@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multi-CLI Agent Hub — UI Mockup</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+</head>
+<body class="bg-transparent text-[var(--foreground)] antialiased p-2 select-none">
+  <!-- Main Desktop Window Frame (Compact 476px height for zero-scroll inline + clean side-pane view) -->
+  <div class="bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] rounded-xl shadow-lg overflow-hidden flex flex-col h-[476px]">
+
+    <!-- 1. TOP WINDOW BAR + BROWSER-STYLE CLI TABS -->
+    <div class="bg-[var(--sidebar)] border-b border-[var(--border)] px-3 pt-2 flex items-end justify-between gap-2 shrink-0">
+      <div class="flex items-center gap-2 pb-2 pr-2 border-r border-[var(--border)]">
+        <!-- macOS Window Traffic Lights -->
+        <div class="flex items-center gap-1.5">
+          <span class="w-2.5 h-2.5 rounded-full bg-red-500/80 inline-block"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-500/80 inline-block"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500/80 inline-block"></span>
+        </div>
+        <span class="text-xs font-semibold tracking-tight ml-1">AgentHub</span>
+      </div>
+
+      <!-- Browser-Style CLI Process Tabs -->
+      <div class="flex items-end gap-1 flex-1 overflow-x-auto" id="cli-tabs">
+        <button onclick="selectCli('agy')" id="tab-agy"
+          class="cli-tab group flex items-center gap-2 px-3 py-1.5 rounded-t-lg border border-b-0 border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] text-xs font-medium transition">
+          <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+          <span class="font-semibold">agy</span>
+          <span class="text-[var(--muted-foreground)]">PID 4812</span>
+          <span id="badge-agy" class="px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 text-xs">Synced</span>
+        </button>
+
+        <button onclick="selectCli('claude')" id="tab-claude"
+          class="cli-tab group flex items-center gap-2 px-3 py-1.5 rounded-t-lg border border-b-0 border-transparent bg-[var(--background)]/50 text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-xs font-medium transition">
+          <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse" id="dot-claude"></span>
+          <span class="font-semibold">claude</span>
+          <span class="text-[var(--muted-foreground)]">PID 4819</span>
+          <span id="badge-claude" class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-xs font-semibold">1 Approval</span>
+        </button>
+
+        <button onclick="selectCli('codex')" id="tab-codex"
+          class="cli-tab group flex items-center gap-2 px-3 py-1.5 rounded-t-lg border border-b-0 border-transparent bg-[var(--background)]/50 text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-xs font-medium transition">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span class="font-semibold">codex</span>
+          <span class="text-[var(--muted-foreground)]">PID 4855</span>
+          <span id="badge-codex" class="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 text-xs">Idle</span>
+        </button>
+      </div>
+
+      <!-- View Mode Switcher (Canvas vs Raw PTY Terminal) -->
+      <div class="pb-1.5 flex items-center gap-1">
+        <div class="bg-[var(--background)] border border-[var(--border)] rounded-lg p-0.5 flex items-center text-xs">
+          <button id="mode-canvas" onclick="setViewMode('canvas')"
+            class="px-2.5 py-1 rounded-md bg-[var(--primary)] text-[var(--primary-foreground)] font-medium transition">
+            Canvas UI
+          </button>
+          <button id="mode-terminal" onclick="setViewMode('terminal')"
+            class="px-2.5 py-1 rounded-md text-[var(--muted-foreground)] hover:text-[var(--foreground)] font-medium transition">
+            &gt;_ PTY Terminal
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. SUB-HEADER: ACTIVE CLI PROCESS & CONTEXT SYNC STATUS -->
+    <div class="bg-[var(--background)]/60 border-b border-[var(--border)] px-3 py-1.5 flex items-center justify-between text-xs shrink-0">
+      <div class="flex items-center gap-2 truncate">
+        <span id="active-cli-label" class="font-semibold text-[var(--foreground)]">agy CLI (Antigravity)</span>
+        <span class="text-[var(--muted-foreground)]">•</span>
+        <span id="active-cli-transcript" class="font-mono text-[var(--muted-foreground)] truncate">~/.gemini/antigravity-cli/transcript.jsonl</span>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <span class="px-2 py-0.5 rounded-full bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] text-xs">
+          Skills: <strong class="font-mono">.agents/skills (4 shared)</strong>
+        </span>
+      </div>
+    </div>
+
+    <!-- 3. MAIN SPLIT BODY: LEFT = ACTIVE CLI WORKSPACE | RIGHT = SHARED HUB & APPROVALS -->
+    <div class="flex-1 flex min-h-0 overflow-hidden">
+
+      <!-- LEFT PANE (60%): ACTIVE CLI TAB CONTENT (CANVAS OR PTY TERMINAL) -->
+      <div class="w-3/5 border-r border-[var(--border)] flex flex-col min-h-0 bg-[var(--card)]">
+
+        <!-- Auto-Context Handoff Banner (Shows how switching CLIs shares context automatically) -->
+        <div id="handoff-banner" class="bg-blue-500/10 border-b border-blue-500/20 px-3 py-1.5 flex items-center justify-between gap-2 shrink-0">
+          <div class="text-xs flex items-center gap-1.5 truncate">
+            <span class="font-semibold text-blue-400">⇄ Hook Context Sync:</span>
+            <span id="handoff-text" class="text-[var(--foreground)] truncate">Auto-injected last 2 turns from <strong>@claude</strong> &amp; <strong>@codex</strong> via PreInvocation</span>
+          </div>
+          <button onclick="togglePayloadModal()" class="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 shrink-0 font-medium">
+            Inspect Hook JSON
+          </button>
+        </div>
+
+        <!-- Hidden Hook JSON Inspector Drawer -->
+        <div id="hook-modal" class="hidden bg-[var(--sidebar)] border-b border-[var(--border)] p-2.5 text-xs font-mono overflow-x-auto shrink-0">
+          <div class="flex justify-between items-center mb-1 text-[var(--muted-foreground)]">
+            <span>stdin/stdout → .agents/hooks.json (PreInvocation)</span>
+            <button onclick="togglePayloadModal()" class="text-xs underline">Close</button>
+          </div>
+          <pre id="hook-json-preview" class="text-xs leading-relaxed text-emerald-400 whitespace-pre-wrap"></pre>
+        </div>
+
+        <!-- Scrollable Content Area (Canvas Mode OR PTY Terminal Mode) -->
+        <div id="left-viewport" class="flex-1 overflow-y-auto p-3 space-y-2.5"></div>
+
+        <!-- Bottom Prompt Bar / Inter-Agent @Mention Input -->
+        <div class="p-2.5 border-t border-[var(--border)] bg-[var(--sidebar)] flex items-center gap-2 shrink-0">
+          <button onclick="insertPeerMention()" title="Ask another CLI agent via MCP"
+            class="px-2 py-1.5 rounded-lg bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] text-xs font-medium hover:opacity-90 shrink-0">
+            @Ask Peer CLI
+          </button>
+          <input id="prompt-input" type="text"
+            placeholder="Message active CLI (or type @claude / @codex to bridge via MCP)..."
+            class="flex-1 bg-[var(--background)] text-[var(--foreground)] placeholder-[var(--muted-foreground)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-[var(--primary)]"
+            onkeydown="if(event.key==='Enter') sendPrompt()" />
+          <button onclick="sendPrompt()"
+            class="px-3 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] text-xs font-medium hover:opacity-90 shrink-0">
+            Send
+          </button>
+        </div>
+      </div>
+
+      <!-- RIGHT PANE (40%): APPROVAL DASHBOARD + SHARED THREAD + SHARED SKILLS -->
+      <div class="w-2/5 flex flex-col min-h-0 bg-[var(--sidebar)]">
+        <!-- Right Panel Navigation Tabs -->
+        <div class="flex border-b border-[var(--border)] bg-[var(--background)]/40 px-2 pt-1.5 gap-1 shrink-0">
+          <button onclick="setRightTab('approvals')" id="rtab-approvals"
+            class="px-2.5 py-1.5 text-xs font-semibold rounded-t-md border border-b-0 border-[var(--border)] bg-[var(--sidebar)] text-[var(--foreground)] flex items-center gap-1.5">
+            <span>🛡️ Approvals</span>
+            <span id="approval-count-pill" class="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-400 text-xs">2</span>
+          </button>
+          <button onclick="setRightTab('shared')" id="rtab-shared"
+            class="px-2.5 py-1.5 text-xs font-medium rounded-t-md border border-b-0 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+            🔗 Shared Bus
+          </button>
+          <button onclick="setRightTab('skills')" id="rtab-skills"
+            class="px-2.5 py-1.5 text-xs font-medium rounded-t-md border border-b-0 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+            📁 Skills Config
+          </button>
+        </div>
+
+        <!-- Right Panel Dynamic Body -->
+        <div id="right-viewport" class="flex-1 overflow-y-auto p-3 space-y-2.5"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // --- STATE ---
+    let activeCli = 'agy';
+    let viewMode = 'canvas'; // 'canvas' | 'terminal'
+    let activeRightTab = 'approvals'; // 'approvals' | 'shared' | 'skills'
+
+    const cliMeta = {
+      agy: {
+        title: 'agy CLI (Antigravity — Gemini 3.8 Pro)',
+        transcript: '~/.gemini/antigravity-cli/transcript.jsonl',
+        handoff: 'Auto-injected last 2 turns from @claude (auth.ts) & @codex via PreInvocation hook',
+        hookJson: `{\n  "injectSteps": [{\n    "ephemeralMessage": "[Shared Bus] @claude refactored verifyJwt() in src/auth.ts. @codex added unit tests in test/auth.test.ts."\n  }]\n}`
+      },
+      claude: {
+        title: 'claude CLI (Claude Code — Sonnet 4.5)',
+        transcript: '~/.claude/projects/app/8f92a.jsonl',
+        handoff: 'Paused at PreToolUse hook — waiting for user approval in Dashboard',
+        hookJson: `{\n  "hookEventName": "PreToolUse",\n  "tool_name": "Bash",\n  "tool_input": { "command": "npx prisma migrate deploy" }\n}`
+      },
+      codex: {
+        title: 'codex CLI (OpenAI Codex — o4-mini)',
+        transcript: '~/.codex/sessions/rollout-2026-10-13.jsonl',
+        handoff: 'Synced with Shared Context Ledger via local MCP Server (agent-bridge-mcp)',
+        hookJson: `{\n  "mcpTool": "mcp__agent_bridge__get_shared_thread",\n  "args": { "last_n_turns": 5 }\n}`
+      }
+    };
+
+    const canvasThreads = {
+      agy: [
+        {
+          role: 'user',
+          text: 'Check what @claude changed in src/auth.ts and optimize the token cache lookup.'
+        },
+        {
+          role: 'thought',
+          text: 'Reading shared context delta injected by PreInvocation hook... @claude extracted verifyJwt(). I will inspect src/auth.ts and add an LRU cache.'
+        },
+        {
+          role: 'tool',
+          toolName: 'replace_file_content',
+          target: 'src/auth.ts (Lines 42-68)',
+          status: 'Completed (Approved)',
+          badgeClass: 'bg-emerald-500/15 text-emerald-400'
+        },
+        {
+          role: 'tool',
+          toolName: 'mcp__agent_bridge__ask_agent',
+          target: 'target: "codex" → "Run benchmark on verifyJwt()"',
+          status: 'Bridged to @codex',
+          badgeClass: 'bg-purple-500/15 text-purple-400'
+        },
+        {
+          role: 'assistant',
+          text: 'I updated `src/auth.ts` with an O(1) session cache and asked **@codex** via the shared MCP bridge to benchmark the latency.'
+        }
+      ],
+      claude: [
+        {
+          role: 'user',
+          text: 'Refactor the JWT middleware and run the database migration for refresh tokens.'
+        },
+        {
+          role: 'thought',
+          text: 'I have refactored src/auth.ts. Now I need to run npx prisma migrate deploy. Calling Bash tool...'
+        },
+        {
+          role: 'tool',
+          toolName: 'Edit',
+          target: 'src/auth.ts (+34, -18 lines)',
+          status: 'Completed',
+          badgeClass: 'bg-emerald-500/15 text-emerald-400'
+        },
+        {
+          role: 'tool',
+          toolName: 'Bash (PreToolUse Hook Intercepted)',
+          target: 'npx prisma migrate deploy',
+          status: '⏳ Waiting Approval in Dashboard',
+          badgeClass: 'bg-amber-500/20 text-amber-400'
+        }
+      ],
+      codex: [
+        {
+          role: 'user',
+          text: '[MCP Request from @agy]: Run benchmark on verifyJwt() and verify test suite.'
+        },
+        {
+          role: 'thought',
+          text: 'Received peer request from @agy via agent-bridge-mcp. Running vitest benchmark...'
+        },
+        {
+          role: 'tool',
+          toolName: 'shell',
+          target: 'npx vitest run test/auth.bench.ts',
+          status: 'Completed (0.42s)',
+          badgeClass: 'bg-emerald-500/15 text-emerald-400'
+        },
+        {
+          role: 'assistant',
+          text: 'Benchmark passed: `verifyJwt()` p99 latency dropped from 4.8ms → 0.19ms. Result published back to Shared Ledger.'
+        }
+      ]
+    };
+
+    const ptyBuffers = {
+      agy: [
+        '╭──────────────────────────────────────────────────────────╮',
+        '│ ✦ Antigravity CLI (agy v2.4) — Workspace: /app           │',
+        '│   Connected MCP: agent-bridge-mcp • Skills: 4 loaded     │',
+        '╰──────────────────────────────────────────────────────────╯',
+        '[Hook:PreInvocation] Injected 2 shared turns from @claude, @codex',
+        '',
+        '> Check what @claude changed in src/auth.ts and optimize cache',
+        '  ⠋ Thinking...',
+        '  ✔ replace_file_content(src/auth.ts)',
+        '  ✔ mcp:agent-bridge-mcp:ask_agent(target="codex")',
+        '  ✦ Done! Cache added and verified by @codex (p99: 0.19ms).',
+        'agy > █'
+      ],
+      claude: [
+        '╭──────────────────────────────────────────────────────────╮',
+        '│ ✻ Claude Code CLI — /app (branch: feat/multi-auth)       │',
+        '╰──────────────────────────────────────────────────────────╯',
+        '> Refactor JWT middleware and run migration',
+        '  ✔ Update(src/auth.ts) — Added 34 lines, removed 18 lines',
+        '  ⏺ Bash(npx prisma migrate deploy)',
+        '  ⏸ [Hook:PreToolUse] Waiting for AgentHub Dashboard decision...',
+        '    (Approve or Reject in the right-hand Approval Gate panel)'
+      ],
+      codex: [
+        'OpenAI Codex CLI (o4-mini) — Sandbox: workspace-write',
+        'Loaded instructions: AGENTS.md + .agents/skills (4 skills)',
+        '',
+        '[MCP Incoming from @agy]: "Run benchmark on verifyJwt()"',
+        '$ npx vitest run test/auth.bench.ts',
+        ' ✓ test/auth.bench.ts (12 tests) 418ms',
+        '   p99 latency: 0.19ms (-96.0%)',
+        'codex > █'
+      ]
+    };
+
+    let approvals = [
+      {
+        id: 'app-1',
+        cli: 'claude',
+        cliColor: 'text-amber-400 bg-amber-500/15',
+        hookType: 'PreToolUse (Bash)',
+        cmd: 'npx prisma migrate deploy',
+        reason: 'Modifies production/local SQL schema',
+        status: 'pending'
+      },
+      {
+        id: 'app-2',
+        cli: 'codex',
+        cliColor: 'text-emerald-400 bg-emerald-500/15',
+        hookType: 'PTY Patch Gate',
+        cmd: 'rm -rf ./dist && npm run build',
+        reason: 'Destructive recursive delete flag detected',
+        status: 'pending'
+      }
+    ];
+
+    const sharedBusEvents = [
+      { time: '13:41:02', agent: 'claude', color: 'text-amber-400', action: 'Edited `src/auth.ts` (extracted `verifyJwt`)' },
+      { time: '13:41:45', agent: 'agy', color: 'text-blue-400', action: 'Auto-synced @claude context via `PreInvocation` hook' },
+      { time: '13:42:10', agent: 'agy', color: 'text-blue-400', action: 'Called MCP `ask_agent(target="codex")` to run benchmarks' },
+      { time: '13:42:18', agent: 'codex', color: 'text-emerald-400', action: 'Ran `vitest` & posted 0.19ms p99 result back to @agy' }
+    ];
+
+    function selectCli(cli) {
+      activeCli = cli;
+      ['agy', 'claude', 'codex'].forEach(c => {
+        const btn = document.getElementById('tab-' + c);
+        if (c === cli) {
+          btn.className = 'cli-tab group flex items-center gap-2 px-3 py-1.5 rounded-t-lg border border-b-0 border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] text-xs font-medium transition';
+        } else {
+          btn.className = 'cli-tab group flex items-center gap-2 px-3 py-1.5 rounded-t-lg border border-b-0 border-transparent bg-[var(--background)]/50 text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-xs font-medium transition';
+        }
+      });
+      document.getElementById('active-cli-label').textContent = cliMeta[cli].title;
+      document.getElementById('active-cli-transcript').textContent = cliMeta[cli].transcript;
+      document.getElementById('handoff-text').textContent = cliMeta[cli].handoff;
+      document.getElementById('hook-json-preview').textContent = cliMeta[cli].hookJson;
+      renderLeftViewport();
+    }
+
+    function setViewMode(mode) {
+      viewMode = mode;
+      const canvasBtn = document.getElementById('mode-canvas');
+      const termBtn = document.getElementById('mode-terminal');
+      if (mode === 'canvas') {
+        canvasBtn.className = 'px-2.5 py-1 rounded-md bg-[var(--primary)] text-[var(--primary-foreground)] font-medium transition';
+        termBtn.className = 'px-2.5 py-1 rounded-md text-[var(--muted-foreground)] hover:text-[var(--foreground)] font-medium transition';
+      } else {
+        termBtn.className = 'px-2.5 py-1 rounded-md bg-[var(--primary)] text-[var(--primary-foreground)] font-medium transition';
+        canvasBtn.className = 'px-2.5 py-1 rounded-md text-[var(--muted-foreground)] hover:text-[var(--foreground)] font-medium transition';
+      }
+      renderLeftViewport();
+    }
+
+    function togglePayloadModal() {
+      const el = document.getElementById('hook-modal');
+      el.classList.toggle('hidden');
+      document.getElementById('hook-json-preview').textContent = cliMeta[activeCli].hookJson;
+    }
+
+    function renderLeftViewport() {
+      const container = document.getElementById('left-viewport');
+      if (viewMode === 'terminal') {
+        const lines = ptyBuffers[activeCli] || [];
+        container.innerHTML = `
+          <div class="bg-[var(--background)] border border-[var(--border)] rounded-lg p-3 font-mono text-xs leading-relaxed space-y-1">
+            <div class="flex items-center justify-between text-[var(--muted-foreground)] pb-1.5 mb-1.5 border-b border-[var(--border)]">
+              <span>xterm.dart PTY Session • Dedicated Process (${activeCli})</span>
+              <span class="text-emerald-400">● TTY Active</span>
+            </div>
+            ${lines.map(l => `<div class="whitespace-pre-wrap">${escapeHtml(l)}</div>`).join('')}
+          </div>
+        `;
+        return;
+      }
+
+      const items = canvasThreads[activeCli] || [];
+      container.innerHTML = items.map(item => {
+        if (item.role === 'user') {
+          return `
+            <div class="bg-[var(--secondary)]/60 border border-[var(--border)] rounded-lg p-2.5 text-xs">
+              <div class="font-semibold text-[var(--muted-foreground)] mb-0.5">You → @${activeCli}</div>
+              <div>${escapeHtml(item.text)}</div>
+            </div>
+          `;
+        }
+        if (item.role === 'thought') {
+          return `
+            <details class="bg-[var(--background)]/50 border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs">
+              <summary class="cursor-pointer text-[var(--muted-foreground)] font-medium">🧠 Thinking trace (streamed from JSONL transcript)</summary>
+              <p class="mt-1.5 text-[var(--muted-foreground)] pl-2 border-l-2 border-[var(--border)]">${escapeHtml(item.text)}</p>
+            </details>
+          `;
+        }
+        if (item.role === 'tool') {
+          return `
+            <div class="bg-[var(--background)] border border-[var(--border)] rounded-lg p-2.5 text-xs flex items-center justify-between gap-2">
+              <div class="truncate">
+                <div class="font-mono font-semibold text-[var(--foreground)]">🔧 ${escapeHtml(item.toolName)}</div>
+                <div class="font-mono text-[var(--muted-foreground)] truncate mt-0.5">${escapeHtml(item.target)}</div>
+              </div>
+              <span class="px-2 py-0.5 rounded font-medium shrink-0 ${item.badgeClass}">${escapeHtml(item.status)}</span>
+            </div>
+          `;
+        }
+        return `
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-lg p-2.5 text-xs leading-relaxed">
+            <div class="font-semibold text-blue-400 mb-0.5">@${activeCli}</div>
+            <div>${item.text}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function setRightTab(tab) {
+      activeRightTab = tab;
+      ['approvals', 'shared', 'skills'].forEach(t => {
+        const btn = document.getElementById('rtab-' + t);
+        if (t === tab) {
+          btn.className = 'px-2.5 py-1.5 text-xs font-semibold rounded-t-md border border-b-0 border-[var(--border)] bg-[var(--sidebar)] text-[var(--foreground)] flex items-center gap-1.5';
+        } else {
+          btn.className = 'px-2.5 py-1.5 text-xs font-medium rounded-t-md border border-b-0 border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] flex items-center gap-1.5';
+        }
+      });
+      renderRightViewport();
+    }
+
+    function handleApproval(id, decision) {
+      const item = approvals.find(a => a.id === id);
+      if (!item) return;
+      item.status = decision;
+
+      if (item.cli === 'claude') {
+        const badge = document.getElementById('badge-claude');
+        const dot = document.getElementById('dot-claude');
+        badge.textContent = decision === 'approved' ? 'Running' : 'Blocked';
+        badge.className = decision === 'approved'
+          ? 'px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 text-xs'
+          : 'px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 text-xs';
+        dot.classList.remove('animate-pulse');
+
+        const toolEntry = canvasThreads.claude[canvasThreads.claude.length - 1];
+        if (toolEntry && toolEntry.role === 'tool') {
+          toolEntry.status = decision === 'approved' ? '✔ Approved via Dashboard' : '✖ Rejected via Dashboard';
+          toolEntry.badgeClass = decision === 'approved'
+            ? 'bg-emerald-500/15 text-emerald-400'
+            : 'bg-red-500/15 text-red-400';
+        }
+        ptyBuffers.claude.push(
+          decision === 'approved'
+            ? '  ✔ [Hook stdout]: {"decision": "allow"} — Executing migration...'
+            : '  ✖ [Hook stdout]: {"decision": "deny", "reason": "Rejected in Dashboard"}'
+        );
+      }
+
+      sharedBusEvents.unshift({
+        time: 'Just now',
+        agent: item.cli,
+        color: 'text-amber-400',
+        action: `User ${decision} tool \`${item.cmd}\` from Approval Dashboard`
+      });
+
+      const pendingCount = approvals.filter(a => a.status === 'pending').length;
+      document.getElementById('approval-count-pill').textContent = pendingCount;
+
+      renderLeftViewport();
+      renderRightViewport();
+    }
+
+    function renderRightViewport() {
+      const container = document.getElementById('right-viewport');
+
+      if (activeRightTab === 'approvals') {
+        container.innerHTML = `
+          <div class="text-xs text-[var(--muted-foreground)] mb-1">
+            Intercepted via <code class="font-mono">.agents/hooks.json</code> &amp; <code class="font-mono">.claude/settings.json</code>:
+          </div>
+          ${approvals.map(a => `
+            <div class="bg-[var(--card)] border border-[var(--border)] rounded-lg p-2.5 text-xs space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded font-semibold uppercase ${a.cliColor}">@${a.cli}</span>
+                <span class="text-[var(--muted-foreground)] font-mono">${a.hookType}</span>
+              </div>
+              <div class="bg-[var(--background)] border border-[var(--border)] rounded p-2 font-mono text-xs break-all">
+                $ ${escapeHtml(a.cmd)}
+              </div>
+              <div class="text-[var(--muted-foreground)]">${escapeHtml(a.reason)}</div>
+              ${a.status === 'pending' ? `
+                <div class="flex items-center gap-1.5 pt-1">
+                  <button onclick="handleApproval('${a.id}', 'approved')"
+                    class="flex-1 py-1 px-2 rounded bg-emerald-600 text-white font-medium hover:bg-emerald-500 transition">
+                    Approve
+                  </button>
+                  <button onclick="handleApproval('${a.id}', 'rejected')"
+                    class="flex-1 py-1 px-2 rounded bg-red-600/80 text-white font-medium hover:bg-red-500 transition">
+                    Reject
+                  </button>
+                </div>
+              ` : `
+                <div class="text-xs font-semibold ${a.status === 'approved' ? 'text-emerald-400' : 'text-red-400'}">
+                  ● ${a.status === 'approved' ? 'Approved — Hook returned {"decision":"allow"}' : 'Rejected — Hook returned {"decision":"deny"}'}
+                </div>
+              `}
+            </div>
+          `).join('')}
+        `;
+        return;
+      }
+
+      if (activeRightTab === 'shared') {
+        container.innerHTML = `
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-semibold">Shared Context Ledger (SQLite + MCP)</span>
+            <button onclick="simulatePeerTalk()" class="text-xs px-2 py-0.5 rounded bg-[var(--primary)] text-[var(--primary-foreground)]">
+              + Simulate Hand-off
+            </button>
+          </div>
+          <div class="space-y-2">
+            ${sharedBusEvents.map(ev => `
+              <div class="bg-[var(--card)] border border-[var(--border)] rounded-lg p-2 text-xs">
+                <div class="flex items-center justify-between mb-0.5">
+                  <span class="font-semibold ${ev.color}">@${ev.agent}</span>
+                  <span class="text-[var(--muted-foreground)] font-mono">${ev.time}</span>
+                </div>
+                <div class="text-[var(--foreground)]">${ev.action}</div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+        return;
+      }
+
+      if (activeRightTab === 'skills') {
+        container.innerHTML = `
+          <div class="bg-[var(--card)] border border-[var(--border)] rounded-lg p-2.5 text-xs space-y-2">
+            <div class="font-semibold">Canonical Folder: <code class="font-mono text-blue-400">.agents/skills/</code></div>
+            <div class="text-[var(--muted-foreground)] leading-relaxed">
+              Single source of truth mounted across all 3 CLIs:
+            </div>
+            <div class="space-y-1 font-mono text-xs bg-[var(--background)] p-2 rounded border border-[var(--border)]">
+              <div class="text-blue-400">✔ agy    → .agents/skills/ (Native)</div>
+              <div class="text-amber-400">✔ claude → .claude/skills ⇢ symlink</div>
+              <div class="text-emerald-400">✔ codex  → .agents/skills/ (Native)</div>
+            </div>
+            <div class="pt-1 space-y-1.5">
+              <div class="font-semibold text-[var(--muted-foreground)]">Active Shared Skills:</div>
+              <label class="flex items-center justify-between bg-[var(--background)] px-2.5 py-1.5 rounded border border-[var(--border)]">
+                <span>db-migration-safety/SKILL.md</span>
+                <input type="checkbox" checked class="accent-blue-500" />
+              </label>
+              <label class="flex items-center justify-between bg-[var(--background)] px-2.5 py-1.5 rounded border border-[var(--border)]">
+                <span>api-contract-validator/SKILL.md</span>
+                <input type="checkbox" checked class="accent-blue-500" />
+              </label>
+              <label class="flex items-center justify-between bg-[var(--background)] px-2.5 py-1.5 rounded border border-[var(--border)]">
+                <span>shared-rules/AGENTS.md</span>
+                <input type="checkbox" checked class="accent-blue-500" />
+              </label>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function insertPeerMention() {
+      const input = document.getElementById('prompt-input');
+      const peer = activeCli === 'agy' ? '@claude' : '@agy';
+      input.value = `Ask ${peer} to review my latest diff and run tests`;
+      input.focus();
+    }
+
+    function sendPrompt() {
+      const input = document.getElementById('prompt-input');
+      const text = input.value.trim();
+      if (!text) return;
+      canvasThreads[activeCli].push({ role: 'user', text });
+      ptyBuffers[activeCli].push(`> ${text}`);
+
+      if (text.includes('@claude') || text.includes('@codex') || text.includes('@agy')) {
+        canvasThreads[activeCli].push({
+          role: 'tool',
+          toolName: 'mcp__agent_bridge__ask_agent',
+          target: `Bridging message: "${text}"`,
+          status: 'Delivered via Local MCP',
+          badgeClass: 'bg-purple-500/15 text-purple-400'
+        });
+        sharedBusEvents.unshift({
+          time: 'Just now',
+          agent: activeCli,
+          color: 'text-blue-400',
+          action: `Sent cross-CLI request: "${text}"`
+        });
+      } else {
+        canvasThreads[activeCli].push({
+          role: 'assistant',
+          text: `Processed in dedicated **${activeCli}** process and logged to Shared Context Ledger.`
+        });
+      }
+      input.value = '';
+      renderLeftViewport();
+      if (activeRightTab === 'shared') renderRightViewport();
+    }
+
+    function simulatePeerTalk() {
+      sharedBusEvents.unshift({
+        time: 'Just now',
+        agent: 'claude',
+        color: 'text-amber-400',
+        action: 'Called `mcp__agent_bridge__ask_agent(target="agy")` → "Can you verify the UI types?"'
+      });
+      renderRightViewport();
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    // Initial render
+    selectCli('agy');
+    setRightTab('approvals');
+  </script>
+</body>
+</html>
