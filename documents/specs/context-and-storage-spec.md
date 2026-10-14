@@ -140,3 +140,33 @@ interface AskPeerAgentParams {
   question: string;
 }
 ```
+
+---
+
+## 5. Artifact Rendering Pipeline (Canvas & Desktop Preview)
+
+Like Antigravity and Claude Desktop, Chorus provides an integrated **Artifact Viewer** so users can immediately view, interact with, and verify files created by agents.
+
+```text
+[Agent writes file (e.g., ui-mockup.html)]
+                    │
+                    ▼
+[PostToolUse Hook triggers] ──► Records artifact in PoloDB
+                    │
+                    ▼
+[Daemon emits IPC event: `artifact:updated`]
+                    │
+                    ▼
+[Chorus Desktop Canvas / Preview Pane]
+┌───────────────────────────────────────────────┐
+│ • .html  ──► Sandboxed iframe / WebView       │
+│ • .md    ──► GFM Markdown + Mermaid diagrams  │
+│ • .svg   ──► Interactive vector viewer        │
+│ • code   ──► Monaco editor with diff viewer   │
+└───────────────────────────────────────────────┘
+```
+
+### 5.1 Real-Time Live Reloading
+* When an agent repeatedly calls `replace_file_content` to polish an HTML/CSS file, the desktop app's file-watcher triggers an in-place hot reload in the embedded WebView.
+* The user watches the visual UI update in real time without refreshing the desktop application manually.
+

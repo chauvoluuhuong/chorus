@@ -26,16 +26,20 @@ Chorus decouples the visual shell from backend agent orchestration across two pl
 agy CLI     claude CLI               codex CLI     Hook Adapter
 ```
 
-### Plane 1: The Terminal Plane (Visual Shell)
-* Runs each CLI engine in an isolated native pseudo-terminal (PTY) process.
-* Streams bidirectional `stdin`/`stdout` to embedded terminal components (`xterm.js` in Tauri or `xterm.dart` in Flutter).
-* Preserves 100% native CLI fidelity: interactive menus, cursor navigation, progress bars, and ANSI colors.
+### Plane 1: The Terminal & Canvas Plane (Visual Shell)
+* **Terminal View**: Runs each CLI engine in an isolated native pseudo-terminal (PTY) process (`xterm.js` / `xterm.dart`).
+* **Canvas & Artifact Viewer**: Side-by-side preview panel (like Antigravity & Claude Desktop Artifacts) for live interactive rendering of:
+  * **HTML / Web Apps**: Embedded sandboxed WebView with live auto-refresh.
+  * **Markdown Docs**: GFM renderer with Mermaid diagram and syntax highlighting support.
+  * **Images & SVGs**: Vector preview with pan/zoom.
+  * **Code Diffs**: Visual side-by-side comparison before approving changes.
 
 ### Plane 2: The Control & Telemetry Plane (Intelligence & Governance)
 * Runs a local background daemon inside the desktop app.
 * Communicates with CLI engines through:
   1. **Lifecycle Hooks**: Intercepts actions (`PreToolUse`, `PostToolUse`, `PreInvocation`) via standard hook scripts.
-  2. **Local MCP Server (`agent-bridge-mcp`)**: Exposes query tools for cross-agent collaboration.
+  2. **Artifact Dispatcher**: Watches file writes via `PostToolUse` and pushes real-time events to the UI Artifact Viewer.
+  3. **Local MCP Server (`agent-bridge-mcp`)**: Exposes query tools for cross-agent collaboration.
 
 ---
 
@@ -142,3 +146,11 @@ Chorus separates core business logic from data persistence by implementing the *
 - [ ] **AC-4.2**: The PoloDB adapter must run embedded inside the desktop process without external database servers.
 - [ ] **AC-4.3**: Tool outputs larger than 4KB must be offloaded to disk log files, keeping the database documents lightweight.
 - [ ] **AC-4.4**: Generated files, HTML mockups, and visual assets must be indexed in the artifact registry with disk paths and metadata.
+
+### 5.5 Canvas & Artifact Viewer (Desktop UI)
+- [ ] **AC-5.1**: When an agent writes or modifies a viewer-compatible file (`.html`, `.md`, `.svg`, code files), the UI automatically detects the event and presents an interactive Artifact Card in the session timeline.
+- [ ] **AC-5.2 (HTML Web Apps)**: The Artifact Viewer renders HTML files inside an embedded, sandboxed WebView/iframe, preventing unauthorized host script execution while supporting Tailwind/JS interactivity.
+- [ ] **AC-5.3 (Live Hot-Reloading)**: Subsequent edits to the same HTML or CSS file by an agent automatically re-render the preview in place without requiring a full app reload.
+- [ ] **AC-5.4 (Markdown & Specs)**: The Artifact Viewer renders markdown files with GitHub Flavored Markdown (GFM), syntax-highlighted code blocks, copy-to-clipboard buttons, and Mermaid architecture diagrams.
+- [ ] **AC-5.5 (Visual Code Diff Review)**: Before approving file edits, the user can inspect a side-by-side visual diff inside the Canvas view.
+- [ ] **AC-5.6 (View Mode Toggle)**: The user can toggle smoothly between the Raw PTY Terminal stream and the Canvas UI at any time without resetting terminal or agent state.
