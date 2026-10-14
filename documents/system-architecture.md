@@ -118,6 +118,7 @@ Chorus separates core business logic from data persistence by implementing the *
 * **PoloDB as Default Engine**: Embedded in-process Rust document database with a MongoDB-compatible API. Operates directly on `~/.chorus/ledger.polodb` with zero external service dependencies.
 * **Pluggable Backends**: The `StorageAdapter` interface allows swapping persistence engines without altering application logic.
 * **First-Class Artifact Storage**: Tracks code files, HTML mockups, SVGs, and docs with persistent disk file references.
+* **Unified Skill Registry**: Stores discovered and user-created skills across all agents in PoloDB, enabling a visual Skill Studio and fast session-start catalog injection.
 
 > Detailed schemas, trait signatures, and MCP parameter contracts are maintained in [context-and-storage-spec.md](file:///Users/huong/chorus/documents/specs/context-and-storage-spec.md) (subject to refinement during implementation).
 
@@ -140,12 +141,15 @@ Chorus separates core business logic from data persistence by implementing the *
 - [ ] **AC-3.2**: Automatically injected handoff context must not exceed 200 tokens under normal operation.
 - [ ] **AC-3.3**: Injected summaries must contain: original user goal, touched files, verification/test state, and pending milestones.
 - [ ] **AC-3.4**: Peer agents can pull deep context (specific execution logs and generated artifacts) on demand via `agent-bridge-mcp` without prompt pollution.
+- [ ] **AC-3.5**: Starting a new chat thread queries PoloDB to inject a compact (<100 token) index of enabled skills with file path pointers into the agent's initial prompt envelope.
 
 ### 5.4 Storage & Adapter Architecture
 - [ ] **AC-4.1**: All storage operations must go through the `StorageAdapter` interface.
 - [ ] **AC-4.2**: The PoloDB adapter must run embedded inside the desktop process without external database servers.
 - [ ] **AC-4.3**: Tool outputs larger than 4KB must be offloaded to disk log files, keeping the database documents lightweight.
 - [ ] **AC-4.4**: Generated files, HTML mockups, and visual assets must be indexed in the artifact registry with disk paths and metadata.
+- [ ] **AC-4.5**: Discovered skills across agent directories (`.agents/skills`, `.claude/`, `.codex/`, and custom folders) must be ingested into PoloDB's `skills` collection.
+- [ ] **AC-4.6**: The UI Skill Studio must allow users to create and edit skills, persisting them in PoloDB and generating backing markdown files on disk.
 
 ### 5.5 Canvas & Artifact Viewer (Desktop UI)
 - [ ] **AC-5.1**: When an agent writes or modifies a viewer-compatible file (`.html`, `.md`, `.svg`, code files), the UI automatically detects the event and presents an interactive Artifact Card in the session timeline.

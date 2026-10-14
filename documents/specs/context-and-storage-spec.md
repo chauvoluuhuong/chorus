@@ -77,6 +77,24 @@ Registers all generated code files, HTML mockups, SVGs, and markdown documentati
 }
 ```
 
+### 2.4 Collection: `skills`
+Indexes discovered and user-created skills across all engines.
+
+```json
+{
+  "_id": "skill_db_migrate",
+  "name": "db-migrate",
+  "title": "Database Migration Assistant",
+  "description": "Rules and safety checks for database migrations",
+  "origin": "claude",
+  "file_path": ".claude/commands/db.md",
+  "content_markdown": "# Database Migration Guidelines\n1. Always run prisma validate...",
+  "is_enabled": true,
+  "created_at": "2026-10-14T11:00:00Z",
+  "updated_at": "2026-10-14T11:05:00Z"
+}
+```
+
 ---
 
 ## 3. Storage Adapter Trait (Rust Draft)
@@ -101,6 +119,11 @@ pub trait StorageAdapter: Send + Sync {
     async fn register_artifact(&self, artifact: &ArtifactDoc) -> Result<(), StorageError>;
     async fn get_artifact(&self, artifact_id: &str) -> Result<Option<ArtifactDoc>, StorageError>;
     async fn list_artifacts(&self, filter: ArtifactFilter) -> Result<Vec<ArtifactDoc>, StorageError>;
+
+    // Skills
+    async fn upsert_skill(&self, skill: &SkillDoc) -> Result<(), StorageError>;
+    async fn get_skill(&self, skill_id: &str) -> Result<Option<SkillDoc>, StorageError>;
+    async fn list_skills(&self, enabled_only: bool) -> Result<Vec<SkillDoc>, StorageError>;
 }
 ```
 
