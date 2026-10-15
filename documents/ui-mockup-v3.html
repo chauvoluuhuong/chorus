@@ -314,6 +314,21 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
 .handoff-pop-item .action-arr { font-size: 14px; color: var(--muted); transition: transform .12s, color .12s; }
 .handoff-pop-item:hover .action-arr { color: var(--accent-strong); transform: translateX(2px); }
 
+/* Smart Mention Popover (@-mention) */
+.mention-popover { position: absolute; left: 14px; bottom: calc(100% + 8px); width: 380px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 10px; z-index: 25; display: flex; flex-direction: column; gap: 8px; animation: popIn .15s ease-out; }
+.mention-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+.mention-tab { padding: 3px 9px; border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--muted); background: none; border: 0; cursor: pointer; transition: all .12s; }
+.mention-tab:hover { color: var(--ink); background: var(--bubble); }
+.mention-tab.active { color: var(--accent-ink); background: var(--accent); }
+.mention-list { display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
+.mention-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; border: 0; background: none; text-align: left; cursor: pointer; width: 100%; transition: background .12s; }
+.mention-item:hover, .mention-item:focus { background: var(--bubble); outline: none; }
+.mention-item .icon { font-size: 15px; flex: none; width: 20px; text-align: center; }
+.mention-item .info { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.mention-item .info strong { font-size: 13px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--f-mono); font-weight: 500; }
+.mention-item .info small { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mention-badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); flex: none; }
+
 /* Send vs Stop Button */
 .send { width: 32px; height: 32px; border-radius: 8px; border: 0; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; flex: none; transition: background .15s; }
 .send:hover { background: var(--accent-strong); }
@@ -643,7 +658,8 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     { id: 'terminal', label: 'Raw PTY Terminal', uc: 'UC-05' },
     { id: 'memory', label: 'Shared Memory (Tier 1 & Tier 2)', uc: 'UC-10' },
     { id: 'skills', label: 'Skills Studio (live search)', uc: 'UC-09' },
-    { id: 'activity', label: 'Activity (Workspace Tools vs Agent Bridge)', uc: 'UC-11' }
+    { id: 'activity', label: 'Activity (Workspace Tools vs Agent Bridge)', uc: 'UC-11' },
+    { id: 'mention', label: '@-Mentions (Files, Skills, Artifacts)', uc: 'UC-12' }
   ];
 
   // Global State
@@ -658,6 +674,9 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     menu: false,
     menuAgent: 'claude',
     handoffMenu: false,
+    mentionMenu: false,
+    mentionTab: 'all', // 'all' | 'file' | 'skill' | 'artifact'
+    mentionSearch: '',
     bell: false,
     continueFromThread: 'none', // 'none' | 't_cake'
     skipPermissions: false,
@@ -715,6 +734,9 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     S.artFullscreen = false;
     S.menu = false;
     S.handoffMenu = false;
+    S.mentionMenu = false;
+    S.mentionTab = 'all';
+    S.mentionSearch = '';
     S.skipPermissions = false;
     S.bell = false;
 
@@ -744,6 +766,9 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     } else if (id === 'mid_handoff') {
       S.screen = 'thread';
       S.handoffMenu = true;
+    } else if (id === 'mention') {
+      S.screen = 'thread';
+      S.mentionMenu = true;
     } else if (id === 'terminal') {
       S.mode = 'terminal';
       S.termTab = 'claude';
@@ -866,6 +891,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
       
       <div class="c-row">
         <button class="c-icon" type="button" aria-label="Add files" data-toast="Attach images or files">${ic('plus')}</button>
+        <button class="c-icon" type="button" data-toggle-mention-menu data-test="mention-trigger-btn" aria-haspopup="menu" aria-expanded="${S.mentionMenu || false}" title="Mention file, skill or artifact (@)" aria-label="Mention" style="font-weight:600;font-size:14px;color:var(--muted)">@</button>
         
         ${isHome ? `
           <button class="folder" type="button" data-toast="Project folder: ~/Sites/sweet-crumb">${ic('folder', 'sm')}<span>sweet-crumb</span>${ic('chev', 'sm')}</button>
@@ -883,7 +909,56 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
       </div>
       ${S.menu ? agentPickerMenuHTML(isHome) : ''}
       ${S.handoffMenu && !isHome ? handoffPopoverHTML(a) : ''}
+      ${S.mentionMenu ? mentionPopoverHTML() : ''}
     </form>`;
+  }
+
+  function mentionPopoverHTML() {
+    const tab = S.mentionTab || 'all';
+    const items = [
+      { type: 'file', icon: '📄', label: 'src/components/OrderForm.tsx', desc: 'React component · 48 lines', token: '@src/components/OrderForm.tsx', badge: 'File' },
+      { type: 'file', icon: '📄', label: 'prisma/schema.prisma', desc: 'Prisma schema · 32 lines', token: '@prisma/schema.prisma', badge: 'File' },
+      { type: 'skill', icon: '⚡', label: 'db-migrate', desc: '.agents/skills/db-migrate/SKILL.md · On-demand mount', token: '@skill:db-migrate', badge: 'Skill' },
+      { type: 'skill', icon: '⚡', label: 'tailwind-ui', desc: '.agents/skills/tailwind-ui/SKILL.md · Design rules', token: '@skill:tailwind-ui', badge: 'Skill' },
+      { type: 'artifact', icon: '🎨', label: 'order-flow.html', desc: '.chorus/artifacts/claude/t_order_cake/order-flow.html', token: '@artifact:order-flow.html', badge: 'Artifact' },
+      { type: 'artifact', icon: '🎨', label: 'cake-spec.md', desc: '.chorus/artifacts/claude/t_order_cake/cake-spec.md', token: '@artifact:cake-spec.md', badge: 'Artifact' }
+    ];
+
+    const filtered = items.filter(it => {
+      if (tab !== 'all' && it.type !== tab) return false;
+      if (S.mentionSearch) {
+        const q = S.mentionSearch.toLowerCase();
+        return it.label.toLowerCase().includes(q) || it.desc.toLowerCase().includes(q);
+      }
+      return true;
+    });
+
+    return `<div class="mention-popover" role="menu" aria-label="Smart Mention options">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <strong style="font-size:13px;color:var(--ink);display:flex;align-items:center;gap:5px">
+          <span style="font-size:14px;color:var(--accent-strong)">@</span> Mention context
+        </strong>
+        <span style="font-size:11px;color:var(--muted)">Tab / Enter to select</span>
+      </div>
+      <div class="mention-tabs">
+        <button class="mention-tab ${tab === 'all' ? 'active' : ''}" type="button" data-mention-tab="all">All</button>
+        <button class="mention-tab ${tab === 'file' ? 'active' : ''}" type="button" data-mention-tab="file">📁 Files</button>
+        <button class="mention-tab ${tab === 'skill' ? 'active' : ''}" type="button" data-mention-tab="skill">⚡ Skills</button>
+        <button class="mention-tab ${tab === 'artifact' ? 'active' : ''}" type="button" data-mention-tab="artifact">🎨 Artifacts</button>
+      </div>
+      <div class="mention-list">
+        ${filtered.map(it => `
+          <button class="mention-item" type="button" data-insert-mention="${esc(it.token)}" data-test="mention-opt-${esc(it.label)}">
+            <span class="icon">${it.icon}</span>
+            <div class="info">
+              <strong>${esc(it.label)}</strong>
+              <small>${esc(it.desc)}</small>
+            </div>
+            <span class="mention-badge">${it.badge}</span>
+          </button>
+        `).join('')}
+      </div>
+    </div>`;
   }
 
   function handoffPopoverHTML(currentAgent) {
@@ -1190,8 +1265,8 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
       </div>
       <div class="p-head">
         <div class="t">
-          <strong>Order a cake page</strong>
-          <small>app/order/page.tsx · live · ${S.artWidth || 580}px</small>
+          <strong>Order a cake page (order-flow.html)</strong>
+          <small>.chorus/artifacts/claude/t_order_cake/order-flow.html · live · ${S.artWidth || 580}px</small>
         </div>
 
         <!-- Version Navigator (‹ v2 of 2 ›) -->
@@ -1592,6 +1667,10 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
       S.handoffMenu = false;
       return render();
     }
+    if (S.mentionMenu && !e.target.closest('.mention-popover') && !e.target.closest('[data-toggle-mention-menu]')) {
+      S.mentionMenu = false;
+      return render();
+    }
     if (S.bell && !e.target.closest('.notif') && !e.target.closest('#bell')) {
       S.bell = false;
       return render();
@@ -1661,6 +1740,29 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
     if ('toggleHandoffMenu' in d || b.id === 'btn-handoff') {
       S.handoffMenu = !S.handoffMenu;
       S.menu = false;
+      S.mentionMenu = false;
+      return render();
+    }
+
+    // Toggle @-mention menu
+    if ('toggleMentionMenu' in d) {
+      S.mentionMenu = !S.mentionMenu;
+      S.menu = false;
+      S.handoffMenu = false;
+      return render();
+    }
+    if (d.mentionTab) {
+      S.mentionTab = d.mentionTab;
+      return render();
+    }
+    if (d.insertMention) {
+      const input = document.getElementById('prompt');
+      if (input) {
+        input.value = (input.value ? input.value + ' ' : '') + d.insertMention + ' ';
+        input.focus();
+      }
+      S.mentionMenu = false;
+      toast(`Inserted ${d.insertMention}`);
       return render();
     }
 
@@ -1870,7 +1972,7 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
     if (panel) {
       panel.style.width = newWidth + 'px';
       const smallText = panel.querySelector('.p-head .t small');
-      if (smallText) smallText.textContent = `app/order/page.tsx · live · ${newWidth}px`;
+      if (smallText) smallText.textContent = `.chorus/artifacts/claude/t_order_cake/order-flow.html · live · ${newWidth}px`;
     }
   });
 
@@ -1890,9 +1992,27 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
       if (panel) {
         panel.style.width = '580px';
         const smallText = panel.querySelector('.p-head .t small');
-        if (smallText) smallText.textContent = 'app/order/page.tsx · live · 580px';
+        if (smallText) smallText.textContent = '.chorus/artifacts/claude/t_order_cake/order-flow.html · live · 580px';
       }
       toast('Reset artifact panel width to 580px');
+    }
+  });
+
+  // Listen for '@' keystroke to automatically pop up Smart Mentions
+  document.addEventListener('input', (e) => {
+    if (e.target && e.target.id === 'prompt') {
+      const val = e.target.value;
+      const cursorPos = e.target.selectionStart;
+      const lastChar = val[cursorPos - 1];
+      if (lastChar === '@' && !S.mentionMenu) {
+        S.mentionMenu = true;
+        render();
+        const input = document.getElementById('prompt');
+        if (input) {
+          input.focus();
+          input.setSelectionRange(cursorPos, cursorPos);
+        }
+      }
     }
   });
 
@@ -1910,7 +2030,7 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
       if (panel) {
         panel.style.width = S.artWidth + 'px';
         const smallText = panel.querySelector('.p-head .t small');
-        if (smallText) smallText.textContent = `app/order/page.tsx · live · ${S.artWidth}px`;
+        if (smallText) smallText.textContent = `.chorus/artifacts/claude/t_order_cake/order-flow.html · live · ${S.artWidth}px`;
       }
     },
     resetArtifactWidth: () => {
@@ -1919,7 +2039,7 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
       if (panel) {
         panel.style.width = '580px';
         const smallText = panel.querySelector('.p-head .t small');
-        if (smallText) smallText.textContent = 'app/order/page.tsx · live · 580px';
+        if (smallText) smallText.textContent = '.chorus/artifacts/claude/t_order_cake/order-flow.html · live · 580px';
       }
     },
     toggleSkipPermissions: (val) => {
@@ -1942,6 +2062,18 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
       S.lastSkillSync = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       render();
       toast('Skills synced from .agents/skills, .claude/skills and .codex/skills');
+    },
+    toggleMentionMenu: (val) => {
+      S.mentionMenu = val !== undefined ? val : !S.mentionMenu;
+      render();
+    },
+    insertMention: (token) => {
+      const input = document.getElementById('prompt');
+      if (input) {
+        input.value = (input.value ? input.value + ' ' : '') + token + ' ';
+      }
+      S.mentionMenu = false;
+      render();
     }
   };
 

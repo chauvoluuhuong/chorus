@@ -33,7 +33,7 @@ ClaudeAdapter   AgyAdapter   CodexAdapter     Universal File Watcher
 1. **Asset Creation Detection**: Ability to detect when an agent creates or modifies visual files (`.html`, `.md`, `.svg`, code files).
 2. **Path Reporting & Segregation**:
    - **Project Code** (`app/order/page.tsx`): Stored directly in the workspace so the app builds and runs.
-   - **Chorus Artifacts** (UI mockups, design specs, Mermaid diagrams): Stored in `.chorus/artifacts/` so the user's Git repo is never polluted with preview scratch files.
+   - **Chorus Artifacts** (UI mockups, design specs, Mermaid diagrams): Stored under `.chorus/artifacts/<ai_cli>/<chat_thread_id>/` (e.g. `.chorus/artifacts/claude/t_order_cake/order-flow.html`) so the user's Git repo is never polluted with preview scratch files and threads remain cleanly isolated.
 3. **Live Canvas Trigger & Hot-Reload**: Ability to dispatch an `artifact:updated` event to the desktop Canvas view within milliseconds of file write.
 
 ---

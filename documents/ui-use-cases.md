@@ -54,7 +54,7 @@ Chorus follows the layout of AI chat desktop apps (Claude desktop): sidebar, cha
 - Sending the first message creates the chat and starts the agent.
 
 **How it's built**: the agent CLI is spawned in a PTY (AC-1.1) with `cwd` set to the folder, appending `--dangerously-skip-permissions` (or equivalent autonomous execution flag) if enabled. A new Chorus *thread* is created and linked to that CLI session (see §6, `threads`). At session start Chorus injects the native **Prompt Envelope** (AC-3.5) containing:
-1. **Generalized Artifact Directive**: Any files created during usage not directly part of the project codebase must be saved to `.chorus/artifacts/`.
+1. **Generalized Artifact Directive**: Any files created during usage not directly part of the project codebase must be saved to `.chorus/artifacts/<ai-cli>/<chat-thread-id>/`.
 2. **Active Skills Index**: Compact catalog (<100 tokens) of enabled skills with path pointers.
 
 **Acceptance criteria**
@@ -162,7 +162,7 @@ Chorus follows the layout of AI chat desktop apps (Claude desktop): sidebar, cha
 - When an agent generates or edits an inspectable file (`.html`, `.svg`, `.md`, or project code):
   - An **Artifact Card** appears in the conversation reply with a 1-click **Open in Canvas** button.
   - The side Canvas panel opens with:
-    - **Header**: File path (either in repository or `.chorus/artifacts/`), version switcher (`‹ v1 of 2 ›`), live status badge, and **Fullscreen toggle (`⤢`)**.
+    - **Header**: File path (either in repository or `.chorus/artifacts/<ai-cli>/<chat-thread-id>/`), version switcher (`‹ v1 of 2 ›`), live status badge, and **Fullscreen toggle (`⤢`)**.
     - **Draggable Resizer Splitter**: A vertical grab handle on the left border allows fluid dragging to resize the panel width (320px to 85vw); double-clicking the splitter or clicking the reset button restores the default width (580px).
     - **View Tabs**: **Preview** (sandboxed WebView or GFM renderer), **Code** (syntax-highlighted source), and **Diff** (visual side-by-side comparison).
   - Subsequent agent edits trigger hot-reloading in real time without refreshing the main window.
@@ -258,6 +258,26 @@ For technical users, so everything is shown.
 **Acceptance criteria**
 - [ ] AC-11.1: Every tool call, hook event, approval decision, MCP call, handoff and detected limit is an event.
 - [ ] AC-11.2: Every event's raw payload can be viewed and copied.
+
+### UC-12 · Smart Mentions (@) for Files, Skills & Artifacts *(mockup: "Smart Mentions")*
+
+- Typing `@` anywhere in the composer message box opens an instant autocomplete popover above the input:
+  - **Tabs / Filter Segments**: `All` · `📁 Files` · `⚡ Skills` · `🎨 Artifacts`.
+  - **📁 Files**: Real-time fuzzy search across the active project repository (excluding `.git`, `node_modules`, and gitignored files). Shows relative path and file type icon.
+  - **⚡ Skills**: Lists enabled and available project skills from Chorus and `.agents/skills/`. Mentioning a skill injects it on-demand for this specific turn, even if disabled globally.
+  - **🎨 Artifacts**: Lists artifacts generated in this thread and across the workspace from `.chorus/artifacts/<ai-cli>/<chat-thread-id>/`. Shows artifact title, engine badge, and file name.
+- Selecting an item inserts a typed chip token into the prompt (e.g. `@src/components/OrderForm.tsx`, `@skill:db-migrate`, `@artifact:order-flow.html`).
+- Keyboard navigation: `Up`/`Down` arrows to navigate, `Enter` or `Tab` to select, `Esc` to dismiss.
+
+**How it's built**:
+- **Files**: Indexed via local Rust git indexer (`ignore` crate). Resolved relative to project root.
+- **Skills**: Injected into the active turn's Prompt Envelope as on-demand contextual instructions.
+- **Artifacts**: Resolved to `.chorus/artifacts/<ai_cli>/<chat_thread_id>/<filename>`. Chorus passes the absolute file pointer and preview metadata to the target CLI so it can build upon or edit the artifact directly.
+
+**Acceptance criteria**
+- [ ] AC-12.1: Typing `@` opens the autocomplete popover with keyboard navigation and instant fuzzy search.
+- [ ] AC-12.2: Mentioning a skill activates that skill for the turn without mutating the global enabled skills list.
+- [ ] AC-12.3: Mentioning an artifact points to `.chorus/artifacts/<ai-cli>/<chat-thread-id>/` and preserves agent attribution.
 
 ---
 

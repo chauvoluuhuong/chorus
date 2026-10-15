@@ -88,18 +88,38 @@ To prevent unlimited disk growth, `executions` is managed as a **Ring Buffer**:
 ```
 
 ### 2.3 Collection: `artifacts`
-Registers all generated code files, HTML mockups, SVGs, and markdown documentation.
+Registers all generated code previews, HTML mockups, SVGs, and markdown documentation.
+
+#### Artifact Filesystem Hierarchy
+Artifacts that do not directly belong to the production repository codebase are stored under an isolated, thread-safe hierarchy:
+
+```text
+.chorus/artifacts/
+└── <ai_cli>/                     (e.g., claude, codex, agy)
+    └── <chat_thread_id>/         (e.g., t_order_cake, t_auth_flow)
+        ├── order-flow.html
+        ├── design-spec.md
+        └── architecture.svg
+```
+
+**Benefits**:
+1. **Multi-Agent Isolation**: Multiple agents working across different turns cannot overwrite each other's preview files.
+2. **Thread Scoping**: Artifacts are strictly scoped to their conversation thread.
+3. **Clean Archival & Purge**: Deleting or archiving a chat thread automatically purges its associated folder `.chorus/artifacts/*/<chat_thread_id>/`.
+4. **Handoff Provenance**: When switching from Claude to Codex, Codex can easily inspect previous artifacts created by Claude under `.chorus/artifacts/claude/<chat_thread_id>/`.
 
 ```json
 {
   "_id": "art_301",
+  "thread_id": "t_order_cake",
   "turn_id": "turn_1048",
   "agent_id": "claude",
   "artifact_type": "html_preview",
-  "title": "Auth Modal UI Mockup",
-  "file_path": "documents/ui-mockup.html",
+  "title": "Cake Order Flow Preview",
+  "file_path": ".chorus/artifacts/claude/t_order_cake/order-flow.html",
+  "relative_path": "claude/t_order_cake/order-flow.html",
   "file_size_bytes": 31337,
-  "summary": "Tailwind + Alpine.js interactive login card",
+  "summary": "Tailwind interactive order page",
   "created_at": "2026-10-14T10:15:30Z"
 }
 ```
