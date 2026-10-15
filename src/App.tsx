@@ -12,6 +12,7 @@ import type {
 import { PtyClient, type PtySpawnOptions } from './services/pty';
 import { createHarness } from './harness';
 import { TerminalView } from './components/TerminalView';
+import { ComposerDock } from './components/ComposerDock';
 
 const INITIAL_SKILLS: SkillBundle[] = [
   {
@@ -73,7 +74,6 @@ export function App() {
   const [selectedModel, setSelectedModel] = useState<string>('Sonnet 3.7');
   const [lastPromptEnvelope, setLastPromptEnvelope] = useState<PromptEnvelope | null>(null);
 
-  const [inputPrompt, setInputPrompt] = useState<string>('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
@@ -217,29 +217,20 @@ export function App() {
     }
   };
 
-  const handleSendPrompt = async () => {
-    if (!inputPrompt.trim()) return;
+  const handleSendPrompt = async (prompt: string, envelope: PromptEnvelope) => {
+    if (!prompt.trim()) return;
 
     const newTurn: ChatMessage = {
       id: `msg-${Date.now()}`,
       threadId: activeThreadId,
       role: 'user',
-      content: inputPrompt,
+      content: prompt,
       timestamp: 'Just now',
     };
     setMessages(prev => [...prev, newTurn]);
 
-    // Build prompt envelope
-    const envelope: PromptEnvelope = {
-      turn_id: `turn-${Date.now()}`,
-      target_engine: selectedAgent,
-      user_prompt: inputPrompt,
-      context_files: [],
-      context_artifacts: [],
-      on_demand_skills: [],
-      shared_memory_budget_tokens: 4000,
-    };
     setLastPromptEnvelope(envelope);
+    stateRef.current = { ...stateRef.current, lastPromptEnvelope: envelope };
 
     // If PTY not running, spawn it
     if (ptyStatus !== 'connected') {
@@ -253,10 +244,8 @@ export function App() {
         args,
       });
     } else {
-      ptyClientRef.current?.write(inputPrompt + '\n');
+      ptyClientRef.current?.write(prompt + '\n');
     }
-
-    setInputPrompt('');
   };
 
   const activeThread = threads.find(t => t.id === activeThreadId);
@@ -409,88 +398,17 @@ export function App() {
           )}
 
           {/* Composer Dock */}
-          <div className="dock">
-            <div className="composer">
-              <textarea
-                data-test="composer-input"
-                rows={2}
-                placeholder="Message Claude, ask questions, or run commands..."
-                value={inputPrompt}
-                onChange={e => setInputPrompt(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendPrompt();
-                  }
-                }}
-              />
-
-              <div className="c-row">
-                {/* Autonomous Mode Toggle */}
-                <button
-                  type="button"
-                  className={`pill-toggle ${autonomousMode ? 'on-warn' : ''}`}
-                  onClick={() => setAutonomousMode(!autonomousMode)}
-                  data-test="toggle-skip-permissions"
-                  title="Toggle autonomous permissions bypass"
-                >
-                  <span className="switch-mini">
-                    <span className="knob" />
-                  </span>
-                  <span>{autonomousMode ? '⚡ auto-approve' : 'Safe mode'}</span>
-                </button>
-
-                {/* Handoff Trigger Button */}
-                <button
-                  type="button"
-                  className="btn-handoff"
-                  data-test="handoff-trigger-btn"
-                  title="Switch to another engine with context handoff"
-                >
-                  ⇄ Hand off
-                </button>
-
-                {/* Agent & Model Picker Button */}
-                <button
-                  type="button"
-                  className="picker"
-                  data-test="agent-picker-btn"
-                  onClick={() => {
-                    const nextAgent =
-                      selectedAgent === 'claude' ? 'agy' : selectedAgent === 'agy' ? 'codex' : 'claude';
-                    setSelectedAgent(nextAgent);
-                  }}
-                >
-                  <span className={`mark xs m-${selectedAgent}`}>{selectedAgent[0].toUpperCase()}</span>
-                  <span className="lbl">{selectedAgent.toUpperCase()}</span>
-                  <span className="mdl">{selectedModel}</span>
-                </button>
-
-                {/* Submit / Stop Buttons */}
-                {ptyStatus === 'connected' ? (
-                  <button
-                    type="button"
-                    className="send stop"
-                    data-test="composer-stop"
-                    onClick={handleStopPty}
-                    title="Send SIGINT (Ctrl+C)"
-                  >
-                    ⏹
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="send"
-                    data-test="composer-submit"
-                    onClick={handleSendPrompt}
-                    title="Send Prompt"
-                  >
-                    ↑
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+          <ComposerDock
+            selectedAgent={selectedAgent}
+            selectedModel={selectedModel}
+            autonomousMode={autonomousMode}
+            ptyConnected={ptyStatus === 'connected'}
+            skills={skills}
+            onToggleAutonomous={() => setAutonomousMode(!autonomousMode)}
+            onSelectAgent={agent => setSelectedAgent(agent)}
+            onSubmitPrompt={handleSendPrompt}
+            onStopPty={handleStopPty}
+          />
         </main>
 
         {/* Right Artifact Canvas Panel */}
