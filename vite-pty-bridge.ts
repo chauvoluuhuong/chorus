@@ -197,6 +197,93 @@ export function ptyBridgePlugin(): Plugin {
           return;
         }
 
+        // Artifact stream & file watcher
+        if (url.pathname === '/api/artifacts/stream' && req.method === 'GET') {
+          res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            Connection: 'keep-alive',
+          });
+
+          const baseArtifactsDir = path.resolve(process.cwd(), '.chorus/artifacts');
+          if (!fs.existsSync(baseArtifactsDir)) {
+            fs.mkdirSync(baseArtifactsDir, { recursive: true });
+          }
+
+          let lastMtimes = new Map<string, number>();
+
+          const scanArtifacts = () => {
+            function checkDir(d: string) {
+              try {
+                if (!fs.existsSync(d)) return;
+                const entries = fs.readdirSync(d, { withFileTypes: true });
+                for (const e of entries) {
+                  const p = path.join(d, e.name);
+                  if (e.isDirectory()) {
+                    checkDir(p);
+                  } else if (e.isFile()) {
+                    const stats = fs.statSync(p);
+                    const prev = lastMtimes.get(p) || 0;
+                    if (stats.mtimeMs > prev) {
+                      lastMtimes.set(p, stats.mtimeMs);
+                      const content = fs.readFileSync(p, 'utf8');
+                      const rel = path.relative(process.cwd(), p);
+                      const parts = rel.split(path.sep);
+                      // .chorus/artifacts/<agent>/<threadId>/<name>
+                      const agent = parts[2] || 'claude';
+                      const threadId = parts[3] || 'thread-1';
+                      const name = parts[parts.length - 1];
+
+                      res.write(
+                        `event: artifact:updated\ndata: ${JSON.stringify({
+                          path: rel,
+                          name,
+                          content,
+                          agent,
+                          threadId,
+                          version: 1,
+                        })}\n\n`,
+                      );
+                    }
+                  }
+                }
+              } catch {
+                // ignore
+              }
+            }
+            checkDir(baseArtifactsDir);
+          };
+
+          // Initial scan
+          scanArtifacts();
+
+          const pollTimer = setInterval(scanArtifacts, 300);
+
+          req.on('close', () => {
+            clearInterval(pollTimer);
+          });
+          return;
+        }
+
+        if (url.pathname === '/api/artifacts/notify' && req.method === 'POST') {
+          let body = '';
+          req.on('data', chunk => (body += chunk));
+          req.on('end', () => {
+            try {
+              const { filePath, content = '' } = JSON.parse(body);
+              const fullPath = path.resolve(process.cwd(), filePath);
+              fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+              fs.writeFileSync(fullPath, content);
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ ok: true, path: filePath }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: err.message }));
+            }
+          });
+          return;
+        }
+
         next();
       });
     },

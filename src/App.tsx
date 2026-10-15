@@ -14,6 +14,7 @@ import { createHarness } from './harness';
 import { TerminalView } from './components/TerminalView';
 import { ComposerDock } from './components/ComposerDock';
 import { InlineApprovalCard } from './components/InlineApprovalCard';
+import { ArtifactPanel } from './components/ArtifactPanel';
 
 const INITIAL_SKILLS: SkillBundle[] = [
   {
@@ -67,6 +68,7 @@ export function App() {
   const [autonomousMode, setAutonomousMode] = useState<boolean>(false);
   const [artifactPanelVisible, setArtifactPanelVisible] = useState<boolean>(false);
   const [artifactPanelWidth, setArtifactPanelWidth] = useState<number>(580);
+  const [isArtFullscreen, setIsArtFullscreen] = useState<boolean>(false);
   const [activeArtifact, setActiveArtifact] = useState<ArtifactItem | null>(null);
   const [activeArtifactVersion, setActiveArtifactVersion] = useState<number>(1);
   const [pendingApprovals, setPendingApprovals] = useState<ApprovalRequest[]>([]);
@@ -270,8 +272,14 @@ export function App() {
       () => stateRef.current,
       {
         setAutonomousMode: enabled => setAutonomousMode(enabled),
-        setArtifactPanelWidth: w => setArtifactPanelWidth(w),
-        resetArtifactPanelWidth: () => setArtifactPanelWidth(580),
+        setArtifactPanelWidth: w => {
+          setArtifactPanelWidth(w);
+          stateRef.current = { ...stateRef.current, artifactPanelWidth: w };
+        },
+        resetArtifactPanelWidth: () => {
+          setArtifactPanelWidth(580);
+          stateRef.current = { ...stateRef.current, artifactPanelWidth: 580 };
+        },
         setArtifactPanelVisible: v => setArtifactPanelVisible(v),
         setActiveArtifact: a => {
           setActiveArtifact(a);
@@ -314,6 +322,45 @@ export function App() {
     };
   }, []);
 
+  // Live OS Artifact Watcher stream
+  useEffect(() => {
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource('/api/artifacts/stream');
+      es.addEventListener('artifact:updated', (e: MessageEvent) => {
+        try {
+          const art = JSON.parse(e.data);
+          const item: ArtifactItem = {
+            id: `art-${Date.now()}`,
+            threadId: art.threadId || activeThreadId,
+            agent: art.agent || selectedAgent,
+            path: art.path,
+            name: art.name,
+            version: art.version || 1,
+            content: art.content,
+            createdAt: 'Just now',
+          };
+          setActiveArtifact(item);
+          setArtifactPanelVisible(true);
+          stateRef.current = {
+            ...stateRef.current,
+            activeArtifact: item,
+            artifactPanelVisible: true,
+          };
+          window.__CHORUS_HARNESS__?.emit('artifact:updated', item);
+        } catch (err) {
+          console.error('Artifact update parse failed:', err);
+        }
+      });
+    } catch {
+      // ignore
+    }
+
+    return () => {
+      es?.close();
+    };
+  }, [activeThreadId, selectedAgent]);
+
   const handleStopPty = async () => {
     if (ptyClientRef.current) {
       await ptyClientRef.current.kill('SIGINT');
@@ -355,7 +402,7 @@ export function App() {
 
   return (
     <div className={`window ${theme}`} data-theme={theme}>
-      <div className={`app ${artifactPanelVisible ? '' : 'art-collapsed'}`}>
+      <div className={`app ${artifactPanelVisible ? '' : 'art-collapsed'} ${isArtFullscreen ? 'art-full' : ''}`}>
         {/* Sidebar */}
         <aside className="sidebar">
           <div className="sb-head">
@@ -543,43 +590,22 @@ export function App() {
 
         {/* Right Artifact Canvas Panel */}
         {artifactPanelVisible && (
-          <aside
-            className="panel"
-            style={{ width: `${artifactPanelWidth}px` }}
-            data-test="artifact-canvas-panel"
-          >
-            <div
-              className="resizer"
-              id="art-resizer"
-              data-test="art-resizer"
-              onDoubleClick={() => setArtifactPanelWidth(580)}
-            >
-              <div className="resizer-grip" />
-            </div>
-            <div className="p-head">
-              <div className="t">
-                <strong>{activeArtifact?.name || 'Artifact Viewer'}</strong>
-                <small>v{activeArtifactVersion}</small>
-              </div>
-              <button
-                className="btn sm"
-                data-test="canvas-reset-width"
-                onClick={() => setArtifactPanelWidth(580)}
-              >
-                Reset
-              </button>
-              <button
-                className="btn sm"
-                data-test="canvas-fullscreen-btn"
-                onClick={() => setArtifactPanelWidth(window.innerWidth)}
-              >
-                Fullscreen
-              </button>
-            </div>
-            <div className="p-body">
-              <pre className="src">{activeArtifact?.content || 'No artifact selected.'}</pre>
-            </div>
-          </aside>
+          <ArtifactPanel
+            artifact={activeArtifact}
+            version={activeArtifactVersion}
+            width={artifactPanelWidth}
+            isFullscreen={isArtFullscreen}
+            onWidthChange={w => {
+              setArtifactPanelWidth(w);
+              stateRef.current = { ...stateRef.current, artifactPanelWidth: w };
+            }}
+            onResetWidth={() => {
+              setArtifactPanelWidth(580);
+              stateRef.current = { ...stateRef.current, artifactPanelWidth: 580 };
+            }}
+            onToggleFullscreen={() => setIsArtFullscreen(!isArtFullscreen)}
+            onClose={() => setArtifactPanelVisible(false)}
+          />
         )}
       </div>
     </div>
