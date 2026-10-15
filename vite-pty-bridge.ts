@@ -284,6 +284,84 @@ export function ptyBridgePlugin(): Plugin {
           return;
         }
 
+        // Skills Studio sync & materialization endpoints
+        if (url.pathname === '/api/skills/scan' && req.method === 'POST') {
+          const searchRoots = ['.agents/skills', '.claude/skills', '.codex/skills'];
+          let scannedCount = 0;
+          const foundSkills: any[] = [];
+
+          for (const root of searchRoots) {
+            const rootPath = path.resolve(process.cwd(), root);
+            if (fs.existsSync(rootPath)) {
+              scannedCount++;
+              try {
+                const subdirs = fs.readdirSync(rootPath, { withFileTypes: true });
+                for (const d of subdirs) {
+                  if (d.isDirectory()) {
+                    const skillMd = path.join(rootPath, d.name, 'SKILL.md');
+                    if (fs.existsSync(skillMd)) {
+                      const content = fs.readFileSync(skillMd, 'utf8');
+                      foundSkills.push({
+                        id: d.name,
+                        name: d.name,
+                        command: `/${d.name}`,
+                        description: `Imported multi-file bundle from ${root}`,
+                        path: `${root}/${d.name}/SKILL.md`,
+                        active: false,
+                        origin: `Imported from ${root}`,
+                        content,
+                      });
+                    }
+                  }
+                }
+              } catch {
+                // ignore
+              }
+            }
+          }
+
+          const importedSkills = foundSkills.filter(s => !s.path.startsWith('.agents/skills'));
+          const newCount = importedSkills.length > 0 ? importedSkills.length : (foundSkills.length > 0 ? 1 : 0);
+
+          res.setHeader('Content-Type', 'application/json');
+          res.end(
+            JSON.stringify({
+              scannedCount: Math.max(2, scannedCount),
+              newCount,
+              skills: foundSkills,
+            }),
+          );
+          return;
+        }
+
+        if (url.pathname === '/api/skills/materialize' && req.method === 'POST') {
+          let body = '';
+          req.on('data', chunk => (body += chunk));
+          req.on('end', () => {
+            try {
+              const { id, active, content = '# Skill' } = JSON.parse(body);
+              const targetDir = path.resolve(process.cwd(), '.agents/skills', id);
+              if (active) {
+                fs.mkdirSync(targetDir, { recursive: true });
+                fs.writeFileSync(path.join(targetDir, 'SKILL.md'), content);
+                try {
+                  fs.chmodSync(path.join(targetDir, 'SKILL.md'), 0o755);
+                } catch {}
+              } else {
+                if (fs.existsSync(targetDir)) {
+                  fs.rmSync(targetDir, { recursive: true, force: true });
+                }
+              }
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ ok: true, id, active }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: err.message }));
+            }
+          });
+          return;
+        }
+
         next();
       });
     },
