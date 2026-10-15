@@ -13,6 +13,7 @@ import { PtyClient, type PtySpawnOptions } from './services/pty';
 import { createHarness } from './harness';
 import { TerminalView } from './components/TerminalView';
 import { ComposerDock } from './components/ComposerDock';
+import { InlineApprovalCard } from './components/InlineApprovalCard';
 
 const INITIAL_SKILLS: SkillBundle[] = [
   {
@@ -142,6 +143,64 @@ export function App() {
 
     client.onData(data => {
       window.__CHORUS_HARNESS__?.emit('pty:data', data);
+
+      // Check for interactive approval prompt
+      const approvalMatch = data.match(/Authorize command:\s*(.*?)\s*\[y\/n\]:/i);
+      if (approvalMatch) {
+        const command = approvalMatch[1].trim();
+        const approval: ApprovalRequest = {
+          id: `appr-${Date.now()}`,
+          threadId: activeThreadId,
+          toolCallId: `tool-${Date.now()}`,
+          command,
+          summary: `Privileged command execution: ${command}`,
+          risk: 'Modifies database schemas / executes system commands',
+          status: 'pending',
+          timestamp: 'Just now',
+        };
+        setPendingApprovals(prev => [...prev, approval]);
+        stateRef.current = {
+          ...stateRef.current,
+          pendingApprovals: [...stateRef.current.pendingApprovals, approval],
+        };
+        setMessages(prev => [
+          ...prev,
+          {
+            id: `msg-${Date.now()}`,
+            threadId: activeThreadId,
+            role: 'assistant',
+            content: `The agent requests authorization to execute a privileged command:`,
+            approvalRequest: approval,
+            timestamp: 'Just now',
+          },
+        ]);
+        setCurrentView('chat');
+        window.__CHORUS_HARNESS__?.emit('approval:requested', approval);
+      }
+
+      // Check for auto-approved execution
+      if (data.includes('auto-approved --dangerously-skip-permissions')) {
+        setMessages(prev => [
+          ...prev,
+          {
+            id: `msg-${Date.now()}`,
+            threadId: activeThreadId,
+            role: 'assistant',
+            content: '⚡ auto-approved (--dangerously-skip-permissions)',
+            timestamp: 'Just now',
+            toolCalls: [
+              {
+                id: `tool-${Date.now()}`,
+                verb: 'Execute',
+                target: 'npx prisma migrate dev',
+                status: 'ok',
+                autoApproved: true,
+              },
+            ],
+          },
+        ]);
+        setCurrentView('chat');
+      }
     });
 
     client.onExit(code => {
@@ -159,6 +218,50 @@ export function App() {
       stateRef.current = { ...stateRef.current, ptyStatus: 'terminated' };
       console.error('PTY spawn failed:', err);
     }
+  };
+
+  const handleAllowApproval = async (approval: ApprovalRequest) => {
+    if (ptyClientRef.current) {
+      await ptyClientRef.current.write('y\n');
+    }
+    setPendingApprovals(prev => prev.filter(a => a.id !== approval.id));
+    stateRef.current = {
+      ...stateRef.current,
+      pendingApprovals: stateRef.current.pendingApprovals.filter(a => a.id !== approval.id),
+    };
+    setMessages(prev =>
+      prev.map(m => {
+        if (m.approvalRequest?.id === approval.id) {
+          return {
+            ...m,
+            approvalRequest: { ...m.approvalRequest, status: 'allowed' },
+          };
+        }
+        return m;
+      }),
+    );
+  };
+
+  const handleDenyApproval = async (approval: ApprovalRequest) => {
+    if (ptyClientRef.current) {
+      await ptyClientRef.current.write('n\n');
+    }
+    setPendingApprovals(prev => prev.filter(a => a.id !== approval.id));
+    stateRef.current = {
+      ...stateRef.current,
+      pendingApprovals: stateRef.current.pendingApprovals.filter(a => a.id !== approval.id),
+    };
+    setMessages(prev =>
+      prev.map(m => {
+        if (m.approvalRequest?.id === approval.id) {
+          return {
+            ...m,
+            approvalRequest: { ...m.approvalRequest, status: 'denied' },
+          };
+        }
+        return m;
+      }),
+    );
   };
 
   // Setup Test Harness
@@ -391,6 +494,33 @@ export function App() {
                       </div>
                     )}
                     <p>{m.content}</p>
+
+                    {m.toolCalls &&
+                      m.toolCalls.map(t => (
+                        <div
+                          key={t.id}
+                          className="tool-group"
+                          data-test="tool-row-auto-approved"
+                          style={{ margin: '6px 0' }}
+                        >
+                          <div className="tool-row">
+                            <span>⚡</span>
+                            <span className="verb">{t.verb}</span>
+                            <span className="target">{t.target}</span>
+                            <span className="st-ok">
+                              ⚡ auto-approved (--dangerously-skip-permissions)
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+
+                    {m.approvalRequest && (
+                      <InlineApprovalCard
+                        approval={m.approvalRequest}
+                        onAllow={handleAllowApproval}
+                        onDeny={handleDenyApproval}
+                      />
+                    )}
                   </div>
                 ))}
               </div>
