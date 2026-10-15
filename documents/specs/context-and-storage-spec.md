@@ -77,23 +77,56 @@ Registers all generated code files, HTML mockups, SVGs, and markdown documentati
 }
 ```
 
-### 2.4 Collection: `skills`
-Indexes discovered and user-created skills across all engines.
+### 2.4 Collection: `skills` (Self-Contained Skill Bundles with Code Storage)
+Stores complete skill packages in the database—including markdown instructions, executable scripts (Python/Bash/Node), and boilerplate templates—with automatic disk materialization for CLI execution.
 
 ```json
 {
   "_id": "skill_db_migrate",
   "name": "db-migrate",
   "title": "Database Migration Assistant",
-  "description": "Rules and safety checks for database migrations",
-  "origin": "claude",
-  "file_path": ".claude/commands/db.md",
-  "content_markdown": "# Database Migration Guidelines\n1. Always run prisma validate...",
+  "description": "Rules and safety checks for database migrations with bundled verification scripts",
+  "origin": "user_created",
+  "entrypoint": "SKILL.md",
+  "has_scripts": true,
+  "bundle_files": [
+    {
+      "relative_path": "SKILL.md",
+      "file_type": "markdown",
+      "is_executable": false,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "content": "# Database Migration Guidelines\nRun `python3 scripts/check.py` before executing migrations..."
+    },
+    {
+      "relative_path": "scripts/check.py",
+      "file_type": "python",
+      "is_executable": true,
+      "sha256": "a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e",
+      "content": "import sys\nimport os\n\ndef check_pending():\n    print('Validating pending migrations...')\n\nif __name__ == '__main__':\n    check_pending()\n"
+    },
+    {
+      "relative_path": "templates/prisma_schema.template",
+      "file_type": "template",
+      "is_executable": false,
+      "sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+      "content": "datasource db {\n  provider = \"postgresql\"\n  url = env(\"DATABASE_URL\")\n}\n"
+    }
+  ],
   "is_enabled": true,
+  "materialized_path": ".agents/skills/db-migrate",
   "created_at": "2026-10-14T11:00:00Z",
   "updated_at": "2026-10-14T11:05:00Z"
 }
 ```
+
+#### 2.4.1 The Materialization & Dematerialization Lifecycle
+* **Source of Truth**: PoloDB stores the full skill manifest, executable metadata, and file contents inside `bundle_files`.
+* **Materialization (On Enable)**: When a skill is set to `is_enabled: true` (or updated), Chorus writes the full folder structure to disk at `materialized_path`, restoring directory trees and setting executable permissions (`chmod +x`) on files where `is_executable: true`.
+* **Dematerialization (On Disable)**: When a skill is set to `is_enabled: false`, Chorus automatically removes its folder from disk (`rm -rf .agents/skills/<name>`) to keep the workspace clean, while preserving all code, scripts, and history inside PoloDB.
+* **Deletion**: Permanently removes the record from PoloDB and purges the materialized folder from disk.
+* **Creation Modes**:
+  1. **UI Skill Studio**: Form entry with optional **AI Refine** assistant to generate script boilerplate and guidelines.
+  2. **On-the-Fly Agent Tool**: Agents can invoke `create_project_skill` directly from chat conversation turns.
 
 ---
 

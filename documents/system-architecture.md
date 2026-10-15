@@ -148,8 +148,9 @@ Chorus separates core business logic from data persistence by implementing the *
 - [ ] **AC-4.2**: The PoloDB adapter must run embedded inside the desktop process without external database servers.
 - [ ] **AC-4.3**: Tool outputs larger than 4KB must be offloaded to disk log files, keeping the database documents lightweight.
 - [ ] **AC-4.4**: Generated files, HTML mockups, and visual assets must be indexed in the artifact registry with disk paths and metadata.
-- [ ] **AC-4.5**: Discovered skills across agent directories (`.agents/skills`, `.claude/`, `.codex/`, and custom folders) must be ingested into PoloDB's `skills` collection.
-- [ ] **AC-4.6**: The UI Skill Studio must allow users to create and edit skills, persisting them in PoloDB and generating backing markdown files on disk.
+- [ ] **AC-4.5**: Discovered skills across agent directories (`.agents/skills`, `.claude/`, `.codex/`, and custom folders) must be ingested into PoloDB as multi-file Skill Bundles, preserving directory hierarchies (`scripts/`, `templates/`) and executable permissions.
+- [ ] **AC-4.6**: The UI Skill Studio must allow users to create and manage multi-file skill bundles (via manual input, AI refinement, or on-the-fly agent requests), persisting the entire bundle in PoloDB.
+- [ ] **AC-4.7 (Materialization & Dematerialization)**: Enabling a skill writes its full folder and scripts to disk with executable flags (`chmod +x`); disabling a skill automatically removes its folder from disk while preserving all files in PoloDB.
 
 ### 5.5 Canvas & Artifact Viewer (Desktop UI)
 - [ ] **AC-5.1**: When an agent writes or modifies a viewer-compatible file (`.html`, `.md`, `.svg`, code files), the UI automatically detects the event and presents an interactive Artifact Card in the session timeline.
