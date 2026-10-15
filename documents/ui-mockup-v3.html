@@ -659,7 +659,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     { id: 'memory', label: 'Shared Memory (Tier 1 & Tier 2)', uc: 'UC-10' },
     { id: 'skills', label: 'Skills Studio (live search)', uc: 'UC-09' },
     { id: 'activity', label: 'Activity (Workspace Tools vs Agent Bridge)', uc: 'UC-11' },
-    { id: 'mention', label: '@-Mentions (Files, Skills, Artifacts)', uc: 'UC-12' }
+    { id: 'mention', label: '@-Mentions & /-Skills', uc: 'UC-12' }
   ];
 
   // Global State
@@ -675,8 +675,9 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     menuAgent: 'claude',
     handoffMenu: false,
     mentionMenu: false,
-    mentionTab: 'all', // 'all' | 'file' | 'skill' | 'artifact'
+    mentionTab: 'all', // 'all' | 'file' | 'folder' | 'artifact'
     mentionSearch: '',
+    slashMenu: false,
     bell: false,
     continueFromThread: 'none', // 'none' | 't_cake'
     skipPermissions: false,
@@ -737,6 +738,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     S.mentionMenu = false;
     S.mentionTab = 'all';
     S.mentionSearch = '';
+    S.slashMenu = false;
     S.skipPermissions = false;
     S.bell = false;
 
@@ -891,7 +893,8 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
       
       <div class="c-row">
         <button class="c-icon" type="button" aria-label="Add files" data-toast="Attach images or files">${ic('plus')}</button>
-        <button class="c-icon" type="button" data-toggle-mention-menu data-test="mention-trigger-btn" aria-haspopup="menu" aria-expanded="${S.mentionMenu || false}" title="Mention file, skill or artifact (@)" aria-label="Mention" style="font-weight:600;font-size:14px;color:var(--muted)">@</button>
+        <button class="c-icon" type="button" data-toggle-mention-menu data-test="mention-trigger-btn" aria-haspopup="menu" aria-expanded="${S.mentionMenu || false}" title="Mention context: files, folders, or artifacts (@)" aria-label="Mention context" style="font-weight:600;font-size:14px;color:var(--muted)">@</button>
+        <button class="c-icon" type="button" data-toggle-slash-menu data-test="slash-trigger-btn" aria-haspopup="menu" aria-expanded="${S.slashMenu || false}" title="Skills and slash commands (/)" aria-label="Skills & Commands" style="font-weight:600;font-size:14px;color:var(--muted)">/</button>
         
         ${isHome ? `
           <button class="folder" type="button" data-toast="Project folder: ~/Sites/sweet-crumb">${ic('folder', 'sm')}<span>sweet-crumb</span>${ic('chev', 'sm')}</button>
@@ -910,6 +913,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
       ${S.menu ? agentPickerMenuHTML(isHome) : ''}
       ${S.handoffMenu && !isHome ? handoffPopoverHTML(a) : ''}
       ${S.mentionMenu ? mentionPopoverHTML() : ''}
+      ${S.slashMenu ? slashPopoverHTML() : ''}
     </form>`;
   }
 
@@ -918,10 +922,11 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     const items = [
       { type: 'file', icon: '📄', label: 'src/components/OrderForm.tsx', desc: 'React component · 48 lines', token: '@src/components/OrderForm.tsx', badge: 'File' },
       { type: 'file', icon: '📄', label: 'prisma/schema.prisma', desc: 'Prisma schema · 32 lines', token: '@prisma/schema.prisma', badge: 'File' },
-      { type: 'skill', icon: '⚡', label: 'db-migrate', desc: '.agents/skills/db-migrate/SKILL.md · On-demand mount', token: '@skill:db-migrate', badge: 'Skill' },
-      { type: 'skill', icon: '⚡', label: 'tailwind-ui', desc: '.agents/skills/tailwind-ui/SKILL.md · Design rules', token: '@skill:tailwind-ui', badge: 'Skill' },
-      { type: 'artifact', icon: '🎨', label: 'order-flow.html', desc: '.chorus/artifacts/claude/t_order_cake/order-flow.html', token: '@artifact:order-flow.html', badge: 'Artifact' },
-      { type: 'artifact', icon: '🎨', label: 'cake-spec.md', desc: '.chorus/artifacts/claude/t_order_cake/cake-spec.md', token: '@artifact:cake-spec.md', badge: 'Artifact' }
+      { type: 'folder', icon: '📂', label: 'src/components/', desc: 'Component directory · 6 files', token: '@src/components/', badge: 'Folder' },
+      { type: 'folder', icon: '📂', label: 'prisma/migrations/', desc: 'Database migration history', token: '@prisma/migrations/', badge: 'Folder' },
+      { type: 'folder', icon: '📂', label: 'documents/specs/', desc: 'Specifications & design notes', token: '@documents/specs/', badge: 'Folder' },
+      { type: 'artifact', icon: '🎨', label: 'order-flow.html', desc: '.chorus/artifacts/claude/t_order_cake/order-flow.html', token: '@order-flow.html', badge: 'Artifact' },
+      { type: 'artifact', icon: '🎨', label: 'cake-spec.md', desc: '.chorus/artifacts/claude/t_order_cake/cake-spec.md', token: '@cake-spec.md', badge: 'Artifact' }
     ];
 
     const filtered = items.filter(it => {
@@ -936,14 +941,14 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     return `<div class="mention-popover" role="menu" aria-label="Smart Mention options">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <strong style="font-size:13px;color:var(--ink);display:flex;align-items:center;gap:5px">
-          <span style="font-size:14px;color:var(--accent-strong)">@</span> Mention context
+          <span style="font-size:14px;color:var(--accent-strong)">@</span> Mention Context
         </strong>
-        <span style="font-size:11px;color:var(--muted)">Tab / Enter to select</span>
+        <span style="font-size:11px;color:var(--muted)">Files · Folders · Artifacts</span>
       </div>
       <div class="mention-tabs">
         <button class="mention-tab ${tab === 'all' ? 'active' : ''}" type="button" data-mention-tab="all">All</button>
         <button class="mention-tab ${tab === 'file' ? 'active' : ''}" type="button" data-mention-tab="file">📁 Files</button>
-        <button class="mention-tab ${tab === 'skill' ? 'active' : ''}" type="button" data-mention-tab="skill">⚡ Skills</button>
+        <button class="mention-tab ${tab === 'folder' ? 'active' : ''}" type="button" data-mention-tab="folder">📂 Folders</button>
         <button class="mention-tab ${tab === 'artifact' ? 'active' : ''}" type="button" data-mention-tab="artifact">🎨 Artifacts</button>
       </div>
       <div class="mention-list">
@@ -952,6 +957,37 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
             <span class="icon">${it.icon}</span>
             <div class="info">
               <strong>${esc(it.label)}</strong>
+              <small>${esc(it.desc)}</small>
+            </div>
+            <span class="mention-badge">${it.badge}</span>
+          </button>
+        `).join('')}
+      </div>
+    </div>`;
+  }
+
+  function slashPopoverHTML() {
+    const items = [
+      { cmd: '/db-migrate', icon: '⚡', desc: 'Database migration utilities & safety verification', detail: '.agents/skills/db-migrate/SKILL.md', badge: 'Skill' },
+      { cmd: '/tailwind-ui', icon: '⚡', desc: 'Component design rules & token guidelines', detail: '.agents/skills/tailwind-ui/SKILL.md', badge: 'Skill' },
+      { cmd: '/sync-skills', icon: '🛠️', desc: 'Scan and sync skill folders across .agents, .claude and .codex', detail: 'Built-in action', badge: 'Action' },
+      { cmd: '/handoff', icon: '⇄', desc: 'Hand off current thread context to another installed coding agent', detail: 'Built-in action', badge: 'Action' },
+      { cmd: '/compact', icon: '🧹', desc: 'Compact thread conversation history to reclaim token window', detail: 'Built-in action', badge: 'Action' }
+    ];
+
+    return `<div class="mention-popover" role="menu" aria-label="Skills & Commands options" style="left:54px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <strong style="font-size:13px;color:var(--ink);display:flex;align-items:center;gap:5px">
+          <span style="font-size:14px;color:var(--accent-strong)">/</span> Skills & Commands
+        </strong>
+        <span style="font-size:11px;color:var(--muted)">Run skill on-demand</span>
+      </div>
+      <div class="mention-list" style="margin-top:4px">
+        ${items.map(it => `
+          <button class="mention-item" type="button" data-insert-slash="${esc(it.cmd)}" data-test="slash-opt-${esc(it.cmd)}">
+            <span class="icon">${it.icon}</span>
+            <div class="info">
+              <strong>${esc(it.cmd)}</strong>
               <small>${esc(it.desc)}</small>
             </div>
             <span class="mention-badge">${it.badge}</span>
@@ -1671,6 +1707,10 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
       S.mentionMenu = false;
       return render();
     }
+    if (S.slashMenu && !e.target.closest('.mention-popover') && !e.target.closest('[data-toggle-slash-menu]')) {
+      S.slashMenu = false;
+      return render();
+    }
     if (S.bell && !e.target.closest('.notif') && !e.target.closest('#bell')) {
       S.bell = false;
       return render();
@@ -1763,6 +1803,25 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
       }
       S.mentionMenu = false;
       toast(`Inserted ${d.insertMention}`);
+      return render();
+    }
+
+    // Toggle / slash commands & skills menu
+    if ('toggleSlashMenu' in d) {
+      S.slashMenu = !S.slashMenu;
+      S.menu = false;
+      S.handoffMenu = false;
+      S.mentionMenu = false;
+      return render();
+    }
+    if (d.insertSlash) {
+      const input = document.getElementById('prompt');
+      if (input) {
+        input.value = d.insertSlash + ' ';
+        input.focus();
+      }
+      S.slashMenu = false;
+      toast(`Active skill / command: ${d.insertSlash}`);
       return render();
     }
 
@@ -1998,7 +2057,7 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
     }
   });
 
-  // Listen for '@' keystroke to automatically pop up Smart Mentions
+  // Listen for '@' keystroke for Context Mentions, and '/' for Skills & Commands
   document.addEventListener('input', (e) => {
     if (e.target && e.target.id === 'prompt') {
       const val = e.target.value;
@@ -2006,6 +2065,16 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
       const lastChar = val[cursorPos - 1];
       if (lastChar === '@' && !S.mentionMenu) {
         S.mentionMenu = true;
+        S.slashMenu = false;
+        render();
+        const input = document.getElementById('prompt');
+        if (input) {
+          input.focus();
+          input.setSelectionRange(cursorPos, cursorPos);
+        }
+      } else if (lastChar === '/' && !S.slashMenu && (cursorPos === 1 || val[cursorPos - 2] === ' ' || val[cursorPos - 2] === '\n')) {
+        S.slashMenu = true;
+        S.mentionMenu = false;
         render();
         const input = document.getElementById('prompt');
         if (input) {
@@ -2073,6 +2142,18 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
         input.value = (input.value ? input.value + ' ' : '') + token + ' ';
       }
       S.mentionMenu = false;
+      render();
+    },
+    toggleSlashMenu: (val) => {
+      S.slashMenu = val !== undefined ? val : !S.slashMenu;
+      render();
+    },
+    insertSlash: (cmd) => {
+      const input = document.getElementById('prompt');
+      if (input) {
+        input.value = cmd + ' ';
+      }
+      S.slashMenu = false;
       render();
     }
   };

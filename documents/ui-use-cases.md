@@ -259,25 +259,35 @@ For technical users, so everything is shown.
 - [ ] AC-11.1: Every tool call, hook event, approval decision, MCP call, handoff and detected limit is an event.
 - [ ] AC-11.2: Every event's raw payload can be viewed and copied.
 
-### UC-12 · Smart Mentions (@) for Files, Skills & Artifacts *(mockup: "Smart Mentions")*
+### UC-12 · Context Mentions (@) & Skills Slash Commands (/) *(mockup: "Mentions & Skills")*
 
-- Typing `@` anywhere in the composer message box opens an instant autocomplete popover above the input:
-  - **Tabs / Filter Segments**: `All` · `📁 Files` · `⚡ Skills` · `🎨 Artifacts`.
-  - **📁 Files**: Real-time fuzzy search across the active project repository (excluding `.git`, `node_modules`, and gitignored files). Shows relative path and file type icon.
-  - **⚡ Skills**: Lists enabled and available project skills from Chorus and `.agents/skills/`. Mentioning a skill injects it on-demand for this specific turn, even if disabled globally.
-  - **🎨 Artifacts**: Lists artifacts generated in this thread and across the workspace from `.chorus/artifacts/<ai-cli>/<chat-thread-id>/`. Shows artifact title, engine badge, and file name.
-- Selecting an item inserts a typed chip token into the prompt (e.g. `@src/components/OrderForm.tsx`, `@skill:db-migrate`, `@artifact:order-flow.html`).
+Chorus follows standard developer conventions separating **Context Resources (`@`)** from **Actionable Skills & Commands (`/`)**:
+
+1. **Context Mentions (`@`)**:
+   - Typing `@` opens an instant autocomplete popover filtering project resources:
+     - **📁 Files**: `@src/components/OrderForm.tsx`, `@prisma/schema.prisma`
+     - **📂 Folders**: `@src/components/`, `@prisma/migrations/` (allows scoping context to an entire folder tree)
+     - **🎨 Artifacts**: `@order-flow.html`, `@cake-spec.md` (scoped to `.chorus/artifacts/<ai-cli>/<chat-thread-id>/`)
+   - Selecting an item inserts a typed chip token into the composer.
+
+2. **Skills & Slash Commands (`/`)**:
+   - Typing `/` opens the **Skills & Commands Catalog popover**:
+     - **⚡ Project Skills**: `/db-migrate`, `/tailwind-ui` (invokes bundled skills on-demand, injecting instructions into the Prompt Envelope for this turn)
+     - **🛠️ Built-in Actions**: `/handoff` (transfer session to candidate agent), `/sync-skills` (scan filesystem for skills), `/compact` (prune context ledger)
+   - Selecting an item prefixes the prompt with the command/skill name (e.g. `/db-migrate generate new schema`).
+
 - Keyboard navigation: `Up`/`Down` arrows to navigate, `Enter` or `Tab` to select, `Esc` to dismiss.
 
 **How it's built**:
-- **Files**: Indexed via local Rust git indexer (`ignore` crate). Resolved relative to project root.
-- **Skills**: Injected into the active turn's Prompt Envelope as on-demand contextual instructions.
-- **Artifacts**: Resolved to `.chorus/artifacts/<ai_cli>/<chat_thread_id>/<filename>`. Chorus passes the absolute file pointer and preview metadata to the target CLI so it can build upon or edit the artifact directly.
+- **Files & Folders**: Indexed via local Rust git indexer (`ignore` crate). Resolved relative to project root.
+- **Skills (`/`)**: Extracted from `.agents/skills/` and Chorus catalog; injected into the turn's Prompt Envelope as on-demand contextual directives without mutating global skill state.
+- **Artifacts**: Resolved to `.chorus/artifacts/<ai_cli>/<chat_thread_id>/<filename>`. Chorus passes the file pointer and preview metadata to the target CLI.
 
 **Acceptance criteria**
-- [ ] AC-12.1: Typing `@` opens the autocomplete popover with keyboard navigation and instant fuzzy search.
-- [ ] AC-12.2: Mentioning a skill activates that skill for the turn without mutating the global enabled skills list.
-- [ ] AC-12.3: Mentioning an artifact points to `.chorus/artifacts/<ai-cli>/<chat-thread-id>/` and preserves agent attribution.
+- [ ] AC-12.1: Typing `@` opens the context autocomplete popover filtering Files, Folders, and Artifacts.
+- [ ] AC-12.2: Typing `/` opens the Skills & Slash Commands popover listing project skills and built-in actions.
+- [ ] AC-12.3: Invoking a skill via `/skill-name` injects that skill's `SKILL.md` into the turn's Prompt Envelope on-demand.
+- [ ] AC-12.4: Mentioning an artifact points to `.chorus/artifacts/<ai-cli>/<chat-thread-id>/` and preserves agent attribution.
 
 ---
 
