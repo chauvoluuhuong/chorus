@@ -332,6 +332,15 @@ export function App() {
     activityEvents,
   });
 
+  // Apply theme to document root
+  useEffect(() => {
+    if (theme === 'system') {
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+  }, [theme]);
+
   // Keep stateRef fresh for test harness
   useEffect(() => {
     stateRef.current = {
@@ -797,13 +806,14 @@ export function App() {
       </header>
 
       {/* Interactive Scenarios Bar */}
-      <div className="scenarios" id="scenarios" role="group" aria-label="Explore scenarios">
+      <div className="scenarios" id="scenarios" role="group" aria-label="Explore scenarios" data-test="scenarios-bar">
         {SCENARIOS.map(s => (
           <button
             key={s.id}
             type="button"
             className="scn"
             data-scn={s.id}
+            data-test={`scenario-btn-${s.id}`}
             aria-pressed={selectedScenario === s.id}
             onClick={() => handleSelectScenario(s.id)}
           >
@@ -1219,6 +1229,90 @@ export function App() {
                         <Icon name="up" />
                       </button>
                     </div>
+
+                    {/* Agent & Model Picker Menu in Home */}
+                    {menuOpen && (
+                      <div className="menu up" role="menu">
+                        {(['claude', 'agy', 'codex'] as AgentId[]).map(k => {
+                          const isCurrent = k === selectedAgent;
+                          return (
+                            <div key={k}>
+                              <button
+                                className="mi"
+                                type="button"
+                                onClick={() => setMenuAgent(k)}
+                              >
+                                <span className={`mark m-${k}`}>{k[0].toUpperCase()}</span>
+                                <span className="t">
+                                  <strong>{AGENTS_CONFIG[k].name}</strong>
+                                  <small>{AGENTS_CONFIG[k].models.length} native models</small>
+                                </span>
+                                {isCurrent && <span className="tick"><Icon name="check" /></span>}
+                              </button>
+                              {k === menuAgent && (
+                                <div className="models" role="radiogroup">
+                                  {AGENTS_CONFIG[k].models.map(([id, n, d]) => (
+                                    <button
+                                      key={id}
+                                      className={`model ${selectedAgent === k && selectedModel === n ? 'on' : ''}`}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedAgent(k);
+                                        setSelectedModel(n);
+                                        setModelsState(prev => ({ ...prev, [k]: id }));
+                                        setMenuOpen(false);
+                                        showToast(`Switched to ${AGENTS_CONFIG[k].name} (${n})`);
+                                      }}
+                                    >
+                                      <span className="radio" />
+                                      <span className="t">
+                                        <strong>{n}</strong>
+                                        <small>{d}</small>
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        <div className="usage">
+                          <div className="usage-row">
+                            <span>Plan usage</span>
+                            <b>72% used</b>
+                          </div>
+                          <div className="meter warn">
+                            <i style={{ width: '72%' }} />
+                          </div>
+                          <small>Resets 6:00 PM</small>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Context Mentions Popover in Home */}
+                    {mentionMenuOpen && (
+                      <MentionPopover
+                        query=""
+                        onSelect={(item: MentionItem) => {
+                          setPromptInput(prev => `${prev}@${item.path} `);
+                          setMentionMenuOpen(false);
+                        }}
+                        onClose={() => setMentionMenuOpen(false)}
+                      />
+                    )}
+
+                    {/* Skills Slash Popover in Home */}
+                    {slashMenuOpen && (
+                      <SlashPopover
+                        query=""
+                        skills={skills}
+                        onSelect={(command: string) => {
+                          setPromptInput(prev => `${prev}${command} `);
+                          setSlashMenuOpen(false);
+                        }}
+                        onClose={() => setSlashMenuOpen(false)}
+                      />
+                    )}
                   </form>
                 </div>
 
@@ -1574,7 +1668,7 @@ export function App() {
             )}
 
             {/* Composer Dock */}
-            {(currentView === 'chat' || currentView === 'terminal') && (
+            {((currentView === 'chat' && screen !== 'home') || currentView === 'terminal') && (
               <div className="dock">
                 <form className="composer" id="composer" onSubmit={handleComposerSubmit}>
                   <label className="sr" htmlFor="prompt">Message</label>
