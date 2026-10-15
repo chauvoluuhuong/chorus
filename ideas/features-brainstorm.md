@@ -2,7 +2,7 @@
 
 ## 1. Core Feature Set (MVP)
 
-- [ ] **Agent Picker**: Pick `claude`, `agy` or `codex` from the composer, like a model picker, with a plain status per agent (Ready, Working, Needs you, Not set up). Full detail lives on the Activity page (see [`ui-use-cases.md`](../documents/ui-use-cases.md)).
+- [ ] **Agent Picker**: Pick `claude`, `agy` or `codex` and its model from the composer, with plan-limit and token usage per agent. Full detail lives on the Activity page (see [`ui-use-cases.md`](../documents/ui-use-cases.md)).
 - [ ] **Dual-Plane View**:
   - **Canvas View**: Clean chat bubbles, collapsible thinking traces, and structured tool execution cards.
   - **PTY Terminal View**: Full-fidelity terminal emulator (`xterm.js` / `xterm.dart`) for power users who want the raw stream.
