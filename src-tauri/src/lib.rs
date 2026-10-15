@@ -60,9 +60,27 @@ fn spawn_pty(
     for arg in &options.args {
         cmd.arg(arg);
     }
-    if let Some(cwd) = &options.cwd {
-        cmd.cwd(cwd);
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/Users".to_string());
+    let mut current_path = std::env::var("PATH").unwrap_or_default();
+    let extra_paths = format!(
+        "{}/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:{}/.cargo/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        home, home
+    );
+    if !current_path.contains("/opt/homebrew/bin") && !current_path.contains("/.local/bin") {
+        current_path = format!("{}:{}", extra_paths, current_path);
     }
+    cmd.env("PATH", &current_path);
+
+    if let Some(cwd) = &options.cwd {
+        if !cwd.is_empty() {
+            cmd.cwd(cwd);
+        } else {
+            cmd.cwd(&home);
+        }
+    } else {
+        cmd.cwd(&home);
+    }
+
     if let Some(env) = &options.env {
         for (k, v) in env {
             cmd.env(k, v);
@@ -96,7 +114,16 @@ fn spawn_pty(
         let mut buf = [0u8; 4096];
         loop {
             match reader.read(&mut buf) {
-                Ok(0) => break, // EOF
+                Ok(0) => {
+                    let _ = app_handle.emit(
+                        "pty:exit",
+                        PtyExitPayload {
+                            id: read_session_id.clone(),
+                            exit_code: 0,
+                        },
+                    );
+                    break;
+                }
                 Ok(n) => {
                     let text = String::from_utf8_lossy(&buf[..n]).to_string();
                     let _ = app_handle.emit(
@@ -107,7 +134,16 @@ fn spawn_pty(
                         },
                     );
                 }
-                Err(_) => break,
+                Err(_) => {
+                    let _ = app_handle.emit(
+                        "pty:exit",
+                        PtyExitPayload {
+                            id: read_session_id.clone(),
+                            exit_code: 1,
+                        },
+                    );
+                    break;
+                }
             }
         }
     });

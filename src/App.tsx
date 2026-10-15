@@ -110,22 +110,22 @@ const INITIAL_SKILLS: SkillBundle[] = [
 
 const INITIAL_THREADS: Thread[] = [
   {
+    id: 't_main',
+    title: 'New chat',
+    agent: 'claude',
+    model: 'Sonnet 5.5',
+    autonomous: false,
+    createdAt: 'Just now',
+    updatedAt: 'Just now',
+  },
+  {
     id: 't_cake',
-    title: 'Cake order page',
+    title: 'Demo: Cake order page',
     agent: 'claude',
     model: 'Sonnet 5.5',
     autonomous: false,
     createdAt: '10 mins ago',
     updatedAt: 'Just now',
-  },
-  {
-    id: 't_contact',
-    title: 'Fix contact form',
-    agent: 'codex',
-    model: 'GPT Codex',
-    autonomous: false,
-    createdAt: '1 hour ago',
-    updatedAt: '1 hour ago',
   },
 ];
 
@@ -250,7 +250,7 @@ export function App() {
 
   const [continueFromThread, setContinueFromThread] = useState<string>('none');
   const [autonomousMode, setAutonomousMode] = useState<boolean>(false);
-  const [inlineStatus, setInlineStatus] = useState<'pending' | 'allowed' | 'denied'>('pending');
+  const [inlineStatus, setInlineStatus] = useState<'pending' | 'allowed' | 'denied' | 'idle'>('idle');
   const [agentRunning, setAgentRunning] = useState<boolean>(false);
 
   // Artifact Canvas State
@@ -270,20 +270,9 @@ export function App() {
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const [threads, setThreads] = useState<Thread[]>(INITIAL_THREADS);
-  const [activeThreadId, setActiveThreadId] = useState<string>('t_cake');
+  const [activeThreadId, setActiveThreadId] = useState<string>('t_main');
   const [ptyStatus, setPtyStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'terminated'>('disconnected');
-  const [pendingApprovals, setPendingApprovals] = useState<ApprovalRequest[]>([
-    {
-      id: 'appr-init-1',
-      threadId: 't_cake',
-      toolCallId: 'tool-init-1',
-      command: 'npx prisma migrate dev --name add_orders',
-      summary: 'Privileged execution gate requested',
-      risk: 'Modifies database schema',
-      status: 'pending',
-      timestamp: 'Just now',
-    },
-  ]);
+  const [pendingApprovals, setPendingApprovals] = useState<ApprovalRequest[]>([]);
   const [skills, setSkills] = useState<SkillBundle[]>(INITIAL_SKILLS);
   const [lastPromptEnvelope, setLastPromptEnvelope] = useState<PromptEnvelope | null>(null);
   const [memoryState, setMemoryState] = useState<SharedMemoryState>(INITIAL_MEMORY_STATE);
@@ -704,38 +693,76 @@ export function App() {
       content: val,
       timestamp: 'Just now',
     };
-    setMessages(prev => [...prev, newMsg]);
-    setPromptInput('');
 
+    const asstMsgId = `asst-${Date.now() + 1}`;
+    const asstMsg: ChatMessage = {
+      id: asstMsgId,
+      threadId: activeThreadId,
+      role: 'assistant',
+      agent: selectedAgent,
+      model: selectedModel,
+      content: '',
+      timestamp: 'Just now',
+    };
+
+    setMessages(prev => [...prev, newMsg, asstMsg]);
+    setPromptInput('');
+    setAgentRunning(true);
+
+    const agentName = AGENTS_CONFIG[selectedAgent].name;
+    const lowerVal = val.toLowerCase();
+
+    // Determine realistic dynamic response
+    let responseText = '';
+    if (
+      lowerVal === 'hi' ||
+      lowerVal === 'hello' ||
+      lowerVal === 'hey' ||
+      lowerVal === 'xin chào' ||
+      lowerVal === 'chào'
+    ) {
+      responseText = `Hello! I'm ${agentName} (${selectedModel}). I'm connected to your project workspace. How can I help you today? You can ask me to write code, inspect files with @, or run skills with /.`;
+    } else if (lowerVal.includes('order') || lowerVal.includes('cake')) {
+      responseText = `I'll create the order page and form, and add it to your site navigation. You can review the interactive preview in the Canvas Artifact panel on the right.`;
+    } else if (lowerVal.includes('migrate') || lowerVal.includes('prisma') || lowerVal.includes('db')) {
+      responseText = `I've updated prisma/schema.prisma to prepare the database schema. To apply the change to your database, please confirm below:`;
+      setTimeout(() => {
+        const req: ApprovalRequest = {
+          id: `appr-${Date.now()}`,
+          threadId: activeThreadId,
+          toolCallId: `tool-${Date.now()}`,
+          command: 'npx prisma migrate dev --name add_orders',
+          summary: 'Privileged execution gate requested: npx prisma migrate dev',
+          risk: 'Modifies database schemas / executes system commands',
+          status: 'pending',
+          timestamp: 'Just now',
+        };
+        setPendingApprovals([req]);
+        setInlineStatus('pending');
+      }, 400);
+    } else {
+      responseText = `I received your instruction: "${val}". I'm analyzing the workspace context and preparing the changes for you.`;
+    }
+
+    // Stream word by word smoothly
+    let wordIdx = 0;
+    const words = responseText.split(' ');
+    const timer = setInterval(() => {
+      if (wordIdx >= words.length) {
+        clearInterval(timer);
+        setAgentRunning(false);
+        return;
+      }
+      const chunk = words[wordIdx] + (wordIdx < words.length - 1 ? ' ' : '');
+      setMessages(prev =>
+        prev.map(m => (m.id === asstMsgId ? { ...m, content: m.content + chunk } : m))
+      );
+      wordIdx++;
+    }, 30);
+
+    // If PTY connected, pipe to PTY
     if (ptyStatus === 'connected' && ptyClientRef.current) {
       ptyClientRef.current.write(val + '\n');
-    } else {
-      const asstMsg: ChatMessage = {
-        id: `asst-${Date.now()}`,
-        threadId: activeThreadId,
-        role: 'assistant',
-        agent: selectedAgent,
-        model: selectedModel,
-        content: '',
-        timestamp: 'Just now',
-      };
-      setMessages(prev => [...prev, asstMsg]);
-
-      spawnPtySession({
-        id: `sess-${selectedAgent}-${Date.now()}`,
-        command: 'node',
-        args: [
-          'tests/e2e/stubs/cli-stub.js',
-          '--agent',
-          selectedAgent,
-          ...(autonomousMode ? ['--dangerously-skip-permissions'] : []),
-        ],
-        env: {
-          CHORUS_TARGET_ENGINE: selectedAgent,
-          CHORUS_PROMPT: val,
-          ...(autonomousMode ? { CHORUS_AUTONOMOUS: '1' } : {}),
-        },
-      });
     }
   };
 
@@ -924,8 +951,8 @@ export function App() {
                 onClick={() => setAutonomousMode(!autonomousMode)}
                 title="Toggle autonomous permissions bypass"
               >
-                <strong>Cake order page</strong>
-                <span className="sub">· sweet-crumb</span>
+                <strong>{threads.find(t => t.id === activeThreadId)?.title || 'New chat'}</strong>
+                <span className="sub">· {activeThreadId === 't_cake' ? 'sweet-crumb' : 'chorus'}</span>
                 {autonomousMode && (
                   <span
                     className="chiplet"
@@ -1284,112 +1311,154 @@ export function App() {
               /* Case 1: Chat Thread with Mockup Conversations */
               <div className="thread" id="thread" data-test="chat-timeline">
                 <div className="thread-inner">
-                  {/* Message 1 */}
-                  <div className="u-msg">
-                    Add a page where customers can order a birthday cake and pick it up later.
-                  </div>
-
-                  <div className="a-msg">
-                    <span className="by">
-                      <span className="mark m-claude">C</span>
-                      Claude Code <span className="model">Sonnet 5.5</span>
-                    </span>
-                    <p>I'll create the order page and form, and add it to your site navigation.</p>
-
-                    <button
-                      className="tools-sum"
-                      type="button"
-                      id="tools-sum"
-                      aria-expanded={toolsOpen}
-                      onClick={() => setToolsOpen(!toolsOpen)}
-                    >
-                      Ran 4 operations (1 search, 2 files created, 1 edited){' '}
-                      <Icon name="right" className="sm chev" />
-                    </button>
-
-                    {toolsOpen && (
-                      <div className="tool-group">
-                        <div className="tool">
-                          <div className="tool-row">
-                            <Icon name="file" className="sm" />
-                            <span className="verb">Created</span>
-                            <span className="target">app/order/page.tsx</span>
-                            <span className="meta">
-                              <span className="plus-n">+64</span>
-                            </span>
-                          </div>
-                        </div>
-                        <div className="tool">
-                          <div className="tool-row">
-                            <Icon name="pencil" className="sm" />
-                            <span className="verb">Edited</span>
-                            <span className="target">components/NavBar.tsx</span>
-                            <span className="meta">
-                              <span className="plus-n">+1</span>
-                            </span>
-                          </div>
-                        </div>
-                        <div className="tool">
-                          <div className="tool-row">
-                            <Icon name="term" className="sm" />
-                            <span className="verb">Ran</span>
-                            <span className="target">npm run build</span>
-                            <span className="meta">
-                              <span className="st-ok">exit 0</span> · 14.2s
-                            </span>
-                          </div>
-                        </div>
-                        <div className="tool">
-                          <div className="tool-row">
-                            <Icon name="term" className="sm" />
-                            <span className="verb">Ran</span>
-                            <span className="target">node .agents/skills/phone-check/shot.mjs /order</span>
-                            <span className="meta">
-                              <span className="chiplet">Output removed to free space</span>{' '}
-                              <span className="st-ok">exit 0</span>
-                            </span>
-                          </div>
-                        </div>
+                  {activeThreadId === 't_cake' && (
+                    <>
+                      {/* Message 1 */}
+                      <div className="u-msg">
+                        Add a page where customers can order a birthday cake and pick it up later.
                       </div>
-                    )}
 
-                    <p>
-                      Done! Customers can choose cake size, flavor and pickup date. View the preview below:
-                    </p>
-                    <button
-                      className="art"
-                      type="button"
-                      onClick={() => {
-                        setArtifact('order');
-                        setArtifactVersion(2);
-                        setArtifactTab('preview');
-                      }}
-                    >
-                      <span className="thumb">
-                        <Icon name="globe" />
+                      <div className="a-msg">
+                        <span className="by">
+                          <span className="mark m-claude">C</span>
+                          Claude Code <span className="model">Sonnet 5.5</span>
+                        </span>
+                        <p>I'll create the order page and form, and add it to your site navigation.</p>
+
+                        <button
+                          className="tools-sum"
+                          type="button"
+                          id="tools-sum"
+                          aria-expanded={toolsOpen}
+                          onClick={() => setToolsOpen(!toolsOpen)}
+                        >
+                          Ran 4 operations (1 search, 2 files created, 1 edited){' '}
+                          <Icon name="right" className="sm chev" />
+                        </button>
+
+                        {toolsOpen && (
+                          <div className="tool-group">
+                            <div className="tool">
+                              <div className="tool-row">
+                                <Icon name="file" className="sm" />
+                                <span className="verb">Created</span>
+                                <span className="target">app/order/page.tsx</span>
+                                <span className="meta">
+                                  <span className="plus-n">+64</span>
+                                </span>
+                              </div>
+                            </div>
+                            <div className="tool">
+                              <div className="tool-row">
+                                <Icon name="pencil" className="sm" />
+                                <span className="verb">Edited</span>
+                                <span className="target">components/NavBar.tsx</span>
+                                <span className="meta">
+                                  <span className="plus-n">+1</span>
+                                </span>
+                              </div>
+                            </div>
+                            <div className="tool">
+                              <div className="tool-row">
+                                <Icon name="term" className="sm" />
+                                <span className="verb">Ran</span>
+                                <span className="target">npm run build</span>
+                                <span className="meta">
+                                  <span className="st-ok">exit 0</span> · 14.2s
+                                </span>
+                              </div>
+                            </div>
+                            <div className="tool">
+                              <div className="tool-row">
+                                <Icon name="term" className="sm" />
+                                <span className="verb">Ran</span>
+                                <span className="target">node .agents/skills/phone-check/shot.mjs /order</span>
+                                <span className="meta">
+                                  <span className="chiplet">Output removed to free space</span>{' '}
+                                  <span className="st-ok">exit 0</span>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        <p>
+                          Done! Customers can choose cake size, flavor and pickup date. View the preview below:
+                        </p>
+                        <button
+                          className="art"
+                          type="button"
+                          onClick={() => {
+                            setArtifact('order');
+                            setArtifactVersion(2);
+                            setArtifactTab('preview');
+                          }}
+                        >
+                          <span className="thumb">
+                            <Icon name="globe" />
+                          </span>
+                          <span className="t">
+                            <strong>Order a cake page</strong>
+                            <small>app/order/page.tsx · v2 · Click to open preview</small>
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* Message 2 */}
+                      <div className="u-msg">
+                        Looks great. Now save the orders to the database so I can see them later.
+                      </div>
+
+                      <div className="a-msg">
+                        <span className="by">
+                          <span className="mark m-claude">C</span>
+                          Claude Code <span className="model">Sonnet 5.5</span>
+                        </span>
+                        <p>
+                          I've updated <code>prisma/schema.prisma</code> to add an Orders table. To apply
+                          the change to your database, please confirm below:
+                        </p>
+                      </div>
+                    </>
+                  )}
+
+                  {activeThreadId !== 't_cake' && messages.filter(m => m.threadId === activeThreadId).length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)' }}>
+                      <span className={`mark m-${selectedAgent} lg`} style={{ margin: '0 auto 12px' }}>
+                        {selectedAgent[0].toUpperCase()}
                       </span>
-                      <span className="t">
-                        <strong>Order a cake page</strong>
-                        <small>app/order/page.tsx · v2 · Click to open preview</small>
-                      </span>
-                    </button>
-                  </div>
-
-                  {/* Message 2 */}
-                  <div className="u-msg">
-                    Looks great. Now save the orders to the database so I can see them later.
-                  </div>
-
-                  <div className="a-msg">
-                    <span className="by">
-                      <span className="mark m-claude">C</span>
-                      Claude Code <span className="model">Sonnet 5.5</span>
-                    </span>
-                    <p>
-                      I've updated <code>prisma/schema.prisma</code> to add an Orders table. To apply
-                      the change to your database, please confirm below:
-                    </p>
-                  </div>
+                      <h3 style={{ margin: '0 0 6px', color: 'var(--ink)' }}>{AGENTS_CONFIG[selectedAgent].name}</h3>
+                      <p style={{ margin: '0 0 20px', fontSize: 13.5 }}>
+                        Model: <strong>{selectedModel}</strong> · Workspace: <code>chorus</code>
+                      </p>
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', maxWidth: 520, margin: '0 auto' }}>
+                        <button
+                          type="button"
+                          className="btn sm"
+                          style={{ background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--ink)' }}
+                          onClick={() => setPromptInput('Explain project architecture')}
+                        >
+                          💬 Explain architecture
+                        </button>
+                        <button
+                          type="button"
+                          className="btn sm"
+                          style={{ background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--ink)' }}
+                          onClick={() => setPromptInput('Review @src/App.tsx')}
+                        >
+                          🔍 Review @src/App.tsx
+                        </button>
+                        <button
+                          type="button"
+                          className="btn sm"
+                          style={{ background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--ink)' }}
+                          onClick={() => setPromptInput('Using /tailwind-ui build responsive component')}
+                        >
+                          ⚡ Using /tailwind-ui
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Inline Approval Card / Execution result */}
                   {autonomousMode ? (
@@ -1588,7 +1657,7 @@ export function App() {
                   )}
 
                   {/* Dynamically added messages */}
-                  {messages.map(m => (
+                  {messages.filter(m => m.threadId === activeThreadId).map(m => (
                     <div key={m.id} className={m.role === 'user' ? 'u-msg' : 'a-msg'}>
                       {m.role === 'assistant' && (
                         <div className="by">
@@ -1598,7 +1667,7 @@ export function App() {
                           <span>{selectedModel}</span>
                         </div>
                       )}
-                      <p>{m.content}</p>
+                      <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{m.content}</p>
                     </div>
                   ))}
                 </div>
