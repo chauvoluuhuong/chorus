@@ -5,14 +5,13 @@ interface SkillsStudioProps {
   skills: SkillBundle[];
   onSyncSkills: () => Promise<void>;
   onToggleSkill: (skillId: string, active: boolean) => Promise<void>;
-  toastMsg: string | null;
+  toastMsg?: string | null;
 }
 
 export const SkillsStudio: FC<SkillsStudioProps> = ({
   skills,
   onSyncSkills,
   onToggleSkill,
-  toastMsg,
 }) => {
   const [search, setSearch] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -99,12 +98,6 @@ export const SkillsStudio: FC<SkillsStudioProps> = ({
             )}
           </ul>
         </div>
-
-        {toastMsg && (
-          <div className="toast" data-test="toast-notification">
-            {toastMsg}
-          </div>
-        )}
       </div>
     </div>
   );
