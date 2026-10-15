@@ -2,6 +2,7 @@ import { useState, useRef, type FC, type KeyboardEvent, type ChangeEvent } from 
 import type { AgentId, SkillBundle, PromptEnvelope } from '../types';
 import { MentionPopover, type MentionItem } from './MentionPopover';
 import { SlashPopover } from './SlashPopover';
+import { HandoffPopover } from './HandoffPopover';
 
 interface ComposerDockProps {
   selectedAgent: AgentId;
@@ -11,6 +12,7 @@ interface ComposerDockProps {
   skills: SkillBundle[];
   onToggleAutonomous: () => void;
   onSelectAgent: (agent: AgentId) => void;
+  onTriggerHandoff: (targetAgent: AgentId) => void;
   onSubmitPrompt: (prompt: string, envelope: PromptEnvelope) => void;
   onStopPty: () => void;
 }
@@ -23,6 +25,7 @@ export const ComposerDock: FC<ComposerDockProps> = ({
   skills,
   onToggleAutonomous,
   onSelectAgent,
+  onTriggerHandoff,
   onSubmitPrompt,
   onStopPty,
 }) => {
@@ -34,6 +37,8 @@ export const ComposerDock: FC<ComposerDockProps> = ({
   const [showSlash, setShowSlash] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
   const [slashPos, setSlashPos] = useState<number>(0);
+
+  const [showHandoff, setShowHandoff] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -184,6 +189,17 @@ export const ComposerDock: FC<ComposerDockProps> = ({
           />
         )}
 
+        {showHandoff && (
+          <HandoffPopover
+            currentAgent={selectedAgent}
+            onSelectAgent={agent => {
+              setShowHandoff(false);
+              onTriggerHandoff(agent);
+            }}
+            onClose={() => setShowHandoff(false)}
+          />
+        )}
+
         <textarea
           ref={textareaRef}
           data-test="composer-input"
@@ -206,6 +222,7 @@ export const ComposerDock: FC<ComposerDockProps> = ({
               setMentionQuery('');
               setMentionPos(text.length);
               setShowSlash(false);
+              setShowHandoff(false);
             }}
           >
             @
@@ -222,6 +239,7 @@ export const ComposerDock: FC<ComposerDockProps> = ({
               setSlashQuery('');
               setSlashPos(text.length);
               setShowMention(false);
+              setShowHandoff(false);
             }}
           >
             /
@@ -247,6 +265,12 @@ export const ComposerDock: FC<ComposerDockProps> = ({
             className="btn-handoff"
             data-test="handoff-trigger-btn"
             title="Switch to another engine with context handoff"
+            onClick={() => {
+              setShowHandoff(!showHandoff);
+              setShowMention(false);
+              setShowSlash(false);
+            }}
+            aria-expanded={showHandoff}
           >
             ⇄ Hand off
           </button>
