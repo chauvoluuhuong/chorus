@@ -87,6 +87,49 @@ export interface PromptEnvelope {
   shared_memory_budget_tokens: number;
 }
 
+export interface WorkingMemoryEntry {
+  key: string;
+  value: string;
+  updatedBy: AgentId;
+  updatedAt: string;
+  readBy: AgentId[];
+}
+
+export interface ProjectMemoryDoc {
+  id: string;
+  title: string;
+  path: string;
+  tokens: number;
+  lastModified: string;
+  excerpt: string;
+}
+
+export interface SharedMemoryState {
+  workingMemory: WorkingMemoryEntry[];
+  projectDocs: ProjectMemoryDoc[];
+  budgetUsedTokens: number;
+  budgetMaxTokens: number;
+  ringBufferCapacity: number;
+  ringBufferUsed: number;
+}
+
+export interface ActivityEvent {
+  id: string;
+  timestamp: string;
+  type: 'workspace' | 'bridge' | 'appr' | 'hook' | 'err';
+  agent: AgentId;
+  summary: string;
+  meta: Record<string, any>;
+  durationMs?: number;
+}
+
+export interface ActivityTelemetry {
+  totalEvents: number;
+  toolCalls: number;
+  approvals: number;
+  handoffs: number;
+}
+
 export interface ChorusAppState {
   threads: Thread[];
   activeThreadId: string | null;
@@ -102,4 +145,6 @@ export interface ChorusAppState {
   selectedAgent: AgentId;
   selectedModel: string;
   lastPromptEnvelope: PromptEnvelope | null;
+  memoryState?: SharedMemoryState;
+  activityEvents?: ActivityEvent[];
 }

@@ -46,8 +46,12 @@ export interface ChorusTestHarness {
 
   // DB & Subsystem Inspection
   getDatabaseRecords(
-    table: 'threads' | 'turns' | 'executions' | 'artifacts' | 'skills',
+    table: 'threads' | 'turns' | 'executions' | 'artifacts' | 'skills' | 'memory' | 'activity',
   ): Promise<any[]>;
+  getSharedMemory(): any;
+  getActivityEvents(): any[];
+  setMemoryState?(memory: any): void;
+  addActivityEvent?(event: any): void;
   getLastPromptEnvelope(): PromptEnvelope | null;
   setLastPromptEnvelope(envelope: PromptEnvelope): void;
 
@@ -80,6 +84,8 @@ export function createHarness(
     getPtyClient: () => PtyClient | null;
     spawnPty: (options: PtySpawnOptions) => Promise<void>;
     setPromptEnvelope: (envelope: PromptEnvelope) => void;
+    setMemoryState?: (memory: any) => void;
+    addActivityEvent?: (event: any) => void;
   },
 ): ChorusTestHarness {
   const eventListeners = new Map<string, ((...args: any[]) => void)[]>();
@@ -106,6 +112,8 @@ export function createHarness(
     selectAgentModel: actions.selectAgentModel,
     triggerMidSessionHandoff: actions.triggerMidSessionHandoff,
     simulateFileDrop: actions.simulateFileDrop,
+    setMemoryState: actions.setMemoryState,
+    addActivityEvent: actions.addActivityEvent,
 
     on: (event: string, callback: (...args: any[]) => void) => {
       const list = eventListeners.get(event) || [];
@@ -164,8 +172,13 @@ export function createHarness(
       if (table === 'threads') return state.threads;
       if (table === 'skills') return state.skills;
       if (table === 'artifacts') return state.activeArtifact ? [state.activeArtifact] : [];
+      if (table === 'memory') return state.memoryState?.workingMemory || [];
+      if (table === 'activity') return state.activityEvents || [];
       return [];
     },
+
+    getSharedMemory: () => getStateRef().memoryState,
+    getActivityEvents: () => getStateRef().activityEvents || [],
 
     getLastPromptEnvelope: () => getStateRef().lastPromptEnvelope,
     setLastPromptEnvelope: (envelope: PromptEnvelope) => actions.setPromptEnvelope(envelope),

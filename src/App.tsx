@@ -8,6 +8,8 @@ import type {
   ArtifactItem,
   PromptEnvelope,
   AgentId,
+  SharedMemoryState,
+  ActivityEvent,
 } from './types';
 import { PtyClient, type PtySpawnOptions } from './services/pty';
 import { createHarness } from './harness';
@@ -16,6 +18,8 @@ import { ComposerDock } from './components/ComposerDock';
 import { InlineApprovalCard } from './components/InlineApprovalCard';
 import { ArtifactPanel } from './components/ArtifactPanel';
 import { SkillsStudio } from './components/SkillsStudio';
+import { SharedMemoryView } from './components/SharedMemoryView';
+import { ActivityLogView } from './components/ActivityLogView';
 
 const INITIAL_SKILLS: SkillBundle[] = [
   {
@@ -61,6 +65,104 @@ const INITIAL_THREADS: Thread[] = [
   },
 ];
 
+const INITIAL_MEMORY_STATE: SharedMemoryState = {
+  workingMemory: [
+    {
+      key: 'active_goal',
+      value: 'Order form responsive layout and Prisma migrations with automated rollback safeguards',
+      updatedBy: 'claude',
+      updatedAt: '2 mins ago',
+      readBy: ['claude', 'codex'],
+    },
+    {
+      key: 'touched_files',
+      value: '["src/components/OrderForm.tsx", "src-tauri/src/lib.rs", "prisma/schema.prisma"]',
+      updatedBy: 'codex',
+      updatedAt: '1 min ago',
+      readBy: ['claude', 'agy', 'codex'],
+    },
+    {
+      key: 'active_diff',
+      value: '+ export function validateOrderForm(data: OrderInput): ValidationResult { ... }',
+      updatedBy: 'claude',
+      updatedAt: 'Just now',
+      readBy: ['claude'],
+    },
+  ],
+  projectDocs: [
+    {
+      id: 'doc-arch',
+      title: 'Chorus Desktop Multi-Engine Architecture',
+      path: '.chorus/memory/ARCHITECTURE.md',
+      tokens: 1840,
+      lastModified: 'Today, 14:20',
+      excerpt:
+        'Orchestrates Claude Code, Antigravity, and Codex CLI over portable PTY master/slave IPC with zero-overhead SQLite ring buffer.',
+    },
+    {
+      id: 'doc-decisions',
+      title: 'Architectural Decision Records (ADRs)',
+      path: '.chorus/memory/DECISIONS.md',
+      tokens: 920,
+      lastModified: 'Yesterday',
+      excerpt:
+        'ADR-001: Adopt ANSI pseudo-terminal passthrough over JSON-RPC. ADR-002: In-DB Ring Buffer for zero-overhead telemetry.',
+    },
+  ],
+  budgetUsedTokens: 3850,
+  budgetMaxTokens: 8000,
+  ringBufferCapacity: 500,
+  ringBufferUsed: 142,
+};
+
+const INITIAL_ACTIVITY_EVENTS: ActivityEvent[] = [
+  {
+    id: 'ev-101',
+    timestamp: '14:22:05',
+    type: 'workspace',
+    agent: 'claude',
+    summary: 'Workspace indexed: 42 files, 3 skills detected',
+    meta: { filesCount: 42, scanRoots: ['.agents/skills', '.claude/skills'] },
+    durationMs: 45,
+  },
+  {
+    id: 'ev-102',
+    timestamp: '14:22:18',
+    type: 'bridge',
+    agent: 'claude',
+    summary: 'PTY Master spawned session "sess-17290123"',
+    meta: { pid: 91402, command: 'node', ptyCols: 120, ptyRows: 34 },
+    durationMs: 12,
+  },
+  {
+    id: 'ev-103',
+    timestamp: '14:23:40',
+    type: 'appr',
+    agent: 'claude',
+    summary: 'Privileged execution gate requested: npx prisma migrate dev',
+    meta: { risk: 'HIGH', userAction: 'allowed', command: 'npx prisma migrate dev' },
+    durationMs: 820,
+  },
+  {
+    id: 'ev-104',
+    timestamp: '14:24:15',
+    type: 'hook',
+    agent: 'codex',
+    summary: 'Mid-session handoff executed: Claude -> Codex',
+    meta: { envelopeSizeTokens: 142, transferredKeys: ['active_goal', 'touched_files'] },
+    durationMs: 95,
+  },
+  {
+    id: 'ev-105',
+    timestamp: '14:25:01',
+    type: 'err',
+    agent: 'codex',
+    summary: 'Non-fatal exit code 1 intercepted from child process',
+    meta: { exitCode: 1, signal: 'SIGINT', recovered: true },
+    durationMs: 5,
+  },
+];
+
 export function App() {
   const [threads, setThreads] = useState<Thread[]>(INITIAL_THREADS);
   const [activeThreadId, setActiveThreadId] = useState<string>('thread-2');
@@ -77,6 +179,8 @@ export function App() {
   const [selectedAgent, setSelectedAgent] = useState<AgentId>('claude');
   const [selectedModel, setSelectedModel] = useState<string>('Sonnet 3.7');
   const [lastPromptEnvelope, setLastPromptEnvelope] = useState<PromptEnvelope | null>(null);
+  const [memoryState, setMemoryState] = useState<SharedMemoryState>(INITIAL_MEMORY_STATE);
+  const [activityEvents, setActivityEvents] = useState<ActivityEvent[]>(INITIAL_ACTIVITY_EVENTS);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -97,6 +201,8 @@ export function App() {
     selectedAgent,
     selectedModel,
     lastPromptEnvelope,
+    memoryState,
+    activityEvents,
   });
 
   // Keep stateRef fresh for test harness
@@ -116,6 +222,8 @@ export function App() {
       selectedAgent,
       selectedModel,
       lastPromptEnvelope,
+      memoryState,
+      activityEvents,
     };
   }, [
     threads,
@@ -132,6 +240,8 @@ export function App() {
     selectedAgent,
     selectedModel,
     lastPromptEnvelope,
+    memoryState,
+    activityEvents,
   ]);
 
   const spawnPtySession = async (options: PtySpawnOptions) => {
@@ -366,6 +476,8 @@ export function App() {
         getPtyClient: () => ptyClientRef.current,
         spawnPty: spawnPtySession,
         setPromptEnvelope: envelope => setLastPromptEnvelope(envelope),
+        setMemoryState: mem => setMemoryState(mem),
+        addActivityEvent: ev => setActivityEvents(prev => [ev, ...prev]),
       },
     );
 
@@ -671,6 +783,18 @@ export function App() {
               onSyncSkills={handleSyncSkills}
               onToggleSkill={handleToggleSkill}
               toastMsg={toastMsg}
+            />
+          ) : currentView === 'memory' ? (
+            <SharedMemoryView memoryState={memoryState} />
+          ) : currentView === 'activity' ? (
+            <ActivityLogView
+              events={activityEvents}
+              telemetry={{
+                totalEvents: activityEvents.length,
+                toolCalls: 18,
+                approvals: 3,
+                handoffs: 2,
+              }}
             />
           ) : currentView === 'terminal' ? (
             <TerminalView
