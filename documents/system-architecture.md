@@ -74,7 +74,8 @@ Chorus balances cross-agent context sharing with token budget conservation using
 │                                                                        │
 │   1. Artifact Directive (Generalized):                                 │
 │      "Auxiliary files created during usage not directly part of the    │
-│       project codebase must be saved to .chorus/artifacts/"            │
+│       project codebase must be saved to:                               │
+│       .chorus/artifacts/<ai-cli>/<chat-thread-id>/"                    │
 │   2. Enabled Skills Index:                                             │
 │      Compact catalog of active skills with file path pointers          │
 │   3. Handoff Briefing (if transferring from peer agent):               │
@@ -94,12 +95,13 @@ Chorus balances cross-agent context sharing with token budget conservation using
 
 ### 3.1 User-Driven Handoff Flow
 * **Explicit Control**: The user explicitly chooses when and which agent takes over work (or accepts the switch when a usage limit is hit).
+* **Voluntary Mid-Session Handoff**: At any point during a conversation, the user can click the **Hand off (`⇄`)** button directly in the input bar (beside the Agent Picker) to immediately transfer the thread with the compact Prompt Envelope without waiting for a limit.
 * **Conversational Handoff**: When handing off to a new agent, Chorus passes the Prompt Envelope at launch. The receiving agent confirms understanding with the user via MCP tool call before proceeding.
 
 ### 3.2 Tier 1: Compact Prompt Envelope (Zero Vendor-Hook Dependency)
 * Passed natively through CLI flags or initial turn arguments (e.g. `claude --append-system-prompt`, `agy -i`, or Codex developer turn) without requiring vendor-specific hooks.
 * Contains high-signal, compact directives (<150–200 tokens total):
-  1. **Generalized Artifact Storage**: Any files created during usage not directly belonging to the project codebase are stored in `.chorus/artifacts/`.
+  1. **Generalized Artifact Storage**: Any files created during usage not directly belonging to the project codebase are stored in `.chorus/artifacts/<ai-cli>/<chat-thread-id>/`.
   2. **Active Skill Index**: Compact list of enabled skills with path pointers.
   3. **Handoff Delta (when applicable)**: User goal, touched files, test status, and remaining milestones.
 * Strips all internal thinking traces, raw tool logs, verbose diff blocks, and conversational noise.
@@ -176,3 +178,17 @@ Chorus separates core business logic from data persistence by implementing the *
 - [ ] **AC-5.4 (Markdown & Specs)**: The Artifact Viewer renders markdown files with GitHub Flavored Markdown (GFM), syntax-highlighted code blocks, copy-to-clipboard buttons, and Mermaid architecture diagrams.
 - [ ] **AC-5.5 (Visual Code Diff Review)**: Before approving file edits, the user can inspect a side-by-side visual diff inside the Canvas view.
 - [ ] **AC-5.6 (View Mode Toggle)**: The user can toggle smoothly between the Raw PTY Terminal stream and the Canvas UI at any time without resetting terminal or agent state.
+- [ ] **AC-5.7 (Draggable Resizer & Fullscreen)**: The Canvas panel provides a draggable resizer (`#art-resizer`) with smooth width clamping (320px to 85vw), double-click reset to 580px, and a 1-click fullscreen toggle (`⤢`).
+
+### 5.6 Context Mentions (@) & Skills Slash Commands (/)
+- [ ] **AC-6.1**: Autocomplete popover for `@` filters project Files, Folders, and Artifacts (`.chorus/artifacts/<ai-cli>/<chat-thread-id>/`), inserting typed chip tokens into the composer.
+- [ ] **AC-6.2**: Autocomplete popover for `/` lists project skills and built-in actions, enabling on-demand skill execution in the turn's Prompt Envelope without mutating global project skills.
+
+### 5.7 Autonomous Execution Mode (`--dangerously-skip-permissions`)
+- [ ] **AC-7.1**: When autonomous mode is enabled on the composer, the CLI engine is spawned with `--dangerously-skip-permissions` (or equivalent), bypassing inline interactive prompts while logging execution telemetry with `⚡ auto-approved` tags.
+
+### 5.8 Component Test Harness & E2E Controllability
+- [ ] **AC-8.1**: In test mode (`CHORUS_TEST_MODE=1`), Chorus exposes a typed test bridge `window.__CHORUS_HARNESS__` allowing automated test runners and AI agents to programmatically query state, dispatch actions, and synchronize with async transitions without flaky timeouts.
+- [ ] **AC-8.2**: Child CLI engines can be substituted by a deterministic native CLI simulator (`tests/e2e/stubs/cli-stub.ts`) running inside a real pseudo-terminal (`portable-pty`), testing 100% of PTY streaming, ANSI parsing, interactive stdin approval prompts, and error recovery with zero cloud API costs.
+
+> See [e2e-testing-architecture.md](specs/e2e-testing-architecture.md) for full test harness specifications and Playwright recipes.
