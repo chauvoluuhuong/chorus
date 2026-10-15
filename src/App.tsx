@@ -292,10 +292,7 @@ export function App() {
           setSelectedAgent(agent);
           setSelectedModel(model);
         },
-        triggerMidSessionHandoff: async (targetAgent: AgentId) => {
-          setSelectedAgent(targetAgent);
-          window.__CHORUS_HARNESS__?.emit('handoff:completed', { targetAgent });
-        },
+        triggerMidSessionHandoff: (targetAgent: AgentId) => handleTriggerHandoff(targetAgent),
         simulateFileDrop: async () => {},
         getPtyClient: () => ptyClientRef.current,
         spawnPty: spawnPtySession,
@@ -360,6 +357,65 @@ export function App() {
       es?.close();
     };
   }, [activeThreadId, selectedAgent]);
+
+  const handleTriggerHandoff = async (targetAgent: AgentId) => {
+    const targetModel =
+      targetAgent === 'codex' ? 'GPT Codex' : targetAgent === 'agy' ? 'Gemini 2.5 Pro' : 'Sonnet 3.7';
+    const targetName =
+      targetAgent === 'codex' ? 'Codex' : targetAgent === 'agy' ? 'Antigravity' : 'Claude';
+
+    const envelope: PromptEnvelope = {
+      turn_id: `turn-handoff-${Date.now()}`,
+      target_engine: targetAgent,
+      user_prompt: `[HANDOFF FROM ${selectedAgent.toUpperCase()}]: Continued goal 'Order form responsive layout and Prisma migrations'. Touched files: ['src/components/OrderForm.tsx']. Recent task: Complete tests and verify UI layout.`,
+      context_files: ['src/components/OrderForm.tsx'],
+      context_artifacts: activeArtifact ? [activeArtifact.path] : [],
+      on_demand_skills: ['tailwind-ui'],
+      shared_memory_budget_tokens: 4000,
+    };
+
+    setSelectedAgent(targetAgent);
+    setSelectedModel(targetModel);
+    setLastPromptEnvelope(envelope);
+    stateRef.current = {
+      ...stateRef.current,
+      selectedAgent: targetAgent,
+      selectedModel: targetModel,
+      lastPromptEnvelope: envelope,
+    };
+
+    setMessages(prev => [
+      ...prev,
+      {
+        id: `msg-handoff-${Date.now()}`,
+        threadId: activeThreadId,
+        role: 'handoff',
+        content: `Continued with ${targetName} · ${targetModel}`,
+        agent: targetAgent,
+        model: targetModel,
+        timestamp: 'Just now',
+      },
+    ]);
+    setCurrentView('chat');
+
+    // Halt previous PTY session gracefully
+    if (ptyClientRef.current) {
+      await ptyClientRef.current.kill('SIGINT');
+    }
+
+    // Spawn target PTY session
+    await spawnPtySession({
+      id: `handoff-${targetAgent}-${Date.now()}`,
+      command: 'node',
+      args: ['tests/e2e/stubs/cli-stub.js', '--agent', targetAgent],
+      env: {
+        CHORUS_TARGET_ENGINE: targetAgent,
+        CHORUS_PROMPT_ENVELOPE: JSON.stringify(envelope),
+      },
+    });
+
+    window.__CHORUS_HARNESS__?.emit('handoff:completed', { targetAgent, envelope });
+  };
 
   const handleStopPty = async () => {
     if (ptyClientRef.current) {
@@ -526,50 +582,123 @@ export function App() {
           ) : (
             <div className="thread" data-test="chat-timeline">
               <div className="thread-inner">
-                {messages.map(m => (
-                  <div
-                    key={m.id}
-                    className={m.role === 'user' ? 'u-msg' : 'a-msg'}
-                    data-test={`msg-${m.id}`}
-                  >
-                    {m.role === 'assistant' && (
-                      <div className="by">
-                        <span className={`mark xs m-${m.agent || selectedAgent}`}>
-                          {(m.agent || selectedAgent)[0].toUpperCase()}
-                        </span>
-                        <span>{m.model || selectedModel}</span>
+                {messages.map(m =>
+                  m.role === 'handoff' ? (
+                    <div
+                      key={m.id}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 8,
+                        margin: '12px 0',
+                        width: '100%',
+                      }}
+                    >
+                      <div className="handoff-div" data-test="handoff-divider">
+                        <span>{m.content}</span>
                       </div>
-                    )}
-                    <p>{m.content}</p>
-
-                    {m.toolCalls &&
-                      m.toolCalls.map(t => (
+                      <div
+                        className="card"
+                        data-test="handoff-envelope-card"
+                        style={{
+                          padding: '12px 16px',
+                          background: 'var(--bubble)',
+                          borderRadius: 12,
+                          fontSize: 13,
+                        }}
+                      >
                         <div
-                          key={t.id}
-                          className="tool-group"
-                          data-test="tool-row-auto-approved"
-                          style={{ margin: '6px 0' }}
+                          style={{
+                            fontWeight: 500,
+                            marginBottom: 6,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                          }}
                         >
-                          <div className="tool-row">
-                            <span>⚡</span>
-                            <span className="verb">{t.verb}</span>
-                            <span className="target">{t.target}</span>
-                            <span className="st-ok">
-                              ⚡ auto-approved (--dangerously-skip-permissions)
-                            </span>
+                          <span>📦 What {m.agent ? m.agent.toUpperCase() : 'Agent'} was told</span>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: 'var(--muted)',
+                              marginLeft: 'auto',
+                            }}
+                          >
+                            &lt;150 tokens
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            color: 'var(--ink-2)',
+                            fontSize: 12.5,
+                            lineHeight: 1.55,
+                          }}
+                        >
+                          <div>
+                            <strong>Recent goal:</strong> Order form responsive layout and Prisma
+                            migrations
+                          </div>
+                          <div>
+                            <strong>Touched files:</strong>{' '}
+                            <code>src/components/OrderForm.tsx</code>
+                          </div>
+                          <div
+                            style={{
+                              marginTop: 4,
+                              fontStyle: 'italic',
+                              color: 'var(--muted)',
+                            }}
+                          >
+                            Prompt Envelope transferred via IPC
                           </div>
                         </div>
-                      ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      key={m.id}
+                      className={m.role === 'user' ? 'u-msg' : 'a-msg'}
+                      data-test={`msg-${m.id}`}
+                    >
+                      {m.role === 'assistant' && (
+                        <div className="by">
+                          <span className={`mark xs m-${m.agent || selectedAgent}`}>
+                            {(m.agent || selectedAgent)[0].toUpperCase()}
+                          </span>
+                          <span>{m.model || selectedModel}</span>
+                        </div>
+                      )}
+                      <p>{m.content}</p>
 
-                    {m.approvalRequest && (
-                      <InlineApprovalCard
-                        approval={m.approvalRequest}
-                        onAllow={handleAllowApproval}
-                        onDeny={handleDenyApproval}
-                      />
-                    )}
-                  </div>
-                ))}
+                      {m.toolCalls &&
+                        m.toolCalls.map(t => (
+                          <div
+                            key={t.id}
+                            className="tool-group"
+                            data-test="tool-row-auto-approved"
+                            style={{ margin: '6px 0' }}
+                          >
+                            <div className="tool-row">
+                              <span>⚡</span>
+                              <span className="verb">{t.verb}</span>
+                              <span className="target">{t.target}</span>
+                              <span className="st-ok">
+                                ⚡ auto-approved (--dangerously-skip-permissions)
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+
+                      {m.approvalRequest && (
+                        <InlineApprovalCard
+                          approval={m.approvalRequest}
+                          onAllow={handleAllowApproval}
+                          onDeny={handleDenyApproval}
+                        />
+                      )}
+                    </div>
+                  ),
+                )}
               </div>
             </div>
           )}
@@ -583,6 +712,7 @@ export function App() {
             skills={skills}
             onToggleAutonomous={() => setAutonomousMode(!autonomousMode)}
             onSelectAgent={agent => setSelectedAgent(agent)}
+            onTriggerHandoff={handleTriggerHandoff}
             onSubmitPrompt={handleSendPrompt}
             onStopPty={handleStopPty}
           />
