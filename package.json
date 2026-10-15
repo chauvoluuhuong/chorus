@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "package": "npm run build && cd src-tauri && cargo build --release && mkdir -p target/release/bundle/dmg && hdiutil create -volname 'Chorus' -srcfolder target/release/bundle/macos/Chorus.app -ov -format UDZO target/release/bundle/dmg/Chorus-0.1.0-aarch64.dmg",
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "playwright test",
