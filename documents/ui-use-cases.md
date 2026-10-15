@@ -1,9 +1,9 @@
 # UI Use Cases — Chorus Desktop
 
-> Companion to [`ui-mockup-v2.html`](ui-mockup-v2.html). Open it in a browser; the buttons at the top are labelled with the use case IDs below.
-> [`ui-mockup.html`](ui-mockup.html) is the v1 mockup, kept for history only.
+> Companion to [`ui-mockup-v3.html`](ui-mockup-v3.html). Open it in a browser; the buttons at the top are labelled with the use case IDs below.
+> [`ui-mockup-v2.html`](ui-mockup-v2.html) and [`ui-mockup.html`](ui-mockup.html) are earlier iterations, kept for history.
 >
-> Every use case has a **How it's built** note that ties the screen to [`system-architecture.md`](system-architecture.md) and [`specs/context-and-storage-spec.md`](specs/context-and-storage-spec.md). Things the specs don't cover yet are collected in §6.
+> Every use case has a **How it's built** note that ties the screen to [`system-architecture.md`](system-architecture.md) and [`specs/cli-engine-adapters.md`](specs/cli-engine-adapters.md). Things the specs don't cover yet are collected in §6.
 
 ---
 
@@ -18,12 +18,12 @@
                                     Chat  ◄─────────────────────────┘
           ┌──────────────┬───────────┴─────┬──────────────────┐
           ▼              ▼                 ▼                  ▼
-     Tool calls     Needs approval     Makes a file       Usage limit
-     (rows in       (bell menu)        (artifact panel)   (hand off to
-      the chat)                                            another agent)
+     Tool calls     Inline approval    Makes a file       Usage limit
+     (rows in       (chat card /       (artifact panel    (hand off to
+      the chat)      bell menu)         with diff/v switch)another agent)
 ```
 
-Supporting pages: **Skills** (stored in Chorus, written to `.agents/skills`), **Shared memory** (what agents can read), **Activity** (everything agents did, in full detail). Each chat can also be viewed as its raw **Terminal**.
+Supporting pages: **Skills** (stored in Chorus, written to `.agents/skills`), **Shared memory** (2-tier context: pushed vs on-request), **Activity** (categorized into Workspace Tools vs Agent Bridge). Each chat can also be viewed as its raw **Terminal**.
 
 ---
 
@@ -33,12 +33,12 @@ Chorus follows the layout of AI chat desktop apps (Claude desktop): sidebar, cha
 
 | Area | Contents |
 |---|---|
-| **Sidebar** | New chat · Chats · Skills · Shared memory · Activity · Recents (each with its current agent's mark) · Settings. No user profile: Chorus has no account of its own; each agent signs in with its own account. |
+| **Sidebar** | New chat · Chats · Skills · Shared memory · Activity · Recents (each with its current agent's mark) · Light/Dark Theme Switcher · Settings. No user profile: Chorus has no account of its own; each agent signs in with its own account. |
 | **Home** | Serif headline "What should we build?", the message box, quick-start chips. |
-| **Message box** | `+` attach · project folder (home only) · context meter (in a chat) · **agent + model picker** · send. |
+| **Message box** | `+` attach · project folder (home only) · context meter (in a chat) · **agent + model picker** · **Stop (⏹) / Send**. |
 | **Chat header** | Chat title and folder · **Chat / Terminal** switch · **bell** with a count of pending approvals. |
-| **Chat** | User messages in a beige bubble on the right; agent replies on the left, signed "Claude Code · Sonnet 5.5"; tool calls as a collapsible list of rows; artifact cards; handoff dividers. |
-| **Side panel** | Only artifacts (Preview / Code). Approvals live in the bell, not here. |
+| **Chat** | User messages in a beige bubble on the right; agent replies on the left, signed "Claude Code · Sonnet 5.5"; tool calls as a collapsible list of rows; inline approval cards; artifact cards; handoff dividers. |
+| **Side panel** | Interactive Artifact Viewer (Version Switcher `‹ v1 of 2 ›`, Preview / Code / Diff tabs, `⤢` Fullscreen toggle). |
 | **Type** | Sans-serif for UI and messages. Serif for the home headline and page titles. |
 
 ---
@@ -50,9 +50,12 @@ Chorus follows the layout of AI chat desktop apps (Claude desktop): sidebar, cha
 - The home screen shows the headline, the message box and quick-start chips.
 - The **folder** button picks the project folder the agent will run in. It defaults to the last folder used.
 - The picker shows the last used agent and model. On first run that's the first installed agent and its default model.
+- **Autonomous Mode Switch (`--dangerously-skip-permissions`)**: Power users can toggle this option on the home screen (or composer toolbar) to spawn the CLI in autonomous mode, bypassing interactive approval prompts for all tool and shell executions.
 - Sending the first message creates the chat and starts the agent.
 
-**How it's built**: the agent CLI is spawned in a PTY (AC-1.1) with `cwd` set to the folder. A new Chorus *thread* is created and linked to that CLI session (see §6, `threads`). At session start Chorus injects the skill index (AC-3.5).
+**How it's built**: the agent CLI is spawned in a PTY (AC-1.1) with `cwd` set to the folder, appending `--dangerously-skip-permissions` (or equivalent autonomous execution flag) if enabled. A new Chorus *thread* is created and linked to that CLI session (see §6, `threads`). At session start Chorus injects the native **Prompt Envelope** (AC-3.5) containing:
+1. **Generalized Artifact Directive**: Any files created during usage not directly part of the project codebase must be saved to `.chorus/artifacts/`.
+2. **Active Skills Index**: Compact catalog (<100 tokens) of enabled skills with path pointers.
 
 **Acceptance criteria**
 - [ ] AC-01.1: No setup screens before the first chat. The only choices are folder, agent and model, and all have defaults.
@@ -138,58 +141,59 @@ Chorus follows the layout of AI chat desktop apps (Claude desktop): sidebar, cha
 - [ ] AC-05.2: Input typed in the terminal appears in the chat as a user message once the CLI records it.
 - [ ] AC-05.3: Every CLI session the chat has used is reachable as a tab, including ended ones (read-only).
 
-### UC-06 · Approvals in the bell *(mockup: "Approvals in the bell")*
+### UC-06 · Inline Approvals & Bell Menu *(mockup: "Inline Approvals")*
 
-- When an agent wants to do something in an "ask" category (§4):
-  - the bell gets a count badge;
-  - the tool row in the chat says *Waiting for approval* with **Review in notifications**.
-- The bell menu has two sections: **Waiting for your approval** (from all chats) and **Earlier** (other notices).
-- Each approval shows:
-  - agent, chat and time;
-  - a plain-words title and one sentence on what changes;
-  - **Show what will run** (tool, command, folder);
-  - **Allow** / **Don't allow** / **Go to chat**;
-  - a countdown: "9:41 left, then the agent is told 'no answer'".
-- **Risky** items have a red tag and a second confirmation ("Yes, delete 214 files").
+- When an agent requests to execute a privileged or risky command (`Bash`, schema migrations, mass deletions):
+  - An interactive **Inline Approval Card** appears directly in the chat thread at the point of action.
+  - The card displays: agent name, command summary ("Run Prisma migration"), executable command line, working directory, and risk explanation.
+  - User options: **Allow (`y`)** or **Don't allow (`n`)**.
+  - Simultaneously, the header **bell** receives a count badge for cross-chat notification.
+- **Risky** operations (e.g. mass file deletion outside project scope) display a warning tag and require explicit confirmation.
 
-**How it's built**: the `PreToolUse` hook passes the tool payload to `chorus-hook-adapter` over the local socket. The hook process blocks until Chorus answers (system-architecture §2). Hooks have a timeout, so Chorus sets it as high as the CLI allows (e.g. 600 s). If time runs out, Chorus answers *deny, reason: no answer from user*, and the agent pauses or asks again. The plain-words title comes from the Risk Analyzer.
+**How it's built**: The underlying CLI halts and waits for approval. In Claude, this is mediated via the `PreToolUse` hook relay; in Antigravity and Codex, it intercepts the native interactive PTY prompt (`Allow [y/n]`). Chorus writes the native decision (`y\n` or `n\n`) back to the CLI process without mutating LLM arguments (AC-2.1–2.3).
 
 **Acceptance criteria**
-- [ ] AC-06.1: The CLI does not run the tool until the user decides or the timeout passes (AC-2.2).
-- [ ] AC-06.2: A timeout never counts as an approval.
-- [ ] AC-06.3: The decision and the full hook payload are recorded in Activity.
+- [ ] AC-06.1: The CLI halts execution until the user clicks **Allow** or **Don't allow** (AC-2.2).
+- [ ] AC-06.2: Approvals pipe native `y`/`n` responses back to the CLI without argument alteration.
+- [ ] AC-06.3: The decision and tool payload are recorded in Activity under Workspace Tools.
 
-### UC-07 · Artifact preview *(mockup: "Artifact preview")*
+### UC-07 · Artifact Viewer & Canvas *(mockup: "Artifact preview")*
 
-- An artifact card ("Order a cake page · Web page") appears in the reply.
-- Clicking it opens the side panel with **Preview / Code**, copy, open in browser and close. The header shows the file path, version and "live".
+- When an agent generates or edits an inspectable file (`.html`, `.svg`, `.md`, or project code):
+  - An **Artifact Card** appears in the conversation reply with a 1-click **Open in Canvas** button.
+  - The side Canvas panel opens with:
+    - **Header**: File path (either in repository or `.chorus/artifacts/`), version switcher (`‹ v1 of 2 ›`), live status badge, and **Fullscreen toggle (`⤢`)**.
+    - **View Tabs**: **Preview** (sandboxed WebView or GFM renderer), **Code** (syntax-highlighted source), and **Diff** (visual side-by-side comparison).
+  - Subsequent agent edits trigger hot-reloading in real time without refreshing the main window.
 
-**How it's built**: §5 of the storage spec. `PostToolUse` registers the file in `artifacts`. The daemon emits `artifact:updated` and the panel hot-reloads (AC-5.1–5.4).
+**How it's built**: Dual detection via tool stream arguments and OS File Watcher on both project files and `.chorus/artifacts/`. Emits `artifact:updated` to the Canvas panel (AC-5.1–5.5).
 
-### UC-08 · Usage limit: hand off *(mockup: "Usage limit, hand off")*
+### UC-08 · Usage limit & Conversational Handoff *(mockup: "Usage limit, hand off")*
 
-- When the agent reports its limit, a card above the message box says: "Claude Code has reached its usage limit. It resets at 6:00 PM."
-- It offers **Continue with Codex**, **Continue with Antigravity**, or **Wait until 6 PM**. The message box is disabled until the user picks.
-- On **Continue with Codex**:
-  1. A divider "Continued with Codex · GPT Codex" appears in the same chat.
-  2. "What Codex was told" (collapsible) shows the exact summary and its size (138 tokens).
-  3. Codex says it has caught up and continues. Its tool rows can include MCP calls to fetch more detail.
-  4. The picker, the Recents mark and the Terminal tabs switch to Codex.
-- Picking another agent in the picker without a limit does the same handoff.
+- When an agent reports its plan limit:
+  - A card above the message box displays: *"Claude Code has reached its usage limit. It resets at 6:00 PM."*
+  - Quick-action buttons offer **Continue with Codex**, **Continue with Antigravity**, or **Wait until reset**.
+- On clicking **Continue with Codex**:
+  1. A thread divider appears: *"Continued with Codex · GPT Codex"*.
+  2. "What Codex was told" (collapsible) shows the exact Prompt Envelope (<150 tokens).
+  3. Codex initializes via its native Prompt Envelope, calls `agent-bridge-mcp` to verify context, and confirms understanding directly with the user before resuming work.
+  4. The picker, Recents indicator, and Terminal tabs switch to Codex.
+- **Voluntary Mid-Session Handoff**: At any point during a conversation, the user can click the **Hand off (`⇄`)** button directly in the input bar (beside the Agent Picker). A popover appears listing the other installed agents with their live quota status; clicking one immediately transfers the thread with the compact Prompt Envelope without waiting for a limit.
+- Manual agent switching in the picker operates via the same handoff pipeline.
 
 **How it's built**
 | Step | Mechanism |
 |---|---|
-| Detect the limit | The transcript parser matches the CLI's limit message or error event and reads the reset time. |
-| Build the summary | Smart Context Handoff Engine, from the thread's `turns.handoff_summary` (goal, done, files, verification, open items), within 200 tokens (AC-3.2, AC-3.3). |
-| Start the new agent | Spawn the new CLI in the same folder, with the model chosen in the picker. |
-| Deliver the summary | Through the new CLI's prompt hook where it has one (`UserPromptSubmit` for Claude Code, `PreInvocation` for Antigravity). Otherwise prepend it to the first prompt. |
-| Deeper detail | The new agent calls `agent-bridge-mcp` (`list_agent_activities`, `get_tool_execution`, `get_artifact_content`) — Tier 2. |
+| Detect the limit | Transcript parser matches the CLI's limit message or error event and reads reset time. |
+| Build the summary | Smart Context Handoff Engine builds delta (<150 tokens) from thread history (goal, touched files, test status, open tasks). |
+| Start the new agent | Spawns the target CLI in an isolated PTY with `cwd` set to the workspace. |
+| Deliver the summary | Passed natively via the **Prompt Envelope** (e.g. `--append-system-prompt` for Claude, `-i` for Antigravity, initial turn envelope for Codex), zero vendor-hook dependency (AC-3.2). |
+| Deeper detail | The receiving agent queries `agent-bridge-mcp` on-demand (`list_agent_activities`, `get_tool_execution`, `get_artifact_content`) — Tier 2. |
 
 **Acceptance criteria**
-- [ ] AC-08.1: One chat thread holds all agents' messages, each signed with agent and model.
-- [ ] AC-08.2: The summary text is visible in the chat and in Shared memory → Handoff summaries.
-- [ ] AC-08.3: Pending approvals of the limited agent are cancelled; the new agent asks again if it needs the same action.
+- [ ] AC-08.1: One unified chat thread holds all agents' turns, signed with agent name and model.
+- [ ] AC-08.2: The Prompt Envelope briefing is visible in the chat and in Shared Memory → Handoff Summaries.
+- [ ] AC-08.3: Pending approvals of the limited agent are cleanly cancelled; the new agent requests permissions anew.
 
 ### UC-09 · Skills and sync *(mockup: "Skills and sync")*
 
@@ -294,9 +298,10 @@ The current [`context-and-storage-spec.md`](specs/context-and-storage-spec.md) c
 | Agent status | Per agent: `installed`, `version`, `signed_in`, `models[]`, `limit {used_pct, resets_at, source}` | UC-02, UC-03 |
 | Skill sync | On `skills`: `origin` values (`user_created`, `agent_created`, `imported:<dir>`), `source_path`, `disk_sha256`, `last_synced_at` | UC-09 |
 
-### To check against the real CLIs before building
+### Checked & Resolved in CLI Engine Adapters Research
+*(See [`specs/cli-engine-adapters.md`](specs/cli-engine-adapters.md) for full scorecard)*
 
-1. Which hook events **Antigravity** (`agy`) and **Codex** support for prompt injection and tool approval, and their timeout limits.
+1. **Prompt Injection & Hooks**: Resolved via native **Prompt Envelope** (zero hooks required for session start). Tool approval is handled via PTY prompt interception (`y/n`) for `agy` and `codex`, and via settings `PreToolUse` hook relay for `claude`.
 2. Where each CLI reports **plan-limit usage** and **reset time**, and the exact wording or event of its limit-reached message.
 3. How each CLI lists **available models** and whether the model can be changed **mid-session**.
 4. Whether Codex and Antigravity read skills from `.agents/skills` directly or need a symlink like `.claude/skills`.

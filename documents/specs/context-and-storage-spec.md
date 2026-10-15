@@ -5,19 +5,20 @@
 
 ---
 
-## 1. Document Database Choice: PoloDB
+## 1. Storage Architecture: Decoupled Adapter Pattern with `redb` Default
 
-Chorus adopts [PoloDB](https://www.polodb.org/) as its embedded document database engine:
-* **Embedded & In-Process**: Compiles directly into the Rust backend (Tauri) with zero external setup, daemons, or ports.
-* **MongoDB-Compatible API**: Operates on native BSON/JSON collections (`db.collection("turns").find(...)`).
-* **Single File Footprint**: All collections reside in a single file on disk (`~/.chorus/ledger.polodb`).
+Chorus avoids the complexity of relational databases (no SQL schemas, joins, or table migrations) and eliminates external `.log` file clutter on disk. Instead, Chorus relies on the **Storage Adapter Pattern**:
+* **Default Engine (`redb`)**: An embedded, pure-Rust Key-Value store (`~/.chorus/chorus.redb`). Stores serialized JSON documents directly, has zero runtime dependencies, is crash-safe, and includes a native `compact()` API to shrink file size after pruning.
+* **High-Level Contract**: The application layer interacts with a clean document / key-value interface (`turns`, `executions`, `artifacts`, `skills`).
+* **Database Agnostic**: The `StorageAdapter` trait decouples application logic. Swapping to alternative engines (e.g. SurrealDB or other KV stores) only requires implementing low-level indexing and compaction without modifying business logic.
+* **Single Store Footprint**: All state (chat history, turn summaries, and tool execution outputs) is stored directly in the single database file without maintaining separate `.log` files on disk.
 
 ---
 
-## 2. Document Data Schemas (PoloDB Collections)
+## 2. Document Data Schemas
 
-### 2.1 Collection: `turns`
-Tracks user prompts, intent, and high-level agent outcomes.
+### 2.1 Collection / Bucket: `turns`
+Tracks user prompts, intent, and high-level agent outcomes (permanently preserved, never pruned).
 
 ```json
 {
@@ -40,10 +41,20 @@ Tracks user prompts, intent, and high-level agent outcomes.
 }
 ```
 
-### 2.2 Collection: `executions`
-Stores structured tool invocations, arguments, and execution telemetry.
+### 2.2 Collection / Bucket: `executions` (Ring Buffer Managed)
+Stores structured tool invocations, arguments, and full execution output directly in the database (no external `.log` files).
+
+To prevent unlimited disk growth, `executions` is managed as a **Ring Buffer**:
+* **Configurable Cap**: User-selectable storage cap (default: **1 GB**).
+* **Purge Threshold**: When total tool execution data reaches the cap, Chorus prompts the user to purge the oldest tool results (default chunk: **10%–20% of cap**, e.g., 100 MB–200 MB, configurable down to 50 MB) or auto-cleans if enabled.
+* **Guaranteed Thread Safety**: Purging only removes heavy tool results (`output`). **Chat threads, messages, turn summaries, and artifacts are ALWAYS preserved.**
+* **Pruned Reference Handling**:
+  * In the database, the record is marked `status: "pruned"`, `output: null`, and `summary: "Output removed to free space"`.
+  * **UI**: Tool rows in chat and activity views display a dimmed badge: *"Output removed to free space"*.
+  * **MCP Bridge**: When an agent queries a pruned execution via `get_tool_execution`, the MCP server gracefully returns `{"status": "removed", "message": "Detailed output was pruned to respect storage cap."}`.
 
 ```json
+// Active execution record
 {
   "_id": "exec_902",
   "turn_id": "turn_1048",
@@ -54,8 +65,24 @@ Stores structured tool invocations, arguments, and execution telemetry.
   },
   "status": "success",
   "exit_code": 0,
-  "stdout_preview": "PASS test/auth.test.ts (12 tests passed)",
-  "raw_log_path": "~/.chorus/logs/exec_902.log",
+  "output": "PASS test/auth.test.ts (12 tests passed)\n...",
+  "output_size_bytes": 48200,
+  "executed_at": "2026-10-14T10:15:20Z"
+}
+
+// Pruned execution record (after Ring Buffer purge)
+{
+  "_id": "exec_902",
+  "turn_id": "turn_1048",
+  "agent_id": "claude",
+  "tool_name": "run_command",
+  "arguments": {
+    "CommandLine": "npm test"
+  },
+  "status": "pruned",
+  "exit_code": 0,
+  "output": null,
+  "summary": "Output removed to free space",
   "executed_at": "2026-10-14T10:15:20Z"
 }
 ```
@@ -120,10 +147,10 @@ Stores complete skill packages in the database—including markdown instructions
 ```
 
 #### 2.4.1 The Materialization & Dematerialization Lifecycle
-* **Source of Truth**: PoloDB stores the full skill manifest, executable metadata, and file contents inside `bundle_files`.
+* **Source of Truth**: The database stores the full skill manifest, executable metadata, and file contents inside `bundle_files`.
 * **Materialization (On Enable)**: When a skill is set to `is_enabled: true` (or updated), Chorus writes the full folder structure to disk at `materialized_path`, restoring directory trees and setting executable permissions (`chmod +x`) on files where `is_executable: true`.
-* **Dematerialization (On Disable)**: When a skill is set to `is_enabled: false`, Chorus automatically removes its folder from disk (`rm -rf .agents/skills/<name>`) to keep the workspace clean, while preserving all code, scripts, and history inside PoloDB.
-* **Deletion**: Permanently removes the record from PoloDB and purges the materialized folder from disk.
+* **Dematerialization (On Disable)**: When a skill is set to `is_enabled: false`, Chorus automatically removes its folder from disk (`rm -rf .agents/skills/<name>`) to keep the workspace clean, while preserving all code, scripts, and history inside the database.
+* **Deletion**: Permanently removes the record from the database and purges the materialized folder from disk.
 * **Creation Modes**:
   1. **UI Skill Studio**: Form entry with optional **AI Refine** assistant to generate script boilerplate and guidelines.
   2. **On-the-Fly Agent Tool**: Agents can invoke `create_project_skill` directly from chat conversation turns.
@@ -132,21 +159,44 @@ Stores complete skill packages in the database—including markdown instructions
 
 ## 3. Storage Adapter Trait (Rust Draft)
 
+The application layer interacts exclusively with the `StorageAdapter` trait. Each concrete database adapter implements low-level indexing, ring buffer eviction, and storage compaction/shrinking.
+
 ```rust
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StorageStats {
+    pub total_size_bytes: u64,
+    pub tool_executions_bytes: u64,
+    pub execution_cap_bytes: u64, // default 1 GB
+    pub turns_count: usize,
+    pub executions_count: usize,
+    pub pruned_executions_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PruneReport {
+    pub records_pruned: usize,
+    pub bytes_freed: u64,
+}
+
 #[async_trait]
 pub trait StorageAdapter: Send + Sync {
-    // Turns
+    // Turns (Permanent)
     async fn save_turn(&self, turn: &TurnDoc) -> Result<(), StorageError>;
     async fn get_turn(&self, turn_id: &str) -> Result<Option<TurnDoc>, StorageError>;
     async fn get_latest_turn(&self, agent_id: Option<&str>) -> Result<Option<TurnDoc>, StorageError>;
 
-    // Executions
+    // Executions (Ring Buffer Managed)
     async fn record_execution(&self, exec: &ToolExecutionDoc) -> Result<(), StorageError>;
     async fn get_execution(&self, exec_id: &str) -> Result<Option<ToolExecutionDoc>, StorageError>;
     async fn list_executions(&self, filter: ExecutionFilter) -> Result<Vec<ToolExecutionDoc>, StorageError>;
+    async fn prune_oldest_executions(&self, target_bytes_to_free: u64) -> Result<PruneReport, StorageError>;
+
+    // Storage Management & Compaction
+    async fn get_storage_stats(&self) -> Result<StorageStats, StorageError>;
+    async fn compact(&self) -> Result<(), StorageError>; // Low-level DB shrink/vacuum
 
     // Artifacts
     async fn register_artifact(&self, artifact: &ArtifactDoc) -> Result<(), StorageError>;
@@ -168,7 +218,7 @@ pub trait StorageAdapter: Send + Sync {
 // Telemetry & Execution Tools
 interface ListAgentActivitiesParams {
   agent?: 'agy' | 'claude' | 'codex';
-  status?: 'success' | 'failed' | 'pending';
+  status?: 'success' | 'failed' | 'pending' | 'pruned';
   limit?: number;
 }
 
@@ -176,6 +226,13 @@ interface GetToolExecutionParams {
   exec_id: string;
   offset?: 'head' | 'tail';
   lines?: number;
+}
+
+interface GetToolExecutionResult {
+  exec_id: string;
+  status: 'success' | 'failed' | 'removed';
+  output?: string;
+  message?: string; // e.g., "Detailed output was pruned to respect storage cap."
 }
 
 // Artifact Discovery & Retrieval
@@ -207,7 +264,7 @@ Like Antigravity and Claude Desktop, Chorus provides an integrated **Artifact Vi
 [Agent writes file (e.g., ui-mockup.html)]
                     │
                     ▼
-[PostToolUse Hook triggers] ──► Records artifact in PoloDB
+[PostToolUse Hook triggers] ──► Records artifact in database
                     │
                     ▼
 [Daemon emits IPC event: `artifact:updated`]
