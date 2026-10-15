@@ -31,8 +31,8 @@ chorus/
   - [`features-brainstorm.md`](ideas/features-brainstorm.md): Feature backlog, inter-agent workflows, and UI requirements.
 - **[documents/](documents/)**
   - [`system-architecture.md`](documents/system-architecture.md): Dual-Plane architecture, PTY management, hook contracts, and MCP bridge specs.
-  - [`ui-mockup-v2.html`](documents/ui-mockup-v2.html): Interactive desktop UI mockup (Claude-desktop style: chat, approvals and artifacts panel, Skills, Activity). Open in a browser.
-  - [`ui-use-cases.md`](documents/ui-use-cases.md): UI use cases (UC-01 to UC-17), layout rules, approval levels, and acceptance criteria.
+  - [`ui-mockup-v2.html`](documents/ui-mockup-v2.html): Interactive desktop UI mockup in AI-chat-app style: start a chat, pick an agent, approvals in the bell, hand off on usage limits. Open in a browser.
+  - [`ui-use-cases.md`](documents/ui-use-cases.md): UI use cases (UC-01 to UC-10) built around the core flow: pick an agent, install if missing, hand off on usage limits.
   - [`ui-mockup.html`](documents/ui-mockup.html): v1 mockup, superseded by v2 and kept for history.
   - [`open-vs-closed-core.md`](documents/open-vs-closed-core.md): The Open-Core boundary (open-source bridge vs. proprietary desktop GUI).
   - [`distribution-and-trust.md`](documents/distribution-and-trust.md): Apple Notarization, Windows Code Signing, and MoR billing guide.

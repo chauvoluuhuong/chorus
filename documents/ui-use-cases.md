@@ -2,374 +2,217 @@
 
 > Companion to [`ui-mockup-v2.html`](ui-mockup-v2.html). Open it in a browser and use the buttons at the top; each one is labelled with the use case IDs it shows.
 >
-> [`ui-mockup.html`](ui-mockup.html) is the v1 mockup, kept for history only. It is superseded by v2.
+> [`ui-mockup.html`](ui-mockup.html) is the v1 mockup, kept for history only.
 
 ---
 
-## 1. Product concept in one paragraph
+## 1. The core value, in one line
 
-Chorus is a desktop app that feels like the Claude desktop app, but the "model" you talk to is a **coding agent running on your computer**: Claude Code, Antigravity or Codex. You chat with an agent in the middle of the screen. When an agent wants to do something important, it **pauses and asks you in the right panel**. When an agent makes something you can look at (a web page, an image, a document), it shows up as an **artifact** you can open in that same right panel. Agents share one memory of the project, so you can switch agents mid-chat without explaining again. Skills are shared across agents from one place. A separate **Activity** page holds the full detail for anyone who wants it.
+**Start a chat, pick which coding agent does the work (Claude Code, Antigravity or Codex), and when that agent hits its usage limit, hand the chat to another one without starting over.**
 
----
-
-## 2. Layout
+Everything else in the app supports that loop.
 
 ```text
-┌────────────┬───────────────────────────────────────┬──────────────────────────┐
-│ Sidebar    │ Chat                                  │ Right panel              │
-│            │                                       │ (only when needed)       │
-│ + New chat │  Cake order page        [2 need you]  │ [Needs you 2] [Artifact] │
-│ Chats      │                                       │                          │
-│ Skills     │  You: Add a page where customers…     │  Approval cards          │
-│ Activity   │  Claude Code: Done. …                 │    or                    │
-│            │   [Order a cake page · Web page]      │  Artifact preview        │
-│ Project ▾  │   [Waiting for your OK]               │                          │
-│ Recents    │  ── Codex caught up on this chat ──   │                          │
-│ …          │                                       │                          │
-│ Agents     │ ┌───────────────────────────────────┐ │                          │
-│ ● Claude   │ │ Reply to Claude Code…             │ │                          │
-│ ● Antigrav │ │ 📎  ✦ 3 skills    [Claude Code ▾] ↑│ │                          │
-│ ● Codex    │ └───────────────────────────────────┘ │                          │
-└────────────┴───────────────────────────────────────┴──────────────────────────┘
+ New chat ──► Pick agent ──► Installed? ──no──► Install popup ──┐
+                                 │ yes                          │
+                                 ▼                              │
+                               Chat ◄───────────────────────────┘
+                                 │
+         ┌───────────────────────┼─────────────────────────┐
+         ▼                       ▼                         ▼
+  Agent needs approval    Agent makes a file        Usage limit reached
+  → bell notification     → artifact card,          → "Continue with Codex"
+    Allow / Don't allow     opens in side panel       → new agent gets a summary
+                                                        and keeps going
 ```
 
-| Area | Holds | Never holds |
-|---|---|---|
-| **Sidebar** | New chat, Chats, Skills, Activity, project switcher, recent chats, each agent's status (Ready / Working / Needs you / Not set up) | Process IDs, file paths, versions |
-| **Chat** | Your messages, agent replies, a collapsed "Worked for 2 min · changed 3 files" summary, artifact cards, "Waiting for your OK" chips, "switched / caught up" dividers | Raw terminal output, hook data, thinking traces |
-| **Composer** | Message box, attach, skills count, **agent picker** (like Claude's model picker), send | — |
-| **Right panel** | Only two things: **Needs you** (approvals) and **artifacts** (preview). It opens when there is something there and closes when there isn't. | Live app preview, logs, file lists, settings |
-| **Activity page** | Timeline of everything every agent did, and **Shared memory** (what agents know and told each other) | — |
-
-On a phone-width window the sidebar becomes a top row, and the right panel moves under the chat.
-
 ---
 
-## 3. Design rules
+## 2. It looks and works like an AI chat desktop app
 
-| # | Rule |
+Chorus copies the layout and feel of the Claude desktop app on purpose. People already know how to use it.
+
+| Element | How it looks in Chorus |
 |---|---|
-| R1 | **Look and behave like the Claude desktop app.** Warm neutral surfaces, serif for agent replies and headings, one clay accent, a large rounded composer, artifacts in a side panel. |
-| R2 | **Ask very little up front.** First launch only asks which agents to use. Everything else has a sensible default. |
-| R3 | **The right panel is for action and results only.** Approvals and artifacts. Nothing else. |
-| R4 | **Agents are chosen like models.** The picker lives in the composer. Switching keeps the chat. |
-| R5 | **Every approval says what will happen in plain words first.** The exact command is one click away ("Show exactly what will run"), never the headline. |
-| R6 | **No technical mode.** Detail lives on the Activity page, which anyone can open at any time. |
-| R7 | **Skills are managed in one place** and synced to the agents you choose. |
-| R8 | **Every error offers a next step.** |
+| **Home** | Logo and a serif greeting ("Good evening, Linh"), a large rounded message box, quick-start chips under it |
+| **Sidebar** | New chat, Chats, Skills, Activity, Recents, the user at the bottom. Each recent chat shows a small mark for the agent it uses. |
+| **Messages** | Sans-serif text. The user's messages sit in a beige bubble on the right. The agent's replies are plain text on the left, signed with the agent's name. |
+| **Tool use** | One quiet line under the reply ("Created 2 files, edited 1 file ›") that expands to a short plain list |
+| **Message box** | `+` (attach), skills, **agent picker** at the bottom right (where Claude has its model picker), clay send button |
+| **Artifacts** | A card in the chat ("Order a cake page · Web page · Click to open"). Clicking it opens a side panel with Preview / Code. |
+| **Approvals** | A **bell icon** at the top right with a count badge. Approvals live in its dropdown, like notifications. |
+| **Type** | Sans-serif for UI and messages; serif only for the home greeting and page titles. Same warm off-white and dark charcoal backgrounds, one clay accent. |
 
 ---
 
-## 4. Words we use
+## 3. Words on screen
 
-| Internal term | On screen |
+| Internal term | What the user sees |
 |---|---|
-| CLI, binary, `agy` / `claude` / `codex` | **Agent**: Claude Code, Antigravity, Codex |
-| PreToolUse hook, intercepted tool call | **Needs you**, "Waiting for your OK" |
-| Allow / deny decision | **Allow**, **Don't allow**, **Ask why** |
-| Tool calls, tool telemetry | "Worked for 2 min · changed 3 files" (expandable plain list) |
-| Context handoff, PreInvocation injection | "Codex caught up on this chat" |
-| `agent-bridge-mcp` `ask_peer_agent` | "Claude Code asked Codex to test the site" |
-| Shared bus | **Activity → Timeline** |
-| Context ledger (turns, handoff summaries) | **Activity → Shared memory** |
-| `.agents/skills`, skill bundle, materialize / dematerialize | **Skills**: on / off, "Synced to" |
-| Artifact registry entry | **Artifact** card ("Order a cake page · Web page") |
-| Workspace / repo / cwd | **Project** ("Sweet Crumb Bakery") |
+| CLI, binary, `agy` / `claude` / `codex` | Agent: **Claude Code**, **Antigravity**, **Codex** |
+| PreToolUse hook / intercepted tool call | Approval in the bell: "Set up storage for cake orders" with **Allow** / **Don't allow** |
+| Context handoff | "Continued with Codex", plus a collapsible "What Codex was told" |
+| Usage limit / rate limit | "Claude Code has reached its usage limit. It resets at 6:00 PM." |
+| Tool telemetry | "Created 2 files, edited 1 file" |
+| Shared bus, context ledger | Activity page: **Timeline** and **Shared memory** |
+| `.agents/skills` | **Skills** |
 
 ---
 
-## 5. Personas
+## 4. Use cases
 
-| Persona | Who | What they need from Chorus |
-|---|---|---|
-| **Linh, bakery owner** | Has never used a terminal. Has a Claude subscription. | Get an order page live without breaking her site. |
-| **Marco, product marketer** | Uses Notion and Figma. Has ChatGPT and Claude. | Use whichever agent is best for each step, and never answer a question he doesn't understand. |
-| **Dana, indie developer** | Knows Git and the terminal. Uses all three agents. | See exactly what ran and what agents told each other (Activity page). |
+### UC-01 · Start a new chat *(mockup: "New chat")*
 
----
-
-## 6. Use cases
-
-Each use case lists the trigger, the main flow, the words on screen, alternate flows and acceptance criteria.
-
-### Getting started
-
-#### UC-01 · Pick your agents *(mockup: "Pick your agents")*
-
-- **Trigger**: First launch.
+- **Trigger**: App opens, or **New chat** in the sidebar.
 - **Main flow**
-  1. One screen: "Which AI agents do you want to use?" with a row per agent: Claude Code, Antigravity, Codex.
-  2. Chorus has already checked the computer. Each row shows **Installed** or **Not installed · Set up**.
-  3. Installed agents are pre-selected. The user ticks or unticks agents and clicks **Start building**.
-  4. The app opens on a new chat in the default project folder, using the first selected agent.
-- **Copy**: "Pick one or more. You can switch between them in any chat, and change this later."
-- **Alternate flows**
-  - *A selected agent isn't installed*: footer says "Codex isn't installed yet. Set it up now, or start without it." **Start building** still works if at least one selected agent is ready.
-  - *Nothing installed*: all rows show **Set up**; **Start building** is disabled until one agent is ready.
+  1. Home shows the greeting, the message box and quick-start chips (Build a page, Fix something, Make a tool, Explain my code).
+  2. The agent picker in the message box shows the last used agent (Claude Code on first run, or the first installed one).
+  3. The user types and sends. The chat opens with the selected agent.
 - **Acceptance criteria**
-  - [ ] AC-01.1: First launch has exactly one decision (which agents). No project, theme, permission or account questions.
-  - [ ] AC-01.2: Installed agents are detected automatically and pre-selected.
-  - [ ] AC-01.3: The user can reach a working chat in two clicks if any agent is installed.
+  - [ ] AC-01.1: No setup screens before the first chat. The only choice is the agent, and it has a default.
+  - [ ] AC-01.2: The first message creates the chat and a title is generated from it.
 
-#### UC-02 · Install helper for a missing agent *(mockup: "Install helper")*
+### UC-02 · Pick an agent *(mockup: "Pick an agent")*
 
-- **Trigger**: **Set up** on an agent (from UC-01, the agent picker, or the sidebar).
-- **Main flow**: a sheet "Set up Codex" with three steps:
-  1. **Install** — **Install for me** (Chorus runs the installer in the background with a progress bar). Under it: "Prefer to do it yourself? Paste this into Terminal:" and the command with a **Copy** button.
-  2. **Sign in** — "Codex uses your ChatGPT account. A sign-in page opens in your browser." **Sign in**.
-  3. **Check it works** — Chorus runs a quick test and shows "Codex is ready."
-  Each step turns into a green check when done. **Done** closes the sheet; the agent is now selectable.
+- **Trigger**: Clicking the agent picker in the message box.
+- **Main flow**
+  1. A menu lists the three agents. Each has a one-line strength: "Great for building and fixing", "Great for planning big changes", "Great for testing and reviews".
+  2. The current agent has a check. An agent that isn't installed shows an **Install** tag. An agent at its usage limit shows **Limit until 6 PM** and can't be picked.
+  3. Footer: "Agents run on your computer with your own accounts."
+- **Acceptance criteria**
+  - [ ] AC-02.1: Chorus detects which agents are installed and signed in when it starts, and again when the menu opens.
+  - [ ] AC-02.2: Picking an installed agent takes effect for the next message.
+
+### UC-03 · The agent isn't installed *(mockup: "Agent not installed")*
+
+- **Trigger**: Picking an agent with the **Install** tag.
+- **Main flow**: a popup titled "Codex isn't installed yet" with "Codex runs on your computer. Install it once and use it in any chat." and three steps:
+  1. **Install**: **Install for me** runs the installer in the background with a progress bar. Below it: "Or paste this into Terminal:" with the command and a copy button.
+  2. **Sign in with ChatGPT**: opens the sign-in page in the browser.
+  3. **Quick check**: Chorus confirms the agent runs.
+  When all three are done, the title changes to "Codex is ready" and **Use Codex** selects it in the picker.
 - **Alternate flows**
-  - *A prerequisite is missing* (e.g. Node.js for npm-based agents): an extra first step "Codex needs Node.js. **Install it for me**."
+  - *Missing prerequisite* (e.g. Node.js): an extra first step, "Codex needs Node.js. **Install it for me**."
   - *Install fails*: "Couldn't install Codex. Check your internet connection and try again." with **Try again** and the manual command.
-  - *User closes the sheet*: **Do this later**; the agent stays "Not set up" and can be finished from the sidebar.
+  - **Not now** closes the popup and keeps the previous agent selected.
 - **Acceptance criteria**
-  - [ ] AC-02.1: A non-technical user can install and sign in to an agent without opening a terminal.
-  - [ ] AC-02.2: The manual command is always shown as an alternative, with copy.
-  - [ ] AC-02.3: Install runs in the background; the rest of the app stays usable.
+  - [ ] AC-03.1: A user can install and sign in without opening a terminal.
+  - [ ] AC-03.2: The manual command is always shown, with copy.
+  - [ ] AC-03.3: Closing the popup never leaves the chat without a working agent.
 
-#### UC-03 · Start a chat in a project
+### UC-04 · Chat with the agent *(mockup: "Chatting")*
 
-- **Trigger**: **New chat** or the project switcher in the sidebar.
 - **Main flow**
-  1. **New chat** opens an empty chat in the current project with the last used agent selected.
-  2. The project switcher lists recent projects and **Open folder…**.
-  3. A first-time project starts in a default folder named after the first request ("Sweet Crumb Bakery").
+  1. Each reply is signed with the agent's mark and name.
+  2. Tool use collapses into one line ("Created 2 files, edited 1 file ›"). Expanding it shows plain steps.
+  3. While the agent works, a small animated "Working…" line shows under the reply.
 - **Acceptance criteria**
-  - [ ] AC-03.1: The project shows by name; the folder location only appears in the project switcher's menu.
-  - [ ] AC-03.2: Every chat belongs to one project; Recents shows chats of the current project.
+  - [ ] AC-04.1: No terminal output, file diffs or thinking traces in the chat.
+  - [ ] AC-04.2: Every reply shows which agent wrote it.
 
-### Working with agents
+### UC-05 · Approvals in the bell *(mockup: "Approvals in the bell")*
 
-#### UC-04 · Chat with an agent *(mockup: "Chat + approvals")*
-
-- **Trigger**: User sends a message.
+- **Trigger**: An agent wants to do something in an "ask first" category (§5).
 - **Main flow**
-  1. The reply streams in as normal text (serif), signed with the agent's name.
-  2. While working, a collapsed line shows progress: "Working… · reading your website". When done it becomes "Worked for 2 min · changed 3 files". Expanding it shows a short plain list ("Created the 'Order a cake' page").
-  3. Anything the agent made that can be previewed appears as an **artifact card** under the reply (UC-06).
-  4. The agent's status in the sidebar moves Ready → Working → Ready.
+  1. The agent pauses. The **bell** at the top right gets a badge with the number of pending approvals.
+  2. In the chat, a row shows "Waiting for your approval · Set up storage for cake orders" with **Review**, which opens the bell with that item highlighted.
+  3. The bell dropdown, "Notifications":
+     - **Waiting for your approval**: one item per request, from any chat. Agent, chat name and time; a title in plain words; one sentence on what changes; "Show what will run" (collapsed); **Allow** / **Don't allow** / **Go to chat**.
+     - **Earlier**: other notices ("Antigravity finished the holiday landing page").
+  4. **Allow** marks the item "Allowed", the chat row turns green ("You allowed: …") and the agent continues. **Don't allow** tells the agent to find another way.
 - **Alternate flows**
-  - *User sends another message while the agent works*: it queues under the current reply with **Send now** / **Remove**.
-  - *Stop*: the send button becomes **Stop** while the agent works.
-  - *Attach*: images and files can be attached from the composer.
+  - *Risky action* (deleting many files, publishing, touching files outside the project): a red **Risky** tag. **Allow** asks again with a specific button ("Yes, delete 214 files").
+  - *App in the background*: also sent as a system notification.
 - **Acceptance criteria**
-  - [ ] AC-04.1: No raw tool names, file diffs or terminal output appear in the chat.
-  - [ ] AC-04.2: The progress line is collapsed by default once the agent finishes.
-  - [ ] AC-04.3: Skills count in the composer reflects skills that are on and synced to the selected agent.
+  - [ ] AC-05.1: The agent stays paused until the user decides. Nothing is approved on a timeout (AC-2.2 in [system-architecture.md](system-architecture.md)).
+  - [ ] AC-05.2: The bell shows approvals from all chats, newest first.
+  - [ ] AC-05.3: The headline is the outcome, not the command. The command is one click away.
 
-#### UC-05 · Approve or decline an action *(mockup: "Chat + approvals")*
+### UC-06 · Preview an artifact *(mockup: "Chatting")*
 
-- **Trigger**: An agent tries an action in an "ask first" category (§7).
+- **Trigger**: The agent creates or edits a web page, image, document or diagram.
 - **Main flow**
-  1. The agent pauses. In chat, a chip says **Waiting for your OK**. The chat header shows "2 need you". The sidebar agent shows **Needs you**.
-  2. The right panel opens on **Needs you** with one card per pending action, newest first:
-     - Agent name, level tag (**Please check** or **Risky**), time
-     - Title in plain words: "Set up storage for cake orders"
-     - One or two sentences on what changes and what doesn't
-     - **Show exactly what will run** (collapsed): the command and files
-     - Optional: "Always allow database changes in this project"
-     - **Allow** · **Don't allow** · **Ask why**
-  3. **Allow**: the card moves to "Earlier in this chat · Allowed …", the chat chip turns green ("You allowed this"), and the agent continues.
-  4. When nothing is pending and no artifact is open, the right panel closes.
+  1. An artifact card appears in the reply.
+  2. Clicking it opens a side panel with **Preview** / **Code**, copy, open in browser, and close.
+  3. Later edits by any agent update the open preview and add a version.
+- **Acceptance criteria**
+  - [ ] AC-06.1: Artifacts are detected from file writes automatically (AC-5.1).
+  - [ ] AC-06.2: Web pages render sandboxed and reload on change (AC-5.2, AC-5.3).
+
+### UC-07 · Usage limit: hand off to another agent *(mockup: "Usage limit, hand off")*
+
+This is the core of Chorus.
+
+- **Trigger**: The current agent reports that its usage limit is reached.
+- **Main flow**
+  1. A card appears above the message box: "Claude Code has reached its usage limit. It resets at 6:00 PM. Hand this chat to another agent to keep going. It gets a summary of everything so far."
+  2. Buttons: **Continue with Codex** (primary: the best installed alternative), **Continue with Antigravity**, **Wait until 6 PM** (sets a reminder).
+  3. The message box is disabled until the user picks ("Pick an agent above to keep going").
+  4. On **Continue with Codex**:
+     - a divider "Continued with Codex" is added to the same chat
+     - a collapsible "What Codex was told" shows the exact summary: goal, what's done, what's in progress, files
+     - Codex replies that it has caught up and continues the unfinished work
+     - the picker switches to Codex, and the chat's mark in Recents changes to Codex
 - **Alternate flows**
-  - *Risky action*: **Allow** asks for a second click with a specific label ("Yes, delete 214 files"). "Always allow" is not offered.
-  - *Don't allow*: the chip turns red ("You said no"); the agent gets the refusal and suggests another way ("I can email each order to you instead").
-  - *Ask why*: focuses the composer for that agent with "Why do you need to do this? Is there a safer way?" The action stays paused.
-  - *Clicking a "Waiting for your OK" chip*: opens the panel and highlights that card.
-  - *App in background*: a system notification "Claude Code needs your OK to keep going."
-  - *Multiple agents*: cards from all agents in this chat appear in one list.
+  - *No other agent installed*: the card offers **Install Codex** (UC-03) or **Wait until 6 PM**.
+  - *Other agents also limited*: the card lists when each resets.
+  - *Manual switch without a limit*: picking another agent in the picker does the same handoff with a "Continued with …" divider.
+  - *The original agent's limit resets*: the user can switch back the same way; the summary includes what the second agent did.
 - **Acceptance criteria**
-  - [ ] AC-05.1: The agent stays paused until the user decides; nothing auto-approves on timeout (maps to AC-2.2 in [system-architecture.md](system-architecture.md)).
-  - [ ] AC-05.2: The card headline is the outcome, not the command; the command is available on demand.
-  - [ ] AC-05.3: "Always allow" is scoped to one category in one project and can be undone from the project menu.
-  - [ ] AC-05.4: Risky actions need a confirming second click.
-  - [ ] AC-05.5: The right panel never shows anything other than approvals and artifacts.
+  - [ ] AC-07.1: The chat history stays in one thread across agents.
+  - [ ] AC-07.2: The summary given to the new agent is under 200 tokens and covers goal, done, in progress, and files (AC-3.2, AC-3.3).
+  - [ ] AC-07.3: The exact summary is visible in the chat ("What Codex was told") and in Activity → Shared memory.
+  - [ ] AC-07.4: Pending approvals from the limited agent are cancelled and the new agent re-asks if it needs the same action.
 
-#### UC-06 · Preview an artifact *(mockup: "Preview an artifact")*
+### UC-08 · Recents show which agent each chat uses
 
-- **Trigger**: An agent creates or edits a previewable file: web page (`.html`), image (`.png`, `.jpg`, `.svg`), document (`.md`), diagram.
+- Each item in Recents has the mark of its current agent. After a handoff the mark changes.
+- **Acceptance criteria**
+  - [ ] AC-08.1: Opening an old chat restores its last agent in the picker.
+
+### UC-09 · Skills *(mockup: "Skills")*
+
 - **Main flow**
-  1. An artifact card appears in the chat: icon, title ("Order a cake page"), type ("Web page"), "Click to open".
-  2. Clicking it opens the artifact as a tab in the right panel next to **Needs you**.
-  3. Web pages render live in a sandboxed frame; documents render as formatted text; images with zoom.
-  4. Header: title and a **version** picker (each agent edit makes a new version). Footer: **Open in browser** / **Copy** / **Save to project**, and **Ask for changes** (focuses the composer).
-  5. When the agent edits the same artifact again, the open preview updates in place.
-- **Alternate flows**
-  - *Approvals arrive while an artifact is open*: the **Needs you** tab shows a count badge; the artifact stays open.
-  - *Close*: the × on the tab closes the artifact; the panel closes if nothing else is in it.
+  1. Sidebar → **Skills**: a list of skills, each with a name, source ("Made in Chorus", "From Claude Code"), one-line description, **Edit**, an on/off switch, and **Synced to** pills (one per agent) to choose which agents get it.
+  2. **New skill**: name, what it's for, instructions, **Write it for me**, **Add files**, sync targets.
+  3. When Chorus finds skills in one agent that others don't have, a box offers "Found 2 skills in Codex" with checkboxes and **Share with all agents**.
 - **Acceptance criteria**
-  - [ ] AC-06.1: Artifacts are detected from agent file writes automatically (AC-5.1).
-  - [ ] AC-06.2: HTML renders sandboxed and hot-reloads on change (AC-5.2, AC-5.3).
-  - [ ] AC-06.3: Previous versions can be viewed.
-  - [ ] AC-06.4: Only files the user would want to see become artifacts (no config files, lockfiles, source code by default).
+  - [ ] AC-09.1: Turning a skill off removes it from the agents but keeps it in Chorus (AC-4.7).
+  - [ ] AC-09.2: Multi-file skills keep their folders and script permissions (AC-4.5, AC-4.6).
+  - [ ] AC-09.3: Nothing found in an agent is shared without the user choosing it.
 
-#### UC-07 · Switch agent mid-chat
+### UC-10 · Activity *(mockup: "Activity")*
 
-- **Trigger**: User picks another agent in the composer's agent picker.
-- **Main flow**
-  1. The picker lists each agent with a one-line strength ("Writes and fixes code", "Plans bigger changes", "Tests and reviews") and a check on the current one.
-  2. Picking another agent adds a divider: "Switched to Antigravity · caught up on this chat".
-  3. The new agent receives a short summary from Shared memory (goal, what's done, files, open items) and continues in the same chat.
-- **Alternate flows**
-  - *Agent not set up*: picking it opens the install helper (UC-02).
-  - *Agent at its usage limit*: shown in the picker as "Paused until 6:00 PM" and can't be picked.
+For people who want the detail. It is a separate page, not a mode.
+
+- **Timeline**: every step by every agent, newest first: time, agent, kind (Started, Changed files, Made an artifact, Asked for approval, Took over), a plain sentence, and the exact files or command.
+- **Shared memory**: per chat, what all agents know (goal, done, next, files) and each handoff summary word for word.
 - **Acceptance criteria**
-  - [ ] AC-07.1: The chat history stays in one thread across agents; each reply is labelled with its agent.
-  - [ ] AC-07.2: The summary given to the new agent stays under 200 tokens and is viewable in Activity → Shared memory (AC-3.2, AC-3.3).
-
-#### UC-08 · One agent asks another
-
-- **Trigger**: The user types `@Codex …`, or an agent decides it needs another agent ("Claude Code asked Codex to run the tests").
-- **Main flow**
-  1. A divider in the chat: "Claude Code asked Codex to test the site · Codex caught up on this chat".
-  2. The asked agent's replies appear in the same chat, labelled with its name.
-  3. Its approvals go to the same **Needs you** list.
-- **Acceptance criteria**
-  - [ ] AC-08.1: Agent-to-agent requests are always visible in the chat and in Activity.
-  - [ ] AC-08.2: The same approval rules apply to work done on another agent's behalf.
-
-#### UC-09 · Something went wrong
-
-- **Trigger**: An agent can't finish (test fails, app won't start, missing file).
-- **Main flow**: the agent's reply explains in plain words what's broken and what still works, followed by suggested actions as buttons: **Try to fix it**, **Ask another agent** (opens the picker), **Show details** (opens Activity filtered to this step).
-- **Acceptance criteria**
-  - [ ] AC-09.1: Raw error text is never the first thing the user sees; it is available in Activity.
-  - [ ] AC-09.2: There are always at least two ways forward.
-
-### Skills
-
-#### UC-10 · Browse, turn on and off, and choose where skills sync *(mockup: "Skills")*
-
-- **Trigger**: Sidebar → **Skills**, or the skills count in the composer.
-- **Main flow**
-  1. Page title "Skills": "Instructions and small tools your agents follow. Turn a skill on and Chorus keeps it in sync with every agent you pick."
-  2. Search box and **All / On / Off** filter.
-  3. One row per skill: name, where it came from ("Made in Chorus", "From Claude Code"), one-line description, **Edit**, and an on/off switch.
-  4. Under each row, **Synced to** pills, one per agent. Clicking a pill adds or removes that agent.
-- **Behavior**
-  - **On** → Chorus writes the skill (with its files and scripts) into each selected agent's skill folder.
-  - **Off** → Chorus removes it from the agents' folders but keeps it in Chorus, so turning it back on restores it.
-  - Agents that aren't set up show a disabled pill.
-- **Acceptance criteria**
-  - [ ] AC-10.1: Turning a skill on/off or changing its sync targets takes effect from the agent's next message (AC-4.7).
-  - [ ] AC-10.2: Folder paths are not shown on this page.
-  - [ ] AC-10.3: Turning a skill off never deletes it.
-
-#### UC-11 · Add or edit a skill
-
-- **Trigger**: **New skill** or **Edit** on the Skills page.
-- **Main flow**: a sheet with
-  - **Name**
-  - **What it's for** (one line; agents use it to decide when the skill applies)
-  - **Instructions** (plain text)
-  - **Write it for me** (an agent drafts the instructions from the one-line description)
-  - **Add files** (scripts, templates, examples)
-  - **Sync to** checkboxes per agent
-  - **Create and turn on** / **Save**
-- **Alternate flows**
-  - *An agent offers to save a skill during a chat* ("Want me to save this as a skill?"): opens the same sheet pre-filled.
-  - *Import*: **New skill → Import** from a folder or a file.
-- **Acceptance criteria**
-  - [ ] AC-11.1: A new skill can be created with only a name and one line of description.
-  - [ ] AC-11.2: Multi-file skills keep their folder structure and script permissions (AC-4.5, AC-4.6).
-
-#### UC-12 · Share skills found in one agent *(mockup: "Skills")*
-
-- **Trigger**: Chorus finds skills in an agent's own folder that other agents don't have.
-- **Main flow**
-  1. A banner at the top of Skills: "Found 2 skills in Codex that your other agents don't have. Pick which ones to share."
-  2. Each found skill is listed with a checkbox (pre-ticked), name and description.
-  3. **Share with all agents** adds them to the list as "From Codex", on, synced to all set-up agents.
-  4. **Not now** hides the banner; the skills stay available under **New skill → Import**.
-- **Acceptance criteria**
-  - [ ] AC-12.1: Discovery runs on launch and when an agent is set up.
-  - [ ] AC-12.2: Nothing is synced without the user's choice.
-
-### Detail for those who want it
-
-#### UC-13 · See everything that happened (Activity → Timeline) *(mockup: "Activity")*
-
-- **Trigger**: Sidebar → **Activity**, or **Show details** from a problem (UC-09).
-- **Main flow**
-  1. Reverse-chronological timeline for the current project. Each row: time, agent, kind of event (Started, Changed files, Ran a check, Made an artifact, Asked another agent, Caught up, Asked for approval), a plain sentence, and where useful the files touched and the exact command.
-  2. Filter by agent.
-- **Acceptance criteria**
-  - [ ] AC-13.1: Every tool run, approval, artifact, handoff and agent-to-agent request is listed.
-  - [ ] AC-13.2: Long outputs are linked, not inlined (AC-4.3).
-
-#### UC-14 · See what agents know (Activity → Shared memory) *(mockup: "Activity")*
-
-- **Trigger**: Activity → **Shared memory**.
-- **Main flow**
-  1. "What every agent can see about this project. When you switch agents, they start from here."
-  2. One card per request: goal, outcome, files, checks, artifacts, still to do.
-  3. Under the card, any summary handed to another agent, word for word ("What Codex was told").
-- **Acceptance criteria**
-  - [ ] AC-14.1: Shared memory mirrors the context ledger (`turns` and handoff summaries in [context-and-storage-spec.md](specs/context-and-storage-spec.md)).
-  - [ ] AC-14.2: The exact text sent to an agent in a handoff is always viewable.
-
-### Edge cases
-
-#### UC-15 · Agent unavailable
-
-- **Trigger**: Usage limit, signed out, or offline.
-- **Main flow**: the sidebar shows **Paused** with the reason ("Usage limit until 6:00 PM", "Signed out"). In chat: "Claude Code reached its usage limit until 6:00 PM." with **Switch agent** and **Sign in again** (when signed out).
-- **Acceptance criteria**
-  - [ ] AC-15.1: The message says when or how the agent becomes available again.
-  - [ ] AC-15.2: Pending approvals and work done so far are kept.
-
-#### UC-16 · Several agents working, app in background
-
-- **Main flow**: each agent's status updates in the sidebar. A system notification is sent when an agent needs approval, finishes, or gets stuck. Clicking it opens the right chat with the panel on **Needs you**.
-- **Acceptance criteria**
-  - [ ] AC-16.1: Background work never steals focus.
-  - [ ] AC-16.2: Two agents never edit the same file at once without the user being told.
-
-#### UC-17 · Quit while an agent is working
-
-- **Main flow**: "Claude Code is still working. Keep it running in the background, or stop it now?" **Keep running** · **Stop and quit**. On next launch: "Claude Code stopped when you quit. Continue?"
-- **Acceptance criteria**
-  - [ ] AC-17.1: Pending approvals survive a restart.
+  - [ ] AC-10.1: Every tool run, approval, artifact and handoff appears in the Timeline.
+  - [ ] AC-10.2: Shared memory mirrors the context ledger in [context-and-storage-spec.md](specs/context-and-storage-spec.md).
 
 ---
 
-## 7. Approval levels
+## 5. Approval levels
 
-| Level | On card | Examples | "Always allow" offered |
-|---|---|---|---|
-| **No card** | — | Read files, edit files inside the project, run the project's own tests, start the dev server | n/a |
-| **Please check** (amber) | Plain title + explanation | Change database structure, install a package, contact a web service, run an unfamiliar command | Yes, per category per project |
-| **Risky** (red) | Plain title + explanation + second confirmation | Delete many files, touch files outside the project, publish/deploy, use stored passwords or keys, spend money | No |
-
-Example translations the risk analyzer produces (roadmap Phase 3):
-
-| Exact command (behind "Show exactly what will run") | Card title | Explanation |
+| Level | Shown as | Examples |
 |---|---|---|
-| `npx prisma migrate dev --name add_orders` | Set up storage for cake orders | Adds an "Orders" table so each order is kept. Your menu and customer list aren't changed. |
-| `rm -rf ./dist` | Delete 214 old build files | These files are rebuilt automatically. Your own work isn't touched. |
-| `npm install stripe` | Add a payments tool (Stripe) | Downloads a well-known add-on so your site can take card payments. |
-| `vercel deploy --prod` | Publish your website | Your changes go live for customers in about a minute. |
-| `cat ~/.ssh/id_rsa` | Read a private key outside your project | This is unusual. We recommend **Don't allow**. |
+| **No approval** | Only the "Created 2 files…" line | Read or edit files inside the project, run the project's tests, start the dev server |
+| **Ask** | Bell item with **Allow** / **Don't allow** | Change database structure, install a package, contact a web service, run an unfamiliar command |
+| **Risky** | Bell item with a red **Risky** tag and a second confirmation | Delete many files, touch files outside the project, publish or deploy, use stored passwords or keys |
+
+| Exact command ("Show what will run") | Title in the bell |
+|---|---|
+| `npx prisma migrate dev --name add_orders` | Set up storage for cake orders |
+| `rm -rf ./dist` | Delete 214 old build files |
+| `npm install stripe` | Add a payments tool (Stripe) |
+| `vercel deploy --prod` | Publish your website |
 
 ---
 
-## 8. Agent status
+## 6. Open questions
 
-| Status | Dot | Where it shows |
-|---|---|---|
-| Ready | green | Sidebar, agent picker |
-| Working | clay, pulsing | Sidebar; progress line in chat |
-| Needs you | amber | Sidebar; "Waiting for your OK" chip; "N need you" in chat header |
-| Paused | grey | Sidebar, agent picker (with reason) |
-| Not set up | grey | Sidebar, agent picker, onboarding (with **Set up**) |
-
----
-
-## 9. Open questions
-
-1. Should the user be able to keep **two chats with different agents open side by side**, or is one chat at a time enough for v1?
-2. Default **"ask first" list**: should installing packages ask by default for non-technical users, or only for unknown packages?
-3. Should **artifacts** include source code files when the user asks to see them, or only web pages, images and documents?
-4. Should **Skills** support per-project skills as well as global ones, or global only for v1?
-5. Should **Activity** be per project (current proposal) or across all projects?
+1. When an agent hits its limit, should Chorus **pick the next agent automatically** (with an undo), or always ask as in UC-07?
+2. Should the handoff summary be **editable** before it's sent, or only viewable?
+3. Should approvals that were pending on the limited agent **carry over** to the new agent instead of being cancelled (AC-07.4)?
+4. Should the user be able to set a **preferred order** of agents for handoffs (e.g. Claude Code → Codex → Antigravity)?
