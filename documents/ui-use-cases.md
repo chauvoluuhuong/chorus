@@ -163,6 +163,7 @@ Chorus follows the layout of AI chat desktop apps (Claude desktop): sidebar, cha
   - An **Artifact Card** appears in the conversation reply with a 1-click **Open in Canvas** button.
   - The side Canvas panel opens with:
     - **Header**: File path (either in repository or `.chorus/artifacts/`), version switcher (`‹ v1 of 2 ›`), live status badge, and **Fullscreen toggle (`⤢`)**.
+    - **Draggable Resizer Splitter**: A vertical grab handle on the left border allows fluid dragging to resize the panel width (320px to 85vw); double-clicking the splitter or clicking the reset button restores the default width (580px).
     - **View Tabs**: **Preview** (sandboxed WebView or GFM renderer), **Code** (syntax-highlighted source), and **Diff** (visual side-by-side comparison).
   - Subsequent agent edits trigger hot-reloading in real time without refreshing the main window.
 

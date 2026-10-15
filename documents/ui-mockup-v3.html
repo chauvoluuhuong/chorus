@@ -393,9 +393,19 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
 .n-done.ok { color: var(--ok); } .n-done.no { color: var(--bad); }
 .unread { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); display: inline-block; }
 
-/* Native Artifact Canvas Panel */
-.panel { width: min(48vw, 620px); border-left: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; min-height: 0; transition: width .2s ease; }
-.app.art-full .panel { width: 100%; border-left: 0; }
+/* Native Artifact Canvas Panel & Draggable Resizer */
+.panel { position: relative; width: min(48vw, 620px); max-width: 85vw; min-width: 320px; border-left: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; min-height: 0; transition: width .15s ease; }
+.app.art-full .panel { width: 100%; max-width: 100%; border-left: 0; transition: none; }
+.app.art-resizing { cursor: col-resize !important; user-select: none !important; }
+.app.art-resizing .panel { transition: none !important; user-select: none !important; }
+
+/* Draggable Splitter */
+.resizer { position: absolute; left: -6px; top: 0; bottom: 0; width: 12px; cursor: col-resize; z-index: 35; display: flex; align-items: center; justify-content: center; user-select: none; }
+.resizer-grip { width: 4px; height: 38px; border-radius: 999px; background: var(--line); transition: all .15s ease; }
+.resizer:hover .resizer-grip, .resizer.active .resizer-grip { background: var(--accent); height: 64px; width: 5px; box-shadow: 0 0 6px rgba(0,0,0,0.18); }
+.resizer:hover { background: rgba(180, 100, 50, 0.05); }
+.app.art-full .resizer { display: none; }
+
 .p-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); min-height: 52px; flex-wrap: wrap; }
 .p-head .t { display: flex; flex-direction: column; line-height: 1.25; flex: 1; min-width: 160px; }
 .p-head strong { font-weight: 500; font-size: 14px; }
@@ -629,7 +639,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     { id: 'tools', label: 'Running tool & Stop button', uc: 'UC-04' },
     { id: 'limit', label: '1-click Handoff on limit', uc: 'UC-08' },
     { id: 'mid_handoff', label: 'Mid-session Handoff (Input button)', uc: 'UC-08' },
-    { id: 'artifact', label: 'Native Artifact (v1/v2, Diff, Fullscreen)', uc: 'UC-07' },
+    { id: 'artifact', label: 'Native Artifact (Resizable, Diff, Fullscreen)', uc: 'UC-07' },
     { id: 'terminal', label: 'Raw PTY Terminal', uc: 'UC-05' },
     { id: 'memory', label: 'Shared Memory (Tier 1 & Tier 2)', uc: 'UC-10' },
     { id: 'skills', label: 'Skills Studio (live search)', uc: 'UC-09' },
@@ -657,6 +667,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     artifact: null, // 'order' | 'spec' | null
     artVer: 2, // 1 | 2
     artTab: 'preview', // 'preview' | 'code' | 'diff'
+    artWidth: 580,
     artFullscreen: false,
     toolsOpen: true,
     toolOpen: { t2: true, t4: true },
@@ -700,6 +711,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     S.inlineStatus = 'pending';
     S.agentRunning = false;
     S.artifact = null;
+    S.artWidth = 580;
     S.artFullscreen = false;
     S.menu = false;
     S.handoffMenu = false;
@@ -1170,11 +1182,16 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
       </div>`;
     }
 
-    return `<aside class="panel" aria-label="Artifact preview">
+    const panelWidthStyle = S.artFullscreen ? 'width: 100%' : `width: ${S.artWidth || 580}px`;
+    return `<aside class="panel" style="${panelWidthStyle}" aria-label="Artifact preview">
+      <!-- Draggable Splitter Handle -->
+      <div class="resizer" id="art-resizer" title="Drag to resize panel · Double-click to reset" aria-label="Resize panel">
+        <span class="resizer-grip"></span>
+      </div>
       <div class="p-head">
         <div class="t">
           <strong>Order a cake page</strong>
-          <small>app/order/page.tsx · live</small>
+          <small>app/order/page.tsx · live · ${S.artWidth || 580}px</small>
         </div>
 
         <!-- Version Navigator (‹ v2 of 2 ›) -->
@@ -1191,6 +1208,9 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
           <button type="button" data-art-tab="diff" aria-pressed="${S.artTab === 'diff'}">Diff</button>
         </div>
 
+        <button class="ghost-icon" type="button" data-art-reset-width title="Reset panel width to 580px">
+          ${ic('sync', 'sm')}
+        </button>
         <button class="ghost-icon" type="button" data-art-expand title="${S.artFullscreen ? 'Exit fullscreen' : 'Fullscreen'}">
           ${ic(S.artFullscreen ? 'compress' : 'expand', 'sm')}
         </button>
@@ -1713,6 +1733,11 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
       S.artFullscreen = !S.artFullscreen;
       return render();
     }
+    if ('artResetWidth' in d) {
+      S.artWidth = 580;
+      toast('Reset artifact panel width to 580px');
+      return render();
+    }
 
     // Terminal tabs
     if (d.ttab) {
@@ -1809,6 +1834,65 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
       }
       p.value = '';
       render();
+    }
+  });
+
+  // Draggable Artifact Panel Resizing
+  let isResizing = false;
+  let startX = 0;
+  let startWidth = 580;
+
+  document.addEventListener('mousedown', (e) => {
+    const resizer = e.target.closest('#art-resizer');
+    if (!resizer || S.artFullscreen) return;
+    
+    isResizing = true;
+    startX = e.clientX;
+    const panel = $('.panel');
+    startWidth = panel ? panel.getBoundingClientRect().width : (S.artWidth || 580);
+    
+    const appEl = $('.app');
+    if (appEl) appEl.classList.add('art-resizing');
+    resizer.classList.add('active');
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+    
+    const delta = startX - e.clientX; // moving mouse left expands panel
+    const minW = 320;
+    const maxW = Math.max(380, window.innerWidth - 320); // reserve space for chat
+    const newWidth = Math.min(Math.max(minW, Math.round(startWidth + delta)), maxW);
+    
+    S.artWidth = newWidth;
+    const panel = $('.panel');
+    if (panel) {
+      panel.style.width = newWidth + 'px';
+      const smallText = panel.querySelector('.p-head .t small');
+      if (smallText) smallText.textContent = `app/order/page.tsx · live · ${newWidth}px`;
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!isResizing) return;
+    isResizing = false;
+    const appEl = $('.app');
+    if (appEl) appEl.classList.remove('art-resizing');
+    const resizer = $('#art-resizer');
+    if (resizer) resizer.classList.remove('active');
+  });
+
+  document.addEventListener('dblclick', (e) => {
+    if (e.target.closest('#art-resizer')) {
+      S.artWidth = 580;
+      const panel = $('.panel');
+      if (panel) {
+        panel.style.width = '580px';
+        const smallText = panel.querySelector('.p-head .t small');
+        if (smallText) smallText.textContent = 'app/order/page.tsx · live · 580px';
+      }
+      toast('Reset artifact panel width to 580px');
     }
   });
 
