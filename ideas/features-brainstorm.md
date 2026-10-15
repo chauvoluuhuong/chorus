@@ -2,7 +2,7 @@
 
 ## 1. Core Feature Set (MVP)
 
-- [ ] **Multi-Engine Tab Bar**: Browser-like tabs for `agy`, `claude`, and `codex` showing process status, PID, and live activity badges.
+- [ ] **Multi-Engine Tab Bar**: Browser-like tabs for `agy`, `claude`, and `codex` showing a plain-language status (Working…, Needs your OK, Stuck). Process IDs and other technical details only appear when "Show technical details" is on (see [`ui-use-cases.md`](../documents/ui-use-cases.md)).
 - [ ] **Dual-Plane View**:
   - **Canvas View**: Clean chat bubbles, collapsible thinking traces, and structured tool execution cards.
   - **PTY Terminal View**: Full-fidelity terminal emulator (`xterm.js` / `xterm.dart`) for power users who want the raw stream.
