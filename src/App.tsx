@@ -15,6 +15,7 @@ import { TerminalView } from './components/TerminalView';
 import { ComposerDock } from './components/ComposerDock';
 import { InlineApprovalCard } from './components/InlineApprovalCard';
 import { ArtifactPanel } from './components/ArtifactPanel';
+import { SkillsStudio } from './components/SkillsStudio';
 
 const INITIAL_SKILLS: SkillBundle[] = [
   {
@@ -33,7 +34,7 @@ const INITIAL_SKILLS: SkillBundle[] = [
     command: '/tailwind-ui',
     description: 'Generates accessible UI components styled with Tailwind CSS',
     path: '.agents/skills/tailwind-ui/SKILL.md',
-    active: true,
+    active: false,
     origin: 'Bundled',
     content: '# Tailwind UI Skill\nGenerate accessible Tailwind components.',
   },
@@ -264,6 +265,74 @@ export function App() {
         return m;
       }),
     );
+  };
+
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const showToast = (msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToastMsg(msg);
+    toastTimerRef.current = setTimeout(() => {
+      setToastMsg(null);
+    }, 4000);
+  };
+
+  const handleSyncSkills = async () => {
+    try {
+      const res = await fetch('/api/skills/scan', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        const found: SkillBundle[] = data.skills || [];
+        setSkills(prev => {
+          const map = new Map(prev.map(s => [s.id, s]));
+          for (const item of found) {
+            map.set(item.id, {
+              ...item,
+            });
+          }
+          const updated = Array.from(map.values());
+          stateRef.current = { ...stateRef.current, skills: updated };
+          return updated;
+        });
+        const msg = `Scanned ${data.scannedCount} skill folders · ${data.newCount} new skill${data.newCount === 1 ? '' : 's'} imported`;
+        showToast(msg);
+        window.__CHORUS_HARNESS__?.emit('skills:scanned', data);
+      }
+    } catch (err) {
+      console.error('Skill scan failed:', err);
+    }
+  };
+
+  const handleToggleSkill = async (skillId: string, active: boolean) => {
+    const currentSkill = stateRef.current.skills.find(s => s.id === skillId);
+    const content =
+      currentSkill?.content ||
+      `# ${skillId} Skill\nGenerate accessible UI components styled with Tailwind CSS.`;
+
+    const updated = stateRef.current.skills.map(s => {
+      if (s.id === skillId) {
+        return { ...s, active };
+      }
+      return s;
+    });
+    setSkills(updated);
+    stateRef.current = { ...stateRef.current, skills: updated };
+
+    try {
+      await fetch('/api/skills/materialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: skillId,
+          active,
+          content,
+        }),
+      });
+      window.__CHORUS_HARNESS__?.emit('skill:toggled', { id: skillId, active });
+    } catch (err) {
+      console.error('Skill materialize failed:', err);
+    }
   };
 
   // Setup Test Harness
@@ -511,6 +580,30 @@ export function App() {
             Chat Stream
           </button>
 
+          <button
+            className={`nav ${currentView === 'skills' ? 'on' : ''}`}
+            onClick={() => setCurrentView('skills')}
+            data-test="nav-skills"
+          >
+            Skills Studio
+          </button>
+
+          <button
+            className={`nav ${currentView === 'memory' ? 'on' : ''}`}
+            onClick={() => setCurrentView('memory')}
+            data-test="nav-memory"
+          >
+            Shared Memory
+          </button>
+
+          <button
+            className={`nav ${currentView === 'activity' ? 'on' : ''}`}
+            onClick={() => setCurrentView('activity')}
+            data-test="nav-activity"
+          >
+            Activity Log
+          </button>
+
           <div className="sb-label">Recent Chats</div>
           <div className="recents">
             {threads.map(t => (
@@ -572,7 +665,14 @@ export function App() {
           </header>
 
           {/* Body View */}
-          {currentView === 'terminal' ? (
+          {currentView === 'skills' ? (
+            <SkillsStudio
+              skills={skills}
+              onSyncSkills={handleSyncSkills}
+              onToggleSkill={handleToggleSkill}
+              toastMsg={toastMsg}
+            />
+          ) : currentView === 'terminal' ? (
             <TerminalView
               ptyClient={ptyClientRef.current}
               agentName={selectedAgent}
@@ -704,18 +804,20 @@ export function App() {
           )}
 
           {/* Composer Dock */}
-          <ComposerDock
-            selectedAgent={selectedAgent}
-            selectedModel={selectedModel}
-            autonomousMode={autonomousMode}
-            ptyConnected={ptyStatus === 'connected'}
-            skills={skills}
-            onToggleAutonomous={() => setAutonomousMode(!autonomousMode)}
-            onSelectAgent={agent => setSelectedAgent(agent)}
-            onTriggerHandoff={handleTriggerHandoff}
-            onSubmitPrompt={handleSendPrompt}
-            onStopPty={handleStopPty}
-          />
+          {(currentView === 'chat' || currentView === 'terminal') && (
+            <ComposerDock
+              selectedAgent={selectedAgent}
+              selectedModel={selectedModel}
+              autonomousMode={autonomousMode}
+              ptyConnected={ptyStatus === 'connected'}
+              skills={skills}
+              onToggleAutonomous={() => setAutonomousMode(!autonomousMode)}
+              onSelectAgent={agent => setSelectedAgent(agent)}
+              onTriggerHandoff={handleTriggerHandoff}
+              onSubmitPrompt={handleSendPrompt}
+              onStopPty={handleStopPty}
+            />
+          )}
         </main>
 
         {/* Right Artifact Canvas Panel */}
