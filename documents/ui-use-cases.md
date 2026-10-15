@@ -1,480 +1,375 @@
-# UI Use Cases: Simple Mode — Chorus
+# UI Use Cases — Chorus Desktop
 
-> Companion to [`ui-mockup-simple.html`](ui-mockup-simple.html). Open the mockup in a browser and use the scenario buttons at the top; each one is labelled with the use case ID it shows (UC-01, UC-03, …).
+> Companion to [`ui-mockup-v2.html`](ui-mockup-v2.html). Open it in a browser and use the buttons at the top; each one is labelled with the use case IDs it shows.
 >
-> The earlier [`ui-mockup.html`](ui-mockup.html) is kept as a reference for the **technical view** (power users only). It is no longer the default screen.
+> [`ui-mockup.html`](ui-mockup.html) is the v1 mockup, kept for history only. It is superseded by v2.
 
 ---
 
-## 1. Why this document exists
+## 1. Product concept in one paragraph
 
-The first mockup showed the machinery: process IDs, transcript paths, hook names, skill folders, raw terminal output and model version strings. That is useful for us as builders, but our target user (see [`product-concept.md`](../ideas/product-concept.md)) is a solo founder, marketer, designer or "vibe coder". For them every one of those labels is noise at best and a reason to feel anxious at worst.
-
-This document defines:
-
-1. The design rules for **Simple mode**, the default Chorus screen.
-2. A vocabulary table: what we stop showing and what we say instead.
-3. The use cases the UI must support, each with its flow, the words on screen, edge cases and acceptance criteria.
+Chorus is a desktop app that feels like the Claude desktop app, but the "model" you talk to is a **coding agent running on your computer**: Claude Code, Antigravity or Codex. You chat with an agent in the middle of the screen. When an agent wants to do something important, it **pauses and asks you in the right panel**. When an agent makes something you can look at (a web page, an image, a document), it shows up as an **artifact** you can open in that same right panel. Agents share one memory of the project, so you can switch agents mid-chat without explaining again. Skills are shared across agents from one place. A separate **Activity** page holds the full detail for anyone who wants it.
 
 ---
 
-## 2. Design rules for Simple mode
-
-| # | Rule | What it means in practice |
-|---|------|---------------------------|
-| R1 | **Talk about the user's project, never about our plumbing.** | Say "your website", "the order page", "saved orders". Never say "PTY", "hook", "MCP", "stdin", "JSONL", "PID", "binary". |
-| R2 | **One question at a time.** | Only one approval card asks for a decision at once per helper. Others queue behind a "2 need your OK" pill. |
-| R3 | **Every risky action is explained before it happens, in one sentence.** | Card title = what the helper wants to do. First line = what changes and what does not. |
-| R4 | **Everything can be undone, and the user is told so.** | A save point is made before every change. The approval card says "Undo: Yes". |
-| R5 | **Show results, not logs.** | The side panel shows the live website, a plain-language list of changes, and History. Logs are hidden. |
-| R6 | **Progress is a short checklist, collapsed when done.** | "What Claude did · 4 of 4 steps · Show". No streaming tool calls. |
-| R7 | **Errors say what broke, what still works, and offer a next step.** | "The order page is missing its cake photo. Everything else worked." + "Ask Codex to fix it". |
-| R8 | **Helpers have names and jobs, not versions.** | "Claude · Writes and fixes", "Antigravity · Plans big changes", "Codex · Checks and tests". |
-| R9 | **Technical detail is opt-in, never removed.** | Settings → "Show technical details" adds exact commands, a Technical log tab and the terminal. |
-| R10 | **No dead ends.** | Every screen has a clear primary action. Every error has at least two ways forward. |
-
----
-
-## 3. Vocabulary: what we hide and what we say instead
-
-| Old label (v1 mockup / internal term) | Simple mode | Where the technical form still lives |
-|---|---|---|
-| `PID 4812`, `TTY Active`, process status | *Removed.* Helper status: **Working…**, **Ready**, **Finished**, **Needs your OK**, **Stuck**, **Catching up…** | Technical log |
-| `~/.claude/projects/app/8f92a.jsonl` (transcript path) | *Removed.* | Technical log |
-| `.agents/skills (4 shared)` | **Know-how** (Settings): "3 instructions your helpers share" | Settings → Know-how → "Show files" |
-| `agy`, `claude`, `codex` (binary names) | **Antigravity**, **Claude**, **Codex** | Technical log |
-| Model strings (`Sonnet 4.5`, `o4-mini`) | *Removed.* | Settings → Helpers |
-| `PreToolUse (Bash)` / "Hook intercepted" | **Needs your OK** | Approval card, with technical details on |
-| `npx prisma migrate deploy` | "Claude wants to create a place to save cake orders" | Approval card, with technical details on |
-| `rm -rf ./dist` | "Codex wants to delete 214 old build files" | Approval card, with technical details on |
-| Hook context sync / `PreInvocation` injection | **Catching up** — "Codex caught up on Claude's work: order page, form, and saved orders." | Technical log (token count) |
-| "Inspect Hook JSON" | *Removed.* | Technical log |
-| `mcp__agent_bridge__ask_agent` | **Asked a teammate** — "Claude asked Codex to test the form." | Technical log |
-| Shared Bus | *Removed as a tab.* Relevant events appear as small notes in the conversation. | Technical log |
-| Canvas UI / PTY Terminal toggle | *Removed.* Only one view by default. | Settings → Show technical details → "Open terminal" |
-| Git checkpoint / commit / branch | **Save point**, **History**, **Go back here** | Technical log (commit hash) |
-| Exit code 1, `ENOENT` | "Couldn't finish" + a plain sentence | Problem card, with technical details on |
-| Diff | **Changes** → "See before and after" | Changes → "Line-by-line comparison" (technical) |
-| Workspace / repo / cwd | **Project** ("Sweet Crumb Bakery") | Settings → Project → "Folder location" |
-
----
-
-## 4. Personas used in the scenarios
-
-| Persona | Who | What they fear | What "done" looks like |
-|---|---|---|---|
-| **Linh — bakery owner** | Runs a small bakery, built her site with a template. Has never opened a terminal. | Breaking the live website; losing orders. | Customers can order cakes online and she can see the orders. |
-| **Marco — product marketer** | Comfortable with Notion and Figma. Builds landing pages and small internal tools. | Being asked questions he can't answer ("Run migration?"). | Ships a landing page by Friday without waiting for engineering. |
-| **Dana — indie developer** | Knows Git and the terminal. Uses Chorus to run three agents side by side. | Losing control or visibility. | Can switch on technical details and see exactly what ran. |
-
-Linh and Marco are the default audience. Dana is served by **Show technical details** (UC-14) and must never be the reason the default screen gets more complex.
-
----
-
-## 5. Screen anatomy (Simple mode)
+## 2. Layout
 
 ```text
-┌──────────────────────────────────────────────────────────────────────────┐
-│ ▮ Project: Sweet Crumb Bakery ▾ │ (C) Claude   (A) Antigravity  (X) Codex  │ [1 needs your OK] ⚙ │
-│                                 │  Working…     Ready            Ready      │                      │
-├─────────────────────────────────────────────┬────────────────────────────┤
-│ Conversation with the selected helper       │ Preview │ Changes │ History │
-│  • your messages                            │                            │
-│  • helper replies                           │  live website /             │
-│  • "What Claude did · 4 of 4 steps"         │  plain list of changes /    │
-│  • approval cards / problem cards           │  save points                │
-│  • small notes ("Codex caught up…")         │                            │
-│ [suggestion chips]                          │                            │
-│ [ Ask Claude to…               ] [Pass to…] [Send]                       │
-└─────────────────────────────────────────────┴────────────────────────────┘
+┌────────────┬───────────────────────────────────────┬──────────────────────────┐
+│ Sidebar    │ Chat                                  │ Right panel              │
+│            │                                       │ (only when needed)       │
+│ + New chat │  Cake order page        [2 need you]  │ [Needs you 2] [Artifact] │
+│ Chats      │                                       │                          │
+│ Skills     │  You: Add a page where customers…     │  Approval cards          │
+│ Activity   │  Claude Code: Done. …                 │    or                    │
+│            │   [Order a cake page · Web page]      │  Artifact preview        │
+│ Project ▾  │   [Waiting for your OK]               │                          │
+│ Recents    │  ── Codex caught up on this chat ──   │                          │
+│ …          │                                       │                          │
+│ Agents     │ ┌───────────────────────────────────┐ │                          │
+│ ● Claude   │ │ Reply to Claude Code…             │ │                          │
+│ ● Antigrav │ │ 📎  ✦ 3 skills    [Claude Code ▾] ↑│ │                          │
+│ ● Codex    │ └───────────────────────────────────┘ │                          │
+└────────────┴───────────────────────────────────────┴──────────────────────────┘
 ```
 
-- **Top bar**: project switcher, the three helpers with a one-word status, an attention pill when something needs a decision, and Settings.
-- **Left**: conversation with the selected helper. Selecting a different helper switches the conversation; work in the background keeps going.
-- **Right**: what the user actually cares about: the result (Preview), what changed (Changes), and how to go back (History).
-- **Phone / narrow window**: helpers wrap to their own row, the side panel moves under the conversation, and sheets become full-screen modals.
+| Area | Holds | Never holds |
+|---|---|---|
+| **Sidebar** | New chat, Chats, Skills, Activity, project switcher, recent chats, each agent's status (Ready / Working / Needs you / Not set up) | Process IDs, file paths, versions |
+| **Chat** | Your messages, agent replies, a collapsed "Worked for 2 min · changed 3 files" summary, artifact cards, "Waiting for your OK" chips, "switched / caught up" dividers | Raw terminal output, hook data, thinking traces |
+| **Composer** | Message box, attach, skills count, **agent picker** (like Claude's model picker), send | — |
+| **Right panel** | Only two things: **Needs you** (approvals) and **artifacts** (preview). It opens when there is something there and closes when there isn't. | Live app preview, logs, file lists, settings |
+| **Activity page** | Timeline of everything every agent did, and **Shared memory** (what agents know and told each other) | — |
+
+On a phone-width window the sidebar becomes a top row, and the right panel moves under the chat.
+
+---
+
+## 3. Design rules
+
+| # | Rule |
+|---|---|
+| R1 | **Look and behave like the Claude desktop app.** Warm neutral surfaces, serif for agent replies and headings, one clay accent, a large rounded composer, artifacts in a side panel. |
+| R2 | **Ask very little up front.** First launch only asks which agents to use. Everything else has a sensible default. |
+| R3 | **The right panel is for action and results only.** Approvals and artifacts. Nothing else. |
+| R4 | **Agents are chosen like models.** The picker lives in the composer. Switching keeps the chat. |
+| R5 | **Every approval says what will happen in plain words first.** The exact command is one click away ("Show exactly what will run"), never the headline. |
+| R6 | **No technical mode.** Detail lives on the Activity page, which anyone can open at any time. |
+| R7 | **Skills are managed in one place** and synced to the agents you choose. |
+| R8 | **Every error offers a next step.** |
+
+---
+
+## 4. Words we use
+
+| Internal term | On screen |
+|---|---|
+| CLI, binary, `agy` / `claude` / `codex` | **Agent**: Claude Code, Antigravity, Codex |
+| PreToolUse hook, intercepted tool call | **Needs you**, "Waiting for your OK" |
+| Allow / deny decision | **Allow**, **Don't allow**, **Ask why** |
+| Tool calls, tool telemetry | "Worked for 2 min · changed 3 files" (expandable plain list) |
+| Context handoff, PreInvocation injection | "Codex caught up on this chat" |
+| `agent-bridge-mcp` `ask_peer_agent` | "Claude Code asked Codex to test the site" |
+| Shared bus | **Activity → Timeline** |
+| Context ledger (turns, handoff summaries) | **Activity → Shared memory** |
+| `.agents/skills`, skill bundle, materialize / dematerialize | **Skills**: on / off, "Synced to" |
+| Artifact registry entry | **Artifact** card ("Order a cake page · Web page") |
+| Workspace / repo / cwd | **Project** ("Sweet Crumb Bakery") |
+
+---
+
+## 5. Personas
+
+| Persona | Who | What they need from Chorus |
+|---|---|---|
+| **Linh, bakery owner** | Has never used a terminal. Has a Claude subscription. | Get an order page live without breaking her site. |
+| **Marco, product marketer** | Uses Notion and Figma. Has ChatGPT and Claude. | Use whichever agent is best for each step, and never answer a question he doesn't understand. |
+| **Dana, indie developer** | Knows Git and the terminal. Uses all three agents. | See exactly what ran and what agents told each other (Activity page). |
 
 ---
 
 ## 6. Use cases
 
-Each use case lists: **actor, trigger, preconditions, main flow, on-screen copy, alternate flows, acceptance criteria**. Copy in quotes is the intended wording; it can be refined but must keep the same level of plainness.
+Each use case lists the trigger, the main flow, the words on screen, alternate flows and acceptance criteria.
 
-### UC-01 · First launch and helper setup *(mockup: "First launch")*
+### Getting started
 
-- **Actor**: Linh, first time opening Chorus.
-- **Trigger**: App opens with no project and at least one helper missing or signed out.
-- **Preconditions**: None.
+#### UC-01 · Pick your agents *(mockup: "Pick your agents")*
 
-**Main flow**
-1. Chorus shows "Let's get your helpers ready" with one card per helper.
-2. Each card shows a state: **Ready · signed in as you**, **Not installed yet**, or **Needs you to sign in**.
-3. Linh clicks **Install for me** on Antigravity. A progress bar replaces the button; she can keep going.
-4. Linh clicks **Sign in** on Codex. Her browser opens the provider sign-in page; the card turns **Ready** when she returns.
-5. Below the cards Linh picks **Open a project**, **Start something new**, or **Use a starter**.
+- **Trigger**: First launch.
+- **Main flow**
+  1. One screen: "Which AI agents do you want to use?" with a row per agent: Claude Code, Antigravity, Codex.
+  2. Chorus has already checked the computer. Each row shows **Installed** or **Not installed · Set up**.
+  3. Installed agents are pre-selected. The user ticks or unticks agents and clicks **Start building**.
+  4. The app opens on a new chat in the default project folder, using the first selected agent.
+- **Copy**: "Pick one or more. You can switch between them in any chat, and change this later."
+- **Alternate flows**
+  - *A selected agent isn't installed*: footer says "Codex isn't installed yet. Set it up now, or start without it." **Start building** still works if at least one selected agent is ready.
+  - *Nothing installed*: all rows show **Set up**; **Start building** is disabled until one agent is ready.
+- **Acceptance criteria**
+  - [ ] AC-01.1: First launch has exactly one decision (which agents). No project, theme, permission or account questions.
+  - [ ] AC-01.2: Installed agents are detected automatically and pre-selected.
+  - [ ] AC-01.3: The user can reach a working chat in two clicks if any agent is installed.
 
-**Copy**: "Chorus works with three AI helpers. You only need one to start. We'll install anything that's missing, so you don't have to type commands."
+#### UC-02 · Install helper for a missing agent *(mockup: "Install helper")*
 
-**Alternate flows**
-- *Install fails* (no internet, disk full): card says "Couldn't install Antigravity. Check your internet connection, then try again." with **Try again** and **Skip for now**.
-- *No helper ready at all*: project buttons are disabled with the hint "Get at least one helper ready to start."
-- *Corporate machine blocks installs*: "Your computer didn't allow the install. Ask your IT team to allow Antigravity, or skip it."
+- **Trigger**: **Set up** on an agent (from UC-01, the agent picker, or the sidebar).
+- **Main flow**: a sheet "Set up Codex" with three steps:
+  1. **Install** — **Install for me** (Chorus runs the installer in the background with a progress bar). Under it: "Prefer to do it yourself? Paste this into Terminal:" and the command with a **Copy** button.
+  2. **Sign in** — "Codex uses your ChatGPT account. A sign-in page opens in your browser." **Sign in**.
+  3. **Check it works** — Chorus runs a quick test and shows "Codex is ready."
+  Each step turns into a green check when done. **Done** closes the sheet; the agent is now selectable.
+- **Alternate flows**
+  - *A prerequisite is missing* (e.g. Node.js for npm-based agents): an extra first step "Codex needs Node.js. **Install it for me**."
+  - *Install fails*: "Couldn't install Codex. Check your internet connection and try again." with **Try again** and the manual command.
+  - *User closes the sheet*: **Do this later**; the agent stays "Not set up" and can be finished from the sidebar.
+- **Acceptance criteria**
+  - [ ] AC-02.1: A non-technical user can install and sign in to an agent without opening a terminal.
+  - [ ] AC-02.2: The manual command is always shown as an alternative, with copy.
+  - [ ] AC-02.3: Install runs in the background; the rest of the app stays usable.
 
-**Acceptance criteria**
-- [ ] AC-01.1: A user can reach a working project without typing any command.
-- [ ] AC-01.2: Install runs in the background; the user can open a project while it runs.
-- [ ] AC-01.3: No paths, version numbers or package-manager names appear on this screen.
+#### UC-03 · Start a chat in a project
 
----
+- **Trigger**: **New chat** or the project switcher in the sidebar.
+- **Main flow**
+  1. **New chat** opens an empty chat in the current project with the last used agent selected.
+  2. The project switcher lists recent projects and **Open folder…**.
+  3. A first-time project starts in a default folder named after the first request ("Sweet Crumb Bakery").
+- **Acceptance criteria**
+  - [ ] AC-03.1: The project shows by name; the folder location only appears in the project switcher's menu.
+  - [ ] AC-03.2: Every chat belongs to one project; Recents shows chats of the current project.
 
-### UC-02 · Open or start a project
+### Working with agents
 
-- **Actor**: Linh or Marco.
-- **Trigger**: Clicks the project switcher or a start option.
+#### UC-04 · Chat with an agent *(mockup: "Chat + approvals")*
 
-**Main flow**
-1. **Open a project** → system folder picker. The project is named after the folder ("Sweet Crumb Bakery").
-2. **Start something new** → one text box: "Describe what you want to build in a sentence." Chorus creates the folder in the default projects location and hands the description to the default helper as the first request.
-3. **Use a starter** → cards: Shop website, Booking page, Internal tool, Landing page.
+- **Trigger**: User sends a message.
+- **Main flow**
+  1. The reply streams in as normal text (serif), signed with the agent's name.
+  2. While working, a collapsed line shows progress: "Working… · reading your website". When done it becomes "Worked for 2 min · changed 3 files". Expanding it shows a short plain list ("Created the 'Order a cake' page").
+  3. Anything the agent made that can be previewed appears as an **artifact card** under the reply (UC-06).
+  4. The agent's status in the sidebar moves Ready → Working → Ready.
+- **Alternate flows**
+  - *User sends another message while the agent works*: it queues under the current reply with **Send now** / **Remove**.
+  - *Stop*: the send button becomes **Stop** while the agent works.
+  - *Attach*: images and files can be attached from the composer.
+- **Acceptance criteria**
+  - [ ] AC-04.1: No raw tool names, file diffs or terminal output appear in the chat.
+  - [ ] AC-04.2: The progress line is collapsed by default once the agent finishes.
+  - [ ] AC-04.3: Skills count in the composer reflects skills that are on and synced to the selected agent.
 
-**Alternate flows**
-- *Folder isn't a project yet* (empty or random files): "This folder doesn't have a website or app in it yet. Start one here?"
-- *Folder has unsaved changes from outside Chorus*: a save point "Changes made outside Chorus" is created silently so UC-09 still works.
+#### UC-05 · Approve or decline an action *(mockup: "Chat + approvals")*
 
-**Acceptance criteria**
-- [ ] AC-02.1: The project is shown by name; the full path only appears in Settings → Project.
-- [ ] AC-02.2: A save point is created when a project is first opened.
+- **Trigger**: An agent tries an action in an "ask first" category (§7).
+- **Main flow**
+  1. The agent pauses. In chat, a chip says **Waiting for your OK**. The chat header shows "2 need you". The sidebar agent shows **Needs you**.
+  2. The right panel opens on **Needs you** with one card per pending action, newest first:
+     - Agent name, level tag (**Please check** or **Risky**), time
+     - Title in plain words: "Set up storage for cake orders"
+     - One or two sentences on what changes and what doesn't
+     - **Show exactly what will run** (collapsed): the command and files
+     - Optional: "Always allow database changes in this project"
+     - **Allow** · **Don't allow** · **Ask why**
+  3. **Allow**: the card moves to "Earlier in this chat · Allowed …", the chat chip turns green ("You allowed this"), and the agent continues.
+  4. When nothing is pending and no artifact is open, the right panel closes.
+- **Alternate flows**
+  - *Risky action*: **Allow** asks for a second click with a specific label ("Yes, delete 214 files"). "Always allow" is not offered.
+  - *Don't allow*: the chip turns red ("You said no"); the agent gets the refusal and suggests another way ("I can email each order to you instead").
+  - *Ask why*: focuses the composer for that agent with "Why do you need to do this? Is there a safer way?" The action stays paused.
+  - *Clicking a "Waiting for your OK" chip*: opens the panel and highlights that card.
+  - *App in background*: a system notification "Claude Code needs your OK to keep going."
+  - *Multiple agents*: cards from all agents in this chat appear in one list.
+- **Acceptance criteria**
+  - [ ] AC-05.1: The agent stays paused until the user decides; nothing auto-approves on timeout (maps to AC-2.2 in [system-architecture.md](system-architecture.md)).
+  - [ ] AC-05.2: The card headline is the outcome, not the command; the command is available on demand.
+  - [ ] AC-05.3: "Always allow" is scoped to one category in one project and can be undone from the project menu.
+  - [ ] AC-05.4: Risky actions need a confirming second click.
+  - [ ] AC-05.5: The right panel never shows anything other than approvals and artifacts.
 
----
+#### UC-06 · Preview an artifact *(mockup: "Preview an artifact")*
 
-### UC-03 · Ask a helper to do something *(mockup: "Working on a request")*
+- **Trigger**: An agent creates or edits a previewable file: web page (`.html`), image (`.png`, `.jpg`, `.svg`), document (`.md`), diagram.
+- **Main flow**
+  1. An artifact card appears in the chat: icon, title ("Order a cake page"), type ("Web page"), "Click to open".
+  2. Clicking it opens the artifact as a tab in the right panel next to **Needs you**.
+  3. Web pages render live in a sandboxed frame; documents render as formatted text; images with zoom.
+  4. Header: title and a **version** picker (each agent edit makes a new version). Footer: **Open in browser** / **Copy** / **Save to project**, and **Ask for changes** (focuses the composer).
+  5. When the agent edits the same artifact again, the open preview updates in place.
+- **Alternate flows**
+  - *Approvals arrive while an artifact is open*: the **Needs you** tab shows a count badge; the artifact stays open.
+  - *Close*: the × on the tab closes the artifact; the panel closes if nothing else is in it.
+- **Acceptance criteria**
+  - [ ] AC-06.1: Artifacts are detected from agent file writes automatically (AC-5.1).
+  - [ ] AC-06.2: HTML renders sandboxed and hot-reloads on change (AC-5.2, AC-5.3).
+  - [ ] AC-06.3: Previous versions can be viewed.
+  - [ ] AC-06.4: Only files the user would want to see become artifacts (no config files, lockfiles, source code by default).
 
-- **Actor**: Linh.
-- **Trigger**: Types "Add a page where customers can order a birthday cake and pick it up later." and presses **Send**.
+#### UC-07 · Switch agent mid-chat
 
-**Main flow**
-1. The helper replies in one or two sentences describing the plan.
-2. A step list appears: "Working on it · 1 of 4 steps". Each step is a plain past-tense sentence ("Created the 'Order a cake' page"). The current step shows a spinner.
-3. The helper's status in the top bar shows **Working…**.
-4. The Preview tab updates live as files change.
-5. When finished, the list collapses to "What Claude did · 4 of 4 steps · Show" and the status becomes **Finished**.
+- **Trigger**: User picks another agent in the composer's agent picker.
+- **Main flow**
+  1. The picker lists each agent with a one-line strength ("Writes and fixes code", "Plans bigger changes", "Tests and reviews") and a check on the current one.
+  2. Picking another agent adds a divider: "Switched to Antigravity · caught up on this chat".
+  3. The new agent receives a short summary from Shared memory (goal, what's done, files, open items) and continues in the same chat.
+- **Alternate flows**
+  - *Agent not set up*: picking it opens the install helper (UC-02).
+  - *Agent at its usage limit*: shown in the picker as "Paused until 6:00 PM" and can't be picked.
+- **Acceptance criteria**
+  - [ ] AC-07.1: The chat history stays in one thread across agents; each reply is labelled with its agent.
+  - [ ] AC-07.2: The summary given to the new agent stays under 200 tokens and is viewable in Activity → Shared memory (AC-3.2, AC-3.3).
 
-**Alternate flows**
-- *User switches to another helper while this one works*: work continues; the top bar status keeps updating.
-- *User sends a new message while the helper works*: it is queued and shown as "Next: …" under the step list, with **Send now** (interrupt) and **Remove**.
-- *User wants to stop*: a **Stop** button replaces **Send** while the helper works. Stopping keeps what was done and makes a save point.
-- *Request is vague*: the helper asks one clarifying question with up to three quick-reply chips.
+#### UC-08 · One agent asks another
 
-**Acceptance criteria**
-- [ ] AC-03.1: No raw tool names (Edit, Bash, replace_file_content) appear in the step list.
-- [ ] AC-03.2: Each step is one sentence of at most ~12 words.
-- [ ] AC-03.3: Thinking traces are not shown in Simple mode.
-- [ ] AC-03.4: Suggestion chips under the conversation offer 1–3 likely next requests.
+- **Trigger**: The user types `@Codex …`, or an agent decides it needs another agent ("Claude Code asked Codex to run the tests").
+- **Main flow**
+  1. A divider in the chat: "Claude Code asked Codex to test the site · Codex caught up on this chat".
+  2. The asked agent's replies appear in the same chat, labelled with its name.
+  3. Its approvals go to the same **Needs you** list.
+- **Acceptance criteria**
+  - [ ] AC-08.1: Agent-to-agent requests are always visible in the chat and in Activity.
+  - [ ] AC-08.2: The same approval rules apply to work done on another agent's behalf.
 
----
+#### UC-09 · Something went wrong
 
-### UC-04 · Approve or decline a risky action *(mockup: "Needs your OK")*
+- **Trigger**: An agent can't finish (test fails, app won't start, missing file).
+- **Main flow**: the agent's reply explains in plain words what's broken and what still works, followed by suggested actions as buttons: **Try to fix it**, **Ask another agent** (opens the picker), **Show details** (opens Activity filtered to this step).
+- **Acceptance criteria**
+  - [ ] AC-09.1: Raw error text is never the first thing the user sees; it is available in Activity.
+  - [ ] AC-09.2: There are always at least two ways forward.
 
-- **Actor**: Linh.
-- **Trigger**: A helper tries an action that falls into an "ask first" category (see §7).
+### Skills
 
-**Main flow**
-1. The helper pauses. Its status becomes **Needs your OK** (amber). The top bar shows "1 needs your OK".
-2. An approval card appears in the conversation:
-   - Risk tag: "Please check · changes stored data"
-   - Title: "Claude wants to create a place to save cake orders"
-   - One sentence on what changes and what doesn't: "This adds a new 'Orders' list to your website's storage. Your existing menu and customer list stay as they are."
-   - Facts: **Affects**: Your website's saved information · **Undo**: Yes, a save point is made first
-   - "What does this mean?" expands a 2–3 sentence explanation with an everyday analogy.
-   - Checkbox: "Don't ask again for storage changes in this project"
-   - Buttons: **Allow** · **Don't allow** · **Ask Claude about it**
-3. Linh clicks **Allow**. A save point is made, the card collapses to "✓ You allowed this. Claude is creating the place to save orders.", and the helper continues.
+#### UC-10 · Browse, turn on and off, and choose where skills sync *(mockup: "Skills")*
 
-**Alternate flows**
-- *Don't allow*: card collapses to "✕ You said no. Claude won't change how orders are stored and will suggest another way." The helper receives the refusal and proposes an alternative.
-- *Ask Claude about it*: the composer is pre-filled with "Why do you need to change how orders are stored? Is there a simpler way?" The action stays paused until Linh decides.
-- *Several approvals pending*: the pill says "3 need your OK". Clicking it jumps to the oldest. Each helper shows at most one card at a time.
-- *User is away*: the helper waits indefinitely; a system notification says "Claude needs your OK to keep going." No timeout auto-approves.
-- *High-risk action* (delete many files, touch files outside the project, spend money, publish to the internet): red tag "Risky", the **Allow** button needs a second click ("Yes, delete 214 files"), and "Don't ask again" is not offered.
-- *Technical details on*: the exact command is shown in a monospace box under the explanation (Dana's case).
+- **Trigger**: Sidebar → **Skills**, or the skills count in the composer.
+- **Main flow**
+  1. Page title "Skills": "Instructions and small tools your agents follow. Turn a skill on and Chorus keeps it in sync with every agent you pick."
+  2. Search box and **All / On / Off** filter.
+  3. One row per skill: name, where it came from ("Made in Chorus", "From Claude Code"), one-line description, **Edit**, and an on/off switch.
+  4. Under each row, **Synced to** pills, one per agent. Clicking a pill adds or removes that agent.
+- **Behavior**
+  - **On** → Chorus writes the skill (with its files and scripts) into each selected agent's skill folder.
+  - **Off** → Chorus removes it from the agents' folders but keeps it in Chorus, so turning it back on restores it.
+  - Agents that aren't set up show a disabled pill.
+- **Acceptance criteria**
+  - [ ] AC-10.1: Turning a skill on/off or changing its sync targets takes effect from the agent's next message (AC-4.7).
+  - [ ] AC-10.2: Folder paths are not shown on this page.
+  - [ ] AC-10.3: Turning a skill off never deletes it.
 
-**Acceptance criteria**
-- [ ] AC-04.1: The card title describes the outcome in the user's terms, not the command.
-- [ ] AC-04.2: The command text is hidden unless technical details are on.
-- [ ] AC-04.3: Every card states whether the action can be undone.
-- [ ] AC-04.4: The helper stays paused until a decision; nothing is auto-approved on timeout.
-- [ ] AC-04.5: "Don't ask again" is scoped to one category in one project and can be reversed in Settings → Ask before.
-- [ ] AC-04.6: Risky actions require a confirming second click.
+#### UC-11 · Add or edit a skill
 
----
+- **Trigger**: **New skill** or **Edit** on the Skills page.
+- **Main flow**: a sheet with
+  - **Name**
+  - **What it's for** (one line; agents use it to decide when the skill applies)
+  - **Instructions** (plain text)
+  - **Write it for me** (an agent drafts the instructions from the one-line description)
+  - **Add files** (scripts, templates, examples)
+  - **Sync to** checkboxes per agent
+  - **Create and turn on** / **Save**
+- **Alternate flows**
+  - *An agent offers to save a skill during a chat* ("Want me to save this as a skill?"): opens the same sheet pre-filled.
+  - *Import*: **New skill → Import** from a folder or a file.
+- **Acceptance criteria**
+  - [ ] AC-11.1: A new skill can be created with only a name and one line of description.
+  - [ ] AC-11.2: Multi-file skills keep their folder structure and script permissions (AC-4.5, AC-4.6).
 
-### UC-05 · See what changed
+#### UC-12 · Share skills found in one agent *(mockup: "Skills")*
 
-- **Actor**: Marco.
-- **Trigger**: Opens the **Changes** tab after a helper finishes.
+- **Trigger**: Chorus finds skills in an agent's own folder that other agents don't have.
+- **Main flow**
+  1. A banner at the top of Skills: "Found 2 skills in Codex that your other agents don't have. Pick which ones to share."
+  2. Each found skill is listed with a checkbox (pre-ticked), name and description.
+  3. **Share with all agents** adds them to the list as "From Codex", on, synced to all set-up agents.
+  4. **Not now** hides the banner; the skills stay available under **New skill → Import**.
+- **Acceptance criteria**
+  - [ ] AC-12.1: Discovery runs on launch and when an agent is set up.
+  - [ ] AC-12.2: Nothing is synced without the user's choice.
 
-**Main flow**
-1. The tab lists changes grouped by what the user sees: "New · Page: Order a cake", "Updated · Menu bar", "New · Saved orders".
-2. Each item has one sentence of description and a **See before and after** toggle showing a plain before/after ("Menu · About" → "Menu · Order a cake · About").
-3. For visual changes, before/after is shown as two small screenshots.
+### Detail for those who want it
 
-**Alternate flows**
-- *Technical details on*: each change links to a line-by-line code comparison.
-- *Many small file edits*: grouped under one user-visible change ("Updated the checkout page") rather than listed per file.
+#### UC-13 · See everything that happened (Activity → Timeline) *(mockup: "Activity")*
 
-**Acceptance criteria**
-- [ ] AC-05.1: Changes are grouped by page/feature, not by file.
-- [ ] AC-05.2: No file names or line counts appear unless technical details are on.
+- **Trigger**: Sidebar → **Activity**, or **Show details** from a problem (UC-09).
+- **Main flow**
+  1. Reverse-chronological timeline for the current project. Each row: time, agent, kind of event (Started, Changed files, Ran a check, Made an artifact, Asked another agent, Caught up, Asked for approval), a plain sentence, and where useful the files touched and the exact command.
+  2. Filter by agent.
+- **Acceptance criteria**
+  - [ ] AC-13.1: Every tool run, approval, artifact, handoff and agent-to-agent request is listed.
+  - [ ] AC-13.2: Long outputs are linked, not inlined (AC-4.3).
 
----
+#### UC-14 · See what agents know (Activity → Shared memory) *(mockup: "Activity")*
 
-### UC-06 · Pass the work to another helper *(mockup: "Pass to another helper")*
+- **Trigger**: Activity → **Shared memory**.
+- **Main flow**
+  1. "What every agent can see about this project. When you switch agents, they start from here."
+  2. One card per request: goal, outcome, files, checks, artifacts, still to do.
+  3. Under the card, any summary handed to another agent, word for word ("What Codex was told").
+- **Acceptance criteria**
+  - [ ] AC-14.1: Shared memory mirrors the context ledger (`turns` and handoff summaries in [context-and-storage-spec.md](specs/context-and-storage-spec.md)).
+  - [ ] AC-14.2: The exact text sent to an agent in a handoff is always viewable.
 
-- **Actor**: Linh.
-- **Trigger**: Clicks **Pass to…** or a suggestion chip like "Pass to Codex to test it".
+### Edge cases
 
-**Main flow**
-1. A sheet opens: "Pass this work to another helper".
-2. Linh picks a helper card (name + job). Codex is preselected because the next step is testing.
-3. A pre-filled, editable summary shows exactly what the new helper will be told:
-   ```
-   Goal: Let customers order a birthday cake online and pick it up later.
-   Done so far: Claude added an "Order a cake" page with a form. New orders are saved and show on a private Orders page.
-   Please: Check that ordering works on a phone and fix anything that's broken.
-   ```
-4. Hint: "If they need more detail, they can look through Claude's work themselves. Your conversation stays here."
-5. **Send to Codex** switches to Codex's conversation. Codex shows **Catching up…** briefly, then a note: "Codex caught up on Claude's work: order page, form, and saved orders."
+#### UC-15 · Agent unavailable
 
-**Alternate flows**
-- *Linh switches helper tabs directly without passing work*: the new helper is still caught up automatically (the short summary is injected); a note says so. No sheet is shown.
-- *Target helper is busy*: "Codex is busy with another task. Send when it's free?" with **Queue it** / **Pick another helper**.
-- *Target helper isn't set up*: card is disabled with "Not set up · Set up".
+- **Trigger**: Usage limit, signed out, or offline.
+- **Main flow**: the sidebar shows **Paused** with the reason ("Usage limit until 6:00 PM", "Signed out"). In chat: "Claude Code reached its usage limit until 6:00 PM." with **Switch agent** and **Sign in again** (when signed out).
+- **Acceptance criteria**
+  - [ ] AC-15.1: The message says when or how the agent becomes available again.
+  - [ ] AC-15.2: Pending approvals and work done so far are kept.
 
-**Acceptance criteria**
-- [ ] AC-06.1: The summary is visible and editable before sending (maps to AC-3.1 in [system-architecture.md](system-architecture.md)).
-- [ ] AC-06.2: Summary uses the Goal / Done so far / Please structure and stays under ~150 tokens (AC-3.2).
-- [ ] AC-06.3: The words "context", "token", "hook" and "inject" do not appear in the sheet.
+#### UC-16 · Several agents working, app in background
 
----
+- **Main flow**: each agent's status updates in the sidebar. A system notification is sent when an agent needs approval, finishes, or gets stuck. Clicking it opens the right chat with the panel on **Needs you**.
+- **Acceptance criteria**
+  - [ ] AC-16.1: Background work never steals focus.
+  - [ ] AC-16.2: Two agents never edit the same file at once without the user being told.
 
-### UC-07 · Helpers ask each other
+#### UC-17 · Quit while an agent is working
 
-- **Actor**: Helpers (with the user watching).
-- **Trigger**: A helper decides it needs another helper's skill (e.g. Claude asks Codex to run tests).
-
-**Main flow**
-1. A small note appears in the asking helper's conversation: "Claude asked Codex to test the order form."
-2. Codex's status changes to **Working…**.
-3. When done, a note returns: "Codex finished: 4 checks passed." The asking helper continues.
-
-**Alternate flows**
-- *The asked helper needs approval*: the approval card appears in the asked helper's conversation; the top bar pill counts it.
-- *User wants to see the details*: clicking the note opens the other helper's conversation at that point.
-
-**Acceptance criteria**
-- [ ] AC-07.1: Cross-helper requests are always visible to the user as a note; nothing happens silently.
-- [ ] AC-07.2: Approval rules (UC-04) apply to work done on another helper's behalf.
-
----
-
-### UC-08 · Something went wrong *(mockup: "Something went wrong")*
-
-- **Actor**: Linh.
-- **Trigger**: A helper can't finish (test failed, file missing, app won't start).
-
-**Main flow**
-1. The failed step shows a red "!" in the step list ("Loaded the cake photo").
-2. A problem card appears:
-   - Tag: "Couldn't finish"
-   - Title: what's broken, from the user's point of view ("The order page is missing its cake photo")
-   - Body: the effect and what still works ("On phones, the page shows a broken image… Everything else worked, and the test order was saved.")
-   - Actions: **Ask Codex to fix it** (primary) · **Choose a photo** (if the user can fix it directly) · **Go back to before** (opens History at the last good save point)
-3. Helper status becomes **Stuck** (red).
-
-**Alternate flows**
-- *Fix attempt fails twice*: the card says "Codex tried twice and couldn't fix this." and suggests **Pass to Claude** or **Go back to before**.
-- *Helper ran out of usage / is signed out*: see UC-13.
-- *The whole app won't start in Preview*: Preview shows "Your website stopped working after the last change." with **Ask a helper to fix it** and **Go back to before**.
-- *Technical details on*: the raw error is shown in a monospace box.
-
-**Acceptance criteria**
-- [ ] AC-08.1: Every problem card says what's broken, what still works, and gives at least two actions.
-- [ ] AC-08.2: No stack traces, exit codes or error codes are visible unless technical details are on.
-- [ ] AC-08.3: No apology language; no blame on the user.
-
----
-
-### UC-09 · Go back to a save point *(mockup: "Go back to a save point")*
-
-- **Actor**: Linh.
-- **Trigger**: "The new dark red menu looks worse. Can we go back?" or clicks **History**.
-
-**Main flow**
-1. History lists save points newest first: time, one-line description, who made it ("Claude", "Claude, after you allowed it", "Saved automatically"). The newest is marked **You are here**.
-2. The helper may pre-select the right save point and say so in the conversation.
-3. Linh clicks **Go back here**. An inline confirmation explains the outcome: "Go back to 2:58 PM? Your website will look the way it did then. The dark red menu stays in History, so you can bring it back."
-4. **Go back** restores the project. A toast confirms: "Back to 2:58 PM. You can return to the newer version from History."
-
-**Alternate flows**
-- *A helper is working*: "Claude is still working. Stop Claude and go back?"
-- *Saved data* (e.g. real customer orders) *was added after the save point*: warn explicitly: "3 orders were placed after 2:58 PM. Going back keeps those orders and only changes the website." Data rollback is a separate, high-risk action.
-
-**Acceptance criteria**
-- [ ] AC-09.1: A save point is created before every approved action and at the end of every request.
-- [ ] AC-09.2: Going back never deletes later save points.
-- [ ] AC-09.3: The words "commit", "branch", "revert" and "reset" don't appear in Simple mode.
-
----
-
-### UC-10 · Preview the result
-
-- **Actor**: Marco.
-- **Trigger**: Opens the **Preview** tab (default while a helper works).
-
-**Main flow**
-1. Preview shows the running website or app ("Your website, running on this computer. It updates as helpers work.").
-2. **Open in browser** opens it in the user's normal browser.
-3. Documents (markdown), images and diagrams open in the same panel when a helper creates them.
-
-**Alternate flows**
-- *Nothing to preview yet*: "Your preview will appear here once a helper builds something."
-- *App needs starting*: Chorus starts it automatically; if it can't, see UC-08.
-- *Phone view*: a toggle shows the page at phone width.
-
-**Acceptance criteria**
-- [ ] AC-10.1: Preview starts without the user running a command (maps to AC-5.1–5.3).
-- [ ] AC-10.2: Port numbers and localhost URLs are not shown unless technical details are on.
+- **Main flow**: "Claude Code is still working. Keep it running in the background, or stop it now?" **Keep running** · **Stop and quit**. On next launch: "Claude Code stopped when you quit. Continue?"
+- **Acceptance criteria**
+  - [ ] AC-17.1: Pending approvals survive a restart.
 
 ---
 
-### UC-11 · Manage know-how (shared skills)
+## 7. Approval levels
 
-- **Actor**: Marco.
-- **Trigger**: Settings → **Know-how** → **Manage**.
+| Level | On card | Examples | "Always allow" offered |
+|---|---|---|---|
+| **No card** | — | Read files, edit files inside the project, run the project's own tests, start the dev server | n/a |
+| **Please check** (amber) | Plain title + explanation | Change database structure, install a package, contact a web service, run an unfamiliar command | Yes, per category per project |
+| **Risky** (red) | Plain title + explanation + second confirmation | Delete many files, touch files outside the project, publish/deploy, use stored passwords or keys, spend money | No |
 
-**Main flow**
-1. A list of short instructions all helpers follow, written as sentences: "Use our brand colors (navy and coral)", "Write in a friendly, simple tone", "Always make pages work on phones".
-2. Each has an on/off switch, **Edit**, and "Used by: all helpers".
-3. **Add know-how** offers: "Write it yourself" or "Ask a helper to write it for me".
+Example translations the risk analyzer produces (roadmap Phase 3):
 
-**Alternate flows**
-- *Know-how imported from a helper's own settings*: tagged "Found in Claude's settings" so the user knows where it came from.
-- *Technical details on*: shows the underlying files and folders (maps to AC-4.5–4.7).
-
-**Acceptance criteria**
-- [ ] AC-11.1: Folder paths (`.agents/skills`, `.claude/skills`) are never shown in Simple mode.
-- [ ] AC-11.2: Turning know-how off takes effect for the next request of every helper.
-
----
-
-### UC-12 · Several helpers working at once
-
-- **Actor**: Dana or Marco.
-- **Trigger**: Two or more helpers are **Working…** at the same time.
-
-**Main flow**
-1. Each helper's status updates independently in the top bar.
-2. When a background helper finishes or needs a decision, its status changes and, if the app is not focused, a system notification is sent ("Codex finished testing the order form.").
-3. If two helpers want to change the same page, the second one waits and shows "Waiting for Claude to finish the order page."
-
-**Acceptance criteria**
-- [ ] AC-12.1: Background helpers never steal focus from the conversation the user is in.
-- [ ] AC-12.2: Two helpers never edit the same file at the same time without the user knowing.
-
----
-
-### UC-13 · A helper is unavailable
-
-- **Actor**: Linh.
-- **Trigger**: Helper hits a usage limit, gets signed out, or loses internet.
-
-**Main flow**
-1. Helper status shows **Paused** with a reason in plain words: "Claude has reached its usage limit until 6:00 PM."
-2. The conversation shows actions: **Pass to Codex** (UC-06), **Try again at 6:00 PM** (reminder), or **Sign in again**.
-
-**Acceptance criteria**
-- [ ] AC-13.1: The message says when or how the helper becomes available again.
-- [ ] AC-13.2: Work done so far is kept and a save point exists.
-
----
-
-### UC-14 · Show technical details (power users)
-
-- **Actor**: Dana.
-- **Trigger**: Settings → **Show technical details** switch on.
-
-**What appears**
-- Approval cards show the exact command and the project folder.
-- Problem cards show the raw error.
-- Side panel gains a **Technical log** tab: timestamp, helper, tool, arguments, result (the v1 Shared Bus, condensed).
-- **Open terminal** opens the full terminal for the selected helper (the v1 PTY view).
-- Changes link to line-by-line code comparisons.
-
-**Acceptance criteria**
-- [ ] AC-14.1: Turning the switch on or off never interrupts a running helper (maps to AC-5.6).
-- [ ] AC-14.2: The setting is remembered per user, not per project.
-- [ ] AC-14.3: With the switch off, the main screen contains none of the items in the left column of §3.
-
----
-
-### UC-15 · Closing Chorus while helpers are working
-
-- **Actor**: Linh.
-- **Trigger**: Closes the window or quits while a helper is **Working…** or **Needs your OK**.
-
-**Main flow**
-1. Dialog: "Claude is still working on the order page. Keep it running in the background, or stop it now?" with **Keep running** · **Stop and quit**.
-2. *Stop and quit* makes a save point first.
-3. On next launch, the project reopens where it left off, with a note: "Claude stopped when you quit. Continue?"
-
-**Acceptance criteria**
-- [ ] AC-15.1: Quitting never leaves the project half-changed without a save point.
-- [ ] AC-15.2: Pending approvals survive a restart.
-
----
-
-## 7. Approval categories ("Ask before")
-
-Defaults for Settings → **Ask before**. Users can relax a category per project; **Risky** items always ask.
-
-| Level | Tag on card | Examples (what the helper wants) | How it's written on the card | "Don't ask again" offered? |
-|---|---|---|---|---|
-| **Safe** | none — no card | Read files, edit files inside the project, run the preview, run tests | Shown only in the step list | n/a |
-| **Please check** | amber | Change stored data structure, install a package, add a new service, contact the internet | "Claude wants to create a place to save cake orders" | Yes, per category per project |
-| **Risky** | red | Delete many files, touch anything outside the project, change real customer data, publish or deploy, spend money, use stored passwords/keys | "Codex wants to delete 214 old build files" | No; needs a second confirming click |
-
-Translation examples the risk analyzer must produce (see the Human-Readable Risk Analyzer in [`roadmap.md`](../plans/roadmap.md), Phase 3):
-
-| Command (technical view only) | Card title (Simple mode) | One-line explanation |
+| Exact command (behind "Show exactly what will run") | Card title | Explanation |
 |---|---|---|
-| `npx prisma migrate dev --name add_orders` | Claude wants to create a place to save cake orders | Adds a new "Orders" list; existing data stays as it is. |
-| `npm install stripe` | Claude wants to add a payments tool (Stripe) | Downloads a well-known add-on so your site can take card payments. |
-| `rm -rf ./dist` | Codex wants to delete 214 old build files | These files are rebuilt automatically. Your own work isn't touched. |
-| `vercel deploy --prod` | Antigravity wants to publish your website | Your changes will be live for customers in about a minute. |
-| `cat ~/.ssh/id_rsa` | Claude wants to read a private key file outside your project | This is unusual. We recommend **Don't allow**. |
+| `npx prisma migrate dev --name add_orders` | Set up storage for cake orders | Adds an "Orders" table so each order is kept. Your menu and customer list aren't changed. |
+| `rm -rf ./dist` | Delete 214 old build files | These files are rebuilt automatically. Your own work isn't touched. |
+| `npm install stripe` | Add a payments tool (Stripe) | Downloads a well-known add-on so your site can take card payments. |
+| `vercel deploy --prod` | Publish your website | Your changes go live for customers in about a minute. |
+| `cat ~/.ssh/id_rsa` | Read a private key outside your project | This is unusual. We recommend **Don't allow**. |
 
 ---
 
-## 8. Status vocabulary
+## 8. Agent status
 
-| Status | Color | When | Top-bar label | Needs user? |
-|---|---|---|---|---|
-| Ready | green dot | Idle, set up | "Ready" | No |
-| Working | accent dot, pulsing | Doing a request | "Working…" | No |
-| Catching up | blue dot, pulsing | Receiving a hand-off summary | "Catching up…" | No |
-| Finished | green dot | Just completed a request (until the next one) | "Finished" | No |
-| Needs your OK | amber, bold | Paused on an approval | "Needs your OK" | **Yes** |
-| Stuck | red, bold | Couldn't finish (UC-08) | "Stuck" | **Yes** |
-| Paused | grey | Usage limit, signed out, offline (UC-13) | "Paused" | Sometimes |
-| Not set up | grey, dashed | Not installed / signed out (UC-01) | "Set up" | Yes, to use it |
+| Status | Dot | Where it shows |
+|---|---|---|
+| Ready | green | Sidebar, agent picker |
+| Working | clay, pulsing | Sidebar; progress line in chat |
+| Needs you | amber | Sidebar; "Waiting for your OK" chip; "N need you" in chat header |
+| Paused | grey | Sidebar, agent picker (with reason) |
+| Not set up | grey | Sidebar, agent picker, onboarding (with **Set up**) |
 
 ---
 
 ## 9. Open questions
 
-1. **Helper brand names**: do we show "Claude / Antigravity / Codex", or role names only ("Builder / Planner / Tester") with the brand as a subtitle? Brand names build trust with users who already pay for those products; role names are easier for total beginners.
-2. **Default helper for a new project**: always Claude, or pick by request type?
-3. **Data rollback** (UC-09 alt flow): do we ever let Simple mode roll back stored data, or only code and content?
-4. **"Don't ask again" scope**: per project (current proposal) or global?
-5. **Notifications**: system notifications on by default, or only for "Needs your OK"?
-6. **Technical details as a per-project setting** for teams where one person is technical?
+1. Should the user be able to keep **two chats with different agents open side by side**, or is one chat at a time enough for v1?
+2. Default **"ask first" list**: should installing packages ask by default for non-technical users, or only for unknown packages?
+3. Should **artifacts** include source code files when the user asks to see them, or only web pages, images and documents?
+4. Should **Skills** support per-project skills as well as global ones, or global only for v1?
+5. Should **Activity** be per project (current proposal) or across all projects?

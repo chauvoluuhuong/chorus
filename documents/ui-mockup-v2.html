@@ -1,0 +1,913 @@
+<title>Chorus Desktop</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* Layout: Claude-desktop style — sidebar | conversation | action panel (approvals + artifacts). Stacks on phones. */
+:root {
+  --bg: #FAF9F5;
+  --sidebar: #F3F1EA;
+  --surface: #FFFFFF;
+  --raised: #F0EEE6;
+  --ink: #1F1E1C;
+  --muted: #6E6B62;
+  --faint: #9C988D;
+  --line: #E6E3D9;
+  --accent: #C6613F;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #F6E7DF;
+  --claude: #C6613F; --claude-soft: #F6E7DF;
+  --agy: #3F6FD1; --agy-soft: #E4ECFA;
+  --codex: #23806F; --codex-soft: #DDEFEA;
+  --ok: #3C7A47; --ok-soft: #E2EFE2;
+  --warn: #9B6413; --warn-soft: #F8EDD6;
+  --bad: #B23B32; --bad-soft: #F8E2DE;
+  --site: #A8476E; --site-soft: #F7E6ED;
+  --shadow: 0 1px 2px rgba(31, 30, 28, .05), 0 10px 30px rgba(31, 30, 28, .07);
+  --scrim: rgba(31, 30, 28, .32);
+
+  --f-serif: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --f-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #262624; --sidebar: #1F1E1D; --surface: #30302E; --raised: #383835; --ink: #F3F1EA; --muted: #AAA69B; --faint: #7F7B72; --line: #3D3C39;
+    --accent: #D97757; --accent-ink: #1F1E1C; --accent-soft: #45302A;
+    --claude: #E08A69; --claude-soft: #45302A; --agy: #86A8EE; --agy-soft: #263250; --codex: #6CC5B0; --codex-soft: #1F3B36;
+    --ok: #86C48F; --ok-soft: #233826; --warn: #E5B562; --warn-soft: #3D3119; --bad: #EE8A80; --bad-soft: #452523;
+    --site: #E79AB9; --site-soft: #42283A;
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 30px rgba(0,0,0,.3); --scrim: rgba(0,0,0,.55);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #262624; --sidebar: #1F1E1D; --surface: #30302E; --raised: #383835; --ink: #F3F1EA; --muted: #AAA69B; --faint: #7F7B72; --line: #3D3C39;
+  --accent: #D97757; --accent-ink: #1F1E1C; --accent-soft: #45302A;
+  --claude: #E08A69; --claude-soft: #45302A; --agy: #86A8EE; --agy-soft: #263250; --codex: #6CC5B0; --codex-soft: #1F3B36;
+  --ok: #86C48F; --ok-soft: #233826; --warn: #E5B562; --warn-soft: #3D3119; --bad: #EE8A80; --bad-soft: #452523;
+  --site: #E79AB9; --site-soft: #42283A;
+  --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 30px rgba(0,0,0,.3); --scrim: rgba(0,0,0,.55);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--f-sans); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 40px;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+.page { max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.intro { display: flex; flex-direction: column; gap: 6px; max-width: 72ch; }
+.intro .eyebrow { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.intro h1 { margin: 0; font-family: var(--f-serif); font-weight: 500; font-size: clamp(26px, 3.6vw, 34px); line-height: 1.15; text-wrap: balance; }
+.intro p { margin: 0; color: var(--muted); }
+.scenarios { display: flex; flex-wrap: wrap; gap: 6px; }
+.scn { display: inline-flex; gap: 8px; align-items: baseline; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 13px; }
+.scn small { font-family: var(--f-mono); font-size: 10.5px; color: var(--faint); }
+.scn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.scn[aria-pressed="true"] small { color: var(--bg); opacity: .65; }
+
+/* ---------- Window ---------- */
+.window { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--bg); box-shadow: var(--shadow); position: relative; }
+.app { display: grid; grid-template-columns: 248px minmax(0, 1fr) auto; height: 740px; }
+
+/* Sidebar */
+.sidebar { background: var(--sidebar); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.sb-top { display: flex; align-items: center; gap: 8px; padding: 14px 14px 8px; }
+.logo { font-family: var(--f-serif); font-size: 20px; font-weight: 500; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
+.logo i { width: 18px; height: 18px; display: inline-grid; grid-template-columns: repeat(3, 1fr); gap: 2px; align-items: end; }
+.logo i b { display: block; background: var(--accent); border-radius: 2px; }
+.logo i b:nth-child(1) { height: 9px; } .logo i b:nth-child(2) { height: 16px; } .logo i b:nth-child(3) { height: 12px; }
+.sb-section { padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; }
+.sb-btn { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; border: 0; background: none; text-align: left; color: var(--ink); width: 100%; }
+.sb-btn:hover { background: var(--raised); }
+.sb-btn[aria-current="page"] { background: var(--raised); font-weight: 600; }
+.sb-btn .count { margin-left: auto; font-size: 11px; background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 0 7px; font-weight: 600; }
+.new-chat { color: var(--accent); font-weight: 600; }
+.new-chat .plus { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; }
+.sb-label { font-size: 11.5px; color: var(--faint); padding: 12px 18px 4px; }
+.recents { flex: 1; overflow-y: auto; min-height: 0; }
+.recent { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 6px 10px; border-radius: 8px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recent:hover { background: var(--raised); color: var(--ink); }
+.recent.on { background: var(--raised); color: var(--ink); }
+.project-chip { margin: 2px 8px 0; display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); text-align: left; }
+.project-chip span { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.project-chip small { color: var(--faint); font-size: 11px; }
+.project-chip strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-agents { border-top: 1px solid var(--line); padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
+.sb-agent { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.sb-agent .dot { margin-left: auto; font-size: 12px; color: var(--muted); display: inline-flex; gap: 5px; align-items: center; }
+.dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+.dot.working::before { background: var(--accent); animation: pulse 1.2s infinite; }
+.dot.waiting::before { background: var(--warn); }
+.dot.off::before { background: var(--faint); }
+@keyframes pulse { 50% { opacity: .3; } }
+
+.mark { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font-size: 11px; font-weight: 700; flex: none; }
+.m-claude { background: var(--claude-soft); color: var(--claude); }
+.m-agy { background: var(--agy-soft); color: var(--agy); }
+.m-codex { background: var(--codex-soft); color: var(--codex); }
+.mark.lg { width: 36px; height: 36px; border-radius: 10px; font-size: 15px; }
+
+/* Main column */
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.main-head { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--line); min-height: 52px; flex-wrap: wrap; }
+.main-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.stack { display: flex; }
+.stack .mark { width: 20px; height: 20px; font-size: 10px; border: 2px solid var(--bg); margin-left: -5px; border-radius: 6px; }
+.stack .mark:first-child { margin-left: 0; }
+.needs-pill { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; border: 0; border-radius: 999px; padding: 5px 11px; background: var(--warn-soft); color: var(--warn); font-weight: 600; font-size: 12.5px; }
+.convo { flex: 1; overflow-y: auto; min-height: 0; }
+.convo-inner { max-width: 720px; margin: 0 auto; padding: 24px 24px 12px; display: flex; flex-direction: column; gap: 18px; }
+.m-user { align-self: flex-end; max-width: 85%; background: var(--raised); padding: 10px 14px; border-radius: 14px; }
+.m-agent { display: flex; flex-direction: column; gap: 10px; }
+.m-agent .by { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.m-agent .by .mark { width: 20px; height: 20px; font-size: 10px; }
+.prose { font-family: var(--f-serif); font-size: 16px; line-height: 1.6; }
+.prose p { margin: 0; }
+.prose p + p { margin-top: 10px; }
+.work { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 13px; }
+.work summary { list-style: none; cursor: pointer; padding: 8px 12px; display: flex; gap: 8px; align-items: center; color: var(--muted); }
+.work summary::-webkit-details-marker { display: none; }
+.work summary .chev { margin-left: auto; transition: transform .15s; }
+.work[open] summary .chev { transform: rotate(180deg); }
+.work ul { margin: 0; padding: 0 12px 10px 34px; display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+.art-card { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); text-align: left; width: 100%; max-width: 420px; }
+.art-card:hover { border-color: var(--faint); }
+.art-card.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.art-thumb { width: 44px; height: 44px; border-radius: 8px; background: var(--raised); display: grid; place-items: center; color: var(--muted); flex: none; }
+.art-card span.t { display: flex; flex-direction: column; min-width: 0; }
+.art-card strong { font-weight: 600; }
+.art-card small { color: var(--muted); }
+.waiting-chip { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--warn); color: var(--warn); background: var(--warn-soft); font-size: 13px; font-weight: 600; }
+.waiting-chip.done { border-color: var(--ok); color: var(--ok); background: var(--ok-soft); }
+.waiting-chip.no { border-color: var(--bad); color: var(--bad); background: var(--bad-soft); }
+.divider { display: flex; align-items: center; gap: 12px; color: var(--faint); font-size: 12.5px; }
+.divider::before, .divider::after { content: ""; height: 1px; flex: 1; background: var(--line); }
+.divider span { display: inline-flex; align-items: center; gap: 6px; text-align: center; }
+
+/* Composer */
+.composer-wrap { padding: 8px 24px 18px; }
+.composer { max-width: 720px; margin: 0 auto; border: 1px solid var(--line); background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); padding: 10px 10px 8px 14px; display: flex; flex-direction: column; gap: 6px; position: relative; }
+.composer textarea { border: 0; background: none; resize: none; min-height: 44px; max-height: 140px; outline: none; font-size: 15px; padding: 4px 0; }
+.composer label.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.c-row { display: flex; align-items: center; gap: 6px; }
+.c-row .agent-pick { min-width: 0; white-space: nowrap; }
+.c-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: 13px; }
+.c-btn:hover { color: var(--ink); background: var(--raised); }
+.c-btn.icon { width: 32px; padding: 0; justify-content: center; }
+.agent-pick { margin-left: auto; color: var(--ink); border-color: transparent; }
+.send { width: 32px; height: 32px; border-radius: 9px; border: 0; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; }
+.menu { position: absolute; right: 50px; bottom: 48px; width: 290px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 6px; z-index: 15; display: flex; flex-direction: column; gap: 2px; }
+.menu-item { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 8px; border: 0; background: none; text-align: left; width: 100%; }
+.menu-item:hover { background: var(--raised); }
+.menu-item span.t { display: flex; flex-direction: column; line-height: 1.25; }
+.menu-item small { color: var(--muted); font-size: 12px; }
+.menu-item .tick { margin-left: auto; color: var(--accent); }
+.menu-item[disabled] { opacity: .55; cursor: default; }
+.menu-note { font-size: 12px; color: var(--muted); padding: 6px 10px 4px; border-top: 1px solid var(--line); margin-top: 4px; }
+
+/* Action panel */
+.panel { width: 420px; border-left: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
+.p-tabs { display: flex; align-items: center; gap: 4px; padding: 8px 10px; border-bottom: 1px solid var(--line); min-height: 52px; overflow-x: auto; }
+.p-tab { display: inline-flex; gap: 6px; align-items: center; padding: 6px 10px; border-radius: 8px; border: 0; background: none; color: var(--muted); font-weight: 600; font-size: 13px; white-space: nowrap; }
+.p-tab[aria-selected="true"] { background: var(--raised); color: var(--ink); }
+.p-tab .n { background: var(--warn); color: var(--surface); border-radius: 999px; padding: 0 6px; font-size: 11px; }
+.p-tab .x { margin-left: 2px; opacity: .6; display: inline-grid; }
+.p-close { margin-left: auto; }
+.p-body { flex: 1; overflow-y: auto; min-height: 0; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.p-sub { margin: 0; font-size: 13px; color: var(--muted); }
+
+.ap { border: 1px solid var(--line); border-radius: 14px; background: var(--bg); display: flex; flex-direction: column; overflow: hidden; }
+.ap.focus { box-shadow: 0 0 0 3px var(--accent-soft); border-color: var(--accent); }
+.ap-head { padding: 12px 14px 0; display: flex; flex-direction: column; gap: 8px; }
+.ap-meta { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); flex-wrap: wrap; }
+.ap-meta time { margin-left: auto; font-variant-numeric: tabular-nums; }
+.lvl { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.lvl-check { background: var(--warn-soft); color: var(--warn); }
+.lvl-risky { background: var(--bad-soft); color: var(--bad); }
+.ap h3 { margin: 0; font-family: var(--f-serif); font-weight: 500; font-size: 18px; line-height: 1.3; text-wrap: balance; }
+.ap-body { padding: 6px 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+.ap-body p { margin: 0; }
+.ap-details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.ap-details .code { margin-top: 6px; }
+.code { font-family: var(--f-mono); font-size: 12px; background: var(--raised); border-radius: 8px; padding: 8px 10px; overflow-x: auto; white-space: pre; }
+.chk { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+.chk input { accent-color: var(--accent); width: 15px; height: 15px; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { height: 34px; padding: 0 14px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; font-size: 13.5px; display: inline-flex; align-items: center; gap: 6px; }
+.btn:hover { background: var(--raised); }
+.btn-primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn-primary:hover { background: var(--ink); opacity: .9; }
+.btn-accent { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn-accent:hover { background: var(--accent); opacity: .92; }
+.btn-danger { background: var(--bad); color: var(--surface); border-color: var(--bad); }
+.btn-danger:hover { background: var(--bad); opacity: .92; }
+.btn-ghost { border-color: transparent; background: none; color: var(--muted); }
+.empty { text-align: center; color: var(--muted); padding: 40px 16px; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.empty strong { color: var(--ink); font-family: var(--f-serif); font-weight: 500; font-size: 18px; }
+.done-list { display: flex; flex-direction: column; gap: 6px; }
+.done-list h4 { margin: 8px 0 2px; font-size: 12px; color: var(--faint); font-weight: 600; }
+.done-row { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+.done-row b { font-weight: 600; }
+.done-row .ok { color: var(--ok); } .done-row .no { color: var(--bad); }
+
+/* Artifact viewer */
+.art-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.art-head strong { font-family: var(--f-serif); font-weight: 500; font-size: 18px; }
+.art-head select { margin-left: auto; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 0 8px; font-size: 12.5px; }
+.art-frame { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.art-bar { display: flex; gap: 6px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--raised); font-size: 12px; color: var(--muted); }
+.art-bar i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); display: inline-block; }
+.art-bar span { margin-left: 6px; }
+.site-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.site-nav b { font-family: var(--f-serif); color: var(--site); font-size: 17px; font-weight: 600; }
+.site-nav nav { display: flex; gap: 12px; font-size: 12.5px; color: var(--muted); }
+.site-nav nav .on { color: var(--site); font-weight: 700; }
+.site-body { padding: 16px 14px; display: flex; flex-direction: column; gap: 10px; }
+.site-body h5 { margin: 0; font-family: var(--f-serif); font-size: 20px; font-weight: 500; }
+.site-body .lead { margin: 0; color: var(--muted); font-size: 13px; }
+.field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.field span { border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px; color: var(--ink); font-size: 13px; background: var(--bg); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.site-btn { align-self: flex-start; background: var(--site); color: var(--surface); font-weight: 700; font-size: 13px; padding: 8px 14px; border-radius: 7px; }
+.doc { padding: 18px; font-family: var(--f-serif); font-size: 15px; line-height: 1.6; }
+.doc h5 { margin: 0 0 8px; font-size: 21px; font-weight: 500; }
+.doc h6 { margin: 14px 0 4px; font-family: var(--f-sans); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.doc p, .doc ul { margin: 0 0 8px; }
+.doc ul { padding-left: 20px; }
+.art-foot { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Pages: skills + activity */
+.pg { flex: 1; overflow-y: auto; min-height: 0; }
+.pg-inner { max-width: 820px; margin: 0 auto; padding: 28px 24px 32px; display: flex; flex-direction: column; gap: 18px; }
+.pg-title { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.pg-title div { flex: 1; min-width: 240px; }
+.pg-title h2 { margin: 0; font-family: var(--f-serif); font-weight: 500; font-size: 28px; }
+.pg-title p { margin: 4px 0 0; color: var(--muted); max-width: 60ch; }
+.found { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 14px; background: var(--accent-soft); flex-wrap: wrap; }
+.found > div { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 8px; }
+.found p { margin: 0; }
+.found-list { display: flex; flex-direction: column; gap: 6px; }
+.found-list label { display: flex; gap: 10px; align-items: flex-start; background: var(--surface); border-radius: 10px; padding: 9px 12px; cursor: pointer; }
+.found-list input { margin-top: 3px; accent-color: var(--accent); }
+.found-list small { display: block; color: var(--muted); }
+.toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.search { flex: 1; min-width: 200px; height: 36px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 0 12px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; padding: 3px; background: var(--surface); gap: 2px; }
+.seg button { border: 0; background: none; padding: 5px 10px; border-radius: 7px; font-size: 13px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--raised); color: var(--ink); font-weight: 600; }
+.skills { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.skill { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; padding: 14px 16px; border-top: 1px solid var(--line); align-items: center; }
+.skill:first-child { border-top: 0; }
+.skill.off .sk-name, .skill.off .sk-desc { opacity: .55; }
+.sk-name { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.sk-name strong { font-weight: 600; font-size: 14.5px; }
+.src { font-size: 11.5px; color: var(--faint); }
+.sk-desc { margin: 2px 0 0; color: var(--muted); font-size: 13.5px; }
+.sync { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--faint); }
+.sync-pill { display: inline-flex; gap: 6px; align-items: center; padding: 3px 9px 3px 4px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); font-size: 12px; color: var(--muted); }
+.sync-pill .mark { width: 16px; height: 16px; font-size: 9px; border-radius: 4px; }
+.sync-pill[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); background: var(--surface); }
+.sync-pill[aria-pressed="false"] .mark { filter: grayscale(1); opacity: .5; }
+.sync-pill[disabled] { opacity: .5; cursor: default; }
+.sk-side { display: flex; gap: 8px; align-items: center; }
+.switch { position: relative; width: 36px; height: 20px; flex: none; }
+.switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.switch span { position: absolute; inset: 0; border-radius: 999px; background: var(--line); transition: background .15s; pointer-events: none; }
+.switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--surface); transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.switch input:checked + span { background: var(--accent); }
+.switch input:checked + span::after { transform: translateX(16px); }
+.switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.tl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.tl li { display: grid; grid-template-columns: 52px 22px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.tl li:first-child { border-top: 0; }
+.tl time { font-variant-numeric: tabular-nums; color: var(--faint); font-size: 12.5px; padding-top: 2px; }
+.tl .what { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tl .what b { font-weight: 600; }
+.tl .kind { font-size: 11.5px; color: var(--muted); }
+.tl .code { font-size: 11.5px; }
+.tl .files { display: flex; gap: 4px; flex-wrap: wrap; }
+.file { font-family: var(--f-mono); font-size: 11px; background: var(--raised); border-radius: 5px; padding: 1px 6px; }
+.ledger { display: flex; flex-direction: column; gap: 10px; }
+.turn { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.turn header { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.turn header time { margin-left: auto; font-variant-numeric: tabular-nums; }
+.turn h3 { margin: 0; font-family: var(--f-serif); font-weight: 500; font-size: 17px; }
+.turn dl { margin: 0; display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 6px 12px; font-size: 13px; }
+.turn dt { color: var(--faint); }
+.turn dd { margin: 0; min-width: 0; }
+.handoff { background: var(--agy-soft); border-radius: 10px; padding: 10px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.handoff b { font-size: 12px; }
+.handoff pre { margin: 0; font-family: var(--f-mono); font-size: 11.5px; white-space: pre-wrap; }
+
+/* Onboarding */
+.onboard { min-height: 740px; display: flex; justify-content: center; align-items: flex-start; padding: 56px 24px 32px; overflow-y: auto; }
+.ob { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 20px; }
+.ob .logo { font-size: 22px; }
+.ob h2 { margin: 0; font-family: var(--f-serif); font-weight: 500; font-size: clamp(26px, 4vw, 34px); line-height: 1.15; text-wrap: balance; }
+.ob > p { margin: -8px 0 0; color: var(--muted); font-size: 15px; }
+.ob-list { display: flex; flex-direction: column; gap: 8px; }
+.ob-item { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
+.ob-item:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ob-item input { accent-color: var(--accent); width: 18px; height: 18px; margin: 0; }
+.ob-item .t { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.ob-item .t strong { font-size: 15px; font-weight: 600; }
+.ob-item .t small { color: var(--muted); font-size: 13px; }
+.state { font-size: 12.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.state.ok { color: var(--ok); }
+.state.miss { color: var(--warn); }
+.ob-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ob-foot p { margin: 0; color: var(--muted); font-size: 13px; flex: 1; min-width: 200px; }
+
+/* Sheets */
+.scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 30; display: grid; place-items: center; padding: 16px; }
+.sheet { width: 100%; max-width: 540px; max-height: 100%; overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.sheet-head { display: flex; gap: 12px; align-items: center; }
+.sheet-head h3 { margin: 0; font-family: var(--f-serif); font-weight: 500; font-size: 22px; flex: 1; }
+.sheet > p { margin: 0; color: var(--muted); }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
+.steps li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.steps li:first-child { border-top: 0; }
+.num { width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--line); display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--muted); }
+.num.done { background: var(--ok); border-color: var(--ok); color: var(--surface); }
+.num.now { border-color: var(--accent); color: var(--accent); }
+.steps .s { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.steps .s strong { font-weight: 600; }
+.steps .s p { margin: 0; color: var(--muted); font-size: 13px; }
+.or { font-size: 12.5px; color: var(--muted); }
+.copyrow { display: flex; gap: 6px; align-items: stretch; }
+.copyrow .code { flex: 1; min-width: 0; }
+.bar { height: 6px; border-radius: 3px; background: var(--raised); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 1.4s ease; }
+.form { display: flex; flex-direction: column; gap: 12px; }
+.form label.l { font-size: 13px; font-weight: 600; display: flex; flex-direction: column; gap: 5px; }
+.form label.l small { font-weight: 400; color: var(--muted); }
+.form input[type="text"], .form textarea { border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 9px 11px; font-weight: 400; }
+.form textarea { min-height: 110px; resize: vertical; line-height: 1.55; }
+.targets { display: flex; gap: 6px; flex-wrap: wrap; }
+.tabs-mini { display: flex; gap: 4px; }
+
+.toast { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 14px; border-radius: 10px; font-size: 13.5px; z-index: 40; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
+
+/* Notes under the window */
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+.notes div { border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 14px 16px; }
+.notes h2 { margin: 0 0 6px; font-family: var(--f-serif); font-weight: 500; font-size: 17px; }
+.notes p { margin: 0; color: var(--muted); font-size: 13.5px; }
+
+@media (max-width: 1180px) {
+  .app { grid-template-columns: 210px minmax(0, 1fr) auto; }
+  .panel { width: 360px; }
+}
+@media (max-width: 900px) {
+  .app { grid-template-columns: 1fr; height: auto; }
+  .sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+  .sb-top { padding-bottom: 4px; }
+  .sb-nav { flex-direction: row; flex-wrap: wrap; }
+  .sb-nav .sb-btn { width: auto; }
+  .recents, .sb-label, .sb-agents { display: none; }
+  .project-chip { margin-bottom: 10px; }
+  .convo, .pg { overflow: visible; }
+  .panel { width: auto; border-left: 0; border-top: 1px solid var(--line); }
+  .p-body { overflow: visible; }
+  .onboard { min-height: 0; padding-top: 32px; }
+  .scrim { position: fixed; }
+  .toast { position: fixed; bottom: max(20px, env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-width: 480px) {
+  .convo-inner, .pg-inner { padding-inline: 14px; }
+  .composer-wrap { padding-inline: 10px; }
+  .menu { right: 8px; left: 8px; width: auto; }
+  .turn dl { grid-template-columns: 1fr; }
+  .turn dt { margin-top: 4px; }
+  .tl li { grid-template-columns: 22px minmax(0, 1fr); }
+  .tl time { grid-column: 2; padding: 0; }
+  .tl li > .mark { grid-row: 1 / span 2; }
+  .two { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="page">
+  <header class="intro">
+    <span class="eyebrow">Chorus · UI mockup v2</span>
+    <h1>Chorus desktop app</h1>
+    <p>Pick a moment to see how it works. Each one matches a use case in <code>documents/ui-use-cases.md</code>. Everything inside the window is clickable.</p>
+  </header>
+  <div class="scenarios" id="scenarios" role="group" aria-label="Choose a moment"></div>
+  <section class="window" id="window" aria-label="Chorus app window"><div id="root"></div></section>
+  <section class="notes" aria-label="Design notes">
+    <div><h2>The right side is for you</h2><p>The right panel only opens when something needs you: an approval, or an artifact an agent made (a page, an image, a document). Otherwise the chat has the full width.</p></div>
+    <div><h2>Agents work like models</h2><p>Pick Claude Code, Antigravity or Codex in the message box, the way you pick a model in Claude. Switching mid-chat brings the new agent up to speed on its own.</p></div>
+    <div><h2>Details have their own place</h2><p>No technical mode. The full story of who did what, and what agents told each other, lives on the Activity page.</p></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  const ICON = {
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    chat: '<path d="M5 18l-1.5 3 4-1.6A8 8 0 1 0 5 18z"/>',
+    skills: '<path d="M12 3l2.2 5.6L20 11l-5.8 2.4L12 19l-2.2-5.6L4 11l5.8-2.4z"/>',
+    activity: '<path d="M3 12h4l3-7 4 14 3-7h4"/>',
+    folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    send: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18"/>',
+    chev: '<path d="M6 9l6 6 6-6"/>',
+    check: '<path d="M5 12.5l4.5 4.5L19 7"/>',
+    copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>',
+    page: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+    code: '<path d="M9 8l-4 4 4 4M15 8l4 4-4 4"/>',
+    hand: '<path d="M12 3v10M8 7l4-4 4 4"/><path d="M5 14v3a4 4 0 0 0 4 4h6a4 4 0 0 0 4-4v-3"/>',
+    attach: '<path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4L15 7"/>',
+    tool: '<path d="M14.5 6.5a4 4 0 0 0-5.3 5.1L4 16.8 7.2 20l5.2-5.2a4 4 0 0 0 5.1-5.3l-2.4 2.4-2.6-.6-.6-2.6z"/>',
+    shield: '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/>',
+    ext: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'
+  };
+  const ic = (n) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`;
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const $ = (s) => document.querySelector(s);
+
+  const AG = {
+    claude: { name: 'Claude Code', by: 'Anthropic', l: 'C', install: 'npm install -g @anthropic-ai/claude-code', account: 'your Claude account' },
+    agy: { name: 'Antigravity', by: 'Google', l: 'A', install: '', account: 'your Google account' },
+    codex: { name: 'Codex', by: 'OpenAI', l: 'X', install: 'npm install -g @openai/codex', account: 'your ChatGPT account' }
+  };
+  const mark = (k, cls = '') => `<span class="mark m-${k} ${cls}" aria-hidden="true">${AG[k].l}</span>`;
+
+  const SCN = [
+    { id: 'onboard', label: 'Pick your agents', uc: 'UC-01' },
+    { id: 'install', label: 'Install helper', uc: 'UC-02' },
+    { id: 'chat', label: 'Chat + approvals', uc: 'UC-04, 05' },
+    { id: 'artifact', label: 'Preview an artifact', uc: 'UC-06' },
+    { id: 'skills', label: 'Skills', uc: 'UC-10, 12' },
+    { id: 'activity', label: 'Activity', uc: 'UC-13, 14' }
+  ];
+
+  const freshApprovals = () => ([
+    { id: 'a1', agent: 'claude', lvl: 'check', time: '2:55 PM', title: 'Set up storage for cake orders',
+      text: 'Adds an "Orders" table to your website\'s database so each order is kept. Your menu and customer list aren\'t changed.',
+      cmd: '$ npx prisma migrate dev --name add_orders\nchanges: prisma/schema.prisma', always: 'database changes', status: 'pending' },
+    { id: 'a2', agent: 'codex', lvl: 'risky', time: '2:53 PM', title: 'Delete 214 old build files',
+      text: 'Removes the "dist" folder before testing. These files are rebuilt automatically. Your own work isn\'t touched.',
+      cmd: '$ rm -rf ./dist', status: 'pending' }
+  ]);
+  const freshSkills = () => ([
+    { id: 's1', name: 'Brand style', desc: 'Use our rose and cream colors and the bakery logo on every page.', src: 'Made in Chorus', on: true, sync: { claude: true, agy: true, codex: true } },
+    { id: 's2', name: 'Friendly copy', desc: 'Write short, warm sentences for customers. No jargon.', src: 'Made in Chorus', on: true, sync: { claude: true, agy: true, codex: true } },
+    { id: 's3', name: 'Phone check', desc: 'After changing a page, check it on a phone-size screen. Includes a screenshot script.', src: 'From Claude Code', on: true, sync: { claude: true, agy: false, codex: true } },
+    { id: 's4', name: 'Stripe payments', desc: 'How to add card payments using Stripe test keys first.', src: 'From Antigravity', on: false, sync: { claude: false, agy: true, codex: false } }
+  ]);
+  const FOUND = [
+    { id: 'f1', name: 'Test before done', desc: 'Run the tests before saying a task is finished.' },
+    { id: 'f2', name: 'Image shrinker', desc: 'Makes photos smaller before adding them to the site. Includes a script.' }
+  ];
+
+  const S = {
+    scenario: 'chat', screen: 'app', view: 'chat',
+    installed: { claude: true, agy: true, codex: false },
+    picked: { claude: true, agy: true, codex: false },
+    sheet: null, installStep: 0, installing: false,
+    agent: 'claude', menu: false,
+    panel: 'approvals', artifact: null, focus: null,
+    approvals: freshApprovals(), riskyConfirm: false,
+    extra: [], skills: freshSkills(), found: FOUND.slice(), foundPick: { f1: true, f2: true },
+    skillFilter: 'all', skillEdit: null,
+    actTab: 'timeline', actFilter: 'all'
+  };
+
+  function setScenario(id) {
+    Object.assign(S, {
+      scenario: id, sheet: null, installStep: 0, installing: false, menu: false, extra: [], agent: 'claude',
+      approvals: freshApprovals(), riskyConfirm: false, focus: null, skillEdit: null,
+      installed: { claude: true, agy: true, codex: false }, picked: { claude: true, agy: true, codex: false },
+      skills: freshSkills(), found: FOUND.slice(), foundPick: { f1: true, f2: true }, actTab: 'timeline', actFilter: 'all'
+    });
+    if (id === 'onboard' || id === 'install') { S.screen = 'onboard'; if (id === 'install') { S.sheet = 'install'; S.picked.codex = true; } }
+    else { S.screen = 'app'; S.installed.codex = true; S.picked.codex = true; }
+    S.view = id === 'skills' ? 'skills' : id === 'activity' ? 'activity' : 'chat';
+    S.artifact = id === 'artifact' ? 'page' : null;
+    S.panel = S.artifact ? 'artifact' : 'approvals';
+    render();
+  }
+
+  const pending = () => S.approvals.filter((a) => a.status === 'pending');
+
+  /* ---------- Onboarding ---------- */
+  function onboardHTML() {
+    const ready = Object.keys(AG).filter((k) => S.picked[k] && S.installed[k]).length;
+    const waiting = Object.keys(AG).filter((k) => S.picked[k] && !S.installed[k]);
+    return `<div class="onboard"><div class="ob">
+      <div class="logo"><i><b></b><b></b><b></b></i>Chorus</div>
+      <h2>Which AI agents do you want to use?</h2>
+      <p>Pick one or more. You can switch between them in any chat, and change this later.</p>
+      <div class="ob-list">${Object.keys(AG).map((k) => `
+        <label class="ob-item">
+          <input type="checkbox" data-pick="${k}" ${S.picked[k] ? 'checked' : ''}>
+          ${mark(k, 'lg')}
+          <span class="t"><strong>${AG[k].name}</strong><small>by ${AG[k].by}</small></span>
+          ${S.installed[k] ? `<span class="state ok">${ic('check')} Installed</span>`
+            : `<span class="state miss">Not installed</span><button class="btn" type="button" data-setup="${k}">Set up</button>`}
+        </label>`).join('')}
+      </div>
+      <div class="ob-foot">
+        <p>${waiting.length ? `${waiting.map((k) => AG[k].name).join(', ')} isn't installed yet. Set it up now, or start without it.` : 'Chorus found these on your computer.'}</p>
+        <button class="btn btn-accent" type="button" id="start" ${ready ? '' : 'disabled'}>Start building</button>
+      </div>
+    </div></div>`;
+  }
+
+  function installSheetHTML() {
+    const k = 'codex';
+    const st = S.installStep; // 0 install, 1 sign in, 2 checking, 3 ready
+    const n = (i) => st > i ? `<span class="num done">${ic('check')}</span>` : `<span class="num ${st === i ? 'now' : ''}">${i + 1}</span>`;
+    return `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-t">
+      <div class="sheet-head">${mark(k, 'lg')}<h3 id="sh-t">Set up ${AG[k].name}</h3><button class="c-btn icon" type="button" data-close-sheet aria-label="Close">${ic('x')}</button></div>
+      <p>Three short steps. Chorus does the work; you only sign in.</p>
+      <ol class="steps">
+        <li>${n(0)}<div class="s"><strong>Install ${AG[k].name}</strong>
+          ${st > 0 ? '<p>Installed.</p>' : S.installing ? '<p>Installing… about a minute.</p><div class="bar"><i id="ibar"></i></div>' : `
+          <p>Chorus can install it for you.</p>
+          <div class="btns"><button class="btn btn-accent" type="button" id="do-install">Install for me</button></div>
+          <span class="or">Prefer to do it yourself? Paste this into Terminal:</span>
+          <div class="copyrow"><div class="code">${esc(AG[k].install)}</div><button class="c-btn icon" type="button" data-copy="${esc(AG[k].install)}" aria-label="Copy">${ic('copy')}</button></div>`}
+        </div></li>
+        <li>${n(1)}<div class="s"><strong>Sign in</strong><p>${AG[k].name} uses ${AG[k].account}. A sign-in page opens in your browser.</p>
+          ${st === 1 ? '<div class="btns"><button class="btn btn-accent" type="button" id="do-signin">Sign in</button></div>' : ''}</div></li>
+        <li>${n(2)}<div class="s"><strong>Check it works</strong><p>${st === 2 ? 'Checking…' : st > 2 ? `${AG[k].name} is ready.` : 'Chorus runs a quick test.'}</p></div></li>
+      </ol>
+      <div class="btns">${st > 2 ? `<button class="btn btn-accent" type="button" data-close-sheet>Done</button>` : `<button class="btn btn-ghost" type="button" data-close-sheet>Do this later</button>`}</div>
+    </div></div>`;
+  }
+
+  /* ---------- App shell ---------- */
+  function sidebarHTML() {
+    const n = pending().length;
+    const status = (k) => {
+      if (!S.installed[k]) return '<span class="dot off">Not set up</span>';
+      if (pending().some((a) => a.agent === k)) return '<span class="dot waiting">Needs you</span>';
+      if (k === 'claude' && S.approvals[0].status === 'allowed') return '<span class="dot working">Working</span>';
+      return '<span class="dot">Ready</span>';
+    };
+    return `<aside class="sidebar">
+      <div class="sb-top"><div class="logo"><i><b></b><b></b><b></b></i>Chorus</div></div>
+      <div class="sb-section sb-nav">
+        <button class="sb-btn new-chat" type="button" data-toast="Starts a new chat in Sweet Crumb Bakery."><span class="plus">${ic('plus')}</span>New chat</button>
+        <button class="sb-btn" type="button" data-view="chat" ${S.view === 'chat' ? 'aria-current="page"' : ''}>${ic('chat')}Chats${n ? `<span class="count">${n}</span>` : ''}</button>
+        <button class="sb-btn" type="button" data-view="skills" ${S.view === 'skills' ? 'aria-current="page"' : ''}>${ic('skills')}Skills</button>
+        <button class="sb-btn" type="button" data-view="activity" ${S.view === 'activity' ? 'aria-current="page"' : ''}>${ic('activity')}Activity</button>
+      </div>
+      <button class="project-chip" type="button" data-toast="Switch project, or open another folder.">${ic('folder')}<span><small>Project</small><strong>Sweet Crumb Bakery</strong></span></button>
+      <div class="sb-label">Recents</div>
+      <div class="sb-section recents">
+        <button class="recent on" type="button" data-view="chat">Cake order page</button>
+        <button class="recent" type="button" data-toast="Opens this chat.">Menu colors</button>
+        <button class="recent" type="button" data-toast="Opens this chat.">Holiday landing page</button>
+        <button class="recent" type="button" data-toast="Opens this chat.">Fix the contact form</button>
+        <button class="recent" type="button" data-toast="Opens this chat.">Write the About page</button>
+      </div>
+      <div class="sb-agents">
+        ${Object.keys(AG).map((k) => `<div class="sb-agent">${mark(k)}<span>${AG[k].name}</span>${status(k)}</div>`).join('')}
+      </div>
+    </aside>`;
+  }
+
+  function chatHTML() {
+    const n = pending().length;
+    const a1 = S.approvals[0], a2 = S.approvals[1];
+    const chip = (a, label) => a.status === 'pending'
+      ? `<button class="waiting-chip" type="button" data-focus="${a.id}">${ic('shield')} ${label}</button>`
+      : a.status === 'allowed' ? `<span class="waiting-chip done">${ic('check')} You allowed this</span>`
+      : `<span class="waiting-chip no">${ic('x')} You said no</span>`;
+    const artCard = (id, title, kind, icon) => `<button class="art-card ${S.artifact === id && S.panel === 'artifact' ? 'on' : ''}" type="button" data-art="${id}">
+      <span class="art-thumb">${ic(icon)}</span><span class="t"><strong>${title}</strong><small>${kind} · Click to open</small></span></button>`;
+
+    const after1 = a1.status === 'allowed'
+      ? `<div class="m-agent"><div class="by">${mark('claude')}Claude Code</div><details class="work"><summary>${ic('tool')}Working · setting up storage<span class="chev">${ic('chev')}</span></summary><ul><li>Made a save point</li><li>Creating the Orders table</li></ul></details></div>`
+      : a1.status === 'denied'
+      ? `<div class="m-agent"><div class="by">${mark('claude')}Claude Code</div><div class="prose"><p>No problem. I can email each order to you instead, so nothing needs to be stored. Want me to do that?</p></div></div>` : '';
+
+    const extra = S.extra.map((m) => m.t === 'user' ? `<div class="m-user">${esc(m.text)}</div>`
+      : m.t === 'switch' ? `<div class="divider"><span>${mark(m.to)} Switched to ${AG[m.to].name} · caught up on this chat</span></div>`
+      : `<div class="m-agent"><div class="by">${mark(m.agent)}${AG[m.agent].name}</div><details class="work" open><summary>${ic('tool')}Thinking…<span class="chev">${ic('chev')}</span></summary><ul><li>Reading your message</li></ul></details></div>`).join('');
+
+    return `<div class="main">
+      <div class="main-head"><h2>Cake order page</h2><span class="stack">${mark('claude')}${mark('codex')}</span>
+        ${n ? `<button class="needs-pill" type="button" data-open-panel>${ic('shield')} ${n} need${n > 1 ? '' : 's'} you</button>` : ''}</div>
+      <div class="convo" id="convo"><div class="convo-inner">
+        <div class="m-user">Add a page where customers can order a birthday cake and pick it up later.</div>
+        <div class="m-agent"><div class="by">${mark('claude')}Claude Code</div>
+          <details class="work"><summary>${ic('tool')}Worked for 2 min · changed 3 files<span class="chev">${ic('chev')}</span></summary>
+            <ul><li>Created the "Order a cake" page</li><li>Added a link to it in the menu</li><li>Checked it on a phone-size screen</li></ul></details>
+          <div class="prose"><p>Done. The new page has a short form for name, cake size, flavor and pickup time, and it's linked from your menu.</p><p>Here's a preview, plus a pickup policy you can put under the form.</p></div>
+          ${artCard('page', 'Order a cake page', 'Web page', 'code')}
+          ${artCard('doc', 'Pickup policy', 'Document', 'page')}
+        </div>
+        <div class="m-user">Looks good. Save the orders somewhere so I can see them, and make sure everything still works.</div>
+        <div class="m-agent"><div class="by">${mark('claude')}Claude Code</div>
+          <div class="prose"><p>To keep each order, I need to add storage to your website. I've asked for your OK on the right.</p><p>I also asked Codex to run the tests.</p></div>
+          ${chip(a1, 'Waiting for your OK')}
+        </div>
+        ${after1}
+        <div class="divider"><span>${mark('codex')} Claude Code asked Codex to test the site · Codex caught up on this chat</span></div>
+        <div class="m-agent"><div class="by">${mark('codex')}Codex</div>
+          <div class="prose"><p>Before testing, I'd like to clear out old build files so the results are clean.</p></div>
+          ${chip(a2, 'Waiting for your OK')}
+        </div>
+        ${extra}
+      </div></div>
+      <div class="composer-wrap"><form class="composer" id="composer">
+        <label class="sr" for="prompt">Message ${AG[S.agent].name}</label>
+        <textarea id="prompt" rows="1" placeholder="Reply to ${AG[S.agent].name}… type @ to ask another agent"></textarea>
+        <div class="c-row">
+          <button class="c-btn icon" type="button" aria-label="Attach files" data-toast="Attach images or files for the agent to use.">${ic('attach')}</button>
+          <button class="c-btn" type="button" data-view="skills">${ic('skills')} ${S.skills.filter((s) => s.on && s.sync[S.agent]).length} skills</button>
+          <button class="c-btn agent-pick" type="button" id="agent-pick" aria-expanded="${S.menu}">${mark(S.agent)} ${AG[S.agent].name} ${ic('chev')}</button>
+          <button class="send" type="submit" aria-label="Send">${ic('send')}</button>
+        </div>
+        ${S.menu ? agentMenuHTML() : ''}
+      </form></div>
+    </div>`;
+  }
+
+  function agentMenuHTML() {
+    return `<div class="menu" role="menu">${Object.keys(AG).map((k) => `
+      <button class="menu-item" type="button" role="menuitem" data-agent="${k}">
+        ${mark(k)}<span class="t"><strong>${AG[k].name}</strong><small>${S.installed[k] ? (k === 'claude' ? 'Writes and fixes code' : k === 'agy' ? 'Plans bigger changes' : 'Tests and reviews') : 'Not set up · click to install'}</small></span>
+        ${k === S.agent ? `<span class="tick">${ic('check')}</span>` : ''}
+      </button>`).join('')}
+      <div class="menu-note">Switching keeps this chat. The new agent gets a short summary of what happened so far.</div>
+    </div>`;
+  }
+
+  function panelHTML() {
+    const n = pending().length;
+    const showPanel = n > 0 || S.artifact;
+    if (!showPanel) return '';
+    const tabs = [`<button class="p-tab" role="tab" type="button" data-panel="approvals" aria-selected="${S.panel === 'approvals'}">${ic('shield')} Needs you${n ? ` <span class="n">${n}</span>` : ''}</button>`];
+    if (S.artifact) tabs.push(`<button class="p-tab" role="tab" type="button" data-panel="artifact" aria-selected="${S.panel === 'artifact'}">${ic(S.artifact === 'page' ? 'code' : 'page')} ${S.artifact === 'page' ? 'Order a cake page' : 'Pickup policy'} <span class="x" data-close-art aria-label="Close artifact">${ic('x')}</span></button>`);
+    const body = S.panel === 'artifact' && S.artifact ? artifactHTML() : approvalsHTML();
+    return `<aside class="panel" aria-label="Needs you and artifacts">
+      <div class="p-tabs" role="tablist">${tabs.join('')}</div>
+      <div class="p-body">${body}</div>
+    </aside>`;
+  }
+
+  function approvalsHTML() {
+    const p = pending();
+    const done = S.approvals.filter((a) => a.status !== 'pending');
+    const cards = p.map((a) => `<article class="ap ${S.focus === a.id ? 'focus' : ''}" id="ap-${a.id}">
+      <div class="ap-head">
+        <div class="ap-meta">${mark(a.agent)} ${AG[a.agent].name} <span class="lvl lvl-${a.lvl}">${a.lvl === 'risky' ? 'Risky' : 'Please check'}</span><time>${a.time}</time></div>
+        <h3>${esc(a.title)}</h3>
+      </div>
+      <div class="ap-body">
+        <p>${esc(a.text)}</p>
+        <details class="ap-details"><summary>Show exactly what will run</summary><div class="code">${esc(a.cmd)}</div></details>
+        ${a.always ? `<label class="chk"><input type="checkbox" id="always-${a.id}"> Always allow ${a.always} in this project</label>` : ''}
+        ${a.lvl === 'risky' && S.riskyConfirm === a.id
+          ? `<p style="font-size:13px;color:var(--bad)">This can't be undone with a save point. Delete 214 files?</p>
+             <div class="btns"><button class="btn btn-danger" type="button" data-decide="${a.id}:allowed">Yes, delete 214 files</button><button class="btn" type="button" data-unconfirm>Cancel</button></div>`
+          : `<div class="btns">
+              <button class="btn btn-primary" type="button" data-decide="${a.id}:${a.lvl === 'risky' ? 'confirm' : 'allowed'}">Allow</button>
+              <button class="btn" type="button" data-decide="${a.id}:denied">Don't allow</button>
+              <button class="btn btn-ghost" type="button" data-askwhy="${a.agent}">Ask why</button>
+            </div>`}
+      </div>
+    </article>`).join('');
+    const empty = `<div class="empty"><strong>Nothing needs you</strong><span>When an agent wants to do something important, like change data or delete files, it will ask here first.</span></div>`;
+    const doneList = done.length ? `<div class="done-list"><h4>Earlier in this chat</h4>${done.map((a) => `<div class="done-row"><span class="${a.status === 'allowed' ? 'ok' : 'no'}">${ic(a.status === 'allowed' ? 'check' : 'x')}</span><b>${a.status === 'allowed' ? 'Allowed' : 'Declined'}</b> ${esc(a.title)}</div>`).join('')}</div>` : '';
+    return `${p.length ? `<p class="p-sub">Agents pause here until you decide. Nothing runs without your OK.</p>` : ''}${cards || empty}${doneList}`;
+  }
+
+  function artifactHTML() {
+    if (S.artifact === 'doc') return `<div class="art-head"><strong>Pickup policy</strong><select aria-label="Version"><option>Version 1</option></select></div>
+      <div class="art-frame"><div class="doc">
+        <h5>Picking up your cake</h5>
+        <p>Thank you for ordering from Sweet Crumb Bakery. Here's how pickup works.</p>
+        <h6>When</h6><ul><li>Order at least 3 days ahead.</li><li>Pickup is Tuesday to Saturday, 9 AM to 5 PM.</li></ul>
+        <h6>Changes</h6><p>You can change flavor or size up to 48 hours before pickup. Just reply to your confirmation email.</p>
+        <h6>Paying</h6><p>Pay when you pick up, by card or cash.</p>
+      </div></div>
+      <div class="art-foot"><button class="btn" type="button" data-toast="Copied the text.">${ic('copy')} Copy</button><button class="btn" type="button" data-toast="Saved as a file in your project.">Save to project</button></div>`;
+    return `<div class="art-head"><strong>Order a cake page</strong><select aria-label="Version" id="art-ver"><option>Version 2 · latest</option><option>Version 1</option></select></div>
+      <div class="art-frame">
+        <div class="art-bar"><i></i><i></i><i></i><span>Live preview · updates when Claude Code edits it</span></div>
+        <div class="site-nav"><b>Sweet Crumb Bakery</b><nav><span>Menu</span><span class="on">Order a cake</span><span>About</span></nav></div>
+        <div class="site-body">
+          <h5>Order a birthday cake</h5>
+          <p class="lead">Tell us what you'd like and when you'll pick it up. We'll email you to confirm.</p>
+          <div class="field">Your name<span>Mai Tran</span></div>
+          <div class="two"><div class="field">Cake size<span>8 inch · serves 10–12</span></div><div class="field">Flavor<span>Vanilla raspberry</span></div></div>
+          <div class="field">Pickup<span>Sat, Oct 24 · 10:00 AM</span></div>
+          <span class="site-btn">Place order</span>
+        </div>
+      </div>
+      <div class="art-foot">
+        <button class="btn" type="button" data-toast="Opens the page in your web browser.">${ic('ext')} Open in browser</button>
+        <button class="btn" type="button" data-askwhy="claude" data-fill="Make the Place order button bigger on phones.">Ask for changes</button>
+      </div>`;
+  }
+
+  /* ---------- Skills page ---------- */
+  function skillsHTML() {
+    const list = S.skills.filter((s) => S.skillFilter === 'all' || (S.skillFilter === 'on' ? s.on : !s.on));
+    return `<div class="main"><div class="pg"><div class="pg-inner">
+      <div class="pg-title"><div><h2>Skills</h2><p>Instructions and small tools your agents follow. Turn a skill on and Chorus keeps it in sync with every agent you pick.</p></div>
+        <button class="btn btn-accent" type="button" data-new-skill>${ic('plus')} New skill</button></div>
+      ${S.found.length ? `<div class="found">
+        <span class="mark m-codex lg" aria-hidden="true">X</span>
+        <div><p><b>Found ${S.found.length} skill${S.found.length > 1 ? 's' : ''} in Codex that your other agents don't have.</b> Pick which ones to share.</p>
+          <div class="found-list">${S.found.map((f) => `<label><input type="checkbox" data-found="${f.id}" ${S.foundPick[f.id] ? 'checked' : ''}><span><b>${esc(f.name)}</b><small>${esc(f.desc)}</small></span></label>`).join('')}</div>
+          <div class="btns"><button class="btn btn-primary" type="button" data-sync-found>Share with all agents</button><button class="btn btn-ghost" type="button" data-dismiss-found>Not now</button></div>
+        </div></div>` : ''}
+      <div class="toolbar">
+        <input class="search" id="skill-search" type="text" placeholder="Search skills" aria-label="Search skills">
+        <div class="seg" role="group" aria-label="Filter">${[['all', 'All'], ['on', 'On'], ['off', 'Off']].map(([k, l]) => `<button type="button" data-sfilter="${k}" aria-pressed="${S.skillFilter === k}">${l}</button>`).join('')}</div>
+      </div>
+      <ul class="skills">${list.map((s) => `<li class="skill ${s.on ? '' : 'off'}">
+        <div><div class="sk-name"><strong>${esc(s.name)}</strong><span class="src">${esc(s.src)}</span></div><p class="sk-desc">${esc(s.desc)}</p></div>
+        <div class="sk-side"><button class="btn btn-ghost" type="button" data-edit-skill="${s.id}">Edit</button>
+          <label class="switch"><input type="checkbox" data-skill-on="${s.id}" ${s.on ? 'checked' : ''} aria-label="Turn ${esc(s.name)} on or off"><span></span></label></div>
+        <div class="sync">Synced to ${Object.keys(AG).map((k) => `<button class="sync-pill" type="button" data-sync="${s.id}:${k}" aria-pressed="${!!s.sync[k]}" ${S.installed[k] && s.on ? '' : 'disabled'} title="${S.installed[k] ? '' : AG[k].name + ' is not set up'}">${mark(k)}${AG[k].name}</button>`).join('')}</div>
+      </li>`).join('') || '<li class="skill"><div class="sk-desc">No skills match.</div></li>'}</ul>
+    </div></div></div>`;
+  }
+
+  function skillSheetHTML() {
+    const s = S.skillEdit === 'new' ? { name: '', desc: '', body: '', sync: { claude: true, agy: true, codex: false } } : Object.assign({ body: 'When you change a page:\n1. Open it at 390px wide.\n2. Take a screenshot.\n3. Fix anything that overlaps or is cut off.' }, S.skills.find((x) => x.id === S.skillEdit));
+    return `<div class="scrim" id="scrim"><form class="sheet form" id="skill-form" role="dialog" aria-modal="true" aria-labelledby="sk-t">
+      <div class="sheet-head"><h3 id="sk-t">${S.skillEdit === 'new' ? 'New skill' : 'Edit skill'}</h3><button class="c-btn icon" type="button" data-close-sheet aria-label="Close">${ic('x')}</button></div>
+      <label class="l">Name<input type="text" id="sk-name" value="${esc(s.name)}" placeholder="e.g. Seasonal menu" required></label>
+      <label class="l">What it's for <small>One line. Agents read this to decide when to use the skill.</small><input type="text" id="sk-desc" value="${esc(s.desc)}" placeholder="e.g. Update the menu when seasons change"></label>
+      <label class="l">Instructions<textarea id="sk-body" placeholder="Write the steps in plain words.">${esc(s.body)}</textarea></label>
+      <div class="btns"><button class="btn" type="button" data-toast="Claude Code drafts the instructions from your one-line description.">${ic('skills')} Write it for me</button><button class="btn" type="button" data-toast="Add scripts, templates or examples to this skill.">${ic('attach')} Add files</button></div>
+      <div class="l" style="font-size:13px;font-weight:600">Sync to</div>
+      <div class="targets">${Object.keys(AG).map((k) => `<label class="sync-pill" style="cursor:pointer"><input type="checkbox" name="tgt" value="${k}" ${s.sync[k] ? 'checked' : ''} ${S.installed[k] ? '' : 'disabled'} style="accent-color:var(--accent)">${mark(k)}${AG[k].name}${S.installed[k] ? '' : ' · not set up'}</label>`).join('')}</div>
+      <div class="btns"><button class="btn btn-accent" type="submit">${S.skillEdit === 'new' ? 'Create and turn on' : 'Save'}</button><button class="btn btn-ghost" type="button" data-close-sheet>Cancel</button></div>
+    </form></div>`;
+  }
+
+  /* ---------- Activity page ---------- */
+  const EVENTS = [
+    { t: '2:55', a: 'claude', kind: 'Asked for approval', what: 'Set up storage for cake orders', code: 'npx prisma migrate dev --name add_orders' },
+    { t: '2:53', a: 'codex', kind: 'Asked for approval', what: 'Delete 214 old build files', code: 'rm -rf ./dist' },
+    { t: '2:52', a: 'codex', kind: 'Caught up', what: 'Read the shared summary of this chat (goal, 3 files, 1 check)' },
+    { t: '2:52', a: 'claude', kind: 'Asked another agent', what: 'Asked Codex: "Run the tests and check the order form works."' },
+    { t: '2:47', a: 'claude', kind: 'Made an artifact', what: 'Pickup policy (document)' },
+    { t: '2:46', a: 'claude', kind: 'Ran a check', what: 'Phone-size screenshot of the order page · passed', code: 'node .agents/skills/phone-check/shot.mjs /order' },
+    { t: '2:44', a: 'claude', kind: 'Changed files', what: 'Created the order page and linked it from the menu', files: ['app/order/page.tsx', 'components/OrderForm.tsx', 'components/NavBar.tsx'] },
+    { t: '2:41', a: 'claude', kind: 'Started', what: 'You asked: "Add a page where customers can order a birthday cake…"' }
+  ];
+  function activityHTML() {
+    const ev = EVENTS.filter((e) => S.actFilter === 'all' || e.a === S.actFilter);
+    const timeline = `<ol class="tl">${ev.map((e) => `<li><time>${e.t}</time>${mark(e.a)}<div class="what"><span class="kind">${AG[e.a].name} · ${e.kind}</span><b>${esc(e.what)}</b>
+      ${e.files ? `<div class="files">${e.files.map((f) => `<span class="file">${f}</span>`).join('')}</div>` : ''}${e.code ? `<div class="code">${esc(e.code)}</div>` : ''}</div></li>`).join('')}</ol>`;
+    const ledger = `<div class="ledger">
+      <article class="turn"><header>${mark('claude')} Claude Code · Request 1<time>2:41–2:47 PM</time></header>
+        <h3>Add a cake order page</h3>
+        <dl><dt>Outcome</dt><dd>Order page with a 4-field form, linked from the menu.</dd>
+        <dt>Files</dt><dd><div class="files"><span class="file">app/order/page.tsx</span><span class="file">components/OrderForm.tsx</span><span class="file">components/NavBar.tsx</span></div></dd>
+        <dt>Checks</dt><dd>1 passed (phone screenshot)</dd>
+        <dt>Artifacts</dt><dd>Order a cake page · Pickup policy</dd>
+        <dt>Still to do</dt><dd>Save orders somewhere</dd></dl></article>
+      <article class="turn"><header>${mark('claude')} Claude Code · Request 2<time>2:50 PM · in progress</time></header>
+        <h3>Save orders and re-test</h3>
+        <dl><dt>Waiting on</dt><dd>Your OK to set up storage</dd><dt>Asked</dt><dd>Codex to run the tests</dd></dl>
+        <div class="handoff"><b>What Codex was told</b><pre>Goal: Customers can order a birthday cake online and pick it up later.
+Done: Order page + form, linked from menu. Phone check passed.
+Files: app/order/page.tsx, components/OrderForm.tsx, components/NavBar.tsx
+Please: Run the tests and check the order form works.</pre></div></article>
+    </div>`;
+    return `<div class="main"><div class="pg"><div class="pg-inner">
+      <div class="pg-title"><div><h2>Activity</h2><p>Everything your agents did in Sweet Crumb Bakery, and what they told each other. Open this when you want the full story.</p></div></div>
+      <div class="toolbar">
+        <div class="seg" role="group" aria-label="View">${[['timeline', 'Timeline'], ['ledger', 'Shared memory']].map(([k, l]) => `<button type="button" data-acttab="${k}" aria-pressed="${S.actTab === k}">${l}</button>`).join('')}</div>
+        ${S.actTab === 'timeline' ? `<div class="seg" role="group" aria-label="Agent">${[['all', 'All agents']].concat(Object.keys(AG).map((k) => [k, AG[k].name])).map(([k, l]) => `<button type="button" data-actf="${k}" aria-pressed="${S.actFilter === k}">${l}</button>`).join('')}</div>` : ''}
+      </div>
+      ${S.actTab === 'timeline' ? timeline : `<p class="p-sub" style="margin-top:-6px">What every agent can see about this project. When you switch agents, they start from here.</p>${ledger}`}
+    </div></div></div>`;
+  }
+
+  /* ---------- Render ---------- */
+  function render() {
+    $('#scenarios').innerHTML = SCN.map((s) => `<button class="scn" type="button" data-scn="${s.id}" aria-pressed="${s.id === S.scenario}"><small>${s.uc}</small>${s.label}</button>`).join('');
+    let html;
+    if (S.screen === 'onboard') html = onboardHTML() + (S.sheet === 'install' ? installSheetHTML() : '');
+    else {
+      const main = S.view === 'skills' ? skillsHTML() : S.view === 'activity' ? activityHTML() : chatHTML();
+      html = `<div class="app">${sidebarHTML()}${main}${panelHTML()}</div>` + (S.sheet === 'skill' ? skillSheetHTML() : S.sheet === 'install' ? installSheetHTML() : '');
+    }
+    $('#root').innerHTML = html;
+    const c = $('#convo'); if (c && !S.keepScroll) c.scrollTop = c.scrollHeight;
+    S.keepScroll = false;
+    if (S.installing) requestAnimationFrame(() => { const b = $('#ibar'); if (b) b.style.width = '100%'; });
+  }
+
+  let tt;
+  function toast(text) {
+    let el = $('#toast');
+    if (!el) { el = document.createElement('div'); el.id = 'toast'; el.className = 'toast'; el.setAttribute('role', 'status'); $('#window').appendChild(el); }
+    el.textContent = text; el.hidden = false; clearTimeout(tt); tt = setTimeout(() => { el.hidden = true; }, 2600);
+  }
+
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('button, [data-close-art]');
+    if (S.menu && !e.target.closest('.menu') && !e.target.closest('#agent-pick')) { S.menu = false; S.keepScroll = true; render(); }
+    if (!b) return;
+    const d = b.dataset;
+    if (d.scn) return setScenario(d.scn);
+    if ('closeArt' in d) { e.stopPropagation(); S.artifact = null; S.panel = 'approvals'; S.keepScroll = true; return render(); }
+    if (d.toast) return toast(d.toast);
+    if (d.copy) { try { navigator.clipboard.writeText(d.copy).then(() => toast('Copied.'), () => toast('Select the text to copy it.')); } catch (_) { toast('Select the text to copy it.'); } return; }
+    if (d.setup) { e.preventDefault(); S.sheet = 'install'; S.installStep = 0; return render(); }
+    if ('closeSheet' in d) { S.sheet = null; return render(); }
+    if (b.id === 'do-install') {
+      S.installing = true; render();
+      setTimeout(() => { S.installing = false; S.installStep = 1; render(); }, 1600); return;
+    }
+    if (b.id === 'do-signin') {
+      toast('Opened the sign-in page in your browser.'); S.installStep = 2; render();
+      setTimeout(() => { S.installStep = 3; S.installed.codex = true; S.picked.codex = true; render(); }, 1300); return;
+    }
+    if (b.id === 'start') { S.screen = 'app'; S.view = 'chat'; S.scenario = 'chat'; return render(); }
+    if (d.view) { S.view = d.view; S.menu = false; return render(); }
+    if (d.art) { S.artifact = d.art; S.panel = 'artifact'; S.keepScroll = true; return render(); }
+    if (d.panel) { S.panel = d.panel; S.keepScroll = true; return render(); }
+    if ('openPanel' in d) { S.panel = 'approvals'; S.keepScroll = true; return render(); }
+    if (d.focus) { S.panel = 'approvals'; S.focus = d.focus; S.keepScroll = true; render(); const el = $('#ap-' + d.focus); if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
+    if (d.decide) {
+      const [id, v] = d.decide.split(':'); const a = S.approvals.find((x) => x.id === id);
+      if (v === 'confirm') { S.riskyConfirm = id; S.keepScroll = true; return render(); }
+      a.status = v; S.riskyConfirm = false; S.focus = null; render();
+      return toast(v === 'allowed' ? `Allowed. ${AG[a.agent].name} is continuing.` : `Declined. ${AG[a.agent].name} will find another way.`);
+    }
+    if ('unconfirm' in d) { S.riskyConfirm = false; S.keepScroll = true; return render(); }
+    if (d.askwhy) {
+      if (S.view !== 'chat') { S.view = 'chat'; render(); }
+      if (S.agent !== d.askwhy) { S.agent = d.askwhy; render(); }
+      const p = $('#prompt'); p.value = d.fill || 'Why do you need to do this? Is there a safer way?'; p.focus(); return;
+    }
+    if (b.id === 'agent-pick') { S.menu = !S.menu; S.keepScroll = true; return render(); }
+    if (d.agent) {
+      const k = d.agent; S.menu = false;
+      if (!S.installed[k]) { S.sheet = 'install'; S.installStep = 0; return render(); }
+      if (k !== S.agent) { S.extra.push({ t: 'switch', to: k }); S.agent = k; toast(`${AG[k].name} caught up on this chat.`); }
+      return render();
+    }
+    if ('newSkill' in d) { S.sheet = 'skill'; S.skillEdit = 'new'; return render(); }
+    if (d.editSkill) { S.sheet = 'skill'; S.skillEdit = d.editSkill; return render(); }
+    if (d.sync) { const [id, k] = d.sync.split(':'); const s = S.skills.find((x) => x.id === id); s.sync[k] = !s.sync[k]; render(); return toast(`${s.name} ${s.sync[k] ? 'added to' : 'removed from'} ${AG[k].name}.`); }
+    if (d.sfilter) { S.skillFilter = d.sfilter; return render(); }
+    if ('syncFound' in d) {
+      const picked = S.found.filter((f) => S.foundPick[f.id]);
+      picked.forEach((f) => S.skills.unshift({ id: f.id, name: f.name, desc: f.desc, src: 'From Codex', on: true, sync: { claude: true, agy: true, codex: true } }));
+      S.found = S.found.filter((f) => !S.foundPick[f.id]); render();
+      return toast(`Shared ${picked.length} skill${picked.length === 1 ? '' : 's'} with all your agents.`);
+    }
+    if ('dismissFound' in d) { S.found = []; render(); return toast('You can find these later under New skill → Import.'); }
+    if (d.acttab) { S.actTab = d.acttab; return render(); }
+    if (d.actf) { S.actFilter = d.actf; return render(); }
+  });
+
+  document.addEventListener('change', (e) => {
+    const d = e.target.dataset;
+    if (d.pick) { S.picked[d.pick] = e.target.checked; return render(); }
+    if (d.skillOn) { const s = S.skills.find((x) => x.id === d.skillOn); s.on = e.target.checked; render(); return toast(s.on ? `${s.name} is on. Agents will use it from their next message.` : `${s.name} is off. Its files are kept, so you can turn it back on.`); }
+    if (d.found) { S.foundPick[d.found] = e.target.checked; }
+  });
+
+  document.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (e.target.id === 'composer') {
+      const p = $('#prompt'); const t = p.value.trim(); if (!t) return;
+      S.extra.push({ t: 'user', text: t }); S.extra.push({ t: 'agent', agent: S.agent }); return render();
+    }
+    if (e.target.id === 'skill-form') {
+      const name = $('#sk-name').value.trim() || 'Untitled skill';
+      const desc = $('#sk-desc').value.trim() || 'No description yet.';
+      const sync = {}; e.target.querySelectorAll('input[name="tgt"]').forEach((i) => { sync[i.value] = i.checked; });
+      if (S.skillEdit === 'new') S.skills.unshift({ id: 'n' + Date.now(), name, desc, src: 'Made in Chorus', on: true, sync });
+      else Object.assign(S.skills.find((x) => x.id === S.skillEdit), { name, desc, sync });
+      S.sheet = null; render(); toast(`Saved ${name}.`);
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { if (S.sheet) { S.sheet = null; render(); } else if (S.menu) { S.menu = false; render(); } }
+    if (e.key === 'Enter' && !e.shiftKey && e.target.id === 'prompt') { e.preventDefault(); $('#composer').requestSubmit(); }
+  });
+
+  setScenario('chat');
+})();
+</script>
