@@ -14,14 +14,21 @@ const hasSkipPerms = process.argv.includes('--dangerously-skip-permissions');
 
 async function main() {
   if (!scenarioPath || !fs.existsSync(scenarioPath)) {
-    // Default interactive / banner output if no scenario specified
-    process.stdout.write('\x1b[32m[chorus-mock]\x1b[0m Native PTY Simulator Ready.\n');
-    process.stdout.write(`Args: ${process.argv.slice(2).join(' ')}\n`);
+    const prompt = process.env.CHORUS_PROMPT || '';
+    const agent = process.env.CHORUS_TARGET_ENGINE || 'claude';
+    process.stdout.write(`\x1b[32m[${agent}]\x1b[0m Started interactive execution session.\n`);
+    if (prompt) {
+      process.stdout.write(`Received instruction: "${prompt}"\n`);
+      process.stdout.write(`Analyzing codebase structure and preparing execution steps...\n`);
+      process.stdout.write(`Inspecting project configuration and workspace files.\n`);
+      process.stdout.write(`Ready. Execution finished cleanly.\n`);
+    } else {
+      process.stdout.write(`Native PTY Simulator Ready. Args: ${process.argv.slice(2).join(' ')}\n`);
+    }
     if (hasSkipPerms) {
       process.stdout.write('\x1b[33m⚡ Mode: --dangerously-skip-permissions active\x1b[0m\n');
     }
-    // Keep alive briefly then exit 0
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 150));
     process.exit(0);
   }
 

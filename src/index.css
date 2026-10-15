@@ -83,11 +83,16 @@
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
 body {
   background: var(--bg); color: var(--ink); font-family: var(--f-sans); font-size: 14px; line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 20px 36px; margin: 0;
 }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -97,21 +102,9 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 svg.i.sm { width: 15px; height: 15px; }
 code, .mono { font-family: var(--f-mono); font-size: .9em; }
 
-/* ---------- Page Layout ---------- */
-.page { max-width: 1360px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
-.intro { display: flex; flex-direction: column; gap: 4px; }
-.intro h1 { margin: 0; font-family: var(--f-serif); font-weight: 400; font-size: clamp(26px, 3.2vw, 34px); letter-spacing: -.01em; }
-.intro p { margin: 0; color: var(--muted); max-width: 84ch; font-size: 14px; }
-.scenarios { display: flex; flex-wrap: wrap; gap: 6px; }
-.scn { display: inline-flex; gap: 8px; align-items: baseline; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 13px; color: var(--ink-2); transition: border-color .15s; }
-.scn:hover { border-color: var(--faint); }
-.scn small { font-family: var(--f-mono); font-size: 10.5px; color: var(--faint); }
-.scn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.scn[aria-pressed="true"] small { color: var(--bg); opacity: .7; }
-
 /* ---------- Window & App Frame ---------- */
-.window { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); position: relative; background: var(--bg); }
-.app { display: grid; grid-template-columns: 252px minmax(0, 1fr) auto; height: 800px; transition: grid-template-columns .2s ease; }
+.window { width: 100vw; height: 100vh; border: none; border-radius: 0; overflow: hidden; box-shadow: none; position: relative; background: var(--bg); }
+.app { display: grid; grid-template-columns: 252px minmax(0, 1fr) auto; height: 100vh; width: 100vw; transition: grid-template-columns .2s ease; }
 .app.art-full { grid-template-columns: 252px 0 minmax(0, 1fr); }
 
 /* Sidebar */

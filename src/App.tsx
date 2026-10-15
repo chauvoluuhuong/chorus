@@ -22,22 +22,7 @@ import { SlashPopover } from './components/SlashPopover';
 import { HandoffPopover } from './components/HandoffPopover';
 import { Icon } from './components/Icon';
 
-/* ---------- Mockup Scenarios Definition ---------- */
-export const SCENARIOS = [
-  { id: 'home', label: 'New chat (with Handoff select)', uc: 'UC-01' },
-  { id: 'skip_perm', label: 'New chat w/ --dangerously-skip-permissions', uc: 'UC-01' },
-  { id: 'pick', label: 'Agent & Quota picker', uc: 'UC-02' },
-  { id: 'inline_approval', label: 'Direct inline approval (y/n)', uc: 'UC-06' },
-  { id: 'tools', label: 'Running tool & Stop button', uc: 'UC-04' },
-  { id: 'limit', label: '1-click Handoff on limit', uc: 'UC-08' },
-  { id: 'mid_handoff', label: 'Mid-session Handoff (Input button)', uc: 'UC-08' },
-  { id: 'artifact', label: 'Native Artifact (Resizable, Diff, Fullscreen)', uc: 'UC-07' },
-  { id: 'terminal', label: 'Raw PTY Terminal', uc: 'UC-05' },
-  { id: 'memory', label: 'Shared Memory (Tier 1 & Tier 2)', uc: 'UC-10' },
-  { id: 'skills', label: 'Skills Studio (live search)', uc: 'UC-09' },
-  { id: 'activity', label: 'Activity (Workspace Tools vs Agent Bridge)', uc: 'UC-11' },
-  { id: 'mention', label: '@-Mentions & /-Skills', uc: 'UC-12' },
-];
+
 
 /* ---------- Agent Registry & Configurations ---------- */
 export const AGENTS_CONFIG: Record<
@@ -244,7 +229,6 @@ const INITIAL_ACTIVITY_EVENTS: ActivityEvent[] = [
 
 export function App() {
   const [theme, setTheme] = useState<'system' | 'light' | 'dark'>('light');
-  const [selectedScenario, setSelectedScenario] = useState<string>('inline_approval');
   const [currentView, setCurrentView] = useState<'chat' | 'terminal' | 'skills' | 'memory' | 'activity'>('chat');
   const [screen, setScreen] = useState<'home' | 'thread'>('thread');
   const [mode, setMode] = useState<'chat' | 'terminal'>('chat');
@@ -387,68 +371,6 @@ export function App() {
     toastTimerRef.current = setTimeout(() => setToastMsg(null), 3000);
   };
 
-  /* ---------- Scenario Selection Handler ---------- */
-  const handleSelectScenario = (id: string) => {
-    setSelectedScenario(id);
-    setCurrentView('chat');
-    setScreen('thread');
-    setMode('chat');
-    setSelectedAgent('claude');
-    setSelectedModel('Sonnet 5.5');
-    setLimited(false);
-    setHandedTo(null);
-    setInlineStatus('pending');
-    setAgentRunning(false);
-    setArtifact(null);
-    setArtifactPanelWidth(580);
-    setIsArtFullscreen(false);
-    setMenuOpen(false);
-    setHandoffMenuOpen(false);
-    setMentionMenuOpen(false);
-    setSlashMenuOpen(false);
-    setAutonomousMode(false);
-    setBellOpen(false);
-
-    if (id === 'home') {
-      setScreen('home');
-      setContinueFromThread('none');
-    } else if (id === 'skip_perm') {
-      setScreen('home');
-      setAutonomousMode(true);
-      setContinueFromThread('none');
-    } else if (id === 'pick') {
-      setScreen('home');
-      setMenuOpen(true);
-      setMenuAgent('claude');
-    } else if (id === 'inline_approval') {
-      setInlineStatus('pending');
-    } else if (id === 'tools') {
-      setAgentRunning(true);
-      setToolsOpen(true);
-    } else if (id === 'artifact') {
-      setArtifact('order');
-      setArtifactVersion(2);
-      setArtifactTab('preview');
-    } else if (id === 'limit') {
-      setLimited(true);
-      setInlineStatus('allowed');
-    } else if (id === 'mid_handoff') {
-      setScreen('thread');
-      setHandoffMenuOpen(true);
-    } else if (id === 'mention') {
-      setScreen('thread');
-      setMentionMenuOpen(true);
-    } else if (id === 'terminal') {
-      setMode('terminal');
-    } else if (id === 'skills') {
-      setCurrentView('skills');
-    } else if (id === 'memory') {
-      setCurrentView('memory');
-    } else if (id === 'activity') {
-      setCurrentView('activity');
-    }
-  };
-
   /* ---------- PTY Execution Spawner ---------- */
   const spawnPtySession = async (options: PtySpawnOptions) => {
     if (ptyClientRef.current) {
@@ -463,6 +385,21 @@ export function App() {
 
     client.onData(data => {
       window.__CHORUS_HARNESS__?.emit('pty:data', data);
+
+      const clean = data.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+      if (clean && !clean.includes('Authorize command:') && !clean.includes('[y/n]:')) {
+        setMessages(prev => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (last.role === 'assistant') {
+            return [
+              ...prev.slice(0, -1),
+              { ...last, content: last.content ? `${last.content}${clean}` : clean },
+            ];
+          }
+          return prev;
+        });
+      }
 
       const approvalMatch = data.match(/Authorize command:\s*(.*?)\s*\[y\/n\]:/i);
       if (approvalMatch) {
@@ -772,6 +709,33 @@ export function App() {
 
     if (ptyStatus === 'connected' && ptyClientRef.current) {
       ptyClientRef.current.write(val + '\n');
+    } else {
+      const asstMsg: ChatMessage = {
+        id: `asst-${Date.now()}`,
+        threadId: activeThreadId,
+        role: 'assistant',
+        agent: selectedAgent,
+        model: selectedModel,
+        content: '',
+        timestamp: 'Just now',
+      };
+      setMessages(prev => [...prev, asstMsg]);
+
+      spawnPtySession({
+        id: `sess-${selectedAgent}-${Date.now()}`,
+        command: 'node',
+        args: [
+          'tests/e2e/stubs/cli-stub.js',
+          '--agent',
+          selectedAgent,
+          ...(autonomousMode ? ['--dangerously-skip-permissions'] : []),
+        ],
+        env: {
+          CHORUS_TARGET_ENGINE: selectedAgent,
+          CHORUS_PROMPT: val,
+          ...(autonomousMode ? { CHORUS_AUTONOMOUS: '1' } : {}),
+        },
+      });
     }
   };
 
@@ -796,33 +760,7 @@ export function App() {
   const artifactPanelVisible = Boolean(artifact || activeArtifactItem);
 
   return (
-    <div className="page">
-      {/* Intro Header */}
-      <header className="intro">
-        <h1>Chorus desktop app · Mockup v3</h1>
-        <p>
-          100% Native AI CLI experience (Claude Code, Antigravity, Codex). Features direct inline approvals (y/n), 1-click context handoff via MCP confirmation, native-style artifact review with diff &amp; fullscreen, 2-tier Shared Memory, and Workspace Tools vs Agent Bridge audit trail.
-        </p>
-      </header>
-
-      {/* Interactive Scenarios Bar */}
-      <div className="scenarios" id="scenarios" role="group" aria-label="Explore scenarios" data-test="scenarios-bar">
-        {SCENARIOS.map(s => (
-          <button
-            key={s.id}
-            type="button"
-            className="scn"
-            data-scn={s.id}
-            data-test={`scenario-btn-${s.id}`}
-            aria-pressed={selectedScenario === s.id}
-            onClick={() => handleSelectScenario(s.id)}
-          >
-            <small>{s.uc}</small>
-            {s.label}
-          </button>
-        ))}
-      </div>
-
+    <>
       {/* App Window Frame */}
       <section className="window" id="window" aria-label="Chorus app window" data-theme={theme}>
         <div
@@ -2131,7 +2069,7 @@ export function App() {
           {toastMsg}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
