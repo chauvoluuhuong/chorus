@@ -850,19 +850,19 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     
     // Stop button vs Send button
     const actionBtn = S.agentRunning
-      ? `<button class="send stop" type="button" data-stop-agent title="Stop agent execution (Ctrl+C)" aria-label="Stop">${ic('stop')}</button>`
-      : `<button class="send" type="submit" aria-label="Send" ${locked ? 'disabled' : ''}>${ic('up')}</button>`;
+      ? `<button class="send stop" type="button" data-stop-agent data-test="composer-stop" title="Stop agent execution (Ctrl+C)" aria-label="Stop">${ic('stop')}</button>`
+      : `<button class="send" type="submit" data-test="composer-submit" aria-label="Send" ${locked ? 'disabled' : ''}>${ic('up')}</button>`;
 
     // Voluntary Mid-session Handoff Button (Only in Chat thread)
     const handoffBtn = !isHome ? `
-      <button class="btn-handoff" type="button" id="btn-handoff" data-toggle-handoff-menu aria-haspopup="menu" aria-expanded="${S.handoffMenu || false}" title="Hand off chat to another agent mid-session">
+      <button class="btn-handoff" type="button" id="btn-handoff" data-test="handoff-trigger-btn" data-toggle-handoff-menu aria-haspopup="menu" aria-expanded="${S.handoffMenu || false}" title="Hand off chat to another agent mid-session">
         ${ic('swap', 'sm')}<span>Hand off</span>
       </button>
     ` : '';
 
     return `<form class="composer" id="composer">
       <label class="sr" for="prompt">Message</label>
-      <textarea id="prompt" rows="${isHome ? 2 : 1}" ${locked ? 'disabled' : ''} placeholder="${isHome ? (S.continueFromThread !== 'none' ? 'Ask the new agent to continue work on the cake order page...' : 'What do you want to build today?') : locked ? 'Pick an agent above to continue' : `Reply to ${AG[a].name}…`}"></textarea>
+      <textarea id="prompt" data-test="composer-input" rows="${isHome ? 2 : 1}" ${locked ? 'disabled' : ''} placeholder="${isHome ? (S.continueFromThread !== 'none' ? 'Ask the new agent to continue work on the cake order page...' : 'What do you want to build today?') : locked ? 'Pick an agent above to continue' : `Reply to ${AG[a].name}…`}"></textarea>
       
       <div class="c-row">
         <button class="c-icon" type="button" aria-label="Add files" data-toast="Attach images or files">${ic('plus')}</button>
@@ -874,7 +874,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
           <button class="ctx" type="button" title="Context: ${ctx}% (${u.ctxOf} tokens)" data-toast="Context ${ctx}% full">${ringSVG(ctx)}<span>${ctx}%</span></button>
         `}
 
-        <button class="picker" type="button" id="picker" aria-haspopup="menu" aria-expanded="${S.menu}">
+        <button class="picker" type="button" id="picker" data-test="agent-picker-btn" aria-haspopup="menu" aria-expanded="${S.menu}">
           ${mark(a)}<span class="lbl">${AG[a].name}</span><span class="mdl">${modelName(a, S.model[a])}</span>${ic('chev', 'sm')}
         </button>
 
@@ -898,7 +898,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
           const u = AG[k].usage;
           const meta = u.quotaStatus ? u.quotaStatus : `${u.limit}% plan used · Resets ${u.resets}`;
           return `
-            <button class="handoff-pop-item" type="button" data-do-handoff="${k}">
+            <button class="handoff-pop-item" type="button" data-do-handoff="${k}" data-test="handoff-agent-opt-${k}">
               ${mark(k)}
               <div class="info">
                 <div class="row-name"><strong>${AG[k].name}</strong> <span class="tag-model">${modelName(k, S.model[k])}</span></div>
@@ -966,7 +966,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
               </select>
             </div>
 
-            <button class="pill-toggle ${S.skipPermissions ? 'on-warn' : ''}" type="button" data-toggle-skip-permissions title="Bypass tool approval prompts. Passes --dangerously-skip-permissions flag when spawning the CLI session.">
+            <button class="pill-toggle ${S.skipPermissions ? 'on-warn' : ''}" type="button" data-toggle-skip-permissions data-test="toggle-skip-permissions" title="Bypass tool approval prompts. Passes --dangerously-skip-permissions flag when spawning the CLI session.">
               <span>⚡</span>
               <span><code>--dangerously-skip-permissions</code></span>
               <span class="switch-mini"><span class="knob"></span></span>
@@ -1006,12 +1006,12 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
         </div>`;
     } else if (S.inlineStatus === 'pending') {
       inlineApprovalBlock = `
-        <div class="inline-approval" role="alert">
+        <div class="inline-approval" role="alert" data-test="inline-approval-card">
           <div class="inline-approval-title">${ic('clock', 'sm')} Claude Code is waiting for permission to run:</div>
           <div class="inline-approval-cmd">tool: Bash\ncommand: npx prisma migrate dev --name add_orders\ncwd: ~/Sites/sweet-crumb</div>
           <div class="btns">
-            <button class="btn sm btn-dark" type="button" data-inline-approve="allowed">${ic('check', 'sm')} Allow (y)</button>
-            <button class="btn sm" type="button" data-inline-approve="denied">${ic('x', 'sm')} Don't allow (n)</button>
+            <button class="btn sm btn-dark" type="button" data-inline-approve="allowed" data-test="approval-allow-btn">${ic('check', 'sm')} Allow (y)</button>
+            <button class="btn sm" type="button" data-inline-approve="denied" data-test="approval-deny-btn">${ic('x', 'sm')} Don't allow (n)</button>
           </div>
         </div>`;
     } else if (S.inlineStatus === 'allowed') {
@@ -1185,7 +1185,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     const panelWidthStyle = S.artFullscreen ? 'width: 100%' : `width: ${S.artWidth || 580}px`;
     return `<aside class="panel" style="${panelWidthStyle}" aria-label="Artifact preview">
       <!-- Draggable Splitter Handle -->
-      <div class="resizer" id="art-resizer" title="Drag to resize panel · Double-click to reset" aria-label="Resize panel">
+      <div class="resizer" id="art-resizer" data-test="art-resizer" title="Drag to resize panel · Double-click to reset" aria-label="Resize panel">
         <span class="resizer-grip"></span>
       </div>
       <div class="p-head">
@@ -1208,10 +1208,10 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
           <button type="button" data-art-tab="diff" aria-pressed="${S.artTab === 'diff'}">Diff</button>
         </div>
 
-        <button class="ghost-icon" type="button" data-art-reset-width title="Reset panel width to 580px">
+        <button class="ghost-icon" type="button" data-art-reset-width data-test="canvas-reset-width" title="Reset panel width to 580px">
           ${ic('sync', 'sm')}
         </button>
-        <button class="ghost-icon" type="button" data-art-expand title="${S.artFullscreen ? 'Exit fullscreen' : 'Fullscreen'}">
+        <button class="ghost-icon" type="button" data-art-expand data-test="canvas-fullscreen-btn" title="${S.artFullscreen ? 'Exit fullscreen' : 'Fullscreen'}">
           ${ic(S.artFullscreen ? 'compress' : 'expand', 'sm')}
         </button>
         <button class="ghost-icon" type="button" data-close-art aria-label="Close panel">${ic('x')}</button>
@@ -1267,7 +1267,7 @@ ${S.inlineStatus === 'allowed' ? '<span class="g">✓ [chorus] allowed via UI</s
             <p>Skills are stored in Chorus. Enabling a skill writes it to <code>.agents/skills/</code> where all CLIs discover it. <span style="font-size:12px;color:var(--muted);margin-left:6px">· Last synced: ${S.lastSkillSync || 'Just now'}</span></p>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
-            <button class="btn" type="button" data-sync-skills title="Scan and sync skill folders across .agents/skills, .claude/skills and .codex/skills">${ic('sync', 'sm')} <span>Sync skills</span></button>
+            <button class="btn" type="button" data-sync-skills data-test="sync-skills-btn" title="Scan and sync skill folders across .agents/skills, .claude/skills and .codex/skills">${ic('sync', 'sm')} <span>Sync skills</span></button>
             <button class="btn btn-dark" type="button" data-toast="Create new skill modal">${ic('plus', 'sm')} New skill</button>
           </div>
         </div>
@@ -1895,6 +1895,55 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
       toast('Reset artifact panel width to 580px');
     }
   });
+
+  // Expose Test Harness for E2E Component & State Control
+  window.__CHORUS_HARNESS__ = {
+    getState: () => JSON.parse(JSON.stringify(S)),
+    setState: (partial) => {
+      Object.assign(S, partial);
+      render();
+    },
+    resetScenario: (id) => resetScenario(id),
+    setArtifactWidth: (width) => {
+      S.artWidth = Math.max(320, Math.min(window.innerWidth * 0.85, width));
+      const panel = $('.panel');
+      if (panel) {
+        panel.style.width = S.artWidth + 'px';
+        const smallText = panel.querySelector('.p-head .t small');
+        if (smallText) smallText.textContent = `app/order/page.tsx · live · ${S.artWidth}px`;
+      }
+    },
+    resetArtifactWidth: () => {
+      S.artWidth = 580;
+      const panel = $('.panel');
+      if (panel) {
+        panel.style.width = '580px';
+        const smallText = panel.querySelector('.p-head .t small');
+        if (smallText) smallText.textContent = 'app/order/page.tsx · live · 580px';
+      }
+    },
+    toggleSkipPermissions: (val) => {
+      S.skipPermissions = val !== undefined ? val : !S.skipPermissions;
+      render();
+    },
+    triggerInlineApproval: (decision) => {
+      S.inlineStatus = decision;
+      S.bellCount = 0;
+      render();
+    },
+    triggerHandoff: (agentId) => {
+      S.handoffMenu = false;
+      S.scenario = 'handoff';
+      S.agent = agentId;
+      S.handedTo = agentId;
+      render();
+    },
+    syncSkills: () => {
+      S.lastSkillSync = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      render();
+      toast('Skills synced from .agents/skills, .claude/skills and .codex/skills');
+    }
+  };
 
   // Initialize
   resetScenario('home');
