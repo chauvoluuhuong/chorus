@@ -1,6 +1,7 @@
 import { useEffect, useRef, type FC } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import '@xterm/xterm/css/xterm.css';
 import type { PtyClient } from '../services/pty';
 
 interface TerminalViewProps {
@@ -8,6 +9,7 @@ interface TerminalViewProps {
   agentName: string;
   modelName: string;
   status: 'connected' | 'connecting' | 'disconnected' | 'terminated';
+  logs?: string[];
 }
 
 export const TerminalView: FC<TerminalViewProps> = ({
@@ -15,10 +17,12 @@ export const TerminalView: FC<TerminalViewProps> = ({
   agentName,
   modelName,
   status,
+  logs,
 }) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermInstance = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const writtenCountRef = useRef<number>(0);
 
   useEffect(() => {
     if (!terminalRef.current) return;
@@ -60,6 +64,14 @@ export const TerminalView: FC<TerminalViewProps> = ({
 
     xtermInstance.current = term;
     fitAddonRef.current = fitAddon;
+    writtenCountRef.current = 0;
+
+    if (logs && logs.length > 0) {
+      for (const entry of logs) {
+        term.write(entry);
+      }
+      writtenCountRef.current = logs.length;
+    }
 
     term.onData(data => {
       ptyClient?.write(data);
@@ -74,10 +86,24 @@ export const TerminalView: FC<TerminalViewProps> = ({
       window.removeEventListener('resize', handleResize);
       term.dispose();
       xtermInstance.current = null;
+      writtenCountRef.current = 0;
     };
   }, []);
 
   useEffect(() => {
+    if (!logs || !xtermInstance.current) return;
+    if (logs.length < writtenCountRef.current) {
+      xtermInstance.current.clear();
+      writtenCountRef.current = 0;
+    }
+    while (writtenCountRef.current < logs.length) {
+      xtermInstance.current.write(logs[writtenCountRef.current]);
+      writtenCountRef.current++;
+    }
+  }, [logs]);
+
+  useEffect(() => {
+    if (logs !== undefined) return;
     if (!ptyClient || !xtermInstance.current) return;
 
     const unsubData = ptyClient.onData(data => {
@@ -92,7 +118,7 @@ export const TerminalView: FC<TerminalViewProps> = ({
       unsubData();
       unsubExit();
     };
-  }, [ptyClient]);
+  }, [ptyClient, logs]);
 
   const dotClass =
     status === 'connected' ? 'dot' : status === 'connecting' ? 'dot wait' : 'dot off';
@@ -112,6 +138,23 @@ export const TerminalView: FC<TerminalViewProps> = ({
         <span>Status: {status}</span>
       </div>
       <div className="term-body" ref={terminalRef} data-test="terminal-xterm" />
+      {logs && logs.length > 0 && (
+        <pre
+          data-test="terminal-text-mirror"
+          style={{
+            position: 'absolute',
+            width: 1,
+            height: 1,
+            padding: 0,
+            margin: -1,
+            overflow: 'hidden',
+            clip: 'rect(0, 0, 0, 0)',
+            border: 0,
+          }}
+        >
+          {logs.join('')}
+        </pre>
+      )}
     </div>
   );
 };

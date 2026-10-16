@@ -12,19 +12,24 @@ export interface PtySpawnOptions {
 }
 
 export class PtyClient {
-  private isTauri = typeof window !== 'undefined' && Boolean((window as any).__TAURI_INTERNALS__);
+  private isTauri =
+    typeof window !== 'undefined' &&
+    Boolean((window as any).__TAURI_INTERNALS__) &&
+    !import.meta.env.DEV;
   private eventSource: EventSource | null = null;
   private unlistenData: UnlistenFn | null = null;
   private unlistenExit: UnlistenFn | null = null;
   private dataListeners: ((chunk: string) => void)[] = [];
   private exitListeners: ((code: number) => void)[] = [];
   public currentId: string | null = null;
+  public destroyed: boolean = false;
 
   async spawn(options: PtySpawnOptions): Promise<void> {
     this.currentId = options.id;
 
     if (this.isTauri) {
       await invoke('spawn_pty', { options });
+      if (this.destroyed) return;
 
       this.unlistenData = await listen<{ id: string; data: string }>('pty:data', event => {
         if (event.payload.id === options.id) {
@@ -48,6 +53,11 @@ export class PtyClient {
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Failed to spawn PTY' }));
         throw new Error(err.error || 'Failed to spawn PTY');
+      }
+
+      if (this.destroyed) {
+        this.kill('SIGTERM').catch(() => {});
+        return;
       }
 
       // Open SSE stream
@@ -93,7 +103,7 @@ export class PtyClient {
   }
 
   async write(data: string): Promise<void> {
-    if (!this.currentId) return;
+    if (!this.currentId || this.destroyed) return;
 
     if (this.isTauri) {
       await invoke('write_pty', { id: this.currentId, data });
@@ -121,6 +131,7 @@ export class PtyClient {
   }
 
   destroy(): void {
+    this.destroyed = true;
     if (this.eventSource) {
       this.eventSource.close();
       this.eventSource = null;

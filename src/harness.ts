@@ -184,11 +184,10 @@ export function createHarness(
     setLastPromptEnvelope: (envelope: PromptEnvelope) => actions.setPromptEnvelope(envelope),
 
     spawnTestPty: async (opts?: Partial<PtySpawnOptions>) => {
-      const defaultStub = 'tests/e2e/stubs/cli-stub.js';
       const options: PtySpawnOptions = {
-        id: opts?.id || 'test-session',
-        command: opts?.command || 'node',
-        args: opts?.args || [defaultStub],
+        id: opts?.id || `agy-session-${Date.now()}`,
+        command: opts?.command || 'agy',
+        args: opts?.args || ['--input-format', 'stream-json', '--output-format', 'stream-json', '--dangerously-skip-permissions', '-p='],
         cwd: opts?.cwd || undefined,
         env: opts?.env || {},
       };

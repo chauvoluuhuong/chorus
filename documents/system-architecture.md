@@ -187,8 +187,3 @@ Chorus separates core business logic from data persistence by implementing the *
 ### 5.7 Autonomous Execution Mode (`--dangerously-skip-permissions`)
 - [ ] **AC-7.1**: When autonomous mode is enabled on the composer, the CLI engine is spawned with `--dangerously-skip-permissions` (or equivalent), bypassing inline interactive prompts while logging execution telemetry with `⚡ auto-approved` tags.
 
-### 5.8 Component Test Harness & E2E Controllability
-- [ ] **AC-8.1**: In test mode (`CHORUS_TEST_MODE=1`), Chorus exposes a typed test bridge `window.__CHORUS_HARNESS__` allowing automated test runners and AI agents to programmatically query state, dispatch actions, and synchronize with async transitions without flaky timeouts.
-- [ ] **AC-8.2**: Child CLI engines can be substituted by a deterministic native CLI simulator (`tests/e2e/stubs/cli-stub.ts`) running inside a real pseudo-terminal (`portable-pty`), testing 100% of PTY streaming, ANSI parsing, interactive stdin approval prompts, and error recovery with zero cloud API costs.
-
-> See [e2e-testing-architecture.md](specs/e2e-testing-architecture.md) for full test harness specifications and Playwright recipes.

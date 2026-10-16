@@ -1,6 +1,7 @@
 import type { Plugin } from 'vite';
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 interface PtyProcessRecord {
@@ -26,12 +27,16 @@ export function ptyBridgePlugin(): Plugin {
           req.on('end', () => {
             try {
               const { id, command, args = [], cwd = process.cwd(), env = {} } = JSON.parse(body);
+              const homeDir = os.homedir();
+              const extraPath = `${homeDir}/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:${homeDir}/.cargo/bin`;
+              const mergedPath = `${extraPath}:${process.env.PATH || ''}`;
 
               // Spawn the real OS child process
               const proc = spawn(command, args, {
                 cwd,
                 env: {
                   ...process.env,
+                  PATH: mergedPath,
                   ...env,
                   FORCE_COLOR: '1',
                 },
@@ -54,6 +59,12 @@ export function ptyBridgePlugin(): Plugin {
 
               proc.stdout?.on('data', handleChunk);
               proc.stderr?.on('data', handleChunk);
+
+              proc.on('error', err => {
+                const msg = `[spawn-error] ${err.message}\n`;
+                record.buffer.push(msg);
+                record.listeners.forEach(fn => fn(msg));
+              });
 
               proc.on('exit', code => {
                 record.exitCode = code ?? 0;
@@ -210,9 +221,9 @@ export function ptyBridgePlugin(): Plugin {
             fs.mkdirSync(baseArtifactsDir, { recursive: true });
           }
 
-          let lastMtimes = new Map<string, number>();
+          const lastMtimes = new Map<string, number>();
 
-          const scanArtifacts = () => {
+          const scanArtifacts = (emitEvents: boolean) => {
             function checkDir(d: string) {
               try {
                 if (!fs.existsSync(d)) return;
@@ -226,24 +237,26 @@ export function ptyBridgePlugin(): Plugin {
                     const prev = lastMtimes.get(p) || 0;
                     if (stats.mtimeMs > prev) {
                       lastMtimes.set(p, stats.mtimeMs);
-                      const content = fs.readFileSync(p, 'utf8');
-                      const rel = path.relative(process.cwd(), p);
-                      const parts = rel.split(path.sep);
-                      // .chorus/artifacts/<agent>/<threadId>/<name>
-                      const agent = parts[2] || 'claude';
-                      const threadId = parts[3] || 'thread-1';
-                      const name = parts[parts.length - 1];
+                      if (emitEvents) {
+                        const content = fs.readFileSync(p, 'utf8');
+                        const rel = path.relative(process.cwd(), p);
+                        const parts = rel.split(path.sep);
+                        // .chorus/artifacts/<agent>/<threadId>/<name>
+                        const agent = parts[2] || 'agy';
+                        const threadId = parts[3] || 'thread-1';
+                        const name = parts[parts.length - 1];
 
-                      res.write(
-                        `event: artifact:updated\ndata: ${JSON.stringify({
-                          path: rel,
-                          name,
-                          content,
-                          agent,
-                          threadId,
-                          version: 1,
-                        })}\n\n`,
-                      );
+                        res.write(
+                          `event: artifact:updated\ndata: ${JSON.stringify({
+                            path: rel,
+                            name,
+                            content,
+                            agent,
+                            threadId,
+                            version: 1,
+                          })}\n\n`,
+                        );
+                      }
                     }
                   }
                 }
@@ -254,10 +267,10 @@ export function ptyBridgePlugin(): Plugin {
             checkDir(baseArtifactsDir);
           };
 
-          // Initial scan
-          scanArtifacts();
+          // Seed existing mtimes so stale artifacts from old sessions do not auto-pop
+          scanArtifacts(false);
 
-          const pollTimer = setInterval(scanArtifacts, 300);
+          const pollTimer = setInterval(() => scanArtifacts(true), 300);
 
           req.on('close', () => {
             clearInterval(pollTimer);
@@ -270,12 +283,38 @@ export function ptyBridgePlugin(): Plugin {
           req.on('data', chunk => (body += chunk));
           req.on('end', () => {
             try {
-              const { filePath, content = '' } = JSON.parse(body);
-              const fullPath = path.resolve(process.cwd(), filePath);
-              fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-              fs.writeFileSync(fullPath, content);
+              const { filePath, content, agent = 'agy', threadId = 'thread-1' } = JSON.parse(body);
+              const sourcePath = path.isAbsolute(filePath)
+                ? filePath
+                : path.resolve(process.cwd(), filePath);
+
+              let finalContent = typeof content === 'string' ? content : '';
+              if (fs.existsSync(sourcePath)) {
+                try {
+                  finalContent = fs.readFileSync(sourcePath, 'utf8');
+                } catch {}
+              }
+
+              const fileName = path.basename(filePath);
+              const targetRelPath = filePath.startsWith('.chorus/artifacts')
+                ? filePath
+                : path.join('.chorus/artifacts', agent, threadId, fileName);
+              const targetFullPath = path.resolve(process.cwd(), targetRelPath);
+
+              fs.mkdirSync(path.dirname(targetFullPath), { recursive: true });
+              fs.writeFileSync(targetFullPath, finalContent);
+
               res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({ ok: true, path: filePath }));
+              res.end(
+                JSON.stringify({
+                  ok: true,
+                  name: fileName,
+                  path: targetRelPath,
+                  content: finalContent,
+                  agent,
+                  threadId,
+                }),
+              );
             } catch (err: any) {
               res.statusCode = 500;
               res.end(JSON.stringify({ error: err.message }));

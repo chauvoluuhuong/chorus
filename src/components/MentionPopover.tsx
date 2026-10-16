@@ -50,17 +50,10 @@ export const MentionPopover: FC<MentionPopoverProps> = ({
       .catch(() => {});
   }, [customFiles.length, customFolders.length]);
 
-  // Combine default items with scanned items
+  // Combine real scanned items and artifacts
   const allItems: MentionItem[] = [];
 
-  // Add sample files if empty
-  const fileList = scannedFiles.length > 0 ? scannedFiles : [
-    'src/components/OrderForm.tsx',
-    'src/App.tsx',
-    'package.json',
-  ];
-
-  fileList.forEach(f => {
+  scannedFiles.forEach(f => {
     allItems.push({
       type: 'file',
       path: f,
@@ -70,13 +63,7 @@ export const MentionPopover: FC<MentionPopoverProps> = ({
     });
   });
 
-  const folderList = scannedFolders.length > 0 ? scannedFolders : [
-    'src/components',
-    'src',
-    'documents',
-  ];
-
-  folderList.forEach(f => {
+  scannedFolders.forEach(f => {
     allItems.push({
       type: 'folder',
       path: f,
@@ -86,11 +73,7 @@ export const MentionPopover: FC<MentionPopoverProps> = ({
     });
   });
 
-  const artifactList = artifacts.length > 0 ? artifacts : [
-    { name: 'checkout-v2.html', path: '.chorus/artifacts/claude/thread-1/checkout-v2.html' },
-  ];
-
-  artifactList.forEach(a => {
+  artifacts.forEach(a => {
     allItems.push({
       type: 'artifact',
       path: a.path,
