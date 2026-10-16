@@ -1,0 +1,56 @@
+{
+  "cli": "claude",
+  "version": "2.1.301 (Claude Code)",
+  "scenario": "mcp",
+  "date": "2026-10-16T04:11:54.279Z",
+  "platform": "linux 6.18.44-fc-v139 x64",
+  "node": "v22.22.0",
+  "scrubbedEnv": [
+    "CLAUDECODE",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_PID"
+  ],
+  "passed": true,
+  "checks": [
+    {
+      "name": "MCP server was started",
+      "ok": true
+    },
+    {
+      "name": "MCP initialize received",
+      "ok": true
+    },
+    {
+      "name": "tools/call received",
+      "ok": true
+    },
+    {
+      "name": "thread id passed via argv",
+      "ok": true
+    },
+    {
+      "name": "model saw tool result",
+      "ok": true
+    }
+  ],
+  "runs": [
+    {
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "durationMs": 6234,
+      "sessionId": "24c77ea2-9be9-4e17-8014-f1c080fba487",
+      "eventTypes": [
+        "active_goal",
+        "autocompact_state",
+        "system",
+        "stream_event",
+        "assistant",
+        "user",
+        "rate_limit_event",
+        "result"
+      ]
+    }
+  ]
+}

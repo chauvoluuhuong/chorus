@@ -1,24 +1,12 @@
 # Dependencies
 node_modules/
 
-# Production build
+# Build output
 dist/
-dist-ssr/
-*.local
-
-# Tauri / Rust build
-src-tauri/target/
 target/
-Cargo.lock
 
-# Chorus Local State & Scoped Artifacts
+# Chorus local state (threads, artifacts, run captures)
 .chorus/
-.agents/skills/
-
-# Testing & Playwright
-test-results/
-playwright-report/
-blob-report/
 
 # OS files
 .DS_Store

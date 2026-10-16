@@ -1,53 +1,48 @@
 # 🎵 Chorus
 
-> **The Safe Multi-Engine Desktop App for AI Builders & Vibe Coders.**  
-> *Orchestrate Antigravity (`agy`), Claude Code (`claude`), and OpenAI Codex (`codex`) in one seamless window with shared context, real-time approval, and zero terminal anxiety.*
+> Hand work between AI coding CLIs (Claude Code, Codex, Antigravity) without losing context, and
+> see the artifacts they create.
 
----
+**Status:** restarting headless-first on branch `refactor`. The v1 desktop prototype was removed
+(still in git history on `dev`). First product: **`chorus-cli`**. The desktop app comes after.
 
-## 🌟 Overview
+## Why
 
-**Chorus** transforms fragmented, terminal-based AI coding tools into an elegant, unified desktop experience. Instead of juggling multiple scary command-line windows, users get:
-- **Unified Agent Orchestration**: Run `claude`, `agy`, and `codex` inside isolated native pseudo-terminals (`portable-pty`).
-- **Autonomous Mode Switch (`--dangerously-skip-permissions`)**: Toggle between Human-in-the-Loop Safe Mode (interactive inline approvals) and Autonomous execution.
-- **Smart Context Mentions (`@`) & Skills Slash Commands (`/`)**:
-  - `@`: Context resources — Files (`@src/components/Nav.tsx`), Folders (`@src/components/`), and Artifacts (`@order-flow.html`).
-  - `/`: Actions & Skills — Invoke bundled skills on-demand (`/db-migrate`, `/tailwind-ui`) or built-in commands (`/handoff`, `/sync-skills`, `/compact`).
-- **Scoped Artifact Dispatcher**: Non-codebase visual files (mockups, SVGs, specs) are stored under an isolated hierarchy `.chorus/artifacts/<ai-cli>/<chat-thread-id>/` with live Canvas preview and draggable split resizer.
-- **Mid-Session & Limit Handoff**: 1-click context transfer via compact Prompt Envelopes (<150 tokens) without losing conversation milestones or project state.
-- **Skills Studio**: Single source of truth for multi-file skill bundles, materializing to `.agents/skills/` with automated disk synchronization across all CLI engines.
+AI CLIs are powerful but siloed. When one hits its plan limit or you want another model's take,
+you copy-paste context by hand, and the plans, mockups and reports each agent produced are
+scattered. Chorus keeps one **thread** of work across agents:
 
----
+- **Handoff:** start the next agent with a note of goal, decisions, files touched and next steps,
+  injected as its first prompt, with an MCP server it can ask for more.
+- **Shared context:** every agent in the thread reads and writes the same store through the
+  `chorus` MCP tools (`get_thread_context`, `checkpoint`, `read_handoff`, …).
+- **Artifacts:** non-code files go to `.chorus/threads/<id>/artifacts/` and are easy to open.
+- **Transparency:** you work in the real CLI TUI; Chorus records everything it does for
+  debugging.
 
-## 📁 Repository Structure
+## Docs
 
-```text
-chorus/
-├── ideas/          # Product vision, target personas, branding, and feature concepts
-├── documents/      # Architecture, specs, use cases, and interactive UI mockups
-│   └── specs/      # Technical deep dives (CLI adapters, storage)
-├── plans/          # Implementation roadmaps, milestones, and go-to-market strategies
-└── README.md
+| Doc | What's in it |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | Components (core, chorus-mcp, chorus-cli, desktop, harness), data model, handoff flow |
+| [docs/roadmap.md](docs/roadmap.md) | Milestones M0–M7, each with a real-CLI exit check |
+| [docs/testing.md](docs/testing.md) | Test layers, what runs in the cloud vs on your Mac |
+| [docs/integrations/](docs/integrations/README.md) | Verified facts per CLI: flags, events, paths, token usage, gotchas |
+| [docs/distribution-and-trust.md](docs/distribution-and-trust.md) | Signing, notarization, payments |
+| [docs/archive/](docs/archive/) | v1 product concept, brainstorm and UI mockup (reference for the desktop app) |
+
+## Repository layout
+
+```
+docs/            architecture, roadmap, testing, per-CLI integration docs
+tools/probe/     capability probe: runs a real CLI through fixed scenarios, records fixtures
+fixtures/        captured real CLI output, per CLI and version (used by contract tests)
 ```
 
-### 📖 Documentation Index
+## Probe a CLI
 
-- **[documents/](documents/)**
-  - [`system-architecture.md`](documents/system-architecture.md): Dual-Plane architecture, PTY management, hook contracts, and MCP bridge specs.
-  - [`ui-mockup-v3.html`](documents/ui-mockup-v3.html): **Latest interactive desktop UI mockup** featuring draggable resizer, sync skills, `--dangerously-skip-permissions`, `@-mentions`, and `/-skills`. Open in any browser.
-  - [`ui-use-cases.md`](documents/ui-use-cases.md): Comprehensive UI use cases (UC-01 to UC-12) mapping to engineering acceptance criteria.
-  - [`open-vs-closed-core.md`](documents/open-vs-closed-core.md): The Open-Core boundary (open-source bridge vs. proprietary desktop GUI).
-  - [`distribution-and-trust.md`](documents/distribution-and-trust.md): Apple Notarization, Windows Code Signing, and MoR billing guide.
-  - [`ui-mockup-v2.html`](documents/ui-mockup-v2.html) & [`ui-mockup.html`](documents/ui-mockup.html): Earlier mockup iterations kept for design history.
-
-- **[documents/specs/](documents/specs/)**
-  - [`cli-engine-adapters.md`](documents/specs/cli-engine-adapters.md): Concrete native adapter specifications for `claude`, `agy`, and `codex` (Prompt Envelope, PTY prompt interception, and lifecycle hooks).
-  - [`context-and-storage-spec.md`](documents/specs/context-and-storage-spec.md): Two-tier storage architecture, SQLite/redb schema definitions, in-DB ring buffers, and `.chorus/artifacts/<ai-cli>/<chat-thread-id>/` filesystem hierarchy.
-
-- **[ideas/](ideas/)**
-  - [`product-concept.md`](ideas/product-concept.md): Core vision, target persona (vibe coders & creators), and branding breakdown.
-  - [`features-brainstorm.md`](ideas/features-brainstorm.md): Feature backlog, inter-agent workflows, and UI requirements.
-
-- **[plans/](plans/)**
-  - [`roadmap.md`](plans/roadmap.md): Phase-by-phase implementation plan from core bridge to desktop release.
-  - [`marketing-launch.md`](plans/marketing-launch.md): Content strategy, 45-second demo video scripts, and launch channels.
+```bash
+node tools/probe/probe.mjs claude --model haiku
+node tools/probe/probe.mjs codex
+node tools/probe/probe.mjs agy
+```
