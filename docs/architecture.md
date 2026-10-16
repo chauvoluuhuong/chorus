@@ -151,6 +151,32 @@ redraws it instantly. The same layer draws the status line.
   finished, needs you: Claude `Stop` hook / end of turn in the stream), `ended` (process exited;
   resumable with the CLI's resume flag).
 
+### Many threads, fast switching
+
+Switching speed comes from never restarting a process to show it. The limit on how many threads
+can be open is memory: one headless `claude` process measured 250–275 MB RSS in the probe
+(`process_rss_mib_result` in the fixtures), so 10 live Claude threads ≈ 2.5 GB.
+
+| Tier | What is kept | Switch time |
+|---|---|---|
+| **Live** | process running + virtual screen in memory | instant (redraw from memory) |
+| **Parked** | process stopped, last screen saved, native session id kept | screen shows instantly; the CLI resumes in the background (`claude --resume`, `codex resume`, `agy --conversation`) and takes over when ready (seconds, to measure in M3) |
+| **Ended** | stored turns/tool calls only | same as parked |
+
+- At most N live threads (default 6, configurable). Above that, the least recently used thread
+  that is `waiting` gets parked. A `working` thread is never parked.
+- `Ctrl+Space Ctrl+Space` toggles to the last thread (like Alt+Tab); the thread list is
+  fuzzy-searchable and ordered by most recent use.
+- Background threads keep being parsed, so their state and the "waiting" count stay live.
+
+### Viewing what is stored
+
+There's no separate "shared memory" concept. The store is the shared memory. To see it:
+
+- `chorus show <thread>`: turns, tool calls, files, artifacts of a thread.
+- **Context preview** (thread menu): exactly what `get_handoff_context` returns for this thread,
+  i.e. what the next agent will see.
+
 ## 7. Artifacts
 
 - Agents are told the artifact folder in the envelope.
