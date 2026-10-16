@@ -12,10 +12,10 @@ AI CLIs are powerful but siloed. When one hits its plan limit or you want anothe
 you copy-paste context by hand, and the plans, mockups and reports each agent produced are
 scattered. Chorus keeps one **thread** of work across agents:
 
-- **Handoff:** start the next agent with a note of goal, decisions, files touched and next steps,
-  injected as its first prompt, with an MCP server it can ask for more.
-- **Shared context:** every agent in the thread reads and writes the same store through the
-  `chorus` MCP tools (`get_thread_context`, `checkpoint`, `read_handoff`, …).
+- **Handoff:** open a new thread with another agent. Its first prompt tells it to load the
+  previous thread through the `chorus` MCP tool `get_handoff_context` and confirm in a few
+  bullets what it learned.
+- **Threads side by side:** several agents run at once; switch between them with one key.
 - **Artifacts:** non-code files go to `.chorus/threads/<id>/artifacts/` and are easy to open.
 - **Transparency:** you work in the real CLI TUI; Chorus records everything it does for
   debugging.

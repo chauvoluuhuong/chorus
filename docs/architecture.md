@@ -30,8 +30,8 @@ Five loosely coupled components:
                  ▼                                      ▼
         ┌─────────────────┐                   ┌──────────────────┐
         │   chorus-cli    │                   │  Chorus desktop  │  (later)
-        │ run / handoff / │                   │  UI over the     │
-        │ threads / trace │                   │  same operations │
+        │ threads/switch/ │                   │  UI over the     │
+        │ handoff/trace   │                   │  same operations │
         └───────┬─────────┘                   └────────┬─────────┘
                 │ spawns in PTY                        │ via chorus-cli serve (local API)
                 ▼                                      │
@@ -41,7 +41,7 @@ Five loosely coupled components:
                 │ spawns per session (stdio)           │
                 ▼                                      │
         ┌─────────────────┐                            │
-        │   chorus-mcp    │  --thread <id>             │
+        │   chorus mcp    │  --thread <id>             │
         └───────┬─────────┘                            │
                 ▼                                      ▼
         ┌──────────────────────────────────────────────────┐
@@ -57,40 +57,43 @@ Five loosely coupled components:
 
 | Component | Responsibility | Talks to |
 |---|---|---|
-| **core** | Data model and storage, normalized events, one adapter per AI CLI, handoff-note builder, artifact watcher. No UI. | SQLite + files in `.chorus/` |
+| **core** | Storage, normalized events, one adapter per AI CLI, handoff-context builder, artifact watcher. No UI. | SQLite + files in `.chorus/` |
 | **chorus-mcp** | Stdio MCP server that each AI CLI starts for its session. Exposes core as tools. Stateless; every call goes to the store. | core |
-| **chorus-cli** | User-facing commands. Starts AI CLIs in a PTY (user sees the real TUI), captures everything, creates threads, triggers handoff, shows artifacts. Later `serve` exposes the same operations to the desktop app. | core, AI CLIs |
+| **chorus-cli** | User-facing app. Runs each thread's AI CLI in its own PTY (user sees the real TUI), switches between threads, captures turns and tool calls, starts handoff threads, shows artifacts. Later `serve` exposes the same operations to the desktop app. | core, AI CLIs |
 | **desktop** | UI only. No business logic of its own. | `chorus-cli serve` |
 | **harness** | `fake-agent` (a scripted CLI that behaves like claude/codex/agy and calls MCP), committed fixtures from real CLIs, scenario runner. | everything |
 
 Why chorus-mcp can't hold state: each AI CLI process starts its **own** copy of the MCP server. Two
 agents means two server processes, plus chorus-cli. Shared state has to live in the store.
 
-## 3. Data model
+## 3. What Chorus stores
+
+Rule: store what a feature needs, nothing more. Each item below names the feature that needs it.
+The CLIs keep their own full transcripts. Chorus stores a compact copy because those files are
+internal formats, change between versions, and get cleaned up (Claude deletes old ones after a
+retention period).
 
 Per project, in `<project>/.chorus/` (git-ignored):
 
 ```
 .chorus/
-  chorus.db                       SQLite (WAL), shared by all processes
+  chorus.db                       SQLite (WAL), shared by chorus-cli and every chorus-mcp process
   threads/<thread-id>/
     artifacts/                    files agents produce for this thread (watched)
-    handoff.md                    latest handoff note, human-readable
-    runs/<run-id>/
-      pty.log                     raw terminal bytes (interactive)
-      stdout.jsonl, stderr.txt    raw output (headless)
-      mcp.jsonl                   MCP traffic for this run
-      meta.json                   argv, cwd, CLI version, native session id, exit
+    raw/                          debug capture: pty.log, stdout.jsonl, mcp.jsonl (size-capped, pruned)
 ```
 
-| Entity | Meaning |
-|---|---|
-| **Thread** | A Chorus conversation about one piece of work. Spans agents. |
-| **Run** | One AI CLI process attached to a thread. Has `agent`, `cli_version`, `native_session_id`, `mode` (interactive/headless), `end_reason` (exit, user-stop, limit, crash). |
-| **Event** | Normalized record from a run: `session.started`, `message.user`, `message.assistant`, `tool.call`, `tool.result`, `usage`, `limit.status`, `error`, `session.ended`. Keeps a pointer to the raw line it came from. |
-| **Artifact** | File under the thread's `artifacts/`, versioned by content hash. |
-| **Checkpoint** | Progress note written by an agent through MCP: summary, decisions, next steps, files. |
-| **Handoff** | From run → to run, reason, the note that was injected. |
+| Table | Fields | Needed for |
+|---|---|---|
+| **threads** | id, title, agent, model, cwd, native session id, `parent_thread_id`, state (`working` / `waiting` / `ended`), created, updated, CLI version, native transcript path | thread list and switching, resume, handoff link, debugging |
+| **turns** | thread, seq, role (`user` / `assistant`), text, timestamp | **handoff context** (what was asked, what was answered), thread preview |
+| **tool_calls** | thread, turn seq, tool name, short target (file path, command, MCP tool), status, duration | **handoff context** (files touched, commands run, test results), activity view |
+| **usage** | thread, turn seq, tokens in / out / cache, cost; latest plan-limit reading (utilization, resets at) | status line, limit warning, activity totals |
+| **artifacts** | thread, path, version (content hash), created by thread, timestamp | artifacts view, handoff context |
+
+**Not stored** in the database: streaming deltas, thinking blocks, full tool output (only a short
+status line such as "12 passed"), system prompts, attachments. Raw output stays in `raw/` for
+`chorus trace` only, capped in size and pruned.
 
 ## 4. How data gets out of each CLI
 
@@ -106,45 +109,47 @@ Details and verification status: [integrations/](integrations/README.md).
 
 ## 5. MCP tools (v1)
 
-Bound to a thread by `chorus-mcp --thread <id>` in the per-session MCP config (verified for Claude
+Bound to a thread by `chorus mcp --thread <id>` in the per-session MCP config (verified for Claude
 and Codex; open question for agy).
 
-| Tool | Purpose |
+| Tool | Returns |
 |---|---|
-| `get_thread_context` | Thread goal, latest checkpoint, handoff note, artifact list, where to save artifacts |
-| `checkpoint(summary, decisions[], next_steps[], files[])` | Agent records progress. This is what makes a handoff possible after a limit hit. |
-| `write_handoff(note)` | Outgoing agent writes the note when asked |
-| `read_handoff()` | Incoming agent reads the full note |
-| `list_artifacts()` / `register_artifact(path, title)` | Artifacts of this thread |
-| `list_threads()` / `read_thread(id, limit)` | Read another thread's history on demand |
+| `get_handoff_context(thread_id?)` | Compact digest of the parent thread (or the given one): first request, the last user and assistant turns, files touched, commands and test results, artifacts, the last assistant message. Kept to a few thousand tokens. |
+| `get_thread_turns(thread_id, before?, limit?)` | Older turns, page by page, when the digest isn't enough |
+| `list_threads()` | Threads in this project, so an agent can look at related work |
+| `list_artifacts(thread_id?)` | Artifacts with paths, to read with the agent's own file tools |
 
-## 6. Handoff flow
+All tools are read-only. Agents never have to write anything for Chorus to work.
 
-```
-user: chorus-cli handoff --to codex          (or automatic suggestion on limit)
-  1. pick the note source, best available first:
-       a. ask the running agent to call write_handoff   (only if it is alive and not limited)
-       b. latest checkpoint(s) from the store
-       c. auto-built from events: goal, last user asks, files touched, artifacts,
-          last assistant message                          (always available)
-  2. write .chorus/threads/<id>/handoff.md and a handoff row
-  3. stop agent A (SIGINT, then SIGTERM/SIGKILL after a grace period)
-  4. start agent B in the PTY with:
-       - its per-session MCP config (chorus-mcp --thread <id>)
-       - first prompt = envelope (below)
-  5. agent B calls read_handoff / get_thread_context for more detail as needed
-```
-
-The envelope is injected as the **first prompt argument**, deterministically. The handoff never
-depends on the model choosing to call a tool.
+## 6. Handoff = new thread that loads the previous one
 
 ```
-[Chorus] You are continuing thread "<title>" (id <id>), previously worked on by <agent A>.
-Read .chorus/threads/<id>/handoff.md first (or call chorus get_thread_context).
-Save non-code files you create (plans, mockups, reports) in .chorus/threads/<id>/artifacts/.
-Call chorus checkpoint after each meaningful step.
-Task: <next step from the note, or the user's message>
+user: Ctrl+Space h → pick codex        (or: chorus handoff --to codex)
+  1. create thread (2) with parent_thread_id = (1)
+  2. start codex for thread (2) with chorus mcp --thread <2>
+  3. first message (fixed text):
+       This chat continues the Chorus thread "<title>", worked on by <agent>.
+       Call chorus get_handoff_context first. Then reply with at most 5 bullets:
+       what was done, decisions, open work, and your next step.
+       Wait for my OK before changing anything.
+  4. the agent calls the tool, shows its summary, and waits; the user corrects it or says go
 ```
+
+- Thread (1) is not stopped or asked anything. It stays in the list and you can switch back.
+- It works after a limit hit, because the context comes from the store, not from the old agent.
+- Safety check: Chorus sees every MCP call. If the new agent finishes its first turn without
+  calling `get_handoff_context`, the status line shows "context not loaded" with a retry key.
+
+### Switching threads
+
+Each thread is its own agent process in its own PTY, running in the background. Chorus keeps a
+virtual screen per thread (a headless terminal emulator), so bringing a thread to the front
+redraws it instantly. The same layer draws the status line.
+
+- `Ctrl+Space t` opens the thread list; `Ctrl+Space 1–9` jumps; `Ctrl+Space [` / `]` cycles.
+- Thread state for the list and status line: `working` (turn in progress), `waiting` (turn
+  finished, needs you: Claude `Stop` hook / end of turn in the stream), `ended` (process exited;
+  resumable with the CLI's resume flag).
 
 ## 7. Artifacts
 
@@ -157,12 +162,12 @@ Task: <next step from the note, or the user's message>
 
 ## 8. Debuggability (first-class requirement)
 
-- Raw capture of every run is kept (`runs/<run-id>/`) next to the normalized events.
-- Correlation ids everywhere: thread id → run id → native session id → tool-use id
+- Raw capture of every thread is kept (`threads/<id>/raw/`, size-capped) next to the normalized data.
+- Correlation ids everywhere: thread id → native session id → tool-use id
   (Claude passes `_meta["claudecode/toolUseId"]` on MCP calls).
-- Every run records the CLI version; adapters warn on versions newer than the last verified one.
-- `chorus-cli doctor`: installed CLIs, versions, login state, paths (transcript dirs, MCP config).
-- `chorus-cli trace <run-id>`: raw + normalized events side by side.
+- Every thread records the CLI version; adapters warn on versions newer than the last verified one.
+- `chorus doctor`: installed CLIs, versions, login state, paths (transcript dirs, MCP config).
+- `chorus trace <thread-id>`: raw + normalized events side by side.
 - Integration facts live in [integrations/](integrations/README.md) with the version they were
   checked on, and fixtures re-generated by `tools/probe`.
 

@@ -19,7 +19,7 @@ live events, tool calls, token usage.
 
 ## M1 · core: store + events + adapters
 
-- Store (SQLite WAL + `.chorus/threads/…` files), entities from [architecture §3](architecture.md#3-data-model)
+- Store (SQLite WAL + `.chorus/threads/…` files): threads, turns, tool calls, usage, artifacts ([architecture §3](architecture.md#3-what-chorus-stores))
 - Normalized event model
 - Adapters per CLI: build launch argv, parse stream lines, locate/tail transcript, detect limit signals
 - L1 tests against every committed fixture
@@ -28,36 +28,37 @@ live events, tool calls, token usage.
 
 ## M2 · chorus-mcp + harness
 
-- Stdio MCP server with the v1 tools ([architecture §5](architecture.md#5-mcp-tools-v1)), bound by `--thread`
+- Stdio MCP server with the read-only v1 tools ([architecture §5](architecture.md#5-mcp-tools-v1)), bound by `--thread`; `get_handoff_context` digest builder
 - `fake-agent` CLI built from fixture behaviour
 - L2 tests: fake agent calls every tool, data lands in the store
 
-**Exit (L3):** real Claude and Codex call `get_thread_context` and `checkpoint` through
-chorus-mcp, and the data is in the store.
+**Exit (L3):** real Claude and Codex call `get_handoff_context` through the MCP server and get
+the digest of a stored thread.
 
-## M3 · chorus-cli: run, capture, artifacts
+## M3 · chorus-cli: threads, switching, capture, artifacts
 
-- `chorus-cli new`, `run <agent> [--thread]` (PTY passthrough, real TUI), `threads`, `show`
-- Raw capture per run + live structured events (Claude hooks/transcript first)
-- Artifact folder injected via envelope + file watcher; `chorus-cli artifacts --open`
-- `chorus-cli doctor`, `chorus-cli trace`
+- `chorus`, `chorus new`, `run <agent> [--thread]` (PTY passthrough, real TUI), `threads`, `show`
+- Several threads at once, virtual screen per thread, status line, menu key, thread switcher
+- Raw capture per thread + live structured data: turns, tool calls, usage (Claude hooks/transcript first)
+- Artifact folder told to the agent at start + file watcher; `chorus artifacts --open`
+- `chorus doctor`, `chorus trace`
 
-**Exit (L3):** interactive Claude session in chorus-cli; its tool calls, token usage and an
-artifact show up in `chorus-cli show` / `artifacts`.
+**Exit (L3):** a Claude thread and a Codex thread running side by side; switching keeps both
+screens intact; turns, tool calls, token usage and an artifact show up in `chorus show` / `artifacts`.
 
-## M4 · Manual handoff
+## M4 · Handoff
 
-- `chorus-cli handoff --to <agent>` with the note sources a→b→c ([architecture §6](architecture.md#6-handoff-flow))
-- Envelope injection as first prompt for each CLI
+- `chorus handoff --to <agent>`: new thread with parent link + fixed first prompt ([architecture §6](architecture.md#6-handoff--new-thread-that-loads-the-previous-one))
+- "Context not loaded" detection and retry
 - `npm run smoke` script for the Mac
 
-**Exit (L3):** Claude → Codex → Agy → Claude on one thread; each agent continues the task
-correctly and sees the previous artifacts.
+**Exit (L3):** Claude → Codex → Agy → Claude as a chain of threads; each new agent calls
+`get_handoff_context`, summarizes correctly and continues the task.
 
 ## M5 · Limit-aware handoff
 
 - Read limit signals (Claude `rate_limit_event` utilization, agy `/usage` + `AGY_ERROR`, Codex TBD)
-- Suggest handoff before the limit (e.g. ≥ 90%) and when it hits; note built without the dead agent's help
+- Suggest a handoff before the limit (e.g. ≥ 90%) and offer it when the limit hits
 
 **Exit (L3):** simulated limit in L2 + one real captured limit event per CLI handled.
 

@@ -104,6 +104,7 @@ nav.scenes .group:first-child { padding-top: 0; }
 .overlay .ttl { padding: 0 16px 8px; color: var(--t-chorus); font-weight: 600; border-bottom: 1px solid var(--t-line); margin-bottom: 6px; }
 .overlay .row { padding: 3px 16px; display: grid; grid-template-columns: 40px 1fr; }
 .overlay .row b { color: var(--t-chorus); font-weight: 600; }
+.overlay .row span { white-space: pre; }
 .overlay .row.sel { background: var(--t-sel); }
 .overlay .foot { padding: 8px 16px 0; margin-top: 6px; border-top: 1px solid var(--t-line); color: var(--t-dim); }
 .overlay.alert { border-color: var(--t-warn); }
@@ -180,8 +181,8 @@ section > p { margin: 0 0 14px; color: var(--muted); max-width: 72ch; }
           <tr><td>chorus</td><td>Home screen: agents, threads, open or create one</td></tr>
           <tr><td>chorus new "&lt;title&gt;" --agent claude [--task "…"]</td><td>Create a thread and start the agent on it</td></tr>
           <tr><td>chorus run &lt;agent&gt; [--thread &lt;id&gt;]</td><td>Open an agent on a thread (latest thread if omitted)</td></tr>
-          <tr><td>chorus handoff --to &lt;agent&gt; [--note auto|checkpoint|ask]</td><td>Stop the current agent and continue the thread in another one</td></tr>
-          <tr><td>chorus threads · chorus show &lt;id&gt;</td><td>List threads; show a thread's runs, checkpoints, handoffs</td></tr>
+          <tr><td>chorus handoff --to &lt;agent&gt; [--from &lt;thread&gt;]</td><td>Start a new thread with another agent that loads the previous thread's context</td></tr>
+          <tr><td>chorus threads · chorus show &lt;id&gt;</td><td>List threads; show a thread's turns, tool calls and the threads it continued</td></tr>
           <tr><td>chorus artifacts [--open | --serve]</td><td>List artifacts; open one, or serve them with live reload</td></tr>
           <tr><td>chorus activity [--thread &lt;id&gt;]</td><td>Tool calls, MCP calls, token usage and limits over time</td></tr>
           <tr><td>chorus trace &lt;run-id&gt;</td><td>Raw CLI output next to the parsed events, for debugging</td></tr>
@@ -213,7 +214,7 @@ const SCENES = [
     title: 'Home screen',
     cmd: '$ chorus',
     chrome: '~/projects/cake-shop — chorus',
-    caption: 'Running chorus in a project shows which AI CLIs are installed and logged in, and the threads for this project. A thread can span several agents.',
+    caption: 'Running chorus in a project shows which AI CLIs are installed and logged in, and the chat threads for this project. A thread continued in another agent appears under the one it came from.',
     screen:
 `<span class="d">$</span> chorus
 
@@ -222,9 +223,10 @@ const SCENES = [
   <span class="d">Agents</span>   <span class="cl">claude</span> 2.1.301 <span class="ok">✓</span>     <span class="cx">codex</span> 0.163.0 <span class="ok">✓</span>     <span class="ag">agy</span> 1.3.6 <span class="ok">✓</span>
 
   <span class="d">Threads</span>
-<span class="sel">▸ Cake order page          <span class="cl">claude</span> → <span class="cx">codex</span>   12m ago      3 artifacts  </span>
-  Stripe webhook           <span class="cx">codex</span>             yesterday    1 artifact
-  Landing page copy        <span class="ag">agy</span>               3 days ago   <span class="d">—</span>
+<span class="sel">▸ Cake order page          <span class="cl">claude</span>   idle        12m ago      3 artifacts  </span>
+    ↳ continued (2)        <span class="cx">codex</span>    <span class="wn">waiting</span>     just now     1 artifact
+  Stripe webhook           <span class="cx">codex</span>    ended       yesterday    1 artifact
+  Landing page copy        <span class="ag">agy</span>      ended       3 days ago   <span class="d">—</span>
 
 
 
@@ -256,7 +258,7 @@ const SCENES = [
   <span class="ch">⏎</span> start   <span class="ch">tab</span> next field   <span class="ch">esc</span> cancel`,
     behind: [
       'Creates thread <code>t_7k2</code> and <code>.chorus/threads/t_7k2/artifacts/</code>.',
-      'Starts <code>claude</code> with <code>--session-id &lt;uuid&gt;</code>, a per-session MCP config <code>chorus mcp --thread t_7k2</code>, and <code>--append-system-prompt</code> with the Chorus rules (where artifacts go, call checkpoint).',
+      'Starts <code>claude</code> with <code>--session-id &lt;uuid&gt;</code>, a per-session MCP config <code>chorus mcp --thread t_7k2</code>, and <code>--append-system-prompt</code> saying where artifacts go.',
       'Removes leaked parent-session env vars before spawning.',
     ],
   },
@@ -265,8 +267,8 @@ const SCENES = [
     title: 'Working in Claude Code',
     cmd: 'the real Claude Code interface',
     chrome: '~/projects/cake-shop — chorus · claude',
-    caption: 'You type into Claude Code exactly as usual. Chorus only adds the status line at the bottom: thread, agent, plan usage, artifacts, and the menu key.',
-    status: S('claude', 'sonnet', { usage: 62, artifacts: 3, toast: '+ order-flow.html v2' }),
+    caption: 'You type into Claude Code exactly as usual. Chorus only adds the status line at the bottom: thread, agent, plan usage, artifacts, other threads (one is waiting for you) and the menu key.',
+    status: S('claude', 'sonnet', { usage: 62, artifacts: 3, toast: '+ order-flow.html v2', waiting: 1 }),
     screen:
 `<span class="d">&gt;</span> Build an order page with a live price calculator (size, layers,
   toppings). Use the existing Next.js app.
@@ -277,8 +279,6 @@ const SCENES = [
   <span class="d">⎿  Wrote 48 lines</span>
 <span class="cl">●</span> <span class="b">Bash</span>(mkdir -p .chorus/threads/t_7k2/artifacts &amp;&amp; …)
   <span class="d">⎿  order-flow.html written</span>
-<span class="cl">●</span> <span class="b">chorus - checkpoint</span> <span class="d">(MCP)</span>
-  <span class="d">⎿  saved checkpoint #3</span>
 <span class="cl">●</span> <span class="b">Bash</span>(npm test -- pricing)
   <span class="d">⎿  12 passed</span>
 
@@ -297,90 +297,97 @@ const SCENES = [
     cmd: 'Ctrl+Space',
     chrome: '~/projects/cake-shop — chorus · claude',
     caption: 'One key opens the Chorus menu on top of the agent. Esc returns to the agent with nothing lost.',
-    status: S('claude', 'sonnet', { usage: 62, artifacts: 3 }),
+    status: S('claude', 'sonnet', { usage: 62, artifacts: 3, waiting: 1 }),
     dim: true,
     overlay: {
       title: 'chorus · Cake order page',
-      rows: [['h', 'Hand off to another agent', true], ['c', 'Checkpoint now'], ['a', 'Artifacts (3)'], ['e', 'Activity'], ['t', 'Threads'], ['n', 'New thread']],
+      rows: [['t', 'Switch thread', true], ['h', 'Hand off (new thread, other agent)'], ['n', 'New thread'], ['a', 'Artifacts (3)'], ['e', 'Activity'], ['1–9', 'Jump to thread 1–9']],
       foot: 'esc  back to claude',
     },
     screenFrom: 2,
     behind: [
       'While the menu is open the agent keeps running; its output is buffered and redrawn on return.',
-      '"Checkpoint now" asks the agent to call <code>chorus checkpoint</code> with a progress summary.',
+      'Shortcuts skip the menu: Ctrl+Space then <code>[</code> / <code>]</code> for the previous / next thread.',
     ],
   },
   {
-    group: 'Handoff',
-    title: 'Hand off: choose agent and note',
-    cmd: 'h  (or chorus handoff --to codex)',
-    chrome: '~/projects/cake-shop — chorus',
-    caption: 'Pick the next agent and check the note it will receive. You can edit the note before confirming.',
-    screen:
-`  <span class="ch b">Hand off</span>  "Cake order page"
-
-  <span class="d">To</span>     claude <span class="d">(current)</span>    <span class="sel"> ▸ <span class="cx">codex</span> <span class="ok">✓</span> 5h 8% </span>    <span class="ag">agy</span> <span class="ok">✓</span> quota ok
-
-  <span class="d">Note source</span>   claude's final note (asked via MCP) + checkpoint #3
-
-  <span class="d">Goal</span>         Order page with live price calculator
-  <span class="d">Done</span>         app/order/pricing.ts, app/order/page.tsx · 12 tests pass
-  <span class="d">Decisions</span>    Prices in cents · Zustand for builder state
-  <span class="d">Next</span>         Add Stripe checkout (server action) + webhook handler
-  <span class="d">Artifacts</span>    order-flow.html v2 · pricing-table.md v1
-  <span class="d">Files</span>        app/order/*, components/CakeBuilder.tsx
-
-
-
-  <span class="ch">⏎</span> hand off   <span class="ch">e</span> edit note   <span class="ch">s</span> switch note source   <span class="ch">esc</span> cancel`,
+    group: 'Working',
+    title: 'Switch thread',
+    cmd: 'Ctrl+Space t',
+    chrome: '~/projects/cake-shop — chorus · claude',
+    caption: 'Every thread keeps running in the background. Pick one to bring it to the front; its screen comes back exactly as you left it.',
+    status: S('claude', 'sonnet', { usage: 62, artifacts: 3, waiting: 1 }),
+    dim: true,
+    screenFrom: 2,
+    overlay: {
+      title: 'Threads · cake-shop',
+      rows: [
+        ['1', '● Cake order page        claude   working'],
+        ['2', '◐ Cake order page (2)    codex    waiting for you', true],
+        ['3', '○ Stripe webhook         codex    ended · resume'],
+        ['n', '+ New thread'],
+      ],
+      foot: '⏎ open   1–9 jump   esc back',
+    },
     behind: [
-      'Note sources, best first: ask the running agent to call <code>write_handoff</code> → latest checkpoint → built from recorded events. The last one always works, even after a limit hit.',
+      'Each thread is its own agent process in its own terminal. Chorus keeps a virtual screen per thread, so switching redraws instantly and nothing is lost.',
+      '"Waiting for you" = the agent finished its turn (Claude Stop hook, end of turn in the transcript). The status line counts these.',
+      'An ended thread can be resumed in the same agent (<code>claude --resume</code>, <code>codex resume</code>).',
     ],
   },
   {
     group: 'Handoff',
-    title: 'Hand off: in progress',
-    cmd: '',
-    chrome: '~/projects/cake-shop — chorus',
-    caption: 'Each step is shown as it happens, so a failed handoff says exactly where it stopped.',
-    screen:
-`  <span class="ch b">Hand off</span>  "Cake order page"   <span class="cl">claude</span> → <span class="cx">codex</span>
-
-  <span class="ok">✓</span> asked claude for a final note        <span class="d">chorus.write_handoff · 4.1s</span>
-  <span class="ok">✓</span> saved handoff note                   <span class="d">.chorus/threads/t_7k2/handoff.md</span>
-  <span class="ok">✓</span> stopped claude                       <span class="d">session 8766878a · exit 0</span>
-  <span class="ok">✓</span> started codex                        <span class="d">chorus mcp --thread t_7k2</span>
-  <span class="ch">●</span> sending first prompt …`,
+    title: 'Hand off',
+    cmd: 'Ctrl+Space h  (or chorus handoff --to codex)',
+    chrome: '~/projects/cake-shop — chorus · claude',
+    caption: 'A handoff is just a new thread with another agent, linked to this one. Pick the agent and press Enter. The current thread stays as it is, so you can switch back.',
+    status: S('claude', 'sonnet', { usage: 62, artifacts: 3, waiting: 1 }),
+    dim: true,
+    screenFrom: 2,
+    overlay: {
+      title: 'Continue "Cake order page" in a new thread',
+      rows: [
+        ['', '▸ codex    5h 8% used', true],
+        ['', '  agy      quota ok'],
+        ['', '  claude   fresh session'],
+      ],
+      foot: '⏎ start   esc cancel',
+    },
     behind: [
-      'Stop = Ctrl+C to the agent, then SIGTERM/SIGKILL after a grace period.',
-      'Codex gets its MCP server per session via <code>-c mcp_servers.chorus.*</code> (verified).',
+      'Creates thread (2) with <code>parent = t_7k2</code> and starts Codex with the Chorus MCP server for the new thread.',
+      'The first message is a short fixed prompt (next scene). Nothing is written by hand and the old agent is not asked to do anything.',
     ],
   },
   {
     group: 'Handoff',
-    title: 'Codex continues',
+    title: 'New agent loads the context',
     cmd: 'the real Codex interface',
     chrome: '~/projects/cake-shop — chorus · codex',
-    caption: 'Codex starts with the Chorus prompt as its first message and picks up the next step. The status line shows where the thread came from.',
-    status: S('codex', 'default', { usage: 9, artifacts: 3, from: 'claude' }),
+    caption: 'Codex is told to fetch the previous thread through MCP and confirm briefly what it learned. You correct it or say go.',
+    status: S('codex', 'default', { usage: 9, artifacts: 3, from: 'claude', title: 'Cake order page (2)', thread: '2/3' }),
     screen:
 `<span class="d">user</span>
-[Chorus] You are continuing thread "Cake order page" (t_7k2), previously
-worked on by claude. Read .chorus/threads/t_7k2/handoff.md first, or call
-chorus get_thread_context. Save non-code files in
-.chorus/threads/t_7k2/artifacts/. Call chorus checkpoint after each step.
-Task: Add Stripe checkout (server action) + webhook handler.
+This chat continues the Chorus thread "Cake order page", worked on by
+claude. Call chorus get_handoff_context first. Then reply with at most
+5 bullets: what was done, decisions, open work, and your next step.
+Wait for my OK before changing anything.
 
 <span class="cx">codex</span>
-<span class="d">•</span> Called <span class="b">chorus.read_handoff</span>
-<span class="d">•</span> Read app/order/page.tsx, app/order/pricing.ts
-I'll add the checkout server action first, then the webhook route.
-<span class="d">•</span> Edited app/order/actions.ts <span class="ok">(+38)</span>
-<span class="d">•</span> Wrote .chorus/threads/t_7k2/artifacts/webhook-plan.md
+<span class="d">•</span> Called <span class="b">chorus.get_handoff_context</span>  <span class="d">(18 turns, 23 tool calls, 3 artifacts)</span>
+
+Here is what I picked up:
+- Order page with a live price calculator in app/order/ (pricing.ts, page.tsx)
+- Prices are stored in cents; builder state uses Zustand; 12 pricing tests pass
+- Artifacts: order-flow.html (v2), pricing-table.md
+- Open: checkout button is not wired yet
+- Next: add a Stripe checkout server action, then the webhook route
+
+OK to start with the checkout action?
 
 <span class="d">›</span> <span class="cur"> </span>`,
     behind: [
-      'The handoff never depends on the model deciding to call a tool: the note path is in the first prompt.',
+      'The context comes from what Chorus stored about thread 1 (chat turns, tool calls, files, artifacts), so it works even when Claude is at its limit.',
+      'If the agent doesn\'t call the tool in its first turn (Chorus sees every MCP call), the status line shows "context not loaded" with a retry key.',
     ],
   },
   {
@@ -395,12 +402,12 @@ I'll add the checkout server action first, then the webhook route.
     overlay: {
       alert: true,
       title: 'Claude reached its 5-hour limit',
-      lines: ['Resets at 18:00. Your work is saved:', 'checkpoint #5 · 4 artifacts · 9 files changed'],
-      rows: [['⏎', 'Hand off to codex now   (5h 8%)', true], ['2', 'Hand off to agy'], ['w', 'Wait for the reset']],
+      lines: ['Resets at 18:00. This thread is saved:', '18 turns · 4 artifacts · 9 files changed'],
+      rows: [['⏎', 'Continue in a new thread with codex  (5h 8%)', true], ['2', 'Continue with agy'], ['w', 'Wait for the reset']],
     },
     behind: [
       'Claude reports usage in a <code>rate_limit_event</code> (5-hour and 7-day utilization, reset time). Chorus warns at 90%.',
-      'After a limit hit Claude can\'t write a note, so it is built from checkpoints and recorded events.',
+      'Claude doesn\'t need to do anything: the new agent reads this thread\'s stored turns and tool calls through MCP.',
     ],
   },
   {
@@ -433,17 +440,17 @@ I'll add the checkout server action first, then the webhook route.
     title: 'Activity',
     cmd: 'e  (or chorus activity)',
     chrome: '~/projects/cake-shop — chorus',
-    caption: 'One timeline for the thread across agents: tool calls, MCP calls, usage, handoffs.',
+    caption: 'One timeline across a thread and the threads continued from it: tool calls, MCP calls, usage, handoffs.',
     screen:
 `  <span class="ch b">Activity</span>  ·  Cake order page          <span class="d">in 41.2k  out 3.1k tokens · $0.21</span>
 
   <span class="d">14:01:12</span>  <span class="cl">claude</span>  tool   Write app/order/pricing.ts              <span class="ok">ok</span>  <span class="d">120ms</span>
   <span class="d">14:01:30</span>  <span class="cl">claude</span>  tool   Bash  npm test -- pricing               <span class="ok">ok</span>  <span class="d">4.2s</span>
-  <span class="d">14:01:44</span>  <span class="cl">claude</span>  mcp    chorus.checkpoint #3                    <span class="ok">ok</span>
   <span class="d">14:01:45</span>  <span class="cl">claude</span>  file   order-flow.html v2
   <span class="d">14:02:03</span>  <span class="cl">claude</span>  usage  5h 62% · resets 18:00
-  <span class="d">14:05:10</span>  <span class="ch">──── handoff  claude → codex  (user) ────</span>
-  <span class="d">14:05:14</span>  <span class="cx">codex </span>  mcp    chorus.read_handoff                     <span class="ok">ok</span>
+  <span class="d">14:05:10</span>  <span class="ch">──── thread (2) started with codex, from (1) ────</span>
+  <span class="d">14:05:14</span>  <span class="cx">codex </span>  mcp    chorus.get_handoff_context              <span class="ok">ok</span>
+  <span class="d">14:05:20</span>  <span class="cx">codex </span>  turn   confirmed context (5 bullets)
   <span class="d">14:05:31</span>  <span class="cx">codex </span>  tool   edit app/order/actions.ts               <span class="ok">ok</span>
   <span class="d">14:05:52</span>  <span class="cx">codex </span>  file   webhook-plan.md v1
 
@@ -491,10 +498,11 @@ function statusBar(st) {
   const usageCls = st.usage >= 90 ? 'er' : st.usage >= 75 ? 'wn' : 'ok';
   return `<div class="status${st.warn ? ' warn' : ''}">
     <span class="brand">chorus</span>
-    <span>Cake order page</span>
+    <span>${st.title || 'Cake order page'}</span>
     <span class="${cls}">${st.agent}${st.model ? ' · ' + st.model : ''}${st.from ? ' <span class="d">from</span> <span class="cl">' + st.from + '</span>' : ''}</span>
     <span>5h <span class="meter ${usageCls}">${meter}</span> ${st.usage}%${st.warn ? ' <span class="er">limit</span>' : ''}</span>
     <span>${st.artifacts} artifacts${st.toast ? ' <span class="ok">' + st.toast + '</span>' : ''}</span>
+    <span>${st.thread || '1/3'} threads${st.waiting ? ' · <span class="wn">' + st.waiting + ' waiting</span>' : ''}</span>
     <span>⌃Space menu</span>
   </div>`;
 }
