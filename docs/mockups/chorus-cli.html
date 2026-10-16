@@ -1,0 +1,565 @@
+<title>chorus-cli Mockup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: scene list on the left, one terminal window per scene on the right, reference sections below. */
+:root {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --fg: #1a1f27;
+  --muted: #5a6474;
+  --line: #dde2e9;
+  --accent: #0f766e;
+  --accent-soft: #e2f3f1;
+
+  /* The terminal keeps one dark look in both themes, like a real terminal. */
+  --t-bg: #12151b;
+  --t-chrome: #1b1f27;
+  --t-fg: #d9dee7;
+  --t-dim: #6f7889;
+  --t-line: #2a303b;
+  --t-chorus: #4fc1b6;
+  --t-claude: #e08a68;
+  --t-codex: #8fb8ff;
+  --t-agy: #9bd38f;
+  --t-ok: #8ccf7e;
+  --t-warn: #f0b85a;
+  --t-err: #f07a7a;
+  --t-sel: #263040;
+
+  --f-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1014; --panel: #151a21; --fg: #e3e8ef; --muted: #98a3b4;
+    --line: #262d38; --accent: #4fc1b6; --accent-soft: #15302e; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1014; --panel: #151a21; --fg: #e3e8ef; --muted: #98a3b4;
+  --line: #262d38; --accent: #4fc1b6; --accent-soft: #15302e; color-scheme: dark;
+}
+
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--f-sans);
+  font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 32px 64px; display: grid; gap: 40px; }
+
+header h1 { font-size: 26px; margin: 0 0 6px; text-wrap: balance; font-weight: 600; letter-spacing: -0.01em; }
+header h1 code { font-family: var(--f-mono); font-weight: 600; color: var(--accent); }
+header p { margin: 0; color: var(--muted); max-width: 68ch; }
+
+.stage { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 28px; align-items: start; }
+nav.scenes { display: grid; gap: 2px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); }
+nav.scenes button {
+  all: unset; cursor: pointer; display: grid; grid-template-columns: 26px 1fr; gap: 6px;
+  padding: 7px 10px; border-radius: 6px; color: var(--muted); font-size: 14px;
+}
+nav.scenes button .n { font-family: var(--f-mono); font-size: 12px; padding-top: 2px; }
+nav.scenes button:hover { background: var(--accent-soft); color: var(--fg); }
+nav.scenes button[aria-current="true"] { background: var(--accent-soft); color: var(--fg); font-weight: 600; }
+nav.scenes button[aria-current="true"] .n { color: var(--accent); }
+nav.scenes button:focus-visible, .ctl button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+nav.scenes .group { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 14px 10px 4px; }
+nav.scenes .group:first-child { padding-top: 0; }
+
+.scene { display: grid; gap: 14px; min-width: 0; }
+.scene-head { display: flex; gap: 16px; align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+.scene-head h2 { margin: 0; font-size: 20px; font-weight: 600; }
+.scene-head .cmd { font-family: var(--f-mono); font-size: 13px; color: var(--muted); }
+.caption { margin: 0; max-width: 72ch; }
+
+.term { background: var(--t-bg); border-radius: 10px; overflow: hidden; border: 1px solid var(--t-line); position: relative; min-width: 0; }
+.term .chrome { display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: var(--t-chrome); border-bottom: 1px solid var(--t-line); }
+.term .chrome i { width: 10px; height: 10px; border-radius: 50%; background: var(--t-line); display: block; }
+.term .chrome span { font-family: var(--f-mono); font-size: 12px; color: var(--t-dim); margin-left: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.term .scroll { overflow-x: auto; }
+.term pre {
+  margin: 0; padding: 14px 16px; font-family: var(--f-mono); font-size: 13px; line-height: 1.6;
+  color: var(--t-fg); min-height: 30em; min-width: 78ch; white-space: pre;
+}
+.term pre.dimmed { opacity: 0.35; }
+.status {
+  display: flex; font-family: var(--f-mono); font-size: 12.5px; background: #1d2530; color: var(--t-fg);
+  border-top: 1px solid var(--t-line); white-space: nowrap; min-width: 78ch;
+}
+.status > span { padding: 5px 10px; border-right: 1px solid var(--t-line); }
+.status > span:last-child { border-right: 0; margin-left: auto; color: var(--t-dim); }
+.status .brand { background: var(--t-chorus); color: #0b1a19; font-weight: 600; }
+.status.warn { background: #3a2c12; }
+.meter { letter-spacing: -1px; }
+
+.overlay {
+  position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%);
+  background: #181d25; border: 1px solid var(--t-chorus); border-radius: 6px;
+  font-family: var(--f-mono); font-size: 13px; color: var(--t-fg); padding: 10px 0; min-width: 330px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+.overlay .ttl { padding: 0 16px 8px; color: var(--t-chorus); font-weight: 600; border-bottom: 1px solid var(--t-line); margin-bottom: 6px; }
+.overlay .row { padding: 3px 16px; display: grid; grid-template-columns: 40px 1fr; }
+.overlay .row b { color: var(--t-chorus); font-weight: 600; }
+.overlay .row.sel { background: var(--t-sel); }
+.overlay .foot { padding: 8px 16px 0; margin-top: 6px; border-top: 1px solid var(--t-line); color: var(--t-dim); }
+.overlay.alert { border-color: var(--t-warn); }
+.overlay.alert .ttl { color: var(--t-warn); }
+
+/* terminal text colors */
+.d { color: var(--t-dim); } .ch { color: var(--t-chorus); } .cl { color: var(--t-claude); }
+.cx { color: var(--t-codex); } .ag { color: var(--t-agy); } .ok { color: var(--t-ok); }
+.wn { color: var(--t-warn); } .er { color: var(--t-err); } .b { font-weight: 600; }
+.sel { background: var(--t-sel); }
+.cur { background: var(--t-fg); color: var(--t-bg); }
+
+.behind { border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; }
+.behind h3 { margin: 0 0 6px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.behind ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.behind code, section code { font-family: var(--f-mono); font-size: 0.88em; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+
+.ctl { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.ctl button {
+  font: inherit; font-size: 14px; padding: 7px 14px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+}
+.ctl button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+.ctl button:disabled { opacity: 0.4; cursor: default; }
+.ctl .hint { color: var(--muted); font-size: 13px; }
+
+section h2 { font-size: 20px; margin: 0 0 12px; font-weight: 600; }
+section > p { margin: 0 0 14px; color: var(--muted); max-width: 72ch; }
+.ref { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.ref table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 14px; }
+.ref th, .ref td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ref tr:last-child td { border-bottom: 0; }
+.ref th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.ref td:first-child { font-family: var(--f-mono); font-size: 13px; white-space: nowrap; }
+.ref td code { background: none; padding: 0; }
+
+.qs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.q { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; min-width: 0; }
+.q h3 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+.q p { margin: 0; color: var(--muted); font-size: 14px; }
+.q p strong { color: var(--fg); font-weight: 600; }
+
+@media (max-width: 860px) {
+  .stage { grid-template-columns: minmax(0, 1fr); }
+  nav.scenes { position: static; display: flex; overflow-x: auto; gap: 4px; padding-bottom: 4px; }
+  nav.scenes .group { display: none; }
+  nav.scenes button { white-space: nowrap; grid-template-columns: auto auto; }
+  .qs { grid-template-columns: minmax(0, 1fr); }
+  .overlay { min-width: 290px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .term pre, .overlay { transition: opacity 0.15s ease; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1><code>chorus</code> terminal app mockup</h1>
+    <p>One thread of work, several AI CLIs. You work inside the real Claude Code, Codex or Antigravity interface; Chorus adds a status line, a menu key, handoff and artifacts around it. Click through the scenes or use the ← → keys.</p>
+  </header>
+
+  <div class="stage">
+    <nav class="scenes" id="nav" aria-label="Scenes"></nav>
+    <div class="scene" id="scene" aria-live="polite"></div>
+  </div>
+
+  <section>
+    <h2>Commands</h2>
+    <p>Everything the interactive screens do is also a plain command, so it can be scripted and tested.</p>
+    <div class="ref">
+      <table>
+        <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td>chorus</td><td>Home screen: agents, threads, open or create one</td></tr>
+          <tr><td>chorus new "&lt;title&gt;" --agent claude [--task "…"]</td><td>Create a thread and start the agent on it</td></tr>
+          <tr><td>chorus run &lt;agent&gt; [--thread &lt;id&gt;]</td><td>Open an agent on a thread (latest thread if omitted)</td></tr>
+          <tr><td>chorus handoff --to &lt;agent&gt; [--note auto|checkpoint|ask]</td><td>Stop the current agent and continue the thread in another one</td></tr>
+          <tr><td>chorus threads · chorus show &lt;id&gt;</td><td>List threads; show a thread's runs, checkpoints, handoffs</td></tr>
+          <tr><td>chorus artifacts [--open | --serve]</td><td>List artifacts; open one, or serve them with live reload</td></tr>
+          <tr><td>chorus activity [--thread &lt;id&gt;]</td><td>Tool calls, MCP calls, token usage and limits over time</td></tr>
+          <tr><td>chorus trace &lt;run-id&gt;</td><td>Raw CLI output next to the parsed events, for debugging</td></tr>
+          <tr><td>chorus doctor</td><td>Installed CLIs, versions, login state, paths, verified versions</td></tr>
+          <tr><td>chorus mcp --thread &lt;id&gt;</td><td>The MCP server. The AI CLI starts it; you don't run it yourself</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Open questions</h2>
+    <p>Decisions this mockup assumes. Each one changes the build.</p>
+    <div class="qs">
+      <div class="q"><h3>Command name</h3><p>The package is <code>chorus-cli</code>; the command you type is <code>chorus</code>. <strong>Proposal: keep both.</strong></p></div>
+      <div class="q"><h3>Menu key</h3><p>It must not clash with keys Claude Code, Codex or Agy already use (Claude uses Ctrl+O, Ctrl+], and others). <strong>Proposal: Ctrl+Space, configurable</strong>, checked against all three CLIs.</p></div>
+      <div class="q"><h3>Status line under another TUI</h3><p>Keeping our line at the bottom while Claude or Codex draws full screen needs a virtual-terminal layer, the way tmux does it. <strong>Fallback if that proves flaky:</strong> status in the terminal title plus the menu key only.</p></div>
+      <div class="q"><h3>Artifact preview</h3><p>Opening files in the default app is simple. A small local preview server (<code>chorus artifacts --serve</code>) gives live reload while the agent edits. <strong>Proposal: both, server optional.</strong></p></div>
+    </div>
+  </section>
+</div>
+
+<script>
+const S = (agent, model, extra = {}) => ({ agent, model, ...extra });
+
+const SCENES = [
+  {
+    group: 'Start',
+    title: 'Home screen',
+    cmd: '$ chorus',
+    chrome: '~/projects/cake-shop — chorus',
+    caption: 'Running chorus in a project shows which AI CLIs are installed and logged in, and the threads for this project. A thread can span several agents.',
+    screen:
+`<span class="d">$</span> chorus
+
+  <span class="ch b">chorus</span> 0.1  <span class="d">·  ~/projects/cake-shop</span>
+
+  <span class="d">Agents</span>   <span class="cl">claude</span> 2.1.301 <span class="ok">✓</span>     <span class="cx">codex</span> 0.163.0 <span class="ok">✓</span>     <span class="ag">agy</span> 1.3.6 <span class="ok">✓</span>
+
+  <span class="d">Threads</span>
+<span class="sel">▸ Cake order page          <span class="cl">claude</span> → <span class="cx">codex</span>   12m ago      3 artifacts  </span>
+  Stripe webhook           <span class="cx">codex</span>             yesterday    1 artifact
+  Landing page copy        <span class="ag">agy</span>               3 days ago   <span class="d">—</span>
+
+
+
+  <span class="ch">n</span> new thread   <span class="ch">⏎</span> open   <span class="ch">a</span> artifacts   <span class="ch">d</span> doctor   <span class="ch">q</span> quit`,
+    behind: [
+      'Reads <code>.chorus/chorus.db</code> in the project folder.',
+      'Agent status comes from the same checks as <code>chorus doctor</code> (version, login).',
+    ],
+  },
+  {
+    group: 'Start',
+    title: 'New thread',
+    cmd: 'n  (or chorus new)',
+    chrome: '~/projects/cake-shop — chorus',
+    caption: 'A thread has a title, a first agent and a task. The task becomes the agent\'s first message.',
+    screen:
+`  <span class="ch b">New thread</span>
+
+  <span class="d">Title</span>   Cake order page<span class="cur"> </span>
+
+  <span class="d">Agent</span>   <span class="sel"> ▸ <span class="cl">claude</span> </span>   codex    agy
+
+  <span class="d">Task</span>    Build an order page with a live price calculator
+          (size, layers, toppings). Use the existing Next.js app.
+
+
+
+
+  <span class="ch">⏎</span> start   <span class="ch">tab</span> next field   <span class="ch">esc</span> cancel`,
+    behind: [
+      'Creates thread <code>t_7k2</code> and <code>.chorus/threads/t_7k2/artifacts/</code>.',
+      'Starts <code>claude</code> with <code>--session-id &lt;uuid&gt;</code>, a per-session MCP config <code>chorus mcp --thread t_7k2</code>, and <code>--append-system-prompt</code> with the Chorus rules (where artifacts go, call checkpoint).',
+      'Removes leaked parent-session env vars before spawning.',
+    ],
+  },
+  {
+    group: 'Working',
+    title: 'Working in Claude Code',
+    cmd: 'the real Claude Code interface',
+    chrome: '~/projects/cake-shop — chorus · claude',
+    caption: 'You type into Claude Code exactly as usual. Chorus only adds the status line at the bottom: thread, agent, plan usage, artifacts, and the menu key.',
+    status: S('claude', 'sonnet', { usage: 62, artifacts: 3, toast: '+ order-flow.html v2' }),
+    screen:
+`<span class="d">&gt;</span> Build an order page with a live price calculator (size, layers,
+  toppings). Use the existing Next.js app.
+
+<span class="cl">●</span> I'll start with the pricing model, then the page.
+
+<span class="cl">●</span> <span class="b">Write</span>(app/order/pricing.ts)
+  <span class="d">⎿  Wrote 48 lines</span>
+<span class="cl">●</span> <span class="b">Bash</span>(mkdir -p .chorus/threads/t_7k2/artifacts &amp;&amp; …)
+  <span class="d">⎿  order-flow.html written</span>
+<span class="cl">●</span> <span class="b">chorus - checkpoint</span> <span class="d">(MCP)</span>
+  <span class="d">⎿  saved checkpoint #3</span>
+<span class="cl">●</span> <span class="b">Bash</span>(npm test -- pricing)
+  <span class="d">⎿  12 passed</span>
+
+<span class="cl">●</span> The calculator works. Next I'll wire the checkout button.
+
+<span class="d">&gt;</span> <span class="cur"> </span>`,
+    behind: [
+      'Raw terminal bytes are saved to <code>runs/&lt;run-id&gt;/pty.log</code> for debugging only.',
+      'Tool calls, tokens and plan usage come from Claude\'s hooks and transcript, not from the screen.',
+      'A file watcher spots the new artifact even though Claude wrote it with Bash, not its Write tool.',
+    ],
+  },
+  {
+    group: 'Working',
+    title: 'Chorus menu',
+    cmd: 'Ctrl+Space',
+    chrome: '~/projects/cake-shop — chorus · claude',
+    caption: 'One key opens the Chorus menu on top of the agent. Esc returns to the agent with nothing lost.',
+    status: S('claude', 'sonnet', { usage: 62, artifacts: 3 }),
+    dim: true,
+    overlay: {
+      title: 'chorus · Cake order page',
+      rows: [['h', 'Hand off to another agent', true], ['c', 'Checkpoint now'], ['a', 'Artifacts (3)'], ['e', 'Activity'], ['t', 'Threads'], ['n', 'New thread']],
+      foot: 'esc  back to claude',
+    },
+    screenFrom: 2,
+    behind: [
+      'While the menu is open the agent keeps running; its output is buffered and redrawn on return.',
+      '"Checkpoint now" asks the agent to call <code>chorus checkpoint</code> with a progress summary.',
+    ],
+  },
+  {
+    group: 'Handoff',
+    title: 'Hand off: choose agent and note',
+    cmd: 'h  (or chorus handoff --to codex)',
+    chrome: '~/projects/cake-shop — chorus',
+    caption: 'Pick the next agent and check the note it will receive. You can edit the note before confirming.',
+    screen:
+`  <span class="ch b">Hand off</span>  "Cake order page"
+
+  <span class="d">To</span>     claude <span class="d">(current)</span>    <span class="sel"> ▸ <span class="cx">codex</span> <span class="ok">✓</span> 5h 8% </span>    <span class="ag">agy</span> <span class="ok">✓</span> quota ok
+
+  <span class="d">Note source</span>   claude's final note (asked via MCP) + checkpoint #3
+
+  <span class="d">Goal</span>         Order page with live price calculator
+  <span class="d">Done</span>         app/order/pricing.ts, app/order/page.tsx · 12 tests pass
+  <span class="d">Decisions</span>    Prices in cents · Zustand for builder state
+  <span class="d">Next</span>         Add Stripe checkout (server action) + webhook handler
+  <span class="d">Artifacts</span>    order-flow.html v2 · pricing-table.md v1
+  <span class="d">Files</span>        app/order/*, components/CakeBuilder.tsx
+
+
+
+  <span class="ch">⏎</span> hand off   <span class="ch">e</span> edit note   <span class="ch">s</span> switch note source   <span class="ch">esc</span> cancel`,
+    behind: [
+      'Note sources, best first: ask the running agent to call <code>write_handoff</code> → latest checkpoint → built from recorded events. The last one always works, even after a limit hit.',
+    ],
+  },
+  {
+    group: 'Handoff',
+    title: 'Hand off: in progress',
+    cmd: '',
+    chrome: '~/projects/cake-shop — chorus',
+    caption: 'Each step is shown as it happens, so a failed handoff says exactly where it stopped.',
+    screen:
+`  <span class="ch b">Hand off</span>  "Cake order page"   <span class="cl">claude</span> → <span class="cx">codex</span>
+
+  <span class="ok">✓</span> asked claude for a final note        <span class="d">chorus.write_handoff · 4.1s</span>
+  <span class="ok">✓</span> saved handoff note                   <span class="d">.chorus/threads/t_7k2/handoff.md</span>
+  <span class="ok">✓</span> stopped claude                       <span class="d">session 8766878a · exit 0</span>
+  <span class="ok">✓</span> started codex                        <span class="d">chorus mcp --thread t_7k2</span>
+  <span class="ch">●</span> sending first prompt …`,
+    behind: [
+      'Stop = Ctrl+C to the agent, then SIGTERM/SIGKILL after a grace period.',
+      'Codex gets its MCP server per session via <code>-c mcp_servers.chorus.*</code> (verified).',
+    ],
+  },
+  {
+    group: 'Handoff',
+    title: 'Codex continues',
+    cmd: 'the real Codex interface',
+    chrome: '~/projects/cake-shop — chorus · codex',
+    caption: 'Codex starts with the Chorus prompt as its first message and picks up the next step. The status line shows where the thread came from.',
+    status: S('codex', 'default', { usage: 9, artifacts: 3, from: 'claude' }),
+    screen:
+`<span class="d">user</span>
+[Chorus] You are continuing thread "Cake order page" (t_7k2), previously
+worked on by claude. Read .chorus/threads/t_7k2/handoff.md first, or call
+chorus get_thread_context. Save non-code files in
+.chorus/threads/t_7k2/artifacts/. Call chorus checkpoint after each step.
+Task: Add Stripe checkout (server action) + webhook handler.
+
+<span class="cx">codex</span>
+<span class="d">•</span> Called <span class="b">chorus.read_handoff</span>
+<span class="d">•</span> Read app/order/page.tsx, app/order/pricing.ts
+I'll add the checkout server action first, then the webhook route.
+<span class="d">•</span> Edited app/order/actions.ts <span class="ok">(+38)</span>
+<span class="d">•</span> Wrote .chorus/threads/t_7k2/artifacts/webhook-plan.md
+
+<span class="d">›</span> <span class="cur"> </span>`,
+    behind: [
+      'The handoff never depends on the model deciding to call a tool: the note path is in the first prompt.',
+    ],
+  },
+  {
+    group: 'Limits',
+    title: 'Limit warning',
+    cmd: '',
+    chrome: '~/projects/cake-shop — chorus · claude',
+    caption: 'When an agent gets close to its plan limit, the status line turns amber. When the limit is hit, Chorus offers the handoff right away.',
+    status: S('claude', 'sonnet', { usage: 100, artifacts: 4, warn: true }),
+    dim: true,
+    screenFrom: 2,
+    overlay: {
+      alert: true,
+      title: 'Claude reached its 5-hour limit',
+      lines: ['Resets at 18:00. Your work is saved:', 'checkpoint #5 · 4 artifacts · 9 files changed'],
+      rows: [['⏎', 'Hand off to codex now   (5h 8%)', true], ['2', 'Hand off to agy'], ['w', 'Wait for the reset']],
+    },
+    behind: [
+      'Claude reports usage in a <code>rate_limit_event</code> (5-hour and 7-day utilization, reset time). Chorus warns at 90%.',
+      'After a limit hit Claude can\'t write a note, so it is built from checkpoints and recorded events.',
+    ],
+  },
+  {
+    group: 'Artifacts',
+    title: 'Artifacts',
+    cmd: 'a  (or chorus artifacts)',
+    chrome: '~/projects/cake-shop — chorus',
+    caption: 'Every non-code file the agents produced for this thread, with versions. Open one in the browser and it reloads while the agent keeps editing it.',
+    screen:
+`  <span class="ch b">Artifacts</span>  ·  Cake order page        <span class="d">.chorus/threads/t_7k2/artifacts/</span>
+
+    <span class="d">NAME                  VER   BY       UPDATED</span>
+<span class="sel">  ▸ order-flow.html       v2    <span class="cl">claude</span>   14m ago     </span>
+    pricing-table.md      v1    <span class="cl">claude</span>   20m ago
+    webhook-plan.md       v1    <span class="cx">codex</span>    just now
+
+  <span class="d">Preview</span>  http://localhost:4317/t_7k2/order-flow.html   <span class="ok">● live reload</span>
+
+
+
+
+  <span class="ch">o</span> open in browser   <span class="ch">p</span> copy path   <span class="ch">v</span> versions   <span class="ch">esc</span> back`,
+    behind: [
+      'Versions are content hashes recorded by the file watcher, with the run that wrote them.',
+      'Agents can list and read the same artifacts through <code>chorus list_artifacts</code>.',
+    ],
+  },
+  {
+    group: 'Debugging',
+    title: 'Activity',
+    cmd: 'e  (or chorus activity)',
+    chrome: '~/projects/cake-shop — chorus',
+    caption: 'One timeline for the thread across agents: tool calls, MCP calls, usage, handoffs.',
+    screen:
+`  <span class="ch b">Activity</span>  ·  Cake order page          <span class="d">in 41.2k  out 3.1k tokens · $0.21</span>
+
+  <span class="d">14:01:12</span>  <span class="cl">claude</span>  tool   Write app/order/pricing.ts              <span class="ok">ok</span>  <span class="d">120ms</span>
+  <span class="d">14:01:30</span>  <span class="cl">claude</span>  tool   Bash  npm test -- pricing               <span class="ok">ok</span>  <span class="d">4.2s</span>
+  <span class="d">14:01:44</span>  <span class="cl">claude</span>  mcp    chorus.checkpoint #3                    <span class="ok">ok</span>
+  <span class="d">14:01:45</span>  <span class="cl">claude</span>  file   order-flow.html v2
+  <span class="d">14:02:03</span>  <span class="cl">claude</span>  usage  5h 62% · resets 18:00
+  <span class="d">14:05:10</span>  <span class="ch">──── handoff  claude → codex  (user) ────</span>
+  <span class="d">14:05:14</span>  <span class="cx">codex </span>  mcp    chorus.read_handoff                     <span class="ok">ok</span>
+  <span class="d">14:05:31</span>  <span class="cx">codex </span>  tool   edit app/order/actions.ts               <span class="ok">ok</span>
+  <span class="d">14:05:52</span>  <span class="cx">codex </span>  file   webhook-plan.md v1
+
+
+  <span class="ch">⏎</span> details   <span class="ch">r</span> raw trace   <span class="ch">f</span> filter   <span class="ch">esc</span> back`,
+    behind: [
+      'Every row links to the raw line it came from (<code>chorus trace &lt;run-id&gt;</code>), so a parsing bug is easy to prove.',
+    ],
+  },
+  {
+    group: 'Debugging',
+    title: 'Doctor',
+    cmd: '$ chorus doctor',
+    chrome: '~/projects/cake-shop — chorus',
+    caption: 'The first thing to run when something breaks. It also warns when an installed CLI is newer than the version Chorus was verified against.',
+    screen:
+`<span class="d">$</span> chorus doctor
+
+  <span class="cl">claude</span>  2.1.301   <span class="ok">✓ logged in</span>   ~/.claude/projects             <span class="ok">verified</span>
+  <span class="cx">codex </span>  0.163.0   <span class="ok">✓ logged in</span>   ~/.codex (sqlite)              <span class="ok">verified</span>
+  <span class="ag">agy   </span>  1.3.6     <span class="ok">✓ logged in</span>   ~/.gemini/antigravity-cli      <span class="wn">not verified</span>
+
+  <span class="d">store</span>   .chorus/chorus.db · 3 threads · 7 runs · 42 MB
+  <span class="d">env</span>     <span class="wn">CLAUDE_CODE_SESSION_ID is set</span> → removed when starting agents
+
+  <span class="wn">1 warning</span>  agy 1.3.6 has not been verified. Run:
+           node tools/probe/probe.mjs agy`,
+    behind: [
+      'Checks match the integration docs in <code>docs/integrations/</code>.',
+    ],
+  },
+];
+
+const nav = document.getElementById('nav');
+const sceneEl = document.getElementById('scene');
+let current = 0;
+
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+
+function statusBar(st) {
+  if (!st) return '';
+  const cls = { claude: 'cl', codex: 'cx', agy: 'ag' }[st.agent];
+  const filled = Math.round(st.usage / 10);
+  const meter = '▮'.repeat(filled) + '▱'.repeat(10 - filled);
+  const usageCls = st.usage >= 90 ? 'er' : st.usage >= 75 ? 'wn' : 'ok';
+  return `<div class="status${st.warn ? ' warn' : ''}">
+    <span class="brand">chorus</span>
+    <span>Cake order page</span>
+    <span class="${cls}">${st.agent}${st.model ? ' · ' + st.model : ''}${st.from ? ' <span class="d">from</span> <span class="cl">' + st.from + '</span>' : ''}</span>
+    <span>5h <span class="meter ${usageCls}">${meter}</span> ${st.usage}%${st.warn ? ' <span class="er">limit</span>' : ''}</span>
+    <span>${st.artifacts} artifacts${st.toast ? ' <span class="ok">' + st.toast + '</span>' : ''}</span>
+    <span>⌃Space menu</span>
+  </div>`;
+}
+
+function overlay(o) {
+  if (!o) return '';
+  const lines = (o.lines || []).map(l => `<div class="row" style="grid-template-columns:1fr">${esc(l)}</div>`).join('');
+  const rows = (o.rows || []).map(([k, label, sel]) =>
+    `<div class="row${sel ? ' sel' : ''}"><b>${esc(k)}</b><span>${esc(label)}</span></div>`).join('');
+  return `<div class="overlay${o.alert ? ' alert' : ''}" role="dialog" aria-label="${esc(o.title)}">
+    <div class="ttl">${esc(o.title)}</div>${lines}${lines && rows ? '<div style="height:8px"></div>' : ''}${rows}
+    ${o.foot ? `<div class="foot">${esc(o.foot)}</div>` : ''}</div>`;
+}
+
+function render() {
+  const s = SCENES[current];
+  const screen = s.screen ?? SCENES[s.screenFrom].screen;
+  sceneEl.innerHTML = `
+    <div class="scene-head"><h2>${esc(s.title)}</h2>${s.cmd ? `<span class="cmd">${esc(s.cmd)}</span>` : ''}</div>
+    <p class="caption">${esc(s.caption)}</p>
+    <div class="term">
+      <div class="chrome"><i></i><i></i><i></i><span>${esc(s.chrome)}</span></div>
+      <div class="scroll"><pre class="${s.dim ? 'dimmed' : ''}">${screen}</pre>${statusBar(s.status)}</div>
+      ${overlay(s.overlay)}
+    </div>
+    <div class="behind"><h3>Behind the scenes</h3><ul>${s.behind.map(b => `<li>${b}</li>`).join('')}</ul></div>
+    <div class="ctl">
+      <button id="prev" ${current === 0 ? 'disabled' : ''}>← Previous</button>
+      <button id="next" class="primary" ${current === SCENES.length - 1 ? 'disabled' : ''}>Next →</button>
+      <span class="hint">${current + 1} of ${SCENES.length}</span>
+    </div>`;
+  document.getElementById('prev').onclick = () => go(current - 1);
+  document.getElementById('next').onclick = () => go(current + 1);
+  [...nav.querySelectorAll('button')].forEach((b, i) => b.setAttribute('aria-current', i === current ? 'true' : 'false'));
+}
+
+function go(i) {
+  if (i < 0 || i >= SCENES.length) return;
+  current = i;
+  render();
+  try { history.replaceState(null, '', '#s' + (i + 1)); } catch (e) {}
+}
+
+let lastGroup = '';
+SCENES.forEach((s, i) => {
+  if (s.group !== lastGroup) {
+    const g = document.createElement('div');
+    g.className = 'group';
+    g.textContent = s.group;
+    nav.appendChild(g);
+    lastGroup = s.group;
+  }
+  const b = document.createElement('button');
+  b.innerHTML = `<span class="n">${String(i + 1).padStart(2, '0')}</span><span>${esc(s.title)}</span>`;
+  b.onclick = () => go(i);
+  nav.appendChild(b);
+});
+
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input, textarea')) return;
+  if (e.key === 'ArrowRight') go(current + 1);
+  if (e.key === 'ArrowLeft') go(current - 1);
+});
+
+const m = location.hash.match(/^#s(\d+)$/);
+current = m ? Math.min(Math.max(Number(m[1]) - 1, 0), SCENES.length - 1) : 0;
+render();
+</script>

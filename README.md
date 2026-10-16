@@ -29,6 +29,7 @@ scattered. Chorus keeps one **thread** of work across agents:
 | [docs/testing.md](docs/testing.md) | Test layers, what runs in the cloud vs on your Mac |
 | [docs/integrations/](docs/integrations/README.md) | Verified facts per CLI: flags, events, paths, token usage, gotchas |
 | [docs/distribution-and-trust.md](docs/distribution-and-trust.md) | Signing, notarization, payments |
+| [docs/mockups/chorus-cli.html](docs/mockups/chorus-cli.html) | Clickable mockup of the chorus terminal app |
 | [docs/archive/](docs/archive/) | v1 product concept, brainstorm and UI mockup (reference for the desktop app) |
 
 ## Repository layout
