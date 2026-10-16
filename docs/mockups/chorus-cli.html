@@ -84,7 +84,20 @@ nav.scenes .group:first-child { padding-top: 0; }
   margin: 0; padding: 14px 16px; font-family: var(--f-mono); font-size: 13px; line-height: 1.6;
   color: var(--t-fg); min-height: 30em; min-width: 78ch; white-space: pre;
 }
-.term pre.dimmed { opacity: 0.35; }
+.term pre.dimmed, .tbody.dimmed pre { opacity: 0.35; }
+.tbody { display: flex; min-width: calc(78ch + 30ch); }
+.tbody pre { flex: 1; min-width: 0; }
+.side {
+  width: 28ch; flex: none; background: #151a21; border-right: 1px solid var(--t-line);
+  font-family: var(--f-mono); font-size: 13px; color: var(--t-fg); padding: 10px 0; display: flex; flex-direction: column;
+}
+.side .hd { padding: 0 12px 8px; color: var(--t-dim); font-size: 11px; letter-spacing: 0.08em; }
+.side .it { padding: 5px 12px 5px 10px; border-left: 2px solid transparent; display: grid; gap: 1px; }
+.side .it .t { white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.side .it .m { font-size: 11.5px; color: var(--t-dim); white-space: pre; }
+.side .it.active { background: var(--t-sel); border-left-color: var(--t-chorus); }
+.side .it.focus { outline: 1px dashed var(--t-chorus); outline-offset: -3px; }
+.side .ft { margin-top: auto; padding: 10px 12px 2px; border-top: 1px solid var(--t-line); color: var(--t-dim); font-size: 11.5px; white-space: pre; line-height: 1.7; }
 .status {
   display: flex; font-family: var(--f-mono); font-size: 12.5px; background: #1d2530; color: var(--t-fg);
   border-top: 1px solid var(--t-line); white-space: nowrap; min-width: 78ch;
@@ -267,8 +280,9 @@ const SCENES = [
     title: 'Working in Claude Code',
     cmd: 'the real Claude Code interface',
     chrome: '~/projects/cake-shop — chorus · claude',
-    caption: 'You type into Claude Code exactly as usual. Chorus only adds the status line at the bottom: thread, agent, plan usage, artifacts, other threads (one is waiting for you) and the menu key.',
-    status: S('claude', 'sonnet', { usage: 62, artifacts: 3, toast: '+ order-flow.html v2', waiting: 1 }),
+    caption: 'You type into Claude Code exactly as usual. On the left, a sidebar lists every thread like tabs, with its agent and state; one is waiting for you. The line at the bottom shows this thread\'s plan usage and artifacts.',
+    status: S('claude', 'sonnet', { usage: 62, artifacts: 3, toast: '+ order-flow.html v2' }),
+    side: { active: 0 },
     screen:
 `<span class="d">&gt;</span> Build an order page with a live price calculator (size, layers,
   toppings). Use the existing Next.js app.
@@ -286,7 +300,8 @@ const SCENES = [
 
 <span class="d">&gt;</span> <span class="cur"> </span>`,
     behind: [
-      'Raw terminal bytes are saved to <code>runs/&lt;run-id&gt;/pty.log</code> for debugging only.',
+      'Claude gets the width left of the sidebar (the terminal size it sees is reduced). Hide the sidebar with Ctrl+Space b for full width.',
+      'Raw terminal bytes are saved to <code>threads/&lt;id&gt;/raw/</code> for debugging only.',
       'Tool calls, tokens and plan usage come from Claude\'s hooks and transcript, not from the screen.',
       'A file watcher spots the new artifact even though Claude wrote it with Bash, not its Write tool.',
     ],
@@ -297,42 +312,34 @@ const SCENES = [
     cmd: 'Ctrl+Space',
     chrome: '~/projects/cake-shop — chorus · claude',
     caption: 'One key opens the Chorus menu on top of the agent. Esc returns to the agent with nothing lost.',
-    status: S('claude', 'sonnet', { usage: 62, artifacts: 3, waiting: 1 }),
+    status: S('claude', 'sonnet', { usage: 62, artifacts: 3 }),
+    side: { active: 0 },
     dim: true,
     overlay: {
       title: 'chorus · Cake order page',
-      rows: [['t', 'Switch thread', true], ['h', 'Hand off (new thread, other agent)'], ['n', 'New thread'], ['a', 'Artifacts (3)'], ['e', 'Activity'], ['1–9', 'Jump to thread 1–9']],
+      rows: [['↑↓', 'Move in the sidebar', true], ['h', 'Hand off (new thread, other agent)'], ['n', 'New thread'], ['m', 'Memory of this thread'], ['a', 'Artifacts (3)'], ['e', 'Activity'], ['b', 'Show / hide sidebar']],
       foot: 'esc  back to claude',
     },
     screenFrom: 2,
     behind: [
       'While the menu is open the agent keeps running; its output is buffered and redrawn on return.',
-      'Shortcuts skip the menu: Ctrl+Space then <code>[</code> / <code>]</code> for the previous / next thread.',
+      'Shortcuts: Ctrl+Space then <code>1</code>–<code>9</code> jumps straight to a thread; Ctrl+Space twice goes back to the previous one.',
     ],
   },
   {
     group: 'Working',
-    title: 'Switch thread',
-    cmd: 'Ctrl+Space t',
+    title: 'Switch thread from the sidebar',
+    cmd: 'Ctrl+Space ↓  ⏎   (or click)',
     chrome: '~/projects/cake-shop — chorus · claude',
-    caption: 'Every thread keeps running in the background. Pick one to bring it to the front; its screen comes back exactly as you left it.',
-    status: S('claude', 'sonnet', { usage: 62, artifacts: 3, waiting: 1 }),
-    dim: true,
+    caption: 'Move down the sidebar and press Enter, or click a thread with the mouse. The thread opens instantly with its screen exactly as you left it. Every thread keeps running in the background.',
+    status: S('claude', 'sonnet', { usage: 62, artifacts: 3 }),
+    side: { active: 0, focus: 1 },
     screenFrom: 2,
-    overlay: {
-      title: 'Threads · cake-shop',
-      rows: [
-        ['1', '● Cake order page        claude   working'],
-        ['2', '◐ Cake order page (2)    codex    waiting for you', true],
-        ['3', '○ Stripe webhook         codex    ended · resume'],
-        ['n', '+ New thread'],
-      ],
-      foot: '⏎ open   1–9 jump   esc back',
-    },
     behind: [
-      'Each thread is its own agent process in its own terminal. Chorus keeps a virtual screen per thread, so switching redraws instantly and nothing is lost.',
-      '"Waiting for you" = the agent finished its turn (Claude Stop hook, end of turn in the transcript). The status line counts these.',
-      'An ended thread can be resumed in the same agent (<code>claude --resume</code>, <code>codex resume</code>).',
+      'Each thread is its own agent process with its own virtual screen in memory, so opening one is a redraw, not a restart.',
+      '"Waiting for you" = the agent finished its turn (Claude Stop hook, end of turn in the transcript).',
+      'Up to 6 threads stay live (configurable). Older idle ones are paused to save memory (~250 MB per Claude process); opening one shows its last screen at once while the agent resumes behind it.',
+      'Mouse clicks inside the sidebar go to Chorus; clicks to the right go to the agent.',
     ],
   },
   {
@@ -341,7 +348,8 @@ const SCENES = [
     cmd: 'Ctrl+Space h  (or chorus handoff --to codex)',
     chrome: '~/projects/cake-shop — chorus · claude',
     caption: 'A handoff is just a new thread with another agent, linked to this one. Pick the agent and press Enter. The current thread stays as it is, so you can switch back.',
-    status: S('claude', 'sonnet', { usage: 62, artifacts: 3, waiting: 1 }),
+    status: S('claude', 'sonnet', { usage: 62, artifacts: 3 }),
+    side: { active: 0 },
     dim: true,
     screenFrom: 2,
     overlay: {
@@ -364,7 +372,8 @@ const SCENES = [
     cmd: 'the real Codex interface',
     chrome: '~/projects/cake-shop — chorus · codex',
     caption: 'Codex is told to fetch the previous thread through MCP and confirm briefly what it learned. You correct it or say go.',
-    status: S('codex', 'default', { usage: 9, artifacts: 3, from: 'claude', title: 'Cake order page (2)', thread: '2/3' }),
+    status: S('codex', 'default', { usage: 9, artifacts: 3, from: 'claude', title: 'Cake order page (2)' }),
+    side: { active: 1, states: { 0: 'idle', 1: 'waiting' } },
     screen:
 `<span class="d">user</span>
 This chat continues the Chorus thread "Cake order page", worked on by
@@ -391,12 +400,46 @@ OK to start with the checkout action?
     ],
   },
   {
+    group: 'Memory',
+    title: 'What Chorus remembers',
+    cmd: 'Ctrl+Space m  (or chorus show)',
+    chrome: '~/projects/cake-shop — chorus',
+    caption: 'While you chat, Chorus writes down each thread in a small database in your project. This is that record. It is the "shared memory": any agent can read it through the chorus MCP tools.',
+    side: { active: 0, states: { 0: 'idle', 1: 'waiting' } },
+    screen:
+`  <span class="ch b">Memory</span> · Cake order page          <span class="d">.chorus/chorus.db</span>
+
+  <span class="d">Chat (18 turns)</span>
+    <span class="d">you   </span> Build an order page with a live price calculator…
+    <span class="cl">claude</span> I'll start with the pricing model, then the page.
+    <span class="d">you   </span> Store prices in cents, not floats.
+    <span class="cl">claude</span> Done. 12 pricing tests pass.
+    <span class="d">…</span>
+    <span class="cl">claude</span> The calculator works. Next I'll wire the checkout.
+
+  <span class="d">Files changed</span>  app/order/pricing.ts, app/order/page.tsx,
+                 components/CakeBuilder.tsx
+  <span class="d">Commands</span>       npm test -- pricing  <span class="ok">→ 12 passed</span>
+  <span class="d">Artifacts</span>      order-flow.html v2, pricing-table.md v1
+  <span class="d">Tokens</span>         41.2k in · 3.1k out · $0.21
+
+  <span class="d">Continued in</span>   <span class="cx">Cake order page (2)</span> with codex
+
+  <span class="ch">p</span> preview what the next agent receives   <span class="ch">⏎</span> full turn   <span class="ch">esc</span> back`,
+    behind: [
+      'Not a separate system: the same rows Chorus collects anyway (turns, tool calls, files, artifacts, usage).',
+      '<code>get_handoff_context</code> builds the next agent\'s summary from exactly these rows; <code>p</code> shows that summary.',
+      'Not stored: the model\'s thinking, full tool output, streaming chunks.',
+    ],
+  },
+  {
     group: 'Limits',
     title: 'Limit warning',
     cmd: '',
     chrome: '~/projects/cake-shop — chorus · claude',
     caption: 'When an agent gets close to its plan limit, the status line turns amber. When the limit is hit, Chorus offers the handoff right away.',
     status: S('claude', 'sonnet', { usage: 100, artifacts: 4, warn: true }),
+    side: { active: 0, states: { 0: 'limit' } },
     dim: true,
     screenFrom: 2,
     overlay: {
@@ -502,10 +545,37 @@ function statusBar(st) {
     <span class="${cls}">${st.agent}${st.model ? ' · ' + st.model : ''}${st.from ? ' <span class="d">from</span> <span class="cl">' + st.from + '</span>' : ''}</span>
     <span>5h <span class="meter ${usageCls}">${meter}</span> ${st.usage}%${st.warn ? ' <span class="er">limit</span>' : ''}</span>
     <span>${st.artifacts} artifacts${st.toast ? ' <span class="ok">' + st.toast + '</span>' : ''}</span>
-    <span>${st.thread || '1/3'} threads${st.waiting ? ' · <span class="wn">' + st.waiting + ' waiting</span>' : ''}</span>
     <span>⌃Space menu</span>
   </div>`;
 }
+
+const THREADS = [
+  { title: 'Cake order page', agent: 'claude', state: 'working' },
+  { title: 'Cake order page (2)', agent: 'codex', state: 'waiting', child: true },
+  { title: 'Stripe webhook', agent: 'codex', state: 'idle' },
+  { title: 'Landing page copy', agent: 'agy', state: 'ended' },
+];
+const STATE = {
+  working: ['<span class="ok">●</span>', 'working'],
+  waiting: ['<span class="wn">◐</span>', '<span class="wn">waiting for you</span>'],
+  idle: ['<span class="d">○</span>', 'idle'],
+  ended: ['<span class="d">○</span>', 'ended'],
+  limit: ['<span class="er">■</span>', '<span class="er">limit · 18:00</span>'],
+};
+function sidebar(sd) {
+  if (!sd) return '';
+  const items = THREADS.map((t, i) => {
+    const st = (sd.states && sd.states[i]) || t.state;
+    const [dot, label] = STATE[st];
+    const agentCls = { claude: 'cl', codex: 'cx', agy: 'ag' }[t.agent];
+    const cls = 'it' + (i === sd.active ? ' active' : '') + (i === sd.focus ? ' focus' : '');
+    return `<div class="${cls}"><span class="t">${t.child ? '<span class="d">↳</span> ' : ''}${dot} ${esc(t.title)}</span>` +
+      `<span class="m">${t.child ? '  ' : ''}  <span class="${agentCls}">${t.agent}</span> · ${label}</span></div>`;
+  }).join('');
+  return `<div class="side"><div class="hd">THREADS · <span class="ch">${i1(sd.active)}</span>/${THREADS.length}</div>${items}` +
+    `<div class="ft"><span class="ch">⌃Space ↑↓</span> move  <span class="ch">⏎</span> open\n<span class="ch">⌃Space n</span> new  <span class="ch">b</span> hide</div></div>`;
+}
+const i1 = i => i + 1;
 
 function overlay(o) {
   if (!o) return '';
@@ -525,7 +595,9 @@ function render() {
     <p class="caption">${esc(s.caption)}</p>
     <div class="term">
       <div class="chrome"><i></i><i></i><i></i><span>${esc(s.chrome)}</span></div>
-      <div class="scroll"><pre class="${s.dim ? 'dimmed' : ''}">${screen}</pre>${statusBar(s.status)}</div>
+      <div class="scroll">${s.side
+        ? `<div class="tbody${s.dim ? ' dimmed' : ''}">${sidebar(s.side)}<pre>${screen}</pre></div>`
+        : `<pre class="${s.dim ? 'dimmed' : ''}">${screen}</pre>`}${statusBar(s.status)}</div>
       ${overlay(s.overlay)}
     </div>
     <div class="behind"><h3>Behind the scenes</h3><ul>${s.behind.map(b => `<li>${b}</li>`).join('')}</ul></div>

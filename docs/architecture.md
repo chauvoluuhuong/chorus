@@ -146,7 +146,10 @@ Each thread is its own agent process in its own PTY, running in the background. 
 virtual screen per thread (a headless terminal emulator), so bringing a thread to the front
 redraws it instantly. The same layer draws the status line.
 
-- `Ctrl+Space t` opens the thread list; `Ctrl+Space 1–9` jumps; `Ctrl+Space [` / `]` cycles.
+- A **sidebar** on the left lists all threads like tabs (title, agent, state). The agent's
+  terminal gets the remaining width; `Ctrl+Space b` hides the sidebar for full width.
+- Open a thread by clicking it (clicks inside the sidebar go to Chorus, clicks to the right go
+  to the agent), with `Ctrl+Space ↑/↓` + Enter, or `Ctrl+Space 1–9` to jump directly.
 - Thread state for the list and status line: `working` (turn in progress), `waiting` (turn
   finished, needs you: Claude `Stop` hook / end of turn in the stream), `ended` (process exited;
   resumable with the CLI's resume flag).
@@ -171,11 +174,13 @@ can be open is memory: one headless `claude` process measured 250–275 MB RSS i
 
 ### Viewing what is stored
 
-There's no separate "shared memory" concept. The store is the shared memory. To see it:
+"Shared memory" is not a separate system. While a thread runs, Chorus writes down its chat
+turns, tool calls, files changed, artifacts and usage in `.chorus/chorus.db` (§3). Every agent
+reads that same file through the chorus MCP tools, which is what makes it shared. To see it:
 
-- `chorus show <thread>`: turns, tool calls, files, artifacts of a thread.
-- **Context preview** (thread menu): exactly what `get_handoff_context` returns for this thread,
-  i.e. what the next agent will see.
+- **Memory view** (`Ctrl+Space m`, or `chorus show <thread>`): the stored record of a thread.
+- **Preview** (`p` in the Memory view): exactly what `get_handoff_context` returns, i.e. what the
+  next agent will receive.
 
 ## 7. Artifacts
 
