@@ -258,16 +258,20 @@ const TEXT_EXT = new Set(['.jsonl', '.json', '.md', '.txt', '.log', '.toml', '.y
 const MAX_COPY = 5 * 1024 * 1024;
 // Only session transcripts are worth keeping. Config, caches, bundled skills and
 // plugin files are user-specific or noise, so they are listed but never copied.
-const COPY_PATTERN = /(^|\/)(projects|sessions)\/.*\.jsonl$|(^|\/)brain\/[^/]+\/\.system_generated\/logs\/transcript\.jsonl$/;
+const COPY_PATTERN = /^-[^/]*\/[^/]+\.jsonl$|(^|\/)(projects|sessions)\/.*\.jsonl$|(^|\/)brain\/[^/]+\/\.system_generated\/logs\/transcript\.jsonl$/;
 
 // Record which files the CLI created/changed in its home dir, and copy the
 // small text ones (transcripts, session indexes) into the fixture.
-function captureHomeChanges(before, dest) {
+function captureHomeChanges(before, dest, ws) {
+  // Claude keeps every project's sessions in one folder: only report this workspace's own,
+  // so other projects' names never end up in fixtures.
+  const slugs = [ws, fs.realpathSync(ws)].map(w => w.replace(/[^a-zA-Z0-9]/g, '-'));
+  const mine = rel => cli !== 'claude' || slugs.some(s => rel.startsWith(s));
   const changes = [];
   for (const root of adapter.homeDirs) {
     const after = snapshot(root);
     for (const [rel, sig] of Object.entries(after)) {
-      if (before[root][rel] === sig) continue;
+      if (before[root][rel] === sig || !mine(rel)) continue;
       const abs = path.join(root, rel);
       const size = Number(sig.split(':')[1]);
       const copied = COPY_PATTERN.test(rel) && TEXT_EXT.has(path.extname(rel)) && size <= MAX_COPY;
@@ -391,7 +395,7 @@ for (const name of names) {
     console.log(`exit=${r.exitCode}${r.timedOut ? ' (timeout)' : ''} ${r.durationMs}ms`);
   }
 
-  const homeChanges = captureHomeChanges(before, dest);
+  const homeChanges = captureHomeChanges(before, dest, ws);
   const mcpLog = fs.existsSync(mcpLogFile) ? parseLines(fs.readFileSync(mcpLogFile, 'utf8')) : [];
   const checks = scenario.checks({ runs, mcpLog, threadId, ws });
   if (fs.existsSync(mcpLogFile)) writeRedacted(mcpLogFile, fs.readFileSync(mcpLogFile, 'utf8'));

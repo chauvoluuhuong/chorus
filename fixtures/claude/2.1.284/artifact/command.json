@@ -1,0 +1,24 @@
+[
+  {
+    "bin": "claude",
+    "args": [
+      "-p",
+      "Create the file .chorus/artifacts/probe/hello.md (create folders as needed) containing a level-1 heading \"Probe artifact\" and one short sentence. Then reply with the word: done",
+      "--session-id",
+      "14c5e74a-37b5-480f-bfb2-33164ddf247d",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--permission-mode",
+      "acceptEdits",
+      "--model",
+      "haiku",
+      "--strict-mcp-config",
+      "--mcp-config",
+      "{\"mcpServers\":{\"chorus\":{\"command\":\"node\",\"args\":[\"~/chorus/tools/probe/probe-mcp.mjs\",\"--log\",\"~/chorus/fixtures/claude/2.1.284/artifact/mcp-log.jsonl\",\"--thread\",\"t_probe_artifact\"]}}}",
+      "--allowedTools",
+      "mcp__chorus__probe_get_context,Bash(echo *),Write,Edit"
+    ],
+    "cwd": "/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-probe-claude-artifact-ZizXbg"
+  }
+]

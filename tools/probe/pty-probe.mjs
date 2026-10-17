@@ -60,7 +60,9 @@ let answered = 0;
 const poke = setInterval(() => {
   const tail = strip(screen).slice(-600);
   if (answered < 3 && /trust|Do you want|Yes, continue|Press enter|Allow/i.test(tail) && !tail.includes(EXPECT)) {
-    term.write('\r');
+    // Claude's folder-trust dialog may start on "No, exit": move up to "Yes" first (clamped at the top)
+    if (cli === 'claude' && /trust/i.test(tail)) term.write('\x1b[A');
+    setTimeout(() => term.write('\r'), 300);
     answered++;
   }
 }, 2500);
@@ -76,7 +78,8 @@ function findTranscript() {
       else if (/\.jsonl$/.test(e.name) && fs.statSync(p).mtimeMs > t0 - 1000) out.push(p);
     }
   };
-  walk(roots[cli]);
+  // only this workspace's own transcripts (other Claude sessions on the machine write here too)
+  walk(cli === 'claude' ? path.join(roots.claude, ws.replace(/[^a-zA-Z0-9]/g, '-')) : roots[cli]);
   return out.filter(p => (cli === 'agy' ? /logs\/transcript\.jsonl$/.test(p) : true));
 }
 
@@ -101,7 +104,8 @@ term.write('\x03');
 await new Promise(r => setTimeout(r, 1500));
 try { term.kill(); } catch {}
 
-const redact = s => s.split(os.homedir()).join('~').replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '<email>');
+const KEYS = /("(?:organizationUuid|organization_uuid|accountUuid|account_uuid|userId|user_id|email|userEmail|account_id|accountId|creator_user_id|creator_account_id)"\s*:\s*)"[^"]*"/g;
+const redact = s => s.replace(KEYS, '$1"<redacted>"').split(os.homedir()).join('~').replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '<email>');
 fs.writeFileSync(path.join(dest, 'screen.txt'), redact(strip(screen)).slice(-8000));
 fs.writeFileSync(path.join(dest, 'events.json'), JSON.stringify({ version, ws: redact(ws), answeredStartupPrompts: answered, transcript: found && { file: redact(found.file), msUntilVisible: found.ms }, bytes: screen.length, aliveAtCapture }, null, 2));
 if (found) fs.writeFileSync(path.join(dest, 'transcript.jsonl'), redact(transcriptWhileRunning));

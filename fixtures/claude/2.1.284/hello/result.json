@@ -1,0 +1,46 @@
+{
+  "cli": "claude",
+  "version": "2.1.284 (Claude Code)",
+  "scenario": "hello",
+  "date": "2026-10-17T05:17:11.348Z",
+  "platform": "darwin 27.0.0 arm64",
+  "node": "v26.10.0",
+  "scrubbedEnv": [
+    "CLAUDECODE",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_PID"
+  ],
+  "passed": true,
+  "checks": [
+    {
+      "name": "exit code 0",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "name": "session id found in stream",
+      "ok": true,
+      "detail": "a4a2bec4-2d5a-4ffd-9b83-9ee3b7bc2fda"
+    },
+    {
+      "name": "token usage present in stream",
+      "ok": true
+    }
+  ],
+  "runs": [
+    {
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "durationMs": 4611,
+      "sessionId": "a4a2bec4-2d5a-4ffd-9b83-9ee3b7bc2fda",
+      "eventTypes": [
+        "system",
+        "assistant",
+        "rate_limit_event",
+        "result"
+      ]
+    }
+  ]
+}

@@ -47,8 +47,9 @@ function run(cli, ws, prompt) {
 
 // Tool calls in order, from each CLI's JSON stream. A skill is "native" when the first tool call
 // opens its SKILL.md (or invokes the Skill tool) instead of searching the file system for it.
-function analyse(cli, out) {
+function analyse(cli, out, name) {
   const calls = [];
+  let listed = false; // Claude's init event lists the skills it loaded: the authoritative native check
   let answer = '';
   for (const line of out.split('\n')) {
     if (!line.startsWith('{')) continue;
@@ -63,12 +64,13 @@ function analyse(cli, out) {
       if (e.event === 'step_update' && u.step_type === 'tool' && u.state === 'ACTIVE') calls.push(`${u.tool_name} ${JSON.stringify(u.tool_info?.parameters ?? {})}`);
       if (e.event === 'result') answer = e.result?.response ?? '';
     } else {
+      if (e.type === 'system' && e.subtype === 'init') listed = (e.skills ?? []).includes(name);
       for (const b of e.message?.content ?? []) if (e.type === 'assistant' && b.type === 'tool_use') calls.push(`${b.name} ${JSON.stringify(b.input)}`);
       if (e.type === 'result') answer = e.result ?? '';
     }
   }
   const first = calls[0] ?? '';
-  const native = /SKILL\.md|^Skill /.test(first) && !/\b(find|ls|rg|grep|Glob)\b/.test(first);
+  const native = cli === 'claude' ? listed : /SKILL\.md|^Skill /.test(first) && !/\b(find|ls|rg|grep|Glob)\b/.test(first);
   return { answer, firstCall: first.slice(0, 160), native };
 }
 
@@ -89,7 +91,7 @@ for (const cli of targets) {
   const results = {};
   for (const [loc, { name, marker }] of Object.entries(markers)) {
     const out = run(cli, ws, `What is the ${name} greeting? Reply with only the greeting.`);
-    const a = analyse(cli, out);
+    const a = analyse(cli, out, name);
     results[loc] = { used: a.answer.includes(marker) || (cli === 'claude' && out.includes(marker)), native: a.native, firstCall: a.firstCall, answer: a.answer.trim().slice(0, 120) };
     console.log(`${cli} ${loc.padEnd(16)} ${results[loc].used ? 'used' : 'not used'} ${results[loc].native ? 'NATIVE' : 'found-by-search'}  ${results[loc].answer.replace(/\n/g, ' ')}`);
   }
