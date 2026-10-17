@@ -1,0 +1,32 @@
+{
+  "name": "chorus-cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Work across AI coding CLIs: handoff, threads, skills",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "bin": {
+    "chorus": "src/cli/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --test-reporter=spec \"test/**/*.test.ts\"",
+    "test:l1": "node --test --test-reporter=spec \"test/contract/*.test.ts\"",
+    "smoke": "node test/smoke/run.ts",
+    "postinstall": "node scripts/fix-pty.mjs",
+    "probe": "node tools/probe/probe.mjs",
+    "probe:pty": "node tools/probe/pty-probe.mjs",
+    "probe:skills": "node tools/probe/skills-probe.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "node-pty": "^1.1.0",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.7"
+  }
+}
