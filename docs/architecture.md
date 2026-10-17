@@ -105,6 +105,8 @@ result. Plus fast tests with a fake agent for every tool.
 
 ### Phase 4 · chorus CLI app
 
+Plan, spike results and the D1 decision: [phase4.md](phase4.md).
+
 The terminal app from the [mockup](mockups/chorus-cli.html): thread sidebar, the real agent screen
 in the middle, status line, handoff, memory view, and display of tool calls, artifacts and
 **approval cards**.
@@ -276,7 +278,7 @@ user: Ctrl+Space h → pick codex        (or: chorus handoff --to codex)
 
 | # | Question | Proposal |
 |---|---|---|
-| D1 | Language for core, MCP server and CLI app | **Decided: TypeScript on Node 22+ for Phases 1–3** (adapters, store, MCP server; fastest while the CLI formats are still moving; official MCP SDK; `node:sqlite` built in). Revisit at the start of Phase 4: a Rust rewrite of the core is an option for a single binary, `npm` distribution via per-platform packages (as `@openai/codex` does) and a Tauri sidecar. Keep the core free of Node-specific shortcuts and `node-pty` behind a small interface so a port stays cheap |
+| D1 | Language for core, MCP server and CLI app | **Decided: TypeScript on Node 22+ for Phases 1–3** (adapters, store, MCP server; fastest while the CLI formats are still moving; official MCP SDK; `node:sqlite` built in). **Phase 4: stay on TypeScript** (spike: PTY + virtual screens + sidebar + switching works, see [phase4.md](phase4.md)); packaging is decided by a binary spike in P4.8, with a Rust port of only the thin app layer as the fallback. Keep `node-pty` behind a small interface so a port stays cheap |
 | D2 | Per-session MCP config for agy | **Decided:** workspace `.agents/mcp_config.json`, verified with agy 1.4.0 |
 | D3 | Desktop technology | Decide at Phase 5; it only needs `chorus serve` |
 | D4 | Provider terms (agy subscription orchestration, Claude and Codex account use) | Check before selling; see integration docs |

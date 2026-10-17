@@ -62,9 +62,9 @@ node tools/probe/probe.mjs <cli>           # recapture fixtures after a CLI upda
 Phases 1–3 are built and their L3 proofs pass with the real Claude Code 2.1.284, Codex 0.163.0 and
 agy 1.4.0 (see `docs/roadmap.md`).
 
-1. Phase 4 (chorus CLI app): decide TypeScript vs Rust at its start (architecture D1), then PTY threads
-   with virtual screens, sidebar, live transcript tailing, handoff, approvals. Approval-card research
-   (Claude hooks / permission-prompt tool, Codex, agy) is part of it.
+1. Phase 4 (chorus CLI app): plan and the D1 decision (TypeScript) are in `docs/phase4.md`; the spike is
+   in `tools/spike/`. Start with P4.1 (thread host + compositor). Approval-card research (hooks per CLI)
+   comes before P4.6.
 2. D4 (provider terms) before selling.
 
 Known gaps in what exists: nothing tails a transcript live yet (Phase 4); the `skills` table in

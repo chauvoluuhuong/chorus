@@ -34,11 +34,16 @@ There is no fixed deadline. Next concrete steps are listed in [CLAUDE.md](../CLA
 
 ## Phase 4 · chorus CLI app
 
-- [ ] Threads in PTYs with virtual screens, sidebar, status line, menu key
-- [ ] Handoff, memory view, artifacts view, tool-call display
-- [ ] Approval cards (research: Claude hooks / permission-prompt tool, Codex, agy)
-- [ ] Limit warning and handoff suggestion
-- [ ] `chorus doctor`, `chorus trace`
+Plan: [phase4.md](phase4.md). D1 decided: TypeScript. Spike done (`tools/spike/`).
+
+- [ ] P4.1 Thread host + compositor (sidebar, status line, resize, switching)
+- [ ] P4.2 Interactive launchers (first prompt + per-thread MCP + skills sync) for each CLI
+- [ ] P4.3 Live transcript tailing into the store
+- [ ] P4.4 Thread state (`working` / `waiting` / `needs approval` / `ended`)
+- [ ] P4.5 Handoff action with "context not loaded" warning
+- [ ] P4.6 Approval cards (research first: hooks per CLI, then keystroke fallback)
+- [ ] P4.7 Memory view, artifacts view, tool-call strip, limit warning, `doctor`, `trace`, `threads`, `show`
+- [ ] P4.8 Packaging spike: Node SEA / Bun compile / per-platform npm packages; binary go/no-go
 - [ ] **Proof:** test drives the app in a PTY: two threads, switch, handoff, approval from a card, artifact listed
 
 ## Phase 5 · Desktop app
