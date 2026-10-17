@@ -14,7 +14,7 @@ scripted.
 
 Rules:
 
-- A milestone is done only when its **L3 smoke test passes** with the real CLIs. Passing L1/L2
+- A phase is done only when its **L3 smoke test passes** with the real CLIs. Passing L1/L2
   alone isn't enough. (v1 had a fully "green" suite that drove a test harness, and the real app
   didn't work.)
 - Every L3 run saves its raw capture. When it fails, the capture becomes a new fixture and an L1
@@ -39,12 +39,12 @@ Rules:
    Review `fixtures/` (emails and account ids are redacted, but check), commit, push.
 2. In the cloud, L1 parsers and L2 flows get written against those fixtures; L3 runs for Claude
    (and Codex if a key is provided).
-3. Each milestone ends with an L3 smoke script you run on the Mac:
-   `npm run smoke -- --agents claude,codex,agy` (to be built in M4). It prints pass/fail and saves
+3. Each phase ends with an L3 smoke script you run on the Mac:
+   `npm run smoke -- --agents claude,codex,agy` (built with the Phase 1 proof). It prints pass/fail and saves
    captures to attach when something fails.
 
 ## What's in place now
 
 - `tools/probe/`: the L3 capability probe (5 scenarios per CLI).
 - `fixtures/claude/2.1.301/`: real Claude Code output for all 5 scenarios.
-- L1/L2 tooling (test runner, `fake-agent`) arrives with M1/M2.
+- L1 tooling (test runner, fixture tests) arrives with Phase 1; `fake-agent` with Phase 3.

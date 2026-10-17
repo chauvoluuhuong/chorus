@@ -1,73 +1,46 @@
-# Roadmap (v2)
+# Roadmap
 
-Each milestone ends with an **exit check that uses the real CLIs**. Nothing moves on until it
-passes. See [testing.md](testing.md).
+The plan and the reasoning behind each phase are in [architecture.md §2](architecture.md#2-build-plan).
+This file tracks progress. A phase is done only when its e2e proof passes with the real CLIs.
 
-## M0 · Capability check *(in progress)*
+## Phase 1 · Context capture
 
-Know exactly what each CLI offers before designing around it.
-
-- [x] Probe tool (`tools/probe/`): hello, MCP, shell, artifact, resume scenarios
-- [x] Claude Code verified, fixtures committed, [doc](integrations/claude-code.md)
-- [x] Codex: flags + per-session MCP spawn verified ([doc](integrations/codex.md))
-- [ ] Codex: probe on a logged-in machine, commit fixtures
-- [ ] Agy: probe on the Mac, commit fixtures, settle per-session MCP (D2)
+- [x] Probe tool (`tools/probe/`): hello, MCP, shell, artifact, resume scenarios (headless)
+- [x] Claude Code headless verified, fixtures committed
+- [x] Codex: flags + per-session MCP spawn verified
 - [ ] Decide D1 (language)
+- [ ] Extend the probe to interactive (PTY) sessions: hooks, transcript tail
+- [ ] Codex: model turn verified (needs login: `OPENAI_API_KEY` in the cloud, or the Mac)
+- [ ] Agy: probe on the Mac, settle per-session MCP (D2)
+- [ ] Integration docs rewritten as "how to get each data item" manuals
+- [ ] Adapter code per CLI + fixture tests
+- [ ] **Proof:** scripted real session per CLI; extracted turns, tool calls, usage and artifact match
 
-**Exit:** all three integration docs are ✅ for: first prompt, per-session MCP, session id, resume,
-live events, tool calls, token usage.
+## Phase 2 · Skills sync
 
-## M1 · core: store + events + adapters
+- [ ] Per-CLI research: locations, format, discovery, invocation, default skills
+- [ ] `integrations/skills.md`
+- [ ] Sync design (source of truth, write-out, Chorus-managed marker, removal)
+- [ ] Fallback for CLIs without reliable native loading (first-prompt index / `AGENTS.md` / MCP)
+- [ ] **Proof:** marker skill synced to all three CLIs and used by each
 
-- Store (SQLite WAL + `.chorus/threads/…` files): threads, turns, tool calls, usage, artifacts ([architecture §3](architecture.md#3-what-chorus-stores))
-- Normalized event model
-- Adapters per CLI: build launch argv, parse stream lines, locate/tail transcript, detect limit signals
-- L1 tests against every committed fixture
+## Phase 3 · MCP server
 
-**Exit:** every fixture parses into the expected events; unknown events are kept, not fatal.
+- [ ] Store (SQLite WAL) and capture pipeline
+- [ ] MCP tools: `get_handoff_context`, `get_thread_turns`, `list_threads`, `list_artifacts`, skills tools
+- [ ] Fake agent + fast tests for every tool
+- [ ] **Proof:** Claude thread captured → Codex thread loads it and summarizes correctly
 
-## M2 · chorus-mcp + harness
+## Phase 4 · chorus CLI app
 
-- Stdio MCP server with the read-only v1 tools ([architecture §5](architecture.md#5-mcp-tools-v1)), bound by `--thread`; `get_handoff_context` digest builder
-- `fake-agent` CLI built from fixture behaviour
-- L2 tests: fake agent calls every tool, data lands in the store
+- [ ] Threads in PTYs with virtual screens, sidebar, status line, menu key
+- [ ] Handoff, memory view, artifacts view, tool-call display
+- [ ] Approval cards (research: Claude hooks / permission-prompt tool, Codex, agy)
+- [ ] Limit warning and handoff suggestion
+- [ ] `chorus doctor`, `chorus trace`
+- [ ] **Proof:** test drives the app in a PTY: two threads, switch, handoff, approval from a card, artifact listed
 
-**Exit (L3):** real Claude and Codex call `get_handoff_context` through the MCP server and get
-the digest of a stored thread.
+## Phase 5 · Desktop app
 
-## M3 · chorus-cli: threads, switching, capture, artifacts
-
-- `chorus`, `chorus new`, `run <agent> [--thread]` (PTY passthrough, real TUI), `threads`, `show`
-- Several threads at once, virtual screen per thread, status line, menu key, thread switcher
-- Raw capture per thread + live structured data: turns, tool calls, usage (Claude hooks/transcript first)
-- Artifact folder told to the agent at start + file watcher; `chorus artifacts --open`
-- `chorus doctor`, `chorus trace`
-
-**Exit (L3):** a Claude thread and a Codex thread running side by side; switching keeps both
-screens intact; turns, tool calls, token usage and an artifact show up in `chorus show` / `artifacts`.
-
-## M4 · Handoff
-
-- `chorus handoff --to <agent>`: new thread with parent link + fixed first prompt ([architecture §6](architecture.md#6-handoff--new-thread-that-loads-the-previous-one))
-- "Context not loaded" detection and retry
-- `npm run smoke` script for the Mac
-
-**Exit (L3):** Claude → Codex → Agy → Claude as a chain of threads; each new agent calls
-`get_handoff_context`, summarizes correctly and continues the task.
-
-## M5 · Limit-aware handoff
-
-- Read limit signals (Claude `rate_limit_event` utilization, agy `/usage` + `AGY_ERROR`, Codex TBD)
-- Suggest a handoff before the limit (e.g. ≥ 90%) and offer it when the limit hits
-
-**Exit (L3):** simulated limit in L2 + one real captured limit event per CLI handled.
-
-## M6 · Ship chorus-cli
-
-- Package (`npm i -g chorus-cli`), README, quick start, troubleshooting page from `doctor`
-- Provider-terms check done (D4)
-
-## M7 · Chorus desktop
-
-- `chorus-cli serve` local API, desktop UI over it (threads, live run view, artifact panel, handoff button)
-- Design reference: [archive/ui-mockup-v3.html](archive/ui-mockup-v3.html)
+- [ ] `chorus serve` local API
+- [ ] Desktop UI over it
