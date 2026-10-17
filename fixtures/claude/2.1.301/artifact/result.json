@@ -1,0 +1,40 @@
+{
+  "cli": "claude",
+  "version": "2.1.301 (Claude Code)",
+  "scenario": "artifact",
+  "date": "2026-10-16T04:12:10.195Z",
+  "platform": "linux 6.18.44-fc-v139 x64",
+  "node": "v22.22.0",
+  "scrubbedEnv": [
+    "CLAUDECODE",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_PID"
+  ],
+  "passed": true,
+  "checks": [
+    {
+      "name": "artifact file written at requested path",
+      "ok": true
+    }
+  ],
+  "runs": [
+    {
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "durationMs": 8473,
+      "sessionId": "8ba5dfb5-5518-47ff-b5ac-c7a41e5b638c",
+      "eventTypes": [
+        "active_goal",
+        "autocompact_state",
+        "system",
+        "stream_event",
+        "assistant",
+        "rate_limit_event",
+        "user",
+        "result"
+      ]
+    }
+  ]
+}

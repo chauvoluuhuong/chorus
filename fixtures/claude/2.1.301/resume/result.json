@@ -1,0 +1,70 @@
+{
+  "cli": "claude",
+  "version": "2.1.301 (Claude Code)",
+  "scenario": "resume",
+  "date": "2026-10-16T04:12:19.985Z",
+  "platform": "linux 6.18.44-fc-v139 x64",
+  "node": "v22.22.0",
+  "scrubbedEnv": [
+    "CLAUDECODE",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_PID"
+  ],
+  "passed": true,
+  "checks": [
+    {
+      "name": "first run produced a session id",
+      "ok": true,
+      "detail": "98f66d27-5f07-4bb2-b57e-ab05a9f2a26b"
+    },
+    {
+      "name": "second run exit code 0",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "name": "resumed run kept the same session id",
+      "ok": true,
+      "detail": "98f66d27-5f07-4bb2-b57e-ab05a9f2a26b"
+    },
+    {
+      "name": "resumed run remembered context",
+      "ok": true
+    }
+  ],
+  "runs": [
+    {
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "durationMs": 4836,
+      "sessionId": "98f66d27-5f07-4bb2-b57e-ab05a9f2a26b",
+      "eventTypes": [
+        "active_goal",
+        "autocompact_state",
+        "system",
+        "stream_event",
+        "assistant",
+        "rate_limit_event",
+        "result"
+      ]
+    },
+    {
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "durationMs": 4929,
+      "sessionId": "98f66d27-5f07-4bb2-b57e-ab05a9f2a26b",
+      "eventTypes": [
+        "active_goal",
+        "autocompact_state",
+        "system",
+        "stream_event",
+        "assistant",
+        "rate_limit_event",
+        "result"
+      ]
+    }
+  ]
+}
