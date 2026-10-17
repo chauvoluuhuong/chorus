@@ -5,7 +5,9 @@
 | **Status** | ✅ Verified with the capability probe |
 | **Version tested** | `2.1.301` on Linux (cloud container), 2026-10-16 |
 | **Fixtures** | [`fixtures/claude/2.1.301/`](../../fixtures/claude/2.1.301/) |
-| **Re-verify** | `node tools/probe/probe.mjs claude --model haiku` |
+| **Adapter** | `src/core/adapters/claude.ts` (`parseStream`, `parseTranscript`), tests in `test/contract/` |
+| **Re-verify** | `node tools/probe/probe.mjs claude --model haiku`; interactive: `node tools/probe/pty-probe.mjs claude` (hooks via `--settings`) |
+| **Pending** | On the Mac the Claude login expired (`claude auth status` → `loggedIn: false`): run `claude auth login`, then the interactive probe and `npm run smoke -- --agents claude` |
 
 Legend: ✅ verified by a probe run · 📄 from `claude --help` or docs, not yet exercised · ❓ unknown.
 

@@ -7,9 +7,10 @@ probe, diff the new fixtures against the committed ones, and update the doc.
 
 | CLI | Doc | Status | Version checked |
 |---|---|---|---|
-| Claude Code | [claude-code.md](claude-code.md) | ✅ verified (all probe scenarios pass) | 2.1.301 |
-| OpenAI Codex | [codex.md](codex.md) | 🟡 flags + MCP spawn verified, no model turn yet | 0.163.0 |
-| Antigravity | [antigravity-agy.md](antigravity-agy.md) | 🔴 unverified (needs the Mac) | n/a (changelog 1.3.6) |
+| Claude Code | [claude-code.md](claude-code.md) | ✅ headless verified; interactive pending a login | 2.1.301 |
+| OpenAI Codex | [codex.md](codex.md) | ✅ headless + interactive verified | 0.163.0 |
+| Antigravity | [antigravity-agy.md](antigravity-agy.md) | ✅ headless + interactive verified | 1.4.0 |
+| Skills (all three) | [skills.md](skills.md) | ✅ Codex + agy; Claude pending a login | see doc |
 
 ## Capability matrix
 
@@ -18,16 +19,17 @@ What Chorus needs from each CLI, and how each provides it.
 | Need | Claude Code | Codex | Antigravity |
 |---|---|---|---|
 | Start with a first prompt (inject envelope) | ✅ `claude "<p>"` / `-p` | 📄 `codex "<p>"` / `exec` | 📄 `agy -i "<p>"` / `-p` |
-| Standing instructions | 📄 `--append-system-prompt` | ❓ (`AGENTS.md`) | 📄 rules / `AGENTS.md` |
-| Per-session MCP server (thread binding) | ✅ `--mcp-config '<json>'` + `--strict-mcp-config` | ✅ `-c mcp_servers.chorus.*` | ❓ workspace `.agents/mcp_config.json`? |
-| Choose / learn session id | ✅ `--session-id <uuid>` (we choose) | 📄 `thread_id` in `--json` | 👀 `conversation_id` in `init` |
-| Resume | ✅ `--resume <id>` | 📄 `exec resume <id>` | 🌐 `--conversation <id>` |
-| Live structured events | ✅ `--output-format stream-json --verbose` | 📄 `exec --json` | 👀 `--output-format stream-json` |
-| Transcript of interactive sessions | ✅ `~/.claude/projects/<slug>/<id>.jsonl` | ✅ SQLite in `CODEX_HOME` (schema ❓) | 🌐 `…/brain/<id>/.system_generated/logs/transcript.jsonl` |
+| Standing instructions | 📄 `--append-system-prompt` | 📄 `AGENTS.md` (no flag) | 📄 rules / `AGENTS.md` |
+| Per-session MCP server (thread binding) | ✅ `--mcp-config '<json>'` + `--strict-mcp-config` | ✅ `-c mcp_servers.chorus.*` + `default_tools_approval_mode="approve"` | ✅ workspace `.agents/mcp_config.json` |
+| Choose / learn session id | ✅ `--session-id <uuid>` (we choose) | ✅ `thread_id` in `--json` | ✅ `conversation_id` in `init` |
+| Resume | ✅ `--resume <id>` | ✅ `exec resume <id>` | ✅ `--conversation <id>` |
+| Live structured events | ✅ `--output-format stream-json --verbose` | ✅ `exec --json` | ✅ `--output-format stream-json` |
+| Transcript of interactive sessions | ✅ `~/.claude/projects/<slug>/<id>.jsonl` | ✅ `~/.codex/sessions/Y/M/D/rollout-*-<id>.jsonl` (tail works live) | ✅ `~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript.jsonl` (tail works live) |
 | Live hooks for interactive sessions | ✅ `--settings` hooks | 📄 hooks (need trust) | 📄 `hooks.json` |
-| Tool calls | ✅ `tool_use` / `tool_result` | 📄 `item.*` | 👀 `step_update` |
-| Token usage | ✅ `usage`, `modelUsage`, `total_cost_usd` | 📄 `turn.completed.usage` | 🌐 `result.usage` |
-| Plan-limit signal | ✅ `rate_limit_event` (utilization + resetsAt) | ❓ | 📄 `AGY_ERROR` / `/usage` |
+| Tool calls | ✅ `tool_use` / `tool_result` | ✅ `item.*` (`command_execution`, `mcp_tool_call`) | ✅ `step_update` (`step_type: tool`) |
+| Token usage | ✅ `usage`, `modelUsage`, `total_cost_usd` | ✅ `turn.completed.usage` | ✅ `result.usage`, per-step `usage` |
+| Plan-limit signal | ✅ `rate_limit_event` (utilization + resetsAt) | ✅ rollout `token_count.rate_limits.primary.used_percent` (hit behaviour ❓) | 📄 `AGY_ERROR` / `/usage` |
+| Project skills folder | 📄 `.claude/skills` | ✅ `.agents/skills`, `.codex/skills` | ✅ `.agents/skills` |
 
 Legend: ✅ verified by running it · 👀 observed by the old prototype · 📄 official help/docs · 🌐 community source · ❓ unknown.
 
@@ -54,6 +56,13 @@ node tools/probe/probe.mjs codex
 node tools/probe/probe.mjs agy
 node tools/probe/probe.mjs agy --scenario mcp       # one scenario
 ```
+
+## Other probes
+
+| Tool | Purpose |
+|---|---|
+| `tools/probe/pty-probe.mjs <cli>` | Starts the real TUI in a PTY, answers the trust prompt, and records whether the transcript is readable while it runs (Claude: also hook events) |
+| `tools/probe/skills-probe.mjs [cli…]` | Writes marker skills into candidate folders and checks which the CLI uses (results: `fixtures/skills/`) |
 
 ## Rules for adapter code
 

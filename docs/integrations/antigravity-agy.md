@@ -5,7 +5,8 @@
 | **Status** | ✅ Headless `-p` verified on the Mac: all 5 probe scenarios pass (15/15 checks). Interactive TUI not probed |
 | **Version tested** | `agy 1.4.0` on macOS, 2026-10-17 (a first run on 1.3.6 also passed; agy **auto-updated** between the runs) |
 | **Fixtures** | `fixtures/agy/1.4.0/{hello,mcp,shell,artifact,resume}/` (only `brain/<id>/…/transcript.jsonl` is copied from `~/.gemini`) |
-| **To verify** | Interactive (PTY) session; quota-exhausted message; ToS answer |
+| **Adapter** | `src/core/adapters/agy.ts` (`parseStream`, `parseTranscript`), tests in `test/contract/` |
+| **To verify** | Quota-exhausted message; approval prompts in the TUI; ToS answer |
 
 Legend: ✅ verified by running it · 📄 official changelog/docs · 🌐 community source only · ❓ unknown.
 
@@ -82,6 +83,15 @@ Tool names seen: `view_file` (`AbsolutePath`), `run_command` (`CommandLine`; out
 | Other per-conversation files | `annotations/<id>.pbtxt`, `presence/<id>.lock`, `conversation_summaries.db`, `conversations/`, `cli.log` | ✅ seen, ❓ content |
 | IDE (not CLI) data | `~/.gemini/antigravity/` | 👀 |
 
+### Interactive TUI (verified with `tools/probe/pty-probe.mjs`) ✅
+
+- `agy -i "<prompt>"` in a PTY. A new folder shows "Do you trust the contents of this project?":
+  Enter on "Yes, I trust this folder". The banner shows the signed-in account (redact it in fixtures).
+- `brain/<conversation-id>/.system_generated/logs/transcript.jsonl` is written **while the TUI runs**:
+  readable 9 s after launch, including the tool call and its result. Tail it. Fixture:
+  `fixtures/agy/1.4.0/pty/`. Ctrl+C once interrupts the running tool; twice exits.
+- Conversation id for `--conversation`: the `brain/<id>` folder name.
+
 ## 5. Errors, exit codes, limits
 
 | Signal | Meaning | Source |
@@ -118,6 +128,7 @@ billing may be the safer path.
 - [x] `.agents/mcp_config.json` is picked up (mcp scenario passes) → D2 settled
 - [x] Transcript path and `result` / `usage` field names
 - [x] `--conversation <id>` resume keeps the id
-- [ ] Interactive (PTY) session: transcript tail while the TUI runs, approval prompts
+- [x] Interactive (PTY) session: transcript tail while the TUI runs
+- [ ] Approval prompts in the TUI (Phase 4 research)
 - [ ] Capture one quota-exhausted run when it happens
 - [ ] Get a clear ToS answer (§6)

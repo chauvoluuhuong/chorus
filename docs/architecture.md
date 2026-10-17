@@ -60,8 +60,9 @@ to drive interactive sessions, not only headless); write one extraction adapter 
 file, run a command, write an artifact). The test asserts that the extracted turns, tool calls,
 usage and artifact match what happened. Claude and Codex run in the cloud; agy on the Mac.
 
-**Status:** Claude headless verified (all probe scenarios pass). Codex: flags and MCP spawn
-verified, no model turn yet. Agy: not verified. Interactive mode: not started for any CLI.
+**Status:** all three CLIs verified headless; Codex and agy verified interactive (transcript tail);
+Claude interactive pending a login. Adapters in `src/core/adapters/` with L1 fixture tests. Smoke proof:
+`npm run smoke -- --phase 1`.
 
 ### Phase 2 · How to sync skills, and make the agents use them
 

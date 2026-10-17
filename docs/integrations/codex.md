@@ -5,7 +5,8 @@
 | **Status** | ✅ Headless `exec` verified on a logged-in Mac: all 5 probe scenarios pass (15/15 checks). Interactive TUI not probed yet |
 | **Version tested** | `codex-cli 0.163.0` (npm `@openai/codex`) on Linux 2026-10-16 (flags) and macOS 2026-10-17 (model turns) |
 | **Fixtures** | `fixtures/codex/0.163.0/{hello,mcp,shell,artifact,resume}/` (only session transcripts are copied from `~/.codex`) |
-| **To verify** | Interactive (PTY) session; plan-limit message; agy-style approval handling |
+| **Adapter** | `src/core/adapters/codex.ts` (`parseStream`, `parseTranscript`), tests in `test/contract/` |
+| **To verify** | Plan-limit message; approval prompts in the TUI |
 
 Legend: ✅ verified by running it · 📄 from `codex --help` / docs, not exercised · ❓ unknown.
 
@@ -85,9 +86,21 @@ Session files on disk:
 | App server | `codex app-server` (experimental) JSON-RPC API; may be the stable way to read threads | 📄 worth evaluating |
 | Hooks | Exist (`--dangerously-bypass-hook-trust`), require "hook trust" | 📄 |
 
+### Interactive TUI (verified with `tools/probe/pty-probe.mjs`) ✅
+
+- `codex "<prompt>"` in a PTY. First start in a new folder asks to trust it: Enter (`allow`) continues.
+- The rollout file `~/.codex/sessions/…/rollout-<time>-<thread_id>.jsonl` is written **while the TUI
+  runs**: it was readable 7.5 s after launch, with the user turn, the `CommandExecution` result and
+  the token counts. Tail it for live data. Fixture: `fixtures/codex/0.163.0/pty/`.
+- On exit the TUI prints `codex resume <thread_id>` and a token summary. The thread id is also in
+  `session_meta.payload.id`.
+- Hooks and the app-server were not needed; the rollout tail is enough for turns, tool calls and usage.
+
 ## 5. Tool usage, tokens, limits
 
 - Tool calls: `command_execution` and `mcp_tool_call` items, with start and completion events. ✅
+- Rollout equivalents: `event_msg/item_completed` with `item.type` `CommandExecution` (`command` array, `aggregated_output`, `exit_code`, `duration`) or `McpToolCall` (`server`, `tool`, `arguments`, `status`, `result.content[]`). ✅
+- Plan-limit reading: `event_msg/token_count.rate_limits.primary.used_percent` in the rollout. ✅ (field seen, limit behaviour ❓)
 - Tokens: `turn.completed.usage` per turn (fields above). ✅ Note `input_tokens` includes cached tokens.
 - Plan limits: message format unknown. ❓ Capture when it happens.
 
@@ -111,7 +124,7 @@ Session files on disk:
 - [x] Record the real `--json` event names and the `usage` fields
 - [x] Find where the thread id appears and confirm `exec resume <id>` keeps it
 - [x] Check MCP tool naming and approval behaviour in `exec`
-- [ ] Find the instructions flag or config key for the envelope
-- [ ] Inspect the `state_5.sqlite` `threads` schema (or use `app-server`) for interactive sessions
-- [ ] Interactive (PTY) session: transcript tail while the TUI runs, approval prompts
+- [ ] Find the instructions flag or config key for the envelope (not needed: first message carries it)
+- [x] Interactive (PTY) session: rollout tail while the TUI runs
+- [ ] Approval prompts in the TUI (Phase 4 research)
 - [ ] `reasoning`, `file_change`, `turn.failed`, `error` event shapes; plan-limit message

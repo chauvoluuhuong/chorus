@@ -22,7 +22,11 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 | `docs/testing.md` | Test layers; what runs in the cloud vs locally |
 | `docs/integrations/` | Verified facts per CLI (flags, events, file paths, fields, gotchas) |
 | `docs/mockups/chorus-cli.html` | Clickable mockup of the CLI app |
-| `tools/probe/` | Capability probe: runs a real CLI through scenarios and records fixtures |
+| `tools/probe/` | Capability probes: `probe.mjs` (headless scenarios), `pty-probe.mjs` (interactive), `skills-probe.mjs` |
+| `src/core/` | Adapters (`adapters/`), store, handoff, skills sync, launch, capture (TypeScript, Node 22+, no build step: `node file.ts`) |
+| `src/mcp/`, `src/cli/` | The `chorus mcp` server and the `chorus` entry point |
+| `test/` | `contract/` (L1, fixtures), `flow/` (L2, fake agent), `smoke/` (L3, real CLIs) |
+| `tools/fake-agent/` | Fake AI CLI for L2 tests |
 | `fixtures/<cli>/<version>/` | Real captured CLI output |
 | `docs/archive/` | v1 material (product concept, UI mockup v3, marketing notes); reference only |
 
@@ -44,18 +48,30 @@ The v1 Tauri/React prototype was removed; it is in git history on `dev`. Work ha
 6. Review fixtures for personal data before committing (the probe redacts emails, account ids and
    the home path).
 
-## Current state and next steps (Phase 1)
+## Commands
 
-Done:
-- Claude Code 2.1.301 verified in headless mode (all 5 probe scenarios pass, fixtures committed).
-- Codex 0.163.0: headless probe passes all 5 scenarios on the Mac (fixtures committed); interactive not yet.
-- D1 decided: TypeScript on Node 22+ for Phases 1–3; revisit Rust at Phase 4 (see architecture §11).
-- agy 1.4.0: headless probe passes all 5 scenarios; per-session MCP via workspace `.agents/mcp_config.json` (D2 settled). agy auto-updates itself.
+```bash
+npm test                                   # L1 + L2, no login needed
+npm run typecheck
+npm run smoke -- --agents claude,codex,agy --phase 1,2,3   # L3 against the real CLIs (not-logged-in CLIs are SKIPped)
+node tools/probe/probe.mjs <cli>           # recapture fixtures after a CLI update
+```
 
-Next, best done on the developer's Mac where all three CLIs are logged in:
-1. Extend the probe to interactive (PTY) sessions: Claude hooks + transcript tail, Codex session
-   store, agy transcript.
-2. Rewrite the integration docs as "how to get each data item" manuals, write the adapters with
-   fixture tests, and build the Phase 1 e2e proof.
+## Current state and next steps
 
-Phase 2 (skills sync research) can run in parallel. See `docs/roadmap.md`.
+Phases 1–3 are built and proven with Codex and agy on the Mac (see `docs/roadmap.md`). Claude Code's
+login expired on the Mac, so every Claude-specific L3 step is pending:
+
+1. `claude auth login`, then `npm run smoke -- --agents claude,codex,agy` (all phases), then
+   `node tools/probe/pty-probe.mjs claude` (hooks + transcript tail while the TUI runs). Fix what fails,
+   commit the new fixtures (`fixtures/claude/<version>/pty`), update `docs/integrations/claude-code.md`
+   and `skills.md` (Claude skills folder).
+2. Phase 4 (chorus CLI app): decide TypeScript vs Rust at its start (architecture D1), then PTY threads,
+   sidebar, handoff, approvals. Approval-card research (Claude hooks / permission-prompt tool, Codex, agy)
+   is part of it.
+3. D4 (provider terms) before selling.
+
+Known gaps in what exists: adapters read headless streams and transcripts but nothing tails a
+transcript live yet (Phase 4); the `skills` table in architecture §4 is not stored (skills are read
+from `.chorus/skills`); `file_change`, `reasoning`, `turn.failed` Codex events and agy errors/quota are
+not captured yet (no fixture).

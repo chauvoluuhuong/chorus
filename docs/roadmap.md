@@ -7,30 +7,31 @@ There is no fixed deadline. Next concrete steps are listed in [CLAUDE.md](../CLA
 ## Phase 1 · Context capture
 
 - [x] Probe tool (`tools/probe/`): hello, MCP, shell, artifact, resume scenarios (headless)
-- [x] Claude Code headless verified, fixtures committed
-- [x] Codex: flags + per-session MCP spawn verified
+- [x] Claude Code, Codex, agy headless verified, fixtures committed
 - [x] Decide D1 (language): TypeScript on Node 22+ for Phases 1–3, revisit Rust at Phase 4
-- [ ] Extend the probe to interactive (PTY) sessions: hooks, transcript tail
-- [x] Codex: model turn verified (headless `exec`, all 5 scenarios, fixtures committed)
-- [x] Agy: headless probe on the Mac passes; per-session MCP via workspace `.agents/mcp_config.json` (D2 settled)
-- [ ] Integration docs rewritten as "how to get each data item" manuals
-- [ ] Adapter code per CLI + fixture tests
-- [ ] **Proof:** scripted real session per CLI; extracted turns, tool calls, usage and artifact match
+- [x] Codex: model turn verified; agy: probe on the Mac, per-session MCP settled (D2)
+- [x] Interactive (PTY) probe: Codex and agy transcript tail verified (`tools/probe/pty-probe.mjs`)
+- [ ] Interactive Claude: hooks + transcript tail (needs `claude auth login`)
+- [x] Integration docs as "how to get each data item" manuals
+- [x] Adapter code per CLI + fixture tests (`src/core/adapters`, `test/contract`)
+- [x] **Proof (Codex, agy):** `npm run smoke -- --phase 1` extracts turns, tool calls, usage and artifact
+- [ ] **Proof (Claude):** same, after login
 
 ## Phase 2 · Skills sync
 
-- [ ] Per-CLI research: locations, format, discovery, invocation, default skills
-- [ ] `integrations/skills.md`
-- [ ] Sync design (source of truth, write-out, Chorus-managed marker, removal)
-- [ ] Fallback for CLIs without reliable native loading (first-prompt index / `AGENTS.md` / MCP)
-- [ ] **Proof:** marker skill synced to all three CLIs and used by each
+- [x] Per-CLI research: locations, format, discovery, invocation, default skills (Codex, agy verified)
+- [x] `integrations/skills.md`
+- [x] Sync design (source of truth, symlinks, Chorus-managed marker, removal) in `src/core/skills.ts`
+- [x] Fallback for CLIs without native loading: MCP `list_skills` / `get_skill`
+- [ ] Claude Code skills folder verified (needs login)
+- [x] **Proof (Codex, agy):** `npm run smoke -- --phase 2`; [ ] Claude
 
 ## Phase 3 · MCP server
 
-- [ ] Store (SQLite WAL) and capture pipeline
-- [ ] MCP tools: `get_handoff_context`, `get_thread_turns`, `list_threads`, `list_artifacts`, skills tools
-- [ ] Fake agent + fast tests for every tool
-- [ ] **Proof:** Claude thread captured → Codex thread loads it and summarizes correctly
+- [x] Store (SQLite WAL, `node:sqlite`) and capture pipeline (`src/core/store.ts`, `capture.ts`)
+- [x] MCP tools: `get_handoff_context`, `get_thread_turns`, `list_threads`, `list_artifacts`, `list_skills`, `get_skill`
+- [x] Fake agent (`tools/fake-agent`) + fast tests for every tool (`test/flow`)
+- [x] **Proof (Codex ↔ agy):** one thread captured → another CLI's thread loads it through MCP and summarizes it (`npm run smoke -- --phase 3`); [ ] Claude as source/target
 
 ## Phase 4 · chorus CLI app
 

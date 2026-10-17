@@ -45,6 +45,11 @@ Rules:
 
 ## What's in place now
 
-- `tools/probe/`: the L3 capability probe (5 scenarios per CLI).
-- `fixtures/claude/2.1.301/`: real Claude Code output for all 5 scenarios.
-- L1 tooling (test runner, fixture tests) arrives with Phase 1; `fake-agent` with Phase 3.
+- `tools/probe/`: capability probe (`probe.mjs`: 5 scenarios per CLI; `pty-probe.mjs`: interactive; `skills-probe.mjs`).
+- `fixtures/<cli>/<version>/`: real output for claude 2.1.301, codex 0.163.0, agy 1.4.0 (+ `pty/`, `skills/`).
+- **L1** `test/contract/`: adapters against those fixtures. `npm run test:l1`
+- **L2** `test/flow/`: store, capture, handoff, MCP server (through a real MCP client), skills sync,
+  with `tools/fake-agent` as the AI CLI. `npm test` runs L1 + L2 (no login needed, ~1 s)
+- **L3** `test/smoke/run.ts`: `npm run smoke -- --agents claude,codex,agy --phase 1,2,3`. A CLI that is
+  not logged in is reported as SKIP with the fix, not FAIL.
+- `npm run typecheck`.
