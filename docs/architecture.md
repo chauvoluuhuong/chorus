@@ -5,17 +5,22 @@
 
 ## 1. What Chorus is for
 
+Make it easy for developers to work across AI coding CLIs. Goal and success definition:
+[product.md](product.md).
+
 1. **Handoff and shared context between AI CLIs.** Work started in one agent (Claude Code, Codex,
    Antigravity) continues in another without losing what was asked, decided and changed,
    including when the first agent hits its plan limit.
 2. **Seeing what the agents do and make.** Tool calls, approvals and artifacts are visible and
    easy to open while the agent keeps running.
-3. **One set of skills for every agent.** A skill written once is available to, and actually
+3. **All threads in one place.** Every agent session in a sidebar like tabs, with its state.
+4. **One set of skills for every agent.** A skill written once is available to, and actually
    used by, all three CLIs.
 
 ## 2. Build plan
 
-Five phases. Phases 1 and 2 are research that ends in **verified documentation plus an e2e test
+Five phases. There is no fixed deadline: each phase takes as long as it needs to work for real.
+Phases 1 and 2 are research that ends in **verified documentation plus an e2e test
 against the real CLIs**; nothing is built on an assumption that a test hasn't proven. Each phase
 is done only when its proof passes with the real `claude`, `codex` and `agy`
 (see [testing.md](testing.md)).

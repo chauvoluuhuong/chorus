@@ -24,9 +24,13 @@ Non-technical users flee if an operating system displays warning popups ("Unveri
 
 To sell software globally without managing 100+ country tax filings:
 - **Platform**: **Polar.sh** (Developer-friendly, low fees ~4%, built-in license key issuance) or **Lemon Squeezy**.
-- **Model**:
-  - 14-day free trial (no credit card required).
-  - One-time purchase ($49–$99 perpetual license with 1 year of updates) OR monthly subscription ($9–$15/month).
+- **Model**: **$5 one-time, lifetime license** (see [product.md](product.md) for the goal and the fee math).
+  - At $5 the fixed per-sale fee matters: expect ≈ $4.30 net per sale.
+  - License key issued by the platform, checked once and stored locally. No heavy anti-piracy work.
+  - Optional: a free tier with $5 unlocking everything, for word of mouth (decide before launch).
+- **Platforms to ship first:** macOS (sign + notarize with an Apple Developer ID, $99/year). Windows later,
+  with Azure Artifact Signing (~$10/month, individuals in the USA/Canada or organizations in the
+  USA/Canada/EU/UK) or an OV certificate otherwise. Not the Mac App Store: its sandbox can't run other CLIs.
 
 ---
 
