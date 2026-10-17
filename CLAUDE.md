@@ -54,6 +54,8 @@ The v1 Tauri/React prototype was removed; it is in git history on `dev`. Work ha
 npm test                                   # L1 + L2, no login needed
 npm run typecheck
 npm run smoke -- --agents claude,codex,agy --phase 1,2,3   # L3 against the real CLIs (not-logged-in CLIs are SKIPped)
+npm run smoke:app                          # the real app hosting the real agent TUIs in PTYs
+node src/cli/index.ts mux codex agy        # try the app by hand
 node tools/probe/probe.mjs <cli>           # recapture fixtures after a CLI update
 ```
 
@@ -63,7 +65,7 @@ Phases 1–3 are built and their L3 proofs pass with the real Claude Code 2.1.28
 agy 1.4.0 (see `docs/roadmap.md`).
 
 1. Phase 4 (chorus CLI app): plan and the D1 decision (TypeScript) are in `docs/phase4.md`; the spike is
-   in `tools/spike/`. Start with P4.1 (thread host + compositor). Approval-card research (hooks per CLI)
+   in `tools/spike/`. P4.1 (thread host + compositor, `src/app/`) is done and proven with the real CLIs; next is P4.2 (interactive launchers). Approval-card research (hooks per CLI)
    comes before P4.6.
 2. D4 (provider terms) before selling.
 

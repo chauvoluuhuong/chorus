@@ -1,6 +1,6 @@
 # Phase 4 plan: the `chorus` CLI app
 
-Status: plan, nothing built yet except a spike. Goal and proof: [architecture.md §2](architecture.md#phase-4--chorus-cli-app),
+Status: P4.1 done (`src/app/`); P4.2 onwards not started. Goal and proof: [architecture.md §2](architecture.md#phase-4--chorus-cli-app),
 mockup: [mockups/chorus-cli.html](mockups/chorus-cli.html).
 
 ## 1. Decision D1: TypeScript or Rust for the app
@@ -63,6 +63,33 @@ All existing core pieces are reused: `adapters`, `Store`, `buildHandoff`/`handof
 
 Order: P4.1 → P4.2 → P4.3 → P4.4 (a usable multi-thread viewer) → P4.5 handoff → P4.6 approvals →
 P4.7 → P4.8. P4.8 can start any time after P4.1.
+
+### P4.1 as built, and what it taught
+
+Code: `src/app/` (`screen.ts` virtual screen, `pty.ts` node-pty behind an interface, `thread-host.ts`,
+`input.ts` menu-key router, `compositor.ts` pure frame composition + row diffing, `app.ts` shell).
+`chorus mux <cmd> <cmd> …` runs any commands as threads (dev command). Tests: `test/app/` (fake TUI in
+real PTYs, ~1 s) and `npm run smoke:app` (real claude + codex + agy: trust dialogs, answers, switching,
+resize, quit).
+
+- **The app is the terminal for each agent**: programs ask their terminal questions (cursor position,
+  device attributes). The headless emulator generates the replies; `ThreadHost` writes them back to
+  the PTY. Without this some TUIs stall.
+- **Modes are mirrored**: when the agent switches on bracketed paste or application cursor keys, the real
+  terminal gets the same mode, so pastes and arrow keys reach the agent in the form it expects. Pastes are
+  never scanned for the menu key.
+- **Not forwarded yet**: mouse reporting (positions would be off by the sidebar width) and the kitty
+  keyboard protocol (the menu key relies on the legacy NUL byte for Ctrl+Space). Revisit if an agent needs them.
+- **Menu key**: Ctrl+Space (NUL) then a key: `1-9` switch, `b` sidebar, `n` new, `h` hand off (the last two
+  report "not available yet" until P4.2/P4.5), `q` quit (twice while threads run), arrows+Enter, Esc cancels,
+  menu key twice sends it to the agent.
+- **Rendering**: whole frame as cells, only changed rows are written, wrapped in synchronized output.
+  Narrow terminals (< 60 columns) hide the sidebar automatically.
+- **Testing gotcha**: Claude and Codex read "text then Enter" arriving in one chunk as a paste, and an arrow
+  plus Enter in one chunk as a different key. Tests send them separately, like a person types.
+- **Known limits**: the thread "busy" dot is a 1.5 s output heuristic until P4.4 reads real events; no
+  scrollback in the thread area yet (agents keep their own); no copy/selection support beyond the
+  terminal's own.
 
 ## 4. Approvals: research and design
 

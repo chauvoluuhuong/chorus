@@ -36,7 +36,7 @@ There is no fixed deadline. Next concrete steps are listed in [CLAUDE.md](../CLA
 
 Plan: [phase4.md](phase4.md). D1 decided: TypeScript. Spike done (`tools/spike/`).
 
-- [ ] P4.1 Thread host + compositor (sidebar, status line, resize, switching)
+- [x] P4.1 Thread host + compositor (sidebar, status line, resize, switching): `src/app/`, `npm run smoke:app` passes with real Claude, Codex and agy
 - [ ] P4.2 Interactive launchers (first prompt + per-thread MCP + skills sync) for each CLI
 - [ ] P4.3 Live transcript tailing into the store
 - [ ] P4.4 Thread state (`working` / `waiting` / `needs approval` / `ended`)

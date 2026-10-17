@@ -52,4 +52,6 @@ Rules:
   with `tools/fake-agent` as the AI CLI. `npm test` runs L1 + L2 (no login needed, ~1 s)
 - **L3** `test/smoke/run.ts`: `npm run smoke -- --agents claude,codex,agy --phase 1,2,3`. A CLI that is
   not logged in is reported as SKIP with the fix, not FAIL.
+- **App (Phase 4)**: `test/app/` (input router, compositor, app shell with a fake TUI in real PTYs; part of `npm test`) and
+  `npm run smoke:app` (the real app hosting real claude, codex and agy).
 - `npm run typecheck`.

@@ -18,7 +18,8 @@
     "postinstall": "node scripts/fix-pty.mjs",
     "probe": "node tools/probe/probe.mjs",
     "probe:pty": "node tools/probe/pty-probe.mjs",
-    "probe:skills": "node tools/probe/skills-probe.mjs"
+    "probe:skills": "node tools/probe/skills-probe.mjs",
+    "smoke:app": "node test/smoke/app.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
