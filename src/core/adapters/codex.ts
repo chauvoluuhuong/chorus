@@ -51,6 +51,10 @@ export const codex: Adapter = {
         s.cliVersion = p.cli_version;
       } else if (e.type === 'turn_context') {
         model ??= p.model;
+      } else if (e.type === 'event_msg' && p.type === 'task_started') {
+        s.status = 'working';
+      } else if (e.type === 'event_msg' && (p.type === 'task_complete' || p.type === 'turn_aborted')) {
+        s.status = 'waiting';
       } else if (e.type === 'event_msg' && p.type === 'thread_settings_applied') {
         model ??= p.thread_settings?.model;
       } else if (e.type === 'event_msg' && p.type === 'item_completed') {

@@ -9,13 +9,16 @@ export type InputEvent =
   | { type: 'menu-close' }
   | { type: 'menu-move'; delta: -1 | 1 }
   | { type: 'menu-enter' }
-  | { type: 'menu-key'; key: string };
+  | { type: 'menu-key'; key: string }
+  | { type: 'key'; key: string }; // capture mode: panes and dialogs read keys themselves
 
 const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';
 
 export class InputRouter {
   menuOpen = false;
+  /** when true every key is reported as {type:'key'} instead of going to the agent (panes, dialogs) */
+  capture = false;
   private inPaste = false;
   private pending = '';
 
@@ -28,6 +31,15 @@ export class InputRouter {
   }
 
   feed(chunk: string) {
+    if (this.capture) {
+      const re = /^(?:\x1b\[[0-9;]*[~A-Za-z]|\x1bO[A-Za-z]|\x1b|[\s\S])/;
+      for (let rest = chunk; rest; ) {
+        const m = rest.match(re)![0];
+        this.emit({ type: 'key', key: m });
+        rest = rest.slice(m.length);
+      }
+      return;
+    }
     let s = this.pending + chunk;
     this.pending = '';
     let pass = '';

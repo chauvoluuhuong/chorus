@@ -2,6 +2,8 @@
 // Fake interactive TUI for app tests: runs inside a PTY and behaves like an agent screen.
 //   READY <name>, colored line, line-based echo ("got: <line>"), SIZE on resize, DSR query/reply,
 //   "alt" enters the alternate screen, "paste?" reports bracketed paste, "q" exits.
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 const name = process.argv[2] ?? 'fake';
 const out = s => process.stdout.write(s);
 out(`READY ${name}\r\n`);
@@ -18,6 +20,8 @@ process.stdin.on('data', d => {
   // terminal replies to our DSR query arrive as \x1b[<row>;<col>R
   const m = d.match(/\x1b\[(\d+);(\d+)R/);
   if (m) { out(`CPR ${m[1]};${m[2]}\r\n`); d = d.replace(m[0], ''); }
+  if (d === '\x1b') { out('KEY esc\r\n'); return; }
+  if (d === '\r' && buf === '') { out('KEY enter\r\n'); return; }
   if (d.includes('\x1b[200~')) out(`PASTE ${JSON.stringify(d.replace(/\x1b\[20[01]~/g, ''))}\r\n`);
   else buf += d;
   let i;
@@ -27,6 +31,7 @@ process.stdin.on('data', d => {
     if (line === 'q') process.exit(0);
     else if (line === 'alt') out('\x1b[?1049h\x1b[2J\x1b[HALT SCREEN\r\n');
     else if (line === 'dsr') out('\x1b[6n');
+    else if (line.startsWith('show ')) out(require('node:fs').readFileSync(line.slice(5), 'utf8').replace(/\n/g, '\r\n') + '\r\n');
     else out(`got: ${JSON.stringify(line)}\r\n`);
   }
 });

@@ -83,11 +83,13 @@ export const agy: Adapter = {
     for (const e of jsonLines(text)) {
       if (e.type === 'USER_INPUT') {
         addTurn(s, 'user', stripWrapper(String(e.content ?? '')), e.created_at);
+        s.status = 'working';
       } else if (e.type === 'PLANNER_RESPONSE') {
         s.usage.inputTokens += e.input_tokens ?? 0;
         s.usage.outputTokens += e.output_tokens ?? 0;
         s.usage.cacheReadTokens += e.cache_read_tokens ?? 0;
         if (e.content) addTurn(s, 'assistant', String(e.content), e.created_at);
+        s.status = (e.tool_calls ?? []).length ? 'working' : 'waiting';
         for (const [i, c] of (e.tool_calls ?? []).entries()) {
           lastTool = addTool(s, {
             id: `${e.step_index}:${i}`,

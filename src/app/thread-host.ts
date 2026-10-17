@@ -43,6 +43,7 @@ export class ThreadHost extends EventEmitter {
     this.screen.onReply(d => this.state === 'running' && this.pty.write(d));
     this.pty.onData(d => {
       this.lastOutput = Date.now();
+      this.emit('data', d);
       this.screen.write(d, () => this.emit('update'));
     });
     this.pty.onExit(code => {

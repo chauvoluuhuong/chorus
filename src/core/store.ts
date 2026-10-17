@@ -127,9 +127,11 @@ export class Store {
     const db = this.db;
     db.exec('BEGIN');
     try {
-      db.prepare('DELETE FROM turns WHERE thread_id = ?').run(threadId);
-      db.prepare('DELETE FROM tool_calls WHERE thread_id = ?').run(threadId);
-      const ti = db.prepare('INSERT INTO turns (thread_id,seq,role,text,ts) VALUES (?,?,?,?,?)');
+      // upsert: a tailed session only grows, so rewriting every row each time would get slower with every turn
+      db.prepare('DELETE FROM turns WHERE thread_id = ? AND seq > ?').run(threadId, s.turns.length);
+      const have = (db.prepare('SELECT COUNT(*) AS n FROM tool_calls WHERE thread_id = ?').get(threadId) as any).n as number;
+      if (have > s.toolCalls.length) db.prepare('DELETE FROM tool_calls WHERE thread_id = ?').run(threadId);
+      const ti = db.prepare('INSERT OR REPLACE INTO turns (thread_id,seq,role,text,ts) VALUES (?,?,?,?,?)');
       for (const t of s.turns) ti.run(threadId, t.seq, t.role, t.text, t.ts ?? null);
       const ci = db.prepare(
         'INSERT OR REPLACE INTO tool_calls (thread_id,call_id,turn_seq,tool,target,status,result,duration_ms) VALUES (?,?,?,?,?,?,?,?)',

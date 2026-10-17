@@ -46,6 +46,8 @@ export interface Session {
   toolCalls: ToolCall[];
   usage: Usage;
   limit?: LimitReading;
+  /** what the agent is doing right now, from the stream/transcript: a turn in progress or finished */
+  status?: 'working' | 'waiting';
 }
 
 export interface Adapter {

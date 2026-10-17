@@ -125,3 +125,55 @@ export const homes = {
   codex: () => process.env.CODEX_HOME ?? path.join(os.homedir(), '.codex'),
   agy: () => path.join(os.homedir(), '.gemini', 'antigravity-cli'),
 };
+
+/* ---------- interactive launches (the TUI inside a Chorus thread) ---------- */
+
+export interface InteractiveOpts {
+  /** typed as the first message; omit to open an empty session */
+  prompt?: string;
+  cwd: string;
+  project: string;
+  threadId: string;
+  /** native session id to continue (parked threads) */
+  resumeId?: string;
+  model?: string;
+}
+
+/**
+ * Command line that opens the agent's own screen with the Chorus MCP server attached for this thread.
+ * Unlike headless runs there is no auto-approve flag: the agent asks and the user (or a Chorus card) answers.
+ */
+export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
+  const mcp = mcpCommand(o.project, o.threadId);
+  if (agent === 'claude') {
+    const sessionId = o.resumeId ? undefined : randomUUID();
+    return {
+      bin: 'claude',
+      cwd: o.cwd,
+      sessionId,
+      args: [
+        ...(o.prompt ? [o.prompt] : []),
+        ...(o.resumeId ? ['--resume', o.resumeId] : ['--session-id', sessionId!]),
+        ...(o.model ? ['--model', o.model] : []),
+        '--mcp-config', JSON.stringify({ mcpServers: { chorus: mcp } }),
+        // Chorus's own tools are read-only: don't ask the user about them
+        '--allowedTools', TOOL_NAMES.map(t => `mcp__chorus__${t}`).join(','),
+      ],
+    };
+  }
+  if (agent === 'codex') {
+    const cfg = [
+      '-c', `mcp_servers.chorus.command=${q(mcp.command)}`,
+      '-c', `mcp_servers.chorus.args=[${mcp.args.map(q).join(',')}]`,
+      '-c', 'mcp_servers.chorus.default_tools_approval_mode="approve"',
+      ...(o.model ? ['-m', o.model] : []),
+    ];
+    return { bin: 'codex', cwd: o.cwd, args: o.resumeId ? [...cfg, 'resume', o.resumeId] : [...cfg, ...(o.prompt ? [o.prompt] : [])] };
+  }
+  writeAgyMcpConfig(o.cwd, mcp);
+  return {
+    bin: 'agy',
+    cwd: o.cwd,
+    args: [...(o.resumeId ? ['--conversation', o.resumeId] : []), ...(o.model ? ['--model', o.model] : []), ...(o.prompt ? ['-i', o.prompt] : [])],
+  };
+}

@@ -34,6 +34,7 @@ function userText(content: unknown): string {
 
 function applyAssistant(s: Session, msg: any, ts?: string) {
   s.model ??= msg.model;
+  s.status = msg.stop_reason === 'end_turn' ? 'waiting' : 'working';
   for (const block of msg.content ?? []) {
     if (block.type === 'text') addTurn(s, 'assistant', block.text, ts);
     else if (block.type === 'tool_use') {
@@ -106,7 +107,8 @@ export const claude: Adapter = {
       if (e.type === 'user' && e.message) {
         const c = e.message.content;
         if (Array.isArray(c) && c.some((b: any) => b?.type === 'tool_result')) applyToolResults(s, c);
-        else if (!e.isMeta) addTurn(s, 'user', userText(c), e.timestamp);
+        else if (!e.isMeta && addTurn(s, 'user', userText(c), e.timestamp)) s.status = 'working';
+        if (Array.isArray(c) && c.some((b: any) => b?.type === 'tool_result')) s.status = 'working';
       } else if (e.type === 'assistant' && e.message) {
         applyAssistant(s, e.message, e.timestamp);
         if (e.message.id) perMessage.set(e.message.id, e.message.usage);

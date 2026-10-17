@@ -130,3 +130,15 @@ test('versionWarning warns only for versions newer than verified', async () => {
   assert.match(versionWarning('agy', '1.4.1')!, /newer than the last verified 1\.4\.0/);
   assert.equal(versionWarning('agy', undefined), undefined);
 });
+
+test('status: a finished turn is "waiting", a cut-off transcript is "working"', () => {
+  for (const [agent, v] of [['claude', '2.1.284'], ['codex', '0.163.0'], ['agy', '1.4.0']] as [AgentId, string][]) {
+    const full = transcript(agent, v, 'shell');
+    assert.equal(adapters[agent].parseTranscript(full).status, 'waiting', `${agent} finished`);
+    const lines = full.split('\n').filter(l => l.trim());
+    // cut right after the tool call started: the agent is mid-turn
+    const cutAt = lines.findIndex(l => /tool_use|CommandExecution|run_command|custom_tool_call"/.test(l));
+    const partial = lines.slice(0, cutAt + 1).join('\n');
+    assert.equal(adapters[agent].parseTranscript(partial).status, 'working', `${agent} mid-turn`);
+  }
+});
