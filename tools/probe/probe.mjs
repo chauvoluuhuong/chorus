@@ -416,7 +416,7 @@ for (const name of names) {
       error: r.error,
     })),
   };
-  fs.writeFileSync(path.join(dest, 'command.json'), JSON.stringify(commands, null, 2));
+  fs.writeFileSync(path.join(dest, 'command.json'), redact(JSON.stringify(commands, null, 2)));
   fs.writeFileSync(path.join(dest, 'home-changes.json'), JSON.stringify(homeChanges, null, 2));
   fs.writeFileSync(path.join(dest, 'workspace-files.json'), JSON.stringify(listFiles(ws), null, 2));
   fs.writeFileSync(path.join(dest, 'result.json'), JSON.stringify(result, null, 2));

@@ -1,0 +1,11 @@
+{
+  "version": "1.4.0",
+  "ws": "/private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-pty-agy-SY9JYW",
+  "answeredStartupPrompts": 1,
+  "transcript": {
+    "file": "~/.gemini/antigravity-cli/brain/4e93f26f-7497-4038-a0f4-021a2028576f/.system_generated/logs/transcript.jsonl",
+    "msUntilVisible": 7611
+  },
+  "bytes": 5652,
+  "aliveAtCapture": true
+}

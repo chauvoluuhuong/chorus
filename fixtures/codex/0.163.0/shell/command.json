@@ -10,7 +10,7 @@
       "-c",
       "mcp_servers.chorus.command=\"node\"",
       "-c",
-      "mcp_servers.chorus.args=[\"/Users/huong/chorus/tools/probe/probe-mcp.mjs\",\"--log\",\"/Users/huong/chorus/fixtures/codex/0.163.0/shell/mcp-log.jsonl\",\"--thread\",\"t_probe_shell\"]",
+      "mcp_servers.chorus.args=[\"~/chorus/tools/probe/probe-mcp.mjs\",\"--log\",\"~/chorus/fixtures/codex/0.163.0/shell/mcp-log.jsonl\",\"--thread\",\"t_probe_shell\"]",
       "-c",
       "mcp_servers.chorus.default_tools_approval_mode=\"approve\"",
       "-c",
