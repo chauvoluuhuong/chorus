@@ -67,7 +67,7 @@ const REDACT_VALUES = [
   ...(opt('redact', '') || '').split(','),
 ].filter(v => v && v.length >= 6);
 const REDACT_KEYS =
-  /("(?:organizationUuid|organization_uuid|accountUuid|account_uuid|userId|user_id|email|userEmail|account_id|accountId)"\s*:\s*)"[^"]*"/g;
+  /("(?:organizationUuid|organization_uuid|accountUuid|account_uuid|userId|user_id|email|userEmail|account_id|accountId|creator_user_id|creator_account_id)"\s*:\s*)"[^"]*"/g;
 
 function redact(text) {
   let t = text.replace(REDACT_KEYS, '$1"<redacted>"');
@@ -108,6 +108,7 @@ const ADAPTERS = {
       const cfg = [
         '-c', `mcp_servers.chorus.command=${tomlString('node')}`,
         '-c', `mcp_servers.chorus.args=[${mcpArgs.map(tomlString).join(',')}]`,
+        '-c', 'mcp_servers.chorus.default_tools_approval_mode="approve"',
         '-c', 'approval_policy="never"',
       ];
       const common = ['--json', '--skip-git-repo-check', '-s', 'workspace-write', ...(model ? ['-m', model] : []), ...cfg];
@@ -255,6 +256,9 @@ function snapshot(root, limit = 200_000) {
 
 const TEXT_EXT = new Set(['.jsonl', '.json', '.md', '.txt', '.log', '.toml', '.yaml', '.yml', '']);
 const MAX_COPY = 5 * 1024 * 1024;
+// Only session transcripts are worth keeping. Config, caches, bundled skills and
+// plugin files are user-specific or noise, so they are listed but never copied.
+const COPY_PATTERN = /(^|\/)(projects|sessions)\/.*\.jsonl$/;
 
 // Record which files the CLI created/changed in its home dir, and copy the
 // small text ones (transcripts, session indexes) into the fixture.
@@ -266,7 +270,7 @@ function captureHomeChanges(before, dest) {
       if (before[root][rel] === sig) continue;
       const abs = path.join(root, rel);
       const size = Number(sig.split(':')[1]);
-      const copied = TEXT_EXT.has(path.extname(rel)) && size <= MAX_COPY;
+      const copied = COPY_PATTERN.test(rel) && TEXT_EXT.has(path.extname(rel)) && size <= MAX_COPY;
       if (copied) {
         const to = path.join(dest, 'home-changes', path.basename(root), rel);
         fs.mkdirSync(path.dirname(to), { recursive: true });

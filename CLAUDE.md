@@ -48,7 +48,7 @@ The v1 Tauri/React prototype was removed; it is in git history on `dev`. Work ha
 
 Done:
 - Claude Code 2.1.301 verified in headless mode (all 5 probe scenarios pass, fixtures committed).
-- Codex 0.163.0: flags and per-session MCP spawning verified; no model turn yet.
+- Codex 0.163.0: headless probe passes all 5 scenarios on the Mac (fixtures committed); interactive not yet.
 
 Next, best done on the developer's Mac where all three CLIs are logged in:
 1. `node tools/probe/probe.mjs codex` and `node tools/probe/probe.mjs agy`; review and commit

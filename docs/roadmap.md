@@ -11,7 +11,7 @@ There is no fixed deadline. Next concrete steps are listed in [CLAUDE.md](../CLA
 - [x] Codex: flags + per-session MCP spawn verified
 - [ ] Decide D1 (language)
 - [ ] Extend the probe to interactive (PTY) sessions: hooks, transcript tail
-- [ ] Codex: model turn verified (needs login: `OPENAI_API_KEY` in the cloud, or the Mac)
+- [x] Codex: model turn verified (headless `exec`, all 5 scenarios, fixtures committed)
 - [ ] Agy: probe on the Mac, settle per-session MCP (D2)
 - [ ] Integration docs rewritten as "how to get each data item" manuals
 - [ ] Adapter code per CLI + fixture tests
