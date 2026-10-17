@@ -2,15 +2,12 @@
 
 | | |
 |---|---|
-| **Status** | 🔴 Not verified: agy cannot be installed or logged in from the cloud container |
-| **Evidence so far** | (a) stream-json events observed by the old Chorus prototype on the developer's Mac, (b) the official changelog (`google-antigravity/antigravity-cli`, latest seen 1.3.6), (c) community tools and guides |
-| **Fixtures** | none yet |
-| **To verify** | On the Mac: `node tools/probe/probe.mjs agy` |
+| **Status** | ✅ Headless `-p` verified on the Mac: all 5 probe scenarios pass (15/15 checks). Interactive TUI not probed |
+| **Version tested** | `agy 1.4.0` on macOS, 2026-10-17 (a first run on 1.3.6 also passed; agy **auto-updated** between the runs) |
+| **Fixtures** | `fixtures/agy/1.4.0/{hello,mcp,shell,artifact,resume}/` (only `brain/<id>/…/transcript.jsonl` is copied from `~/.gemini`) |
+| **To verify** | Interactive (PTY) session; quota-exhausted message; ToS answer |
 
-Legend: 👀 observed by the old prototype on a real machine · 📄 official changelog/docs · 🌐 community source only · ❓ unknown.
-
-Why the cloud can't test it: `antigravity.google` (installer and docs) doesn't resolve from the
-container, there is no official npm package, and login is a Google account (or `GEMINI_API_KEY`).
+Legend: ✅ verified by running it · 📄 official changelog/docs · 🌐 community source only · ❓ unknown.
 
 ---
 
@@ -20,18 +17,19 @@ container, there is no official npm package, and login is a Google account (or `
 |---|---|---|
 | Interactive TUI | `agy` | 🌐 |
 | Interactive with first prompt | `agy -i "<prompt>"` / `--prompt-interactive` (can't be combined with `--print`, exits 2) | 📄 |
-| Headless, one turn | `agy -p "<prompt>"` (`--print` / `--prompt`) | 📄 |
-| Structured output | `--output-format text\|json\|stream-json` | 📄 |
+| Headless, one turn | `agy -p "<prompt>" --output-format stream-json --dangerously-skip-permissions` | ✅ |
+| Structured output | `--output-format text\|json\|stream-json` | ✅ stream-json |
 | Multi-turn over stdin | `--input-format stream-json` (needs `--output-format stream-json`), one JSON prompt per line: `{"event":"user","message":{"content":"…"}}` | 👀 📄 |
-| Resume specific conversation | `--conversation <id>` | 🌐 |
+| Resume specific conversation | `--conversation <id> -p "<prompt>"`. Keeps the same `conversation_id` and remembers context (`num_turns` counts both turns) | ✅ |
 | Resume latest | `-c` / `--continue` (falls back to the latest non-empty conversation) | 📄 |
 | Model / effort | `--model <id>` (e.g. `gemini-3.8-flash-low`), `--effort low\|medium\|high`; honoured in `-p` only from 1.1.10 | 👀 🌐 |
-| Permissions | `--dangerously-skip-permissions`, `--mode accept-edits\|plan` | 👀 🌐 |
+| Permissions | `--dangerously-skip-permissions` is needed for tools in `-p` (init shows `permission_mode: always-proceed`). Also `--mode accept-edits\|auto\|plan`, `--sandbox` | ✅ (skip-permissions) |
 | Timeout | `--print-timeout` (default unlimited since 1.2.6) | 📄 |
-| Workspace | cwd is the workspace (1.2.16+); `--add-dir` for more | 🌐 |
+| Workspace | cwd is the workspace (`init.cwd`); `--add-dir` for more | ✅ |
+| Other flags (1.3.6 `--help`) | `--agent`, `--project`, `--new-project`, `--log-file`, `--json-schema`, `--input-format`, `--effort low\|medium\|high\|xhigh\|max`, `--remote-control` | ✅ |
 
-**stdin gotcha:** `agy -p` reads stdin even when the prompt is given; leave stdin open and it
-can block. Spawn with stdin closed. 🌐
+**stdin gotcha:** `agy -p` may read stdin even when the prompt is given. The probe spawns with stdin
+closed and it works. 🌐 ✅
 
 ## 2. Injecting the Chorus prompt envelope
 
@@ -42,40 +40,47 @@ can block. Spawn with stdin closed. 🌐
 
 ## 3. MCP server wiring
 
-| Fact | Source |
+**Decision D2 settled: a workspace file works, no global edit needed.** The probe writes
+`<workspace>/.agents/mcp_config.json` and agy starts that server for the run:
+
+```json
+{ "mcpServers": { "chorus": { "command": "node", "args": ["chorus-mcp.js", "--thread", "t_123"] } } }
+```
+
+| Fact | Status |
 |---|---|
-| Managed with `agy mcp add\|remove\|list\|enable\|disable`, which edit `mcp_config.json` | 📄 |
-| Global config: `~/.gemini/config/mcp_config.json` | 🌐 |
-| Workspace config: `.agents/mcp_config.json` (sources disagree) | 🌐 ❓ The probe writes this file to test it |
-| **No per-session `--mcp-config` flag known** | ❓ Biggest open question. If workspace config doesn't work, we need `agy mcp add` with a unique name per thread, or a single server that learns the thread another way |
-| Headless runs wait for MCP servers to load before the turn | 📄 |
-| `_meta["antigravity/alwaysLoad"]` on a tool keeps it always loaded | 📄 |
-| MCP calls with undeclared arguments are rejected (1.1.27+) | 📄 |
+| `.agents/mcp_config.json` in the cwd is picked up; the server starts, `tools/call` works, the model sees the result | ✅ |
+| Args reach the server → `--thread <id>` binding works. Parent env does **not** (`CHORUS_THREAD_ID` was null): use argv | ✅ |
+| Handshake: first `server/discover` (we answer -32601, agy continues), then `initialize` with `protocolVersion: "2025-11-25"`, `clientInfo.name: "antigravity-client"`, then `tools/list` | ✅ |
+| agy still loads the user's **global** MCP servers too (the run wrote tool files for ElevenLabs, chrome-devtools, etc.), so the model sees many more tools; a unique server name like `chorus` avoids clashes | ✅ |
+| agy writes each server's tool schemas to `~/.gemini/antigravity-cli/mcp/<server>/<tool>.json` and the model reads them with `view_file`, then calls `call_mcp_tool` (`ServerName`, `ToolName`, `Arguments`) | ✅ |
+| Managed with `agy mcp add [flags] <name> <commandOrUrl> [args…]` (flags `-e/--env`, `-H/--header`, `-t/--type`; flags before the name), `remove`, `list`, `enable`, `disable`. Edits the global config, so not used | ✅ help |
+| Headless runs wait for MCP servers to load before the turn; calls with undeclared arguments are rejected (1.1.27+); `_meta["antigravity/alwaysLoad"]` keeps a tool always loaded | 📄 |
 
 ## 4. Getting the chat session
 
-### Live stream (`--output-format stream-json`)
+### Live stream (`--output-format stream-json`), one JSON object per line ✅
 
-Seen by the old prototype (field names as it parsed them): 👀
-
-| `event` | Fields used |
+| `event` | Fields |
 |---|---|
-| `init` | `conversation_id`, `init.model` (official docs: also reports `permission_mode`) |
-| `user` | echo of our input |
-| `step_update` | `step_update.step_index`, `step_type` (`tool`, …), `tool_name` / `tool_info.name`, `tool_info.parameters` (`AbsolutePath`, `TargetFile`, `CommandLine`, …), `tool_info.output`, `state` (`ACTIVE` while running) |
-| `result` | `response`, `usage {input_tokens, output_tokens, thinking_tokens, cache_read_tokens, total_tokens}`, `num_turns`, status `SUCCESS`; `structured_output` with `--json-schema` | 🌐 |
+| `init` | `conversation_id`, `init.cwd`, `init.tools` (~60 names), `init.permission_mode` |
+| `step_update` | `step_update.{conversation_id, step_index, state, step_type}`. `state`: `ACTIVE` then `DONE`. `step_type`: `user_input`, `agent_response`, `tool` |
+| `step_update` (`agent_response`) | `text_delta` (partial text while `ACTIVE`, `"\n"` at `DONE`), at `DONE`: `duration_seconds` and `usage {input_tokens, output_tokens, thinking_tokens, cache_read_tokens, total_tokens}` |
+| `step_update` (`tool`) | `tool_name`, `tool_info.{name, parameters}`; at `DONE`: `tool_info.output` (a string) and `duration_seconds` |
+| `result` | `result.{conversation_id, status ("SUCCESS"), response, duration_seconds, num_turns, usage}`; `usage` is summed over the turn's model calls |
 
-Tool names seen: `view_file`, `write_to_file`, `replace_file_content`, `run_command`. 👀
+Tool names seen: `view_file` (`AbsolutePath`), `run_command` (`CommandLine`; output has `\r\n`),
+`write_to_file` (`TargetFile`; no output text), `call_mcp_tool` (`ServerName`, `ToolName`, `Arguments`). Not seen:
+`replace_file_content`, errors, quota.
 
 ### Files on disk
 
-| What | Path | Source |
+| What | Path | Status |
 |---|---|---|
-| Transcript | `~/.gemini/antigravity-cli/brain/<conversation-id>/.system_generated/logs/transcript.jsonl` (+ `transcript_full.jsonl` when fields are truncated) | 🌐 |
-| Conversation DB | `~/.gemini/antigravity-cli/conversations/*.db` or `…/cache/` (sources disagree) | 🌐 ❓ |
-| IDE (not CLI) data | `~/.gemini/antigravity/` (the old prototype wrote reports to `brain/` here) | 👀 |
-
-The probe snapshots all of `~/.gemini` before and after each run to settle these paths.
+| Transcript | `~/.gemini/antigravity-cli/brain/<conversation-id>/.system_generated/logs/transcript.jsonl` (also `transcript_full.jsonl` and `chunks/transcript*/00000000.jsonl`). Lines: `{step_index, source (USER_EXPLICIT/MODEL), type (USER_INPUT/PLANNER_RESPONSE/GENERIC), status, created_at, content, tool_calls[{name,args}], input_tokens, output_tokens, cache_read_tokens}`. The user input is wrapped in `<USER_REQUEST>…` | ✅ |
+| Tool outputs | `brain/<id>/.system_generated/steps/<n>/output.txt` | ✅ |
+| Other per-conversation files | `annotations/<id>.pbtxt`, `presence/<id>.lock`, `conversation_summaries.db`, `conversations/`, `cli.log` | ✅ seen, ❓ content |
+| IDE (not CLI) data | `~/.gemini/antigravity/` | 👀 |
 
 ## 5. Errors, exit codes, limits
 
@@ -85,7 +90,7 @@ The probe snapshots all of `~/.gemini` before and after each run to settle these
 | exit `1` | bad `--agent`, invalid `--json-schema` | 📄 |
 | exit `2` | `--print` combined with `--prompt-interactive` | 📄 |
 | exit `3` | model/agent error during a headless run; stderr line `AGY_ERROR: {…, "retryable", "error_id"}` | 📄 |
-| Quota exhausted | reported immediately (1.3.3+); expected as `RESOURCE_EXHAUSTED` in `AGY_ERROR` | 📄 🌐 not captured |
+| Quota exhausted | reported immediately (1.3.3+); expected as `RESOURCE_EXHAUSTED` in `AGY_ERROR` | 📄 🌐 ❓ not captured |
 | Quota check without spending | `agy --output-format json -p /usage` (don't use `--disable-slash-commands`) | 🌐 |
 | Denied actions | `denied_actions` in JSON output | 📄 |
 
@@ -97,11 +102,22 @@ users cite the Antigravity Additional Terms on third-party software access. **Ge
 before selling a product that drives agy on users' subscription accounts.** `GEMINI_API_KEY`
 billing may be the safer path.
 
-## 7. Verification checklist (run on the Mac)
+## 7. Gotchas
 
-- [ ] `agy --version`, `agy --help`, `agy mcp --help` → paste into this doc
-- [ ] `node tools/probe/probe.mjs agy` and commit `fixtures/agy/<version>/` after review
-- [ ] Confirm `.agents/mcp_config.json` is picked up (mcp scenario passes); if not, find another per-session method
-- [ ] Confirm transcript path and the `result` / `usage` field names
-- [ ] Confirm `--conversation <id>` resume keeps the id (resume scenario)
+1. **agy auto-updates itself** (1.3.6 → 1.4.0 during this session). Record the version per fixture
+   run and re-probe after updates. ✅
+2. Without `--dangerously-skip-permissions`, tool calls in `-p` are not auto-approved. ✅ (flag used)
+3. The user's global MCP servers load in every run: more tools, slower start (~10-17 s per turn). ✅
+4. `~/.gemini` holds an OAuth token and settings backups. Never copy anything but
+   `transcript.jsonl` into fixtures. ✅
+
+## 8. Verification checklist
+
+- [x] `agy --version`, `agy --help`, `agy mcp --help` recorded above
+- [x] `node tools/probe/probe.mjs agy`; fixtures committed after review
+- [x] `.agents/mcp_config.json` is picked up (mcp scenario passes) → D2 settled
+- [x] Transcript path and `result` / `usage` field names
+- [x] `--conversation <id>` resume keeps the id
+- [ ] Interactive (PTY) session: transcript tail while the TUI runs, approval prompts
 - [ ] Capture one quota-exhausted run when it happens
+- [ ] Get a clear ToS answer (§6)

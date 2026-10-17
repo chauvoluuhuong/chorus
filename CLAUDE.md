@@ -49,16 +49,13 @@ The v1 Tauri/React prototype was removed; it is in git history on `dev`. Work ha
 Done:
 - Claude Code 2.1.301 verified in headless mode (all 5 probe scenarios pass, fixtures committed).
 - Codex 0.163.0: headless probe passes all 5 scenarios on the Mac (fixtures committed); interactive not yet.
+- agy 1.4.0: headless probe passes all 5 scenarios; per-session MCP via workspace `.agents/mcp_config.json` (D2 settled). agy auto-updates itself.
 
 Next, best done on the developer's Mac where all three CLIs are logged in:
-1. `node tools/probe/probe.mjs codex` and `node tools/probe/probe.mjs agy`; review and commit
-   `fixtures/`; update `docs/integrations/codex.md` and `antigravity-agy.md`.
-2. Paste `agy --help` and `agy mcp --help` output into the agy doc; settle how agy gets a
-   per-session MCP server (open decision D2).
-3. Decide D1 (language). Proposal: TypeScript on Node 20+.
-4. Extend the probe to interactive (PTY) sessions: Claude hooks + transcript tail, Codex session
+1. Decide D1 (language). Proposal: TypeScript on Node 20+.
+2. Extend the probe to interactive (PTY) sessions: Claude hooks + transcript tail, Codex session
    store, agy transcript.
-5. Rewrite the integration docs as "how to get each data item" manuals, write the adapters with
+3. Rewrite the integration docs as "how to get each data item" manuals, write the adapters with
    fixture tests, and build the Phase 1 e2e proof.
 
 Phase 2 (skills sync research) can run in parallel. See `docs/roadmap.md`.

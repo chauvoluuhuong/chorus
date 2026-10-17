@@ -12,7 +12,7 @@ There is no fixed deadline. Next concrete steps are listed in [CLAUDE.md](../CLA
 - [ ] Decide D1 (language)
 - [ ] Extend the probe to interactive (PTY) sessions: hooks, transcript tail
 - [x] Codex: model turn verified (headless `exec`, all 5 scenarios, fixtures committed)
-- [ ] Agy: probe on the Mac, settle per-session MCP (D2)
+- [x] Agy: headless probe on the Mac passes; per-session MCP via workspace `.agents/mcp_config.json` (D2 settled)
 - [ ] Integration docs rewritten as "how to get each data item" manuals
 - [ ] Adapter code per CLI + fixture tests
 - [ ] **Proof:** scripted real session per CLI; extracted turns, tool calls, usage and artifact match

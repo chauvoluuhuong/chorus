@@ -258,7 +258,7 @@ const TEXT_EXT = new Set(['.jsonl', '.json', '.md', '.txt', '.log', '.toml', '.y
 const MAX_COPY = 5 * 1024 * 1024;
 // Only session transcripts are worth keeping. Config, caches, bundled skills and
 // plugin files are user-specific or noise, so they are listed but never copied.
-const COPY_PATTERN = /(^|\/)(projects|sessions)\/.*\.jsonl$/;
+const COPY_PATTERN = /(^|\/)(projects|sessions)\/.*\.jsonl$|(^|\/)brain\/[^/]+\/\.system_generated\/logs\/transcript\.jsonl$/;
 
 // Record which files the CLI created/changed in its home dir, and copy the
 // small text ones (transcripts, session indexes) into the fixture.

@@ -1,0 +1,45 @@
+{
+  "cli": "agy",
+  "version": "1.4.0",
+  "scenario": "hello",
+  "date": "2026-10-17T04:01:14.698Z",
+  "platform": "darwin 27.0.0 arm64",
+  "node": "v26.10.0",
+  "scrubbedEnv": [
+    "CLAUDECODE",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_PID"
+  ],
+  "passed": true,
+  "checks": [
+    {
+      "name": "exit code 0",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "name": "session id found in stream",
+      "ok": true,
+      "detail": "a24c5af0-b38e-4532-be7d-1578cd0accbf"
+    },
+    {
+      "name": "token usage present in stream",
+      "ok": true
+    }
+  ],
+  "runs": [
+    {
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "durationMs": 10168,
+      "sessionId": "a24c5af0-b38e-4532-be7d-1578cd0accbf",
+      "eventTypes": [
+        "init",
+        "step_update",
+        "result"
+      ]
+    }
+  ]
+}
