@@ -9,7 +9,7 @@ There is no fixed deadline. Next concrete steps are listed in [CLAUDE.md](../CLA
 - [x] Probe tool (`tools/probe/`): hello, MCP, shell, artifact, resume scenarios (headless)
 - [x] Claude Code headless verified, fixtures committed
 - [x] Codex: flags + per-session MCP spawn verified
-- [ ] Decide D1 (language)
+- [x] Decide D1 (language): TypeScript on Node 22+ for Phases 1–3, revisit Rust at Phase 4
 - [ ] Extend the probe to interactive (PTY) sessions: hooks, transcript tail
 - [x] Codex: model turn verified (headless `exec`, all 5 scenarios, fixtures committed)
 - [x] Agy: headless probe on the Mac passes; per-session MCP via workspace `.agents/mcp_config.json` (D2 settled)

@@ -275,8 +275,8 @@ user: Ctrl+Space h → pick codex        (or: chorus handoff --to codex)
 
 | # | Question | Proposal |
 |---|---|---|
-| D1 | Language for core, MCP server and CLI app (needed before Phase 1 adapter code) | **TypeScript on Node 20+**: users already have Node (Claude Code and Codex install via npm), the official MCP SDK is TypeScript, `node-pty` is mature, the CLI ships with `npm i -g chorus-cli` |
-| D2 | Per-session MCP config for agy | Settle in Phase 1 (workspace `.agents/mcp_config.json` vs `agy mcp add` per thread) |
+| D1 | Language for core, MCP server and CLI app | **Decided: TypeScript on Node 22+ for Phases 1–3** (adapters, store, MCP server; fastest while the CLI formats are still moving; official MCP SDK; `node:sqlite` built in). Revisit at the start of Phase 4: a Rust rewrite of the core is an option for a single binary, `npm` distribution via per-platform packages (as `@openai/codex` does) and a Tauri sidecar. Keep the core free of Node-specific shortcuts and `node-pty` behind a small interface so a port stays cheap |
+| D2 | Per-session MCP config for agy | **Decided:** workspace `.agents/mcp_config.json`, verified with agy 1.4.0 |
 | D3 | Desktop technology | Decide at Phase 5; it only needs `chorus serve` |
 | D4 | Provider terms (agy subscription orchestration, Claude and Codex account use) | Check before selling; see integration docs |
 | D5 | Command name and menu key | `chorus` (package `chorus-cli`); Ctrl+Space, checked against all three CLIs' key bindings in Phase 4 |
