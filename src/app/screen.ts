@@ -1,8 +1,7 @@
 // A virtual terminal screen for one thread (the "terminal emulator in memory" of architecture §8).
-import { createRequire } from 'node:module';
+import headless from '@xterm/headless'; // static import so a bundler can include it
 
-const require = createRequire(import.meta.url);
-const { Terminal } = require('@xterm/headless');
+const { Terminal } = headless as unknown as { Terminal: new (opts: object) => any };
 
 /** One screen cell. `s` is an SGR parameter string ('' = default style), `t` the characters ('' = second half of a wide char). */
 export interface Cell {

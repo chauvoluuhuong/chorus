@@ -86,8 +86,9 @@ export function saveScreenshot(screen: VirtualScreen, file: string, caption?: st
     fs.writeFileSync(file.replace(/\.png$/, '.html'), html);
     return false;
   }
-  const w = Math.ceil(screen.cols * 8.45) + 60;
-  const h = Math.ceil(screen.rows * 17.9) + (caption ? 90 : 60);
+  // Menlo 14px is ~8.43px wide per column; leave room for the padding so the right edge is never clipped
+  const w = Math.ceil(screen.cols * 8.6) + 90;
+  const h = Math.ceil(screen.rows * 17.9) + (caption ? 100 : 70);
   const r = spawnSync(CHROME, ['--headless=new', '--disable-gpu', '--hide-scrollbars', `--window-size=${w},${h}`, `--screenshot=${file}`, `file://${tmp}`], { stdio: 'ignore', timeout: 30000 });
   return r.status === 0 && fs.existsSync(file);
 }

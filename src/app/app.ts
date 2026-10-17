@@ -102,7 +102,10 @@ export class App extends EventEmitter {
     const entry: Entry = { id: spec.id, title: spec.title, agent: spec.agent };
     this.entries.push(entry);
     const host = this.attach(entry, spec);
-    if (select) this.active = this.entries.length - 1;
+    if (select) {
+      this.active = this.entries.length - 1;
+      this.emit('select', entry);
+    }
     this.schedule();
     return host;
   }
@@ -214,6 +217,7 @@ export class App extends EventEmitter {
   }
 
   setCard(card: Card | undefined) {
+    if (JSON.stringify(card) === JSON.stringify(this.card)) return;
     this.card = card;
     this.schedule();
   }

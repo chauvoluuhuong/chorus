@@ -1,7 +1,10 @@
 // node-pty behind a small interface, so the PTY layer can be swapped (docs/phase4.md §1).
 import { createRequire } from 'node:module';
+import { isSea } from 'node:sea';
+import path from 'node:path';
 
-const require = createRequire(import.meta.url);
+// node-pty is a native addon: inside a single-executable build it is loaded from node_modules next to the binary
+const require = createRequire(isSea() ? path.join(path.dirname(process.execPath), 'chorus.js') : import.meta.url);
 
 export interface PtyLike {
   pid: number;

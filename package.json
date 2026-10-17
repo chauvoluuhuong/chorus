@@ -19,10 +19,12 @@
     "probe": "node tools/probe/probe.mjs",
     "probe:pty": "node tools/probe/pty-probe.mjs",
     "probe:skills": "node tools/probe/skills-probe.mjs",
-    "smoke:app": "node test/smoke/app.ts"
+    "smoke:app": "node test/smoke/app.ts",
+    "proof": "node test/smoke/proof.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "esbuild": "^0.28.2",
     "node-pty": "^1.1.0",
     "typescript": "^7.0.2"
   },

@@ -40,7 +40,19 @@ export function detectApproval(agent: AgentId, lines: string[]): PendingApproval
   const between = lines.slice(qi + 1, optIdx < 0 ? qi + 1 : optIdx).map(l => l.replace(/^[\s│┃|]+/, '').replace(/\s+$/, ''));
   const dollar = between.findIndex(l => l.startsWith('$ '));
   const fromBelow = dollar >= 0 ? between.slice(dollar).filter(Boolean).join(' ').replace(/^\$\s*/, '') : '';
-  const what = fromBelow || lines
+  // Claude frames each request between a solid rule and the question: "Create file / calc.js / <preview>"
+  let framed = '';
+  if (agent === 'claude') {
+    let start = qi - 1;
+    while (start >= 0 && !/^[\s│┃|]*─{10,}/.test(lines[start])) start--;
+    framed = lines
+      .slice(start + 1, qi)
+      .map(l => l.replace(/^[\s│┃|]+/, '').replace(/\s+$/, ''))
+      .filter(l => l && !/^[╌─━┄\-]+$/.test(l) && !/^\d+(\s|$)/.test(l) && !/^(Hook |settings\.json)/.test(l))
+      .slice(0, 3)
+      .join(' · ');
+  }
+  const what = fromBelow || framed || lines
     .slice(Math.max(0, qi - 8), qi)
     .map(l => l.replace(/^[\s│┃|]+/, '').replace(/\s+$/, ''))
     .filter(l => l && !/^[─━═┄\-]+$/.test(l) && !/^(Run shell command|Reason:|Environment:|Hook |settings\.json)/.test(l))

@@ -1,6 +1,7 @@
 // How to start each CLI for one Chorus thread (flags verified in docs/integrations/*.md).
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { isSea } from 'node:sea';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -30,7 +31,9 @@ export interface Launch {
 }
 
 export function mcpCommand(project: string, threadId: string) {
-  return { command: process.execPath, args: [CLI_ENTRY, 'mcp', '--project', project, '--thread', threadId] };
+  // a single-executable build is its own entry point
+  const entry = isSea() ? [] : [CLI_ENTRY];
+  return { command: process.execPath, args: [...entry, 'mcp', '--project', project, '--thread', threadId] };
 }
 
 const q = (s: string) => JSON.stringify(s);

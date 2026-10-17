@@ -118,10 +118,10 @@ function drawCard(grid: Grid, c: { title: string; lines: string[] }, x0: number,
   const boxH = lines.length + 2;
   const y = Math.max(0, height - boxH);
   const x = x0 + 1;
-  put(grid, y, x, '┏' + '━'.repeat(inner) + '┓', '1;31');
+  put(grid, y, x, '┌' + '─'.repeat(inner) + '┐', '1;31');
   put(grid, y, x + 2, ` ${c.title} `, '1;31');
-  lines.forEach((l, i) => put(grid, y + 1 + i, x, '┃' + (' ' + l).padEnd(inner).slice(0, inner) + '┃', '1;31'));
-  put(grid, y + boxH - 1, x, '┗' + '━'.repeat(inner) + '┛', '1;31');
+  lines.forEach((l, i) => put(grid, y + 1 + i, x, '│' + (' ' + l).padEnd(inner).slice(0, inner) + '│', '1;31'));
+  put(grid, y + boxH - 1, x, '└' + '─'.repeat(inner) + '┘', '1;31');
   for (let i = 0; i < lines.length; i++) put(grid, y + 1 + i, x + 1, (' ' + lines[i]).padEnd(inner).slice(0, inner), '');
 }
 

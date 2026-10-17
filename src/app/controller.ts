@@ -66,11 +66,16 @@ export class Controller {
     }
   }
 
-  newThread(o: { agent: AgentId; title?: string; prompt?: string; parent?: ThreadRow }): Entry {
+  /**
+   * `raw` prompts (handoffs) are typed exactly as given. Any other first prompt gets a line telling the agent
+   * where this thread's artifacts go (docs/architecture.md §9).
+   */
+  newThread(o: { agent: AgentId; title?: string; prompt?: string; parent?: ThreadRow; raw?: boolean }): Entry {
     if (fs.existsSync(sourceDir(this.project))) syncSkills(this.project, { agents: [o.agent] });
     const n = this.store.listThreads().filter(t => t.agent === o.agent).length + 1;
     const row = this.store.createThread({ title: o.title ?? `${o.agent} ${n}`, agent: o.agent, cwd: this.project, parent_thread_id: o.parent?.id, state: 'working' });
-    const launch = (this.o.launcher ?? buildInteractive)(o.agent, { prompt: o.prompt, cwd: this.project, project: this.project, threadId: row.id, model: this.o.models?.[o.agent] });
+    const prompt = o.prompt && !o.raw ? `${o.prompt}\n\n(Files meant for the user, such as notes or reports, go in ${this.store.artifactsDir(row.id)})` : o.prompt;
+    const launch = (this.o.launcher ?? buildInteractive)(o.agent, { prompt, cwd: this.project, project: this.project, threadId: row.id, model: this.o.models?.[o.agent] });
     if (launch.sessionId) this.store.updateThread(row.id, { native_session_id: launch.sessionId });
     this.sawStart.set(row.id, o.prompt ? Date.now() : 0);
     const host = this.app.addThread({ id: row.id, title: row.title, agent: o.agent, file: launch.bin, args: launch.args, cwd: launch.cwd }, true);
@@ -98,7 +103,7 @@ export class Controller {
     const from = this.store.getThread(fromId);
     if (!from) return undefined;
     this.tailers.get(fromId)?.poll(); // make sure the store has the latest of the source thread
-    const entry = this.newThread({ agent: to, title: `${from.title} → ${to}`, prompt: handoffPrompt(from), parent: from });
+    const entry = this.newThread({ agent: to, title: `${from.title} → ${to}`, prompt: handoffPrompt(from), parent: from, raw: true });
     this.app.setFlash(`handoff: ${to} is loading "${from.title}" through the Chorus MCP server`);
     return entry;
   }
@@ -191,7 +196,7 @@ export class Controller {
       }
       if (changed) this.refreshState(e.id);
     }
-    if (changed) this.syncCard();
+    this.syncCard(); // also after a switch: the card is only for threads you are not looking at
   }
 
   private syncCard() {
