@@ -55,22 +55,24 @@ npm test                                   # L1 + L2, no login needed
 npm run typecheck
 npm run smoke -- --agents claude,codex,agy --phase 1,2,3   # L3 against the real CLIs (not-logged-in CLIs are SKIPped)
 npm run smoke:app                          # the real app hosting the real agent TUIs in PTYs
+npm run proof                              # Phase 4 e2e with screenshots → docs/proof/phase4/ (real Claude + Codex, ~8 min)
 node src/cli/index.ts mux codex agy        # try the app by hand
 node tools/probe/probe.mjs <cli>           # recapture fixtures after a CLI update
 ```
 
 ## Current state and next steps
 
-Phases 1–3 are built and their L3 proofs pass with the real Claude Code 2.1.284, Codex 0.163.0 and
-agy 1.4.0 (see `docs/roadmap.md`).
+Phases 1–4 are built and proven with the real Claude Code 2.1.284, Codex 0.163.0 and agy 1.4.0
+(`docs/roadmap.md`). The Phase 4 e2e proof, with screenshots of every step, is `docs/proof/phase4/README.md`
+(`npm run proof`).
 
-1. Phase 4 (chorus CLI app): plan and the D1 decision (TypeScript) are in `docs/phase4.md`; the spike is
-   in `tools/spike/`. P4.1 (thread host + compositor, `src/app/`) is done and proven with the real CLIs; next is P4.2 (interactive launchers). Approval-card research (hooks per CLI)
-   comes before P4.6.
+1. Phase 5 (desktop): `chorus serve` local API over the same core, then the UI; decide D3 (Electron vs Tauri) there.
+   The packaging spike (`docs/phase4.md`) says the JS core ships fine as an npm package or a Node single executable.
 2. D4 (provider terms) before selling.
+3. Hardening backlog: agy and Codex approvals were proven by fixtures of their real prompts and keys (Claude
+   end to end in the proof); run the proof with agy as a thread too; Codex/agy session matching when two
+   threads start in the same second in one folder; mouse and kitty keyboard protocol are not forwarded.
 
-Known gaps in what exists: nothing tails a transcript live yet (Phase 4); the `skills` table in
-architecture §4 is not stored (skills are read from `.chorus/skills`); `file_change`, `reasoning`,
-`turn.failed` Codex events, agy errors/quota and the Claude plan-limit hit are not captured (no fixture
-yet); the PTY probes press Ctrl+C after the first reply, so the Claude `Stop` hook was not captured
-interactively.
+Known gaps: `file_change`, `reasoning`, `turn.failed` Codex events, agy errors/quota and the Claude plan-limit hit
+are not captured (no fixture yet); the `skills` table in architecture §4 is not stored (skills are read from
+`.chorus/skills`).
