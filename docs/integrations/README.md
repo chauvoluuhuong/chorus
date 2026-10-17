@@ -7,10 +7,10 @@ probe, diff the new fixtures against the committed ones, and update the doc.
 
 | CLI | Doc | Status | Version checked |
 |---|---|---|---|
-| Claude Code | [claude-code.md](claude-code.md) | ✅ headless verified; interactive pending a login | 2.1.301 |
+| Claude Code | [claude-code.md](claude-code.md) | ✅ headless + interactive (hooks, transcript tail) verified | 2.1.301 (cloud), 2.1.284 (Mac) |
 | OpenAI Codex | [codex.md](codex.md) | ✅ headless + interactive verified | 0.163.0 |
 | Antigravity | [antigravity-agy.md](antigravity-agy.md) | ✅ headless + interactive verified | 1.4.0 |
-| Skills (all three) | [skills.md](skills.md) | ✅ Codex + agy; Claude pending a login | see doc |
+| Skills (all three) | [skills.md](skills.md) | ✅ all three verified | see doc |
 
 ## Capability matrix
 
@@ -29,7 +29,7 @@ What Chorus needs from each CLI, and how each provides it.
 | Tool calls | ✅ `tool_use` / `tool_result` | ✅ `item.*` (`command_execution`, `mcp_tool_call`) | ✅ `step_update` (`step_type: tool`) |
 | Token usage | ✅ `usage`, `modelUsage`, `total_cost_usd` | ✅ `turn.completed.usage` | ✅ `result.usage`, per-step `usage` |
 | Plan-limit signal | ✅ `rate_limit_event` (utilization + resetsAt) | ✅ rollout `token_count.rate_limits.primary.used_percent` (hit behaviour ❓) | 📄 `AGY_ERROR` / `/usage` |
-| Project skills folder | 📄 `.claude/skills` | ✅ `.agents/skills`, `.codex/skills` | ✅ `.agents/skills` |
+| Project skills folder | ✅ `.claude/skills` only | ✅ `.agents/skills`, `.codex/skills` | ✅ `.agents/skills` |
 
 Legend: ✅ verified by running it · 👀 observed by the old prototype · 📄 official help/docs · 🌐 community source · ❓ unknown.
 

@@ -59,19 +59,16 @@ node tools/probe/probe.mjs <cli>           # recapture fixtures after a CLI upda
 
 ## Current state and next steps
 
-Phases 1–3 are built and proven with Codex and agy on the Mac (see `docs/roadmap.md`). Claude Code's
-login expired on the Mac, so every Claude-specific L3 step is pending:
+Phases 1–3 are built and their L3 proofs pass with the real Claude Code 2.1.284, Codex 0.163.0 and
+agy 1.4.0 (see `docs/roadmap.md`).
 
-1. `claude auth login`, then `npm run smoke -- --agents claude,codex,agy` (all phases), then
-   `node tools/probe/pty-probe.mjs claude` (hooks + transcript tail while the TUI runs). Fix what fails,
-   commit the new fixtures (`fixtures/claude/<version>/pty`), update `docs/integrations/claude-code.md`
-   and `skills.md` (Claude skills folder).
-2. Phase 4 (chorus CLI app): decide TypeScript vs Rust at its start (architecture D1), then PTY threads,
-   sidebar, handoff, approvals. Approval-card research (Claude hooks / permission-prompt tool, Codex, agy)
-   is part of it.
-3. D4 (provider terms) before selling.
+1. Phase 4 (chorus CLI app): decide TypeScript vs Rust at its start (architecture D1), then PTY threads
+   with virtual screens, sidebar, live transcript tailing, handoff, approvals. Approval-card research
+   (Claude hooks / permission-prompt tool, Codex, agy) is part of it.
+2. D4 (provider terms) before selling.
 
-Known gaps in what exists: adapters read headless streams and transcripts but nothing tails a
-transcript live yet (Phase 4); the `skills` table in architecture §4 is not stored (skills are read
-from `.chorus/skills`); `file_change`, `reasoning`, `turn.failed` Codex events and agy errors/quota are
-not captured yet (no fixture).
+Known gaps in what exists: nothing tails a transcript live yet (Phase 4); the `skills` table in
+architecture §4 is not stored (skills are read from `.chorus/skills`); `file_change`, `reasoning`,
+`turn.failed` Codex events, agy errors/quota and the Claude plan-limit hit are not captured (no fixture
+yet); the PTY probes press Ctrl+C after the first reply, so the Claude `Stop` hook was not captured
+interactively.

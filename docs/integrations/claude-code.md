@@ -7,7 +7,7 @@
 | **Fixtures** | [`fixtures/claude/2.1.301/`](../../fixtures/claude/2.1.301/) |
 | **Adapter** | `src/core/adapters/claude.ts` (`parseStream`, `parseTranscript`), tests in `test/contract/` |
 | **Re-verify** | `node tools/probe/probe.mjs claude --model haiku`; interactive: `node tools/probe/pty-probe.mjs claude` (hooks via `--settings`) |
-| **Pending** | On the Mac the Claude login expired (`claude auth status` → `loggedIn: false`): run `claude auth login`, then the interactive probe and `npm run smoke -- --agents claude` |
+| **Mac run** | `2.1.284` on macOS 2026-10-17: all 5 probe scenarios pass (`fixtures/claude/2.1.284/`), interactive probe passes (`…/pty/`), `npm run smoke` passes all phases |
 
 Legend: ✅ verified by a probe run · 📄 from `claude --help` or docs, not yet exercised · ❓ unknown.
 
@@ -103,6 +103,19 @@ The hook command receives JSON on stdin:
 
 `transcript_path` in every hook payload is the easiest way to locate the transcript of an
 interactive session. ✅
+
+### 4d. Interactive TUI (verified with `tools/probe/pty-probe.mjs`, 2.1.284) ✅
+
+- `claude --settings '<hooks json>' "<prompt>"` in a PTY. A new folder shows the trust dialog; the
+  cursor can start on "No, exit", so send Up then Enter to choose "Yes, I trust this folder".
+- The transcript `~/.claude/projects/<slug>/<session-id>.jsonl` is readable **7.5 s** after launch
+  and grows live; `<slug>` is the cwd with every non-alphanumeric character replaced by `-`
+  (use the real path: `/tmp` → `/private/tmp` on macOS).
+- Hooks fire in the TUI exactly as above: `SessionStart` → `UserPromptSubmit` → `PreToolUse` →
+  `PostToolUse` (…`Stop`), each with `session_id` and `transcript_path`; `PreToolUse`/`PostToolUse`
+  share `tool_use_id` with the transcript's `tool_use` block. The tool status line shows
+  "running PreToolUse hook", so hooks are on the critical path: keep them fast (`cat >> file`).
+- Fixtures: `fixtures/claude/2.1.284/pty/{transcript.jsonl,hook-events.jsonl,screen.txt}`.
 
 ## 5. Tool usage
 

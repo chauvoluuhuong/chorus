@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | ✅ Codex 0.163.0 and agy 1.4.0 verified (probe + smoke proof). 🟡 Claude Code: location from docs, **not verified on this Mac** (login expired); verify with `npm run smoke -- --agents claude --phase 2` after `claude auth login` |
+| **Status** | ✅ Claude Code 2.1.284, Codex 0.163.0 and agy 1.4.0 verified (probe + smoke proof) |
 | **Probe** | `node tools/probe/skills-probe.mjs [claude codex agy]` writes one marker skill into each candidate folder and asks for it. Results in `fixtures/skills/` |
 | **Proof** | `npm run smoke -- --phase 2` (marker skill synced from `.chorus/skills`, used by each CLI) |
 
@@ -12,7 +12,7 @@ Legend: ✅ verified by running it · 📄 docs only · ❓ unknown.
 
 | CLI | Native project folders | Native user folders | Source of the evidence |
 |---|---|---|---|
-| Claude Code | `.claude/skills/<name>/SKILL.md` | `~/.claude/skills/` | 📄 docs (❓ does not read `.agents/skills`; verify) |
+| Claude Code | `.claude/skills/<name>/SKILL.md` only | `~/.claude/skills/` | ✅ the `system/init` event has a `skills` array: it listed `probe-claude` (`.claude/skills`) and not `probe-agents` (`.agents/skills`) |
 | Codex | `.agents/skills/`, `.codex/skills/` | `~/.agents/skills/`, `~/.codex/skills/` (+ `~/.codex/skills/.system/` defaults) | ✅ Codex lists its "skill roots" in the first developer message of every session (`rollout-*.jsonl`) and names both project folders |
 | agy | `.agents/skills/` (also the older `.agent/skills/`) | `~/.gemini/antigravity-cli/builtin/skills/` (defaults), `~/.gemini/config` | ✅ first tool call opens the `SKILL.md` directly; shipped doc `builtin/skills/agy-customizations/docs/skills.md` says `<customization root>/skills/<name>/SKILL.md`, e.g. `.agents/skills/` |
 
@@ -37,7 +37,7 @@ not the CLI loading a skill, and it is not reliable. Don't depend on it.
   tool: Codex runs `cat <root>/<name>/SKILL.md`, agy calls `view_file`. ✅
 - So a skill is "used" when the transcript shows that read. Chorus's smoke test asserts the marker
   from the skill body in the answer **and** a tool call mentioning the skill. ✅
-- Claude Code uses a `Skill` tool call and slash invocation `/name`. 📄 (to verify)
+- Claude Code: the model calls its `Skill` tool (`{"skill": "<name>"}`), also available as `/name`; the `init` event lists loaded skills in `skills` and `slash_commands`. ✅ Symlinked skill folders work (smoke phase 2).
 
 ## 4. Default skills (avoid name clashes)
 
@@ -45,7 +45,7 @@ not the CLI loading a skill, and it is not reliable. Don't depend on it.
 |---|---|---|
 | Codex | `~/.codex/skills/.system/` | `imagegen`, `openai-docs`, `review-agent`, `skill-creator`, `skill-installer`; plugins add more under `~/.codex/plugins/cache/` |
 | agy | `~/.gemini/antigravity-cli/builtin/skills/` | `agy-customizations`, `antigravity_guide`, `automation`, `generative_ui`, `migrate-workflows`, `permissioned-github`, `plugin`, `run-workflow`, `ui-plugin-navigation` |
-| Claude Code | bundled (not files) | ❓ list with the `/skills` command |
+| Claude Code | bundled (not files) | see `init.skills` of a run in a folder with no skills |
 
 ## 5. Sync design (implemented in `src/core/skills.ts`)
 
@@ -66,9 +66,10 @@ not the CLI loading a skill, and it is not reliable. Don't depend on it.
 
 ## 6. Gotchas
 
-1. Model behaviour is not deterministic: with five skills in unusual folders Codex sometimes
-   answered "can't find" for a valid one. Judge native loading by the CLI's own skill list
-   (Codex roots table, agy first tool call), not by one answer. ✅
+1. Model behaviour is not deterministic: with five skills in different folders Codex and Claude
+   Haiku sometimes answered "can't find" for a skill that was loaded natively. Judge native loading by
+   the CLI's own skill list (Codex roots table, Claude `init.skills`, agy first tool call), not by one
+   answer. ✅
 2. Skill names must be unique across `.claude/skills` and `.agents/skills`; use distinct names from
    the defaults in §4.
 3. Folded descriptions (`description: >-`) are valid YAML; Chorus's parser handles them. ✅
