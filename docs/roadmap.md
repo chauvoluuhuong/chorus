@@ -34,17 +34,17 @@ There is no fixed deadline. Next concrete steps are listed in [CLAUDE.md](../CLA
 
 ## Phase 4 · chorus CLI app
 
-Plan: [phase4.md](phase4.md). D1 decided: TypeScript. Spike done (`tools/spike/`).
+Plan and results: [phase4.md](phase4.md). D1 decided: TypeScript. E2E proof with screenshots: [proof/phase4/README.md](proof/phase4/README.md).
 
-- [x] P4.1 Thread host + compositor (sidebar, status line, resize, switching): `src/app/`, `npm run smoke:app` passes with real Claude, Codex and agy
-- [ ] P4.2 Interactive launchers (first prompt + per-thread MCP + skills sync) for each CLI
-- [ ] P4.3 Live transcript tailing into the store
-- [ ] P4.4 Thread state (`working` / `waiting` / `needs approval` / `ended`)
-- [ ] P4.5 Handoff action with "context not loaded" warning
-- [ ] P4.6 Approval cards (research first: hooks per CLI, then keystroke fallback)
-- [ ] P4.7 Memory view, artifacts view, tool-call strip, limit warning, `doctor`, `trace`, `threads`, `show`
-- [ ] P4.8 Packaging spike: Node SEA / Bun compile / per-platform npm packages; binary go/no-go
-- [ ] **Proof:** test drives the app in a PTY: two threads, switch, handoff, approval from a card, artifact listed
+- [x] P4.1 Thread host + compositor (sidebar, status line, resize, switching): `src/app/`, `npm run smoke:app`
+- [x] P4.2 Interactive launchers (first prompt + per-thread MCP + skills sync) for each CLI
+- [x] P4.3 Live transcript tailing into the store (`src/app/tailer.ts`)
+- [x] P4.4 Thread state (`working` / `waiting` / `needs approval` / `ended` / `parked`)
+- [x] P4.5 Handoff action with "context not loaded" warning and retry key
+- [x] P4.6 Approval cards: research ([integrations/approvals.md](integrations/approvals.md)) and implementation (screen detector + the prompt's own keys)
+- [x] P4.7 Memory, tool-call and files views, limit warning, `new/run/handoff/threads/show/memory/artifacts/activity/trace/doctor`
+- [x] P4.8 Packaging spike: Node single executable works (147 MB), Bun does not (node-pty); npm package is the main route
+- [x] **Proof:** `npm run proof` drives the real app with real Claude and Codex: two threads, switch, approval from a card, handoff, artifacts; screenshots in `docs/proof/phase4/`
 
 ## Phase 5 · Desktop app
 

@@ -1,0 +1,44 @@
+ CHORUS                   │ files and artifacts
+                          │ artifacts:
+ 1 fix add()             ○│ t_31360515  .chorus/threads/t_31360515/artifacts/notes.md  (6694b69ba451)
+ 2 codex 1               ○│
+▶3 fix add() → codex     ○│ files written by tools:
+                          │ /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-WBzI1J/calc.js
+                          │ /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-WBzI1J/.chorus/threads/t_31360515/artifacts/notes.md
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │ ↑/↓ PgUp/PgDn scroll · g/G top/bottom · esc close  (1-6 of 6)
+ 3/3  fix add() → codex  ·  codex                                                                                                    ctrl+space: menu

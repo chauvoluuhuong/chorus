@@ -54,4 +54,5 @@ Rules:
   not logged in is reported as SKIP with the fix, not FAIL.
 - **App (Phase 4)**: `test/app/` (input router, compositor, app shell with a fake TUI in real PTYs; part of `npm test`) and
   `npm run smoke:app` (the real app hosting real claude, codex and agy).
+- **Phase 4 proof**: `npm run proof` (`test/smoke/proof.ts`) drives the real `chorus` app in a PTY with real Claude and Codex and saves a PNG per step to `docs/proof/phase4/` (rendered by Chrome headless from the virtual screen). Unit-level app tests: `test/app/` (controller, approval detector on real prompt screens, commands).
 - `npm run typecheck`.

@@ -1,6 +1,6 @@
 # Phase 4 plan: the `chorus` CLI app
 
-Status: P4.1 done (`src/app/`); P4.2 onwards not started. Goal and proof: [architecture.md §2](architecture.md#phase-4--chorus-cli-app),
+Status: **P4.1–P4.8 built**; the e2e proof with screenshots is in [proof/phase4/README.md](proof/phase4/README.md) (`npm run proof`). Goal and proof: [architecture.md §2](architecture.md#phase-4--chorus-cli-app),
 mockup: [mockups/chorus-cli.html](mockups/chorus-cli.html).
 
 ## 1. Decision D1: TypeScript or Rust for the app
@@ -91,11 +91,35 @@ resize, quit).
   scrollback in the thread area yet (agents keep their own); no copy/selection support beyond the
   terminal's own.
 
+### P4.2–P4.7 as built
+
+| Package | Where | What it does / what we learned |
+|---|---|---|
+| P4.2 launchers | `core/launch.ts` `buildInteractive`, `app/controller.ts` `newThread` | Claude: `claude "<prompt>" --session-id <uuid> --mcp-config … --allowedTools mcp__chorus__…` (the prompt goes first because `--allowedTools` is variadic); Codex: `codex -c mcp_servers.chorus… "<prompt>"`, resume `codex … resume <id>`; agy: workspace `.agents/mcp_config.json` + `agy -i "<prompt>"`, resume `--conversation`. No auto-approve flags: the agent asks like it does for a person. A first prompt gets one added line naming the thread's artifact folder (architecture §9); handoff prompts are typed exactly as specified |
+| P4.3 tailing | `app/tailer.ts`, `core/discover.ts` | One tailer per thread: reads appended bytes (keeps the last half line), re-parses the transcript, upserts the store, scans artifacts. Claude's file is known from `--session-id`; for Codex/agy the tailer claims the first unclaimed transcript born after the spawn (Codex: same cwd). Limits: two threads started in the same second in one cwd are matched by creation order; the handoff prompt makes this unambiguous (not yet used as a marker) |
+| P4.4 state | adapters (`Session.status`), controller `refreshState` | `working` / `waiting` come from the transcripts (Claude `stop_reason: end_turn`, Codex `task_started`/`task_complete`, agy a planner reply without tool calls); `approval` from the screen detector; `ended` from the process; `parked` for threads of earlier runs. No hooks needed |
+| P4.5 handoff | `Controller.handoff`, `checkContext` | `ctrl+space h` → pick the agent → child thread (`parent_thread_id`) started with the fixed first message. If the child's first turn finishes without a `get_handoff_context` MCP call the status line warns and `ctrl+space r` types the prompt again |
+| P4.6 approvals | `app/approval.ts`, [integrations/approvals.md](integrations/approvals.md) | Screen detector + the prompt's own keys; the card appears only for threads you are not looking at; `ctrl+space y` / `x` answers the active thread's prompt or the card's |
+| P4.7 views and commands | `Controller.memoryLines/toolLines/fileLines`, `cli/commands.ts` | Panes for memory (`m`, the exact digest a handoff carries), tool calls (`t`), files and artifacts (`f`), help (`?`); limit warning at ≥ 90 % plan use; raw PTY capture per thread (`threads/<id>/raw/pty.log`, 2 MB cap); commands `new`, `run`, `handoff`, `threads`, `show`, `memory`, `artifacts`, `activity`, `trace`, `doctor` |
+
+### P4.8 packaging spike: results
+
+| Route | Result |
+|---|---|
+| **Node single-executable app** (`tools/packaging/build-sea.mjs`, `verify-sea.mjs`) | ✅ works: esbuild bundle (1.7 MB) + official Node 26 → one binary (147 MB; the Node runtime is most of it) that runs the app and `chorus mcp`; `node-pty` stays a folder next to the binary. Needs an **official** Node build (Homebrew's has SEA disabled: "Single executable application is disabled") and, on macOS, an ad-hoc `codesign` after injection (otherwise the binary is killed, exit 137) |
+| **Bun compile** | ❌ `node-pty` hangs under Bun (the PTY spawn never returns), so the PTY layer would have to be rewritten for Bun's own terminal API |
+| **npm package of the JS** | ✅ `npm i -g chorus-cli` / `npx chorus-cli` works with Node 22+; `node-pty` ships prebuilds (a postinstall chmods its `spawn-helper`) |
+| **Rust rewrite of the app layer** | not needed so far; stays the fallback if a small native binary becomes a hard requirement (147 MB is the cost of embedding Node) |
+
+**Go/no-go:** ship the npm package as the main distribution (users of these CLIs mostly have Node; Codex itself
+is an npm install). Offer the SEA binary as an optional download for users without Node, built per platform in CI
+(macOS arm64/x64, Linux, Windows); if its size is a problem, revisit Rust for the thin app layer (D1).
+
 ## 4. Approvals: research and design
 
 The agent's own screen already shows its approval prompt when the thread is in front. Chorus adds
 value for a **background** thread: the sidebar shows `needs approval`, a card shows the request, and one
-key answers it. Two mechanisms, to verify per CLI (CLAUDE.md rule 1; nothing below is verified yet):
+key answers it. Two mechanisms were tested per CLI (CLAUDE.md rule 1). **Outcome:** hooks decide fully only for Claude (allow/deny/ask) and can only deny for agy and Codex; keystrokes on the agent's own prompt work for all three and are what Chorus uses. Verified facts: [integrations/approvals.md](integrations/approvals.md). The plan as written before the tests:
 
 | | A. Hook decides (preferred) | B. Keystroke injection (fallback) |
 |---|---|---|

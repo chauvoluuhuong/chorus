@@ -1,0 +1,44 @@
+ CHORUS                   │ tool calls · fix add() → codex
+                          │ ✓ mcp:chorus get_handoff_context  → # Handoff from Chorus thread "fix add()" (claude, claude-hai
+ 1 fix add()             ○│
+ 2 codex 1               ○│
+▶3 fix add() → codex     ○│
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │ ↑/↓ PgUp/PgDn scroll · g/G top/bottom · esc close  (1-1 of 1)
+ 3/3  fix add() → codex  ·  codex                                                                                                    ctrl+space: menu

@@ -1,0 +1,44 @@
+ CHORUS                   │
+                          │ ▐▛███▛█   Claude Code v2.1.284
+▶1 fix add()             !│▝▜██████▀  Haiku 4.5 · Claude Pro
+                          │ ▝▝   ▝▝   /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-WBzI1J
+                          │
+                          │
+                          │❯ Create calc.js in the current directory that exports a function add(a, b). Run it once with your shell tool as: node -e
+                          │  "console.log(require('./calc.js').add(2, 3))" . Then write a short markdown note about what you did into notes.md in the
+                          │  artifacts folder. Reply with one line: done.
+                          │
+                          │  (Files meant for the user, such as notes or reports, go in
+                          │  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-WBzI1J/.chorus/threads/t_31360515/artifacts)
+                          │
+                          │⏺ Write(calc.js)
+                          │
+                          │⏺ Running 1 shell command…
+                          │  ⎿  $ node -e "console.log(require('./calc.js').add(2, 3))"
+                          │
+                          │───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                          │ Create file
+                          │ calc.js
+                          │╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+                          │  1 function add(a, b) {
+                          │  2   return a + b;
+                          │  3 }
+                          │  4
+                          │  5 module.exports = { add };
+                          │╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+                          │ Do you want to create calc.js?
+                          │ ❯ 1. Yes
+                          │   2. Yes, and switch to accept edits (auto-approve file edits and common file commands) for this session (shift+tab)
+                          │   3. No
+                          │
+                          │ Esc to cancel · Tab to amend
+                          │
+                          │
+                          │
+                          │ ┌─ new thread with… ─────┐
+                          │ │ 1  claude              │
+                          │ │ 2  codex               │
+                          │ │ 3  agy                 │
+                          │ └────────────────────────┘
+                          │
+ 1/1  fix add()  ·  claude                                                                                                           ctrl+space: menu

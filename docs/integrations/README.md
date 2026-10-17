@@ -11,6 +11,7 @@ probe, diff the new fixtures against the committed ones, and update the doc.
 | OpenAI Codex | [codex.md](codex.md) | ✅ headless + interactive verified | 0.163.0 |
 | Antigravity | [antigravity-agy.md](antigravity-agy.md) | ✅ headless + interactive verified | 1.4.0 |
 | Skills (all three) | [skills.md](skills.md) | ✅ all three verified | see doc |
+| Approvals (all three) | [approvals.md](approvals.md) | ✅ keystrokes on the agent's prompt; hooks only deny | see doc |
 
 ## Capability matrix
 
