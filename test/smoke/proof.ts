@@ -10,7 +10,7 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { VirtualScreen } from '../../src/app/screen.ts';
-import { saveScreenshot } from '../../src/app/snapshot.ts';
+import { maskText, saveScreenshot } from '../../src/app/snapshot.ts';
 import { activityCmd, artifactsCmd, doctorCmd, threadsCmd, traceCmd } from '../../src/cli/commands.ts';
 import { Store } from '../../src/core/store.ts';
 
@@ -41,7 +41,7 @@ let n = 0;
 function shot(slug: string, caption: string) {
   const file = `${String(++n).padStart(2, '0')}-${slug}.png`;
   const ok = saveScreenshot(outer, path.join(OUT, file), caption);
-  fs.writeFileSync(path.join(OUT, file.replace('.png', '.txt')), outer.text().map(l => l.trimEnd()).join('\n').replace(/\n+$/, '') + '\n');
+  fs.writeFileSync(path.join(OUT, file.replace('.png', '.txt')), outer.text().map(l => maskText(l.trimEnd())).join('\n').replace(/\n+$/, '') + '\n');
   shots.push({ file, caption });
   log(`  📷 ${file}${ok ? '' : ' (png failed)'}`);
 }
