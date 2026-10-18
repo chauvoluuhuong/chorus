@@ -41,4 +41,4 @@
 ──────────────────────────────│
  ⌃Space ↑↓ move  ⏎ open       │
  ⌃Space n new  b hide         │ ↑/↓ PgUp/PgDn scroll · g/G top/bottom · esc close  (1-15 of 15)
- chorus  preview: http://localhost:4317/t_753e7378/notes.md                                                                               ⌃Space menu
+ chorus  preview: http://localhost:4317/t_00bb052f/notes.md                                                                               ⌃Space menu

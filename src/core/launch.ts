@@ -30,6 +30,11 @@ export interface Launch {
   sessionId?: string;
 }
 
+/** Where a thread's artifacts go, said to the agent (architecture §9). Claude and agy also get it through the MCP server's instructions. */
+export function artifactNote(project: string, threadId: string): string {
+  return `This chat is Chorus thread ${threadId}. Files meant for the user (notes, plans, reports, mockups, anything that is not source code of the project) go in ${path.join(project, '.chorus', 'threads', threadId, 'artifacts')} (create it if missing). Chorus shows them in its Artifacts view.`;
+}
+
 export function mcpCommand(project: string, threadId: string) {
   // a single-executable build is its own entry point
   const entry = isSea() ? [] : [CLI_ENTRY];
@@ -64,6 +69,8 @@ export function buildHeadless(agent: AgentId, o: LaunchOpts): Launch {
       '-c', `mcp_servers.chorus.command=${q(mcp.command)}`,
       '-c', `mcp_servers.chorus.args=[${mcp.args.map(q).join(',')}]`,
       '-c', 'mcp_servers.chorus.default_tools_approval_mode="approve"',
+      // Codex does not show MCP server instructions to the model: give it the note as developer instructions
+      '-c', `developer_instructions=${q(artifactNote(o.project, o.threadId))}`,
       '-c', 'approval_policy="never"',
     ];
     return { bin: 'codex', cwd: o.cwd, args: o.resumeId ? ['exec', ...common, 'resume', o.resumeId, o.prompt] : ['exec', ...common, o.prompt] };
@@ -169,6 +176,7 @@ export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
       '-c', `mcp_servers.chorus.command=${q(mcp.command)}`,
       '-c', `mcp_servers.chorus.args=[${mcp.args.map(q).join(',')}]`,
       '-c', 'mcp_servers.chorus.default_tools_approval_mode="approve"',
+      '-c', `developer_instructions=${q(artifactNote(o.project, o.threadId))}`,
       ...(o.model ? ['-m', o.model] : []),
     ];
     return { bin: 'codex', cwd: o.cwd, args: o.resumeId ? [...cfg, 'resume', o.resumeId] : [...cfg, ...(o.prompt ? [o.prompt] : [])] };

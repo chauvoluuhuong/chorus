@@ -57,7 +57,7 @@ function shot(slug: string, caption: string) {
 const TASK =
   'Create calc.js in the current directory that exports a function add(a, b). ' +
   `Run it once with your shell tool as: node -e "console.log(require('./calc.js').add(2, 3))" . ` +
-  'Then write a short markdown note about what you did into notes.md in the artifacts folder. Reply with one line: done.';
+  'Then write a short markdown note about what you did, as notes.md, where Chorus keeps files for the user. Reply with one line: done.';
 
 const env = { ...process.env, TERM: 'xterm-256color', CHORUS_MODEL_CLAUDE: 'haiku', CHORUS_NO_OPEN: '1' } as Record<string, string>; // NO_OPEN: the preview URL is fetched below, not shown in a browser
 for (const k of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_PID']) delete env[k];
@@ -128,8 +128,7 @@ if (has(/Yes, I trust this folder/i) && has(/Enter to confirm/)) {
   app.write('\r');
 }
 await until(/\? for shortcuts|shift\+tab to cycle/i, 30000);
-const dir0 = store().listThreads()[0];
-app.write(`${TASK} (The artifacts folder is ${path.join(project, '.chorus', 'threads', dir0.id, 'artifacts')})`);
+app.write(TASK); // the folder for notes is not mentioned: the agent is told through Chorus's instructions
 await sleep(600);
 app.write('\r');
 shot('claude-starts', 'thread 1 is Claude Code (haiku); the task was typed into its own screen');

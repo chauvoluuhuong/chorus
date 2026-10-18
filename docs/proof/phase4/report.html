@@ -41,30 +41,30 @@ pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;paddi
 <h2>Commands after the run</h2>
 <pre>$ chorus threads
 id          agent   state    parent      title
-t_3fe2da8e  codex   waiting  t_753e7378  Create calc.js in the curren → codex
-t_48903be3  codex   waiting  -           Reply with only the text cod
-t_753e7378  claude  waiting  -           Create calc.js in the curren</pre>
+t_187c829e  codex   waiting  t_00bb052f  Create calc.js in the curren → codex
+t_23e4d60a  codex   waiting  -           Reply with only the text cod
+t_00bb052f  claude  waiting  -           Create calc.js in the curren</pre>
 <pre>$ chorus activity
 thread      agent   turns  tools  mcp   tokens in/out     cost     limit
-t_3fe2da8e  codex   3      1      1     58657/243         -        1%
-t_48903be3  codex   2      0      0     19278/9           -        1%
-t_753e7378  claude  2      3      0     38100/865         -        -</pre>
+t_187c829e  codex   3      1      1     59484/361         -        2%
+t_23e4d60a  codex   2      0      0     19383/9           -        2%
+t_00bb052f  claude  2      3      0     65725/1093        -        -</pre>
 <pre>$ chorus artifacts
-t_753e7378	2648178a6503	/private$TMPDIR/chorus-proof-iPIUTf/.chorus/threads/t_753e7378/artifacts/notes.md</pre>
+t_00bb052f	3948ac12aea2	/private$TMPDIR/chorus-proof-plb27S/.chorus/threads/t_00bb052f/artifacts/notes.md</pre>
 <pre>$ chorus trace &lt;claude thread>
-thread t_753e7378 (claude 2.1.302)
-raw terminal capture: $PROJECT/.chorus/threads/t_753e7378/raw/pty.log (27109 bytes)
-transcript: ~/.claude/projects/-private-var-folders-hj-b9dgqj-s11738sh6-z2w79bm0000gn-T-chorus-proof-iPIUTf/4eaaca6e-389b-470a-bea3-8aa98c4d6b05.jsonl
-transcript lines: 55  → parsed turns: 2, tool calls: 3, status: waiting
+thread t_00bb052f (claude 2.1.302)
+raw terminal capture: $PROJECT/.chorus/threads/t_00bb052f/raw/pty.log (30029 bytes)
+transcript: ~/.claude/projects/-private-var-folders-hj-b9dgqj-s11738sh6-z2w79bm0000gn-T-chorus-proof-plb27S/05f72d4e-8f3a-41a7-aaa1-98bc02b77487.jsonl
+transcript lines: 54  → parsed turns: 2, tool calls: 3, status: waiting
 
 last raw lines (cut) → what we made of the session:
-  raw  {"parentUuid":"56d37003-7a80-4030-adc8-e06b8e1d96fe","isSidechain":false,"message":{"model":"claude-haiku-5-5","id":"msg_011Cg8r2tXShTwSHtPE4KHAD","type":"messa
-  raw  {"parentUuid":"ad860db1-ab36-443d-b353-afd697ec2843","isSidechain":false,"type":"system","subtype":"turn_duration","durationMs":10254,"messageCount":28,"timesta
-  raw  {"type":"cost-state","sessionId":"4eaaca6e-389b-470a-bea3-8aa98c4d6b05","totalCostUSD":0.01017227,"totalAPIDuration":12976,"totalAPIDurationWithoutRetries":1295
+  raw  {"parentUuid":"2545b289-29af-4320-bb6e-17c7086cfc53","isSidechain":false,"message":{"model":"claude-haiku-5-5","id":"msg_011Cg91dER2Sr6wN5HpvL2Fq","type":"messa
+  raw  {"parentUuid":"b191b1aa-8f6c-42c9-a2b2-0220131b9922","isSidechain":false,"type":"system","subtype":"turn_duration","durationMs":9089,"messageCount":28,"timestam
+  raw  {"type":"cost-state","sessionId":"05f72d4e-8f3a-41a7-aaa1-98bc02b77487","totalCostUSD":0.01479742,"totalAPIDuration":9040,"totalAPIDurationWithoutRetries":9012,
   raw  {"type":"last-prompt","lastPrompt":"Create calc.js in the current directory that exports a function add(a, b). Run it once with your shell tool as: node -e \"co
-  raw  {"type":"cost-state","sessionId":"4eaaca6e-389b-470a-bea3-8aa98c4d6b05","totalCostUSD":0.01017227,"totalAPIDuration":12976,"totalAPIDurationWithoutRetries":1295
+  raw  {"type":"cost-state","sessionId":"05f72d4e-8f3a-41a7-aaa1-98bc02b77487","totalCostUSD":0.01479742,"totalAPIDuration":9040,"totalAPIDurationWithoutRetries":9012,
   tool ok Write $PROJECT/cal
-  tool ok Bash node -e "console.log(require('./calc.js').add(2, 3))"
+  tool ok Bash node -e "console.log(require('./calc.js').add(2, 3))" &amp;&amp; mkdir -p .chorus/thread
   tool ok Write $PROJECT/.ch
   turn user: Create calc.js in the current directory that exports a function add(a, b). Run it once with your she
   turn assistant: done
@@ -82,6 +82,6 @@ claude  2.1.302   verified 2.1.301  logged in
         data: ~/.claude
 codex   0.163.0   verified 0.163.0  logged in
         data: ~/.codex
-agy     1.4.1     verified 1.4.0    has a settings file (no status command; start agy once to sign in)
-        ⚠ agy 1.4.1 is newer than the last verified 1.4.0; re-run tools/probe and check docs/integrations/agy.md
+agy     1.4.2     verified 1.4.0    has a settings file (no status command; start agy once to sign in)
+        ⚠ agy 1.4.2 is newer than the last verified 1.4.0; re-run tools/probe and check docs/integrations/agy.md
         data: ~/.gemini/antigravity-cli</pre>

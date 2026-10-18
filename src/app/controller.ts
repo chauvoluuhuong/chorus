@@ -83,17 +83,14 @@ export class Controller {
     }
   }
 
-  /**
-   * `raw` prompts (handoffs) are typed exactly as given. Any other first prompt gets a line telling the agent
-   * where this thread's artifacts go (docs/architecture.md §9).
-   */
-  newThread(o: { agent: AgentId; title?: string; prompt?: string; parent?: ThreadRow; raw?: boolean; model?: string; cwd?: string }): Entry {
+  /** The first prompt is typed exactly as given: where artifacts go is told through the agent's instructions (launch.ts), not the prompt. */
+  newThread(o: { agent: AgentId; title?: string; prompt?: string; parent?: ThreadRow; model?: string; cwd?: string }): Entry {
     const cwd = o.cwd ?? this.project;
     const model = o.model && o.model !== 'default' ? o.model : this.o.models?.[o.agent];
     if (fs.existsSync(sourceDir(this.project))) syncSkills(this.project, { agents: [o.agent], into: cwd });
     const n = this.store.listThreads().filter(t => t.agent === o.agent).length + 1;
     const row = this.store.createThread({ title: o.title ?? `${o.agent} ${n}`, agent: o.agent, cwd, model: model ?? null, parent_thread_id: o.parent?.id, state: 'working' });
-    const prompt = o.prompt && !o.raw ? `${o.prompt}\n\n(Files meant for the user, such as notes or reports, go in ${this.store.artifactsDir(row.id)})` : o.prompt;
+    const prompt = o.prompt;
     const launch = (this.o.launcher ?? buildInteractive)(o.agent, { prompt, cwd, project: this.project, threadId: row.id, model });
     if (launch.sessionId) this.store.updateThread(row.id, { native_session_id: launch.sessionId });
     this.sawStart.set(row.id, o.prompt ? Date.now() : 0);
@@ -123,7 +120,7 @@ export class Controller {
     const from = this.store.getThread(fromId);
     if (!from) return undefined;
     this.tailers.get(fromId)?.poll(); // make sure the store has the latest of the source thread
-    const entry = this.newThread({ agent: to, title: `${from.title} → ${to}`, prompt: handoffPrompt(from), parent: from, raw: true });
+    const entry = this.newThread({ agent: to, title: `${from.title} → ${to}`, prompt: handoffPrompt(from), parent: from });
     this.app.setFlash(`handoff: ${to} is loading "${from.title}" through the Chorus MCP server`);
     return entry;
   }

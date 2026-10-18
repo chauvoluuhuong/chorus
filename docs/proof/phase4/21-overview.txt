@@ -1,13 +1,12 @@
  THREADS  · 1/3               │
 ▎ ○ Create calc.js in the cu… │ ▐▛███▛█   Claude Code v2.1.302
 ▎   claude · idle             │▝▜██████▀  Haiku 5.5 · Claude Pro
-  ↳ ◐ Create calc.js in the … │ ▝▝   ▝▝   /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-iPIUTf
+  ↳ ◐ Create calc.js in the … │ ▝▝   ▝▝   /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-plb27S
       codex · waiting for you │
   ◐ Reply with only the text… │
     codex · waiting for you   │❯ Create calc.js in the current directory that exports a function add(a, b). Run it once with your shell tool as: node
-                              │  -e "console.log(require('./calc.js').add(2, 3))" . Then write a short markdown note about what you did into
-                              │  notes.md in the artifacts folder. Reply with one line: done. (The artifacts folder is
-                              │  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-iPIUTf/.chorus/threads/t_753e7378/artifacts)
+                              │  -e "console.log(require('./calc.js').add(2, 3))" . Then write a short markdown note about what you did, as
+                              │  notes.md, where Chorus keeps files for the user. Reply with one line: done.
                               │
                               │⏺ Write(calc.js)
                               │  ⎿  Wrote 5 lines to calc.js
@@ -19,26 +18,27 @@
                               │
                               │  Ran 1 shell command
                               │
-                              │⏺ Write(.chorus/threads/t_753e7378/artifacts/notes.md)
-                              │  ⎿  Wrote 4 lines to .chorus/threads/t_753e7378/artifacts/notes.md
+                              │⏺ Write(.chorus/threads/t_00bb052f/artifacts/notes.md)
+                              │  ⎿  Wrote 14 lines to .chorus/threads/t_00bb052f/artifacts/notes.md
                               │      1 # Notes: calc.js
                               │      2
-                              │      3 - Created `calc.js` in the project root. It exports `add(a, b)`, which returns `a + b`, via `module.expo
-                              │        rts = { add }`.
-                              │      4 - Ran `node -e "console.log(require('./calc.js').add(2, 3))"` once with the shell tool. Output: `5`.
+                              │      3 ## What I did
+                              │      4
+                              │      5 1. Created `calc.js` in the project directory. It defines `add(a, b)`, which returns `a + b`, and export
+                              │        s it with `module.exports = { add }`.
+                              │      6 2. Ran the requested check with the shell:
+                              │      7    `node -e "console.log(require('./calc.js').add(2, 3))"`
+                              │      8    The output was `5`, so the export works as expected.
+                              │      9 3. Created the Chorus artifacts folder for this thread and saved this note there.
+                              │     … +5 lines
                               │
                               │⏺ done
                               │
-                              │✻ Cogitated for 10s · done 8:37 AM
-                              │
-                              │
-                              │
-                              │
-                              │
+                              │✻ Cogitated for 9s · done 10:42 AM
                               │
                               │
                               │───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-──────────────────────────────│❯ commit this
+──────────────────────────────│❯
  ⌃Space ↑↓ move  ⏎ open       │───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  ⌃Space n new  b hide         │  ⏸ manual mode on · ? for shortcuts
- chorus  preview: http://localhost:4317/t_753e7378/notes.md                                                                               ⌃Space menu
+ chorus  Create calc.js in the curren │ claude · claude-haiku-5-5 │ 1 artifact                                                            ⌃Space menu

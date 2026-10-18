@@ -22,7 +22,8 @@
     "smoke:app": "node test/smoke/app.ts",
     "proof": "node test/smoke/proof.ts --open",
     "proof:agy": "node test/smoke/proof-agy.ts --open",
-    "start": "node src/cli/index.ts"
+    "start": "node src/cli/index.ts",
+    "smoke:artifacts": "node test/smoke/artifacts.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

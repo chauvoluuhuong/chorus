@@ -3,11 +3,11 @@
 ▎   claude · idle             │  ▸ notes.md                        v1    claude   just now
   ↳ ◐ Create calc.js in the … │
       codex · waiting for you │  Preview  press o to open it in the browser: it reloads while the agent keeps editing
-  ◐ Reply with only the text… │  Path     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-iPIUTf/.chorus/threads/t_753e7378/arti
+  ◐ Reply with only the text… │  Path     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-plb27S/.chorus/threads/t_00bb052f/arti
     codex · waiting for you   │
                               │  Files written by tools
-                              │    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-iPIUTf/calc.js
-                              │    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-iPIUTf/.chorus/threads/t_753e7378/artifacts/n
+                              │    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-plb27S/calc.js
+                              │    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-plb27S/.chorus/threads/t_00bb052f/artifacts/n
                               │
                               │
                               │

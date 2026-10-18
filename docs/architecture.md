@@ -259,7 +259,7 @@ user: Ctrl+Space h → pick codex        (or: chorus handoff --to codex)
 
 ## 9. Artifacts
 
-- Agents are told the artifact folder `.chorus/threads/<id>/artifacts/` at start.
+- Agents are told the artifact folder `.chorus/threads/<id>/artifacts/` at start, **without touching the user's first prompt**: Claude and agy through the instructions of the Chorus MCP server (the server knows its thread), Codex through `-c developer_instructions=…` (it does not show MCP server instructions to the model). Verified with the real CLIs: `npm run smoke:artifacts`.
 - A file watcher registers new versions. Tool-call parsing alone isn't enough: in the probe,
   Claude created an artifact with `Bash` (`mkdir && printf`), not its `Write` tool.
 - `chorus artifacts [--open | --serve]`: list, open in the default app, or serve with live reload.

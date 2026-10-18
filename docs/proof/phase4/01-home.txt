@@ -1,6 +1,6 @@
-  chorus 0.1  ·  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-iPIUTf
+  chorus 0.1  ·  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-plb27S
 
-  Agents   claude 2.1.302 ✓     codex checking… ✓     agy 1.4.1 ✓
+  Agents   claude 2.1.302 ✓     codex checking… ✓     agy 1.4.2 ✓
 
   Threads
 

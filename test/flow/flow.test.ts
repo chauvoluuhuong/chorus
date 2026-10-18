@@ -107,3 +107,26 @@ test('fake agent can simulate a plan-limit stop', async () => {
   assert.equal(r.code, 1);
   assert.match(r.stdout, /usage limit reached/);
 });
+
+test('artifact folder: the MCP server tells the agent where the thread keeps files for the user', async () => {
+  const proj = project();
+  const c = await client(proj, 't_artifacts');
+  const text = c.getInstructions() ?? '';
+  assert.match(text, /Chorus thread t_artifacts/);
+  assert.ok(text.includes(path.join(proj, '.chorus', 'threads', 't_artifacts', 'artifacts')));
+  await c.close();
+  const none = await client(proj, '');
+  void none; // a server without a thread id has no folder to name: nothing to assert, it must simply start
+  await none.close();
+});
+
+test('artifact folder: Codex gets it as developer instructions (it does not show MCP server instructions to the model)', async () => {
+  const { buildHeadless, buildInteractive, artifactNote } = await import('../../src/core/launch.ts');
+  const proj = project();
+  for (const l of [buildHeadless('codex', { prompt: 'hi', cwd: proj, project: proj, threadId: 't_9' }), buildInteractive('codex', { cwd: proj, project: proj, threadId: 't_9' })]) {
+    const i = l.args.findIndex(a => a.startsWith('developer_instructions='));
+    assert.ok(i > 0 && l.args[i - 1] === '-c', l.args.join(' ').slice(0, 200));
+    assert.ok(l.args[i].includes(path.join(proj, '.chorus', 'threads', 't_9', 'artifacts')));
+  }
+  assert.match(artifactNote(proj, 't_9'), /Chorus thread t_9/);
+});

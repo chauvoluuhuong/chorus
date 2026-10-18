@@ -11,7 +11,12 @@ export const TOOL_NAMES = ['get_handoff_context', 'get_thread_turns', 'list_thre
 
 export function createServer(project: string, threadId?: string): McpServer {
   const store = new Store(project);
-  const server = new McpServer({ name: 'chorus', version: '0.0.1' });
+  // Every agent starts this server for its thread, so this text reaches all three: it says where the thread's artifacts go.
+  const dir = threadId ? store.artifactsDir(threadId) : undefined;
+  const instructions = dir
+    ? `This chat is Chorus thread ${threadId}. Files meant for the user (notes, plans, reports, mockups, anything that is not source code of the project) go in ${dir} (create it if missing). Chorus shows them in its Artifacts view.`
+    : undefined;
+  const server = new McpServer({ name: 'chorus', version: '0.0.1' }, instructions ? { instructions } : undefined);
 
   const reply = (tool: string, text: string, isError = false) => {
     try {
