@@ -89,3 +89,45 @@ global (`~/.chorus/skills`). Not solved yet, to do later:
   the agent lacks, and cannot grant permissions (`allowed-tools` only means something to Claude).
 - [ ] **Proof:** a probe puts a Claude-style skill (uses `TodoWrite`, `$ARGUMENTS`, `allowed-tools`) in the
   library and checks in the Codex and agy transcripts that they load it and follow it; fixture in `fixtures/skills/`.
+
+### TD-2 · Memory must not depend on agent initiative
+Probed ([risks/memory-adoption](risks/memory-adoption.md)): agents save a memory on their own 7/9 times, use it 3/9; Codex 1/3 and 0/3.
+- [ ] Inject a ≤300-token digest of global + project memory at chat start through the artifacts-note channels (MCP instructions for Claude/agy, `developer_instructions` for Codex).
+- [ ] Capture memory candidates from transcripts and show them in the Memory screen as "Save?" (user confirms); `remember`/`recall` stay as bonus tools.
+- [ ] Re-probe with a stronger Claude model and interactive sessions before quoting any adoption rate.
+
+### TD-3 · Failures and file changes are invisible to the adapters
+([risks/capture-errors](risks/capture-errors.md)) A bad model shows as a normal Claude turn, or as an empty thread for Codex and agy; Codex `file_change` never reaches the Files view.
+- [ ] `Session.error` (`kind`, `message`, `status`), thread state `failed`, shown in sidebar, status line and `get_handoff_context`.
+- [ ] Claude `result.is_error` (drop the `<synthetic>` turn), Codex `turn.failed`/`error`, agy `result.status==="ERROR"`; fixtures + L1 tests from `fixtures/risks/capture-errors/`.
+- [ ] Codex `file_change` → tool call per changed path. Codex `reasoning` is encrypted: do not capture.
+
+### TD-4 · Transcript matching when two threads start together
+([risks/session-race](risks/session-race.md)) Codex birth order disagreed with launch order in 2/2 trials; same cwd.
+- [ ] Codex: match the rollout by the `This chat is Chorus thread t_…` line in its developer message (`discover.ts`).
+- [ ] agy: launch with a per-thread `--log-file` and read the session id from it (verify with interactive `-i`); fallback: serialize agy launches.
+- [ ] Never guess when ambiguous: leave unlinked and retry.
+
+### TD-5 · Mouse, focus and kitty keyboard are not forwarded to threads
+([risks/terminal-protocols](risks/terminal-protocols.md)) Codex asks for mouse (1000–1006) and kitty keys; agy for kitty keys; Claude for focus events.
+- [ ] Track the child's modes from the virtual screen; forward clicks inside the thread region (offset by sidebar and top bar) as SGR when enabled; answer the kitty query honestly and re-encode Shift/Ctrl+Enter; forward focus to the focused thread only.
+
+### TD-6 · Windows is unverified
+([risks/windows](risks/windows.md)) node-pty/ConPTY, CLI home paths, Claude slug rule, skills copy-mode, Ctrl+\ in conhost.
+- [ ] `windows-latest` CI job (`npm test` + `store-concurrency`), then a probe on a real Windows machine.
+
+### TD-7 · No real plan-limit capture
+([risks/plan-limit](risks/plan-limit.md)) The limit box is built on `fake-agent`; no real message from any CLI.
+- [ ] Capture raw transcript + screen at the first natural limit hit; adapter test; `Session.error.kind='quota'`.
+
+### TD-8 · Store write cost grows with session length
+`Store.recordSession` rewrites every turn row on each tail (`INSERT OR REPLACE`); worst write was 992 ms with 24 writers ([risks/store-concurrency](risks/store-concurrency.md)). No lost writes.
+- [ ] Insert only turns above the stored count; batch tailer writes (~250 ms). Do it with the move to `~/.chorus/chorus.db`.
+
+### TD-9 · Approval prompt wording is version-specific
+([risks/approval-drift](risks/approval-drift.md)) Resolved for claude 2.1.302, codex 0.163.0, agy 1.4.2.
+- [ ] Run `npm run risk -- approval-drift` before `npm run proof`; refresh fixtures with `approval-probe.mjs` on every CLI update.
+
+### TD-10 · "Skip permissions" flags are documented, not verified in the interactive screen
+Claude `--dangerously-skip-permissions`, Codex `--dangerously-bypass-approvals-and-sandbox`, agy `--dangerously-skip-permissions` (ui-plan item 4).
+- [ ] Check each flag in the interactive TUI with a probe before the New chat checkbox ships; status line shows `skip` in amber.
