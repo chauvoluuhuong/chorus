@@ -1,0 +1,44 @@
+ CHORUS                   │ files and artifacts
+                          │ artifacts:
+▶1 Create calc.js in the ○│ t_493f98ca  .chorus/threads/t_493f98ca/artifacts/notes.md  (231102a10ff2)
+ 2 claude 1              ○│
+ 3 Create calc.js in the ○│ files written by tools:
+ 4 Create calc.js in the ●│ /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-Ehl4pX/calc.js
+                          │ /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-Ehl4pX/.chorus/threads/t_493f98ca/artifacts/notes.md
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │ ↑/↓ PgUp/PgDn scroll · g/G top/bottom · esc close  (1-6 of 6)
+ 1/4  Create calc.js in the curren  ·  agy                                                                                           ctrl+space: menu

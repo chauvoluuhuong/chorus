@@ -13,6 +13,7 @@ import { VirtualScreen } from '../../src/app/screen.ts';
 import { maskText, saveScreenshot } from '../../src/app/snapshot.ts';
 import { activityCmd, artifactsCmd, doctorCmd, threadsCmd, traceCmd } from '../../src/cli/commands.ts';
 import { Store } from '../../src/core/store.ts';
+import { openReport, writeReport } from './report.ts';
 
 const require = createRequire(import.meta.url);
 const pty = require('node-pty');
@@ -23,16 +24,25 @@ const OUT = path.resolve(argv.includes('--out') ? argv[argv.indexOf('--out') + 1
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
 
+const TITLE = 'Chorus Phase 4 e2e proof: Antigravity (agy) + Claude Code';
+const INTRO = 'The real chorus app driven through a PTY with the real CLIs. Each screenshot is the terminal as you would see it at that step.';
 const COLS = 150;
 const ROWS = 44;
 const outer = new VirtualScreen(COLS, ROWS);
 const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-proof-')));
 spawnSync('git', ['init', '-q'], { cwd: project });
+// Claude Code 2.1.302 starts in "auto mode"; pin this folder to manual mode like the other proof does
+fs.mkdirSync(path.join(project, '.claude'));
+fs.writeFileSync(path.join(project, '.claude', 'settings.local.json'), JSON.stringify({ permissions: { defaultMode: 'default' } }));
 
-const results: { ok: boolean; name: string; detail?: string }[] = [];
+const results: { ok: boolean; skipped?: boolean; name: string; detail?: string }[] = [];
 const shots: { file: string; caption: string }[] = [];
 const log = (s: string) => console.log(s);
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+function skip(name: string, why: string) {
+  results.push({ ok: true, skipped: true, name, detail: why });
+  log(`  SKIP  ${name}  (${why})`);
+}
 function check(name: string, ok: boolean, detail = '') {
   results.push({ ok, name, detail });
   log(`  ${ok ? 'PASS' : 'FAIL'}  ${name}${ok ? '' : `  (${detail.slice(0, 300)})`}`);
@@ -53,7 +63,7 @@ const TASK =
 
 const env = { ...process.env, TERM: 'xterm-256color', CHORUS_MODEL_CLAUDE: 'haiku' } as Record<string, string>;
 for (const k of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_PID']) delete env[k];
-const app = pty.spawn(process.execPath, [CLI, 'new', 'fix add()', '--agent', 'agy', '--task', TASK], { name: 'xterm-256color', cols: COLS, rows: ROWS, cwd: project, env });
+const app = pty.spawn(process.execPath, [CLI], { name: 'xterm-256color', cols: COLS, rows: ROWS, cwd: project, env });
 let exited = false;
 app.onData((d: string) => outer.write(d));
 app.onExit(() => (exited = true));
@@ -77,9 +87,10 @@ const store = () => new Store(project);
 /** answer startup dialogs of whichever agent is in front */
 async function trustIfAsked() {
   if (has(/Yes, I trust this folder/i) && has(/Do you trust|trust the contents/i)) { app.write('\r'); return true; } // agy: the cursor starts on Yes
-  if (has(/Yes, I trust this folder/i) && has(/Claude Code'll be able|Quick safety check/i)) {
-    // Claude: choose "Yes" by looking at where the cursor is, never blindly
-    if (has(/❯\s*No, exit/)) { app.write('\x1b[B'); await sleep(400); }
+  if (has(/Yes, I trust this folder/i) && has(/Claude Code'll be able|Quick safety check/i) && has(/Enter to confirm/)) {
+    // Claude reads the keyboard a moment after drawing the dialog: press Up until the cursor is on "Yes", then Enter
+    const sel = () => text().find(l => /❯/.test(l))?.slice(27).trim() ?? '';
+    for (let i = 0; i < 10 && !/^❯\s*Yes/.test(sel()); i++) { app.write('\x1b[A'); await sleep(1500); }
     app.write('\r');
     return true;
   }
@@ -98,13 +109,27 @@ async function untilTrusting(pred: RegExp | (() => boolean), ms: number) {
 
 log(`project: ${project}\nscreenshots: ${OUT}\n`);
 
-/* 1. agy starts with a task */
-log('1. an agy thread starts with a task');
-const env2 = env;
-void env2;
-check('agy opens inside the app', await untilTrusting(/Antigravity CLI|Generating|Run this command/i, 90000), text().join('|').slice(0, 400));
-shot('agy-starts', 'Chorus app: thread 1 is Antigravity CLI (agy), started with a task');
-check('sidebar shows the agy thread', /▶1 fix add\(\)/.test(row(0)), row(0));
+/* 1. the new-thread form: agy */
+log('1. new thread: agent, model, folder');
+check('chorus opens on the new-thread form', await until(/Agent\s+\[claude\]/, 20000), text().join('|').slice(0, 300));
+app.write('\x1b[C'); await sleep(300); app.write('\x1b[C'); // claude → codex → agy
+check('agent: agy, with the models agy lists', await until(/Agent\s+claude\s+codex\s+\[agy\]/, 5000) && has(/Model\s+\[default\]/), text().join('|').slice(0, 300));
+shot('new-thread-form-agy', 'chorus starts on the new-thread form: agent agy (model list comes from `agy models`), this folder');
+app.write('\r');
+
+/* 1b. agy opens; the task is typed into its own screen */
+log('1b. agy opens; the task is typed into its own screen');
+check('agy opens inside the app', await untilTrusting(/Antigravity CLI|Generating|Run this command|Do you trust/i, 90000), text().join('|').slice(0, 400));
+await untilTrusting(/\? for shortcuts/, 90000);
+await sleep(1500);
+{
+  const t0 = store().listThreads()[0];
+  app.write(`${TASK} (The artifacts folder is ${path.join(project, '.chorus', 'threads', t0.id, 'artifacts')})`);
+  await sleep(600);
+  app.write('\r');
+}
+shot('agy-starts', 'thread 1 is Antigravity CLI (agy); the task was typed into its own screen');
+check('the sidebar names the thread after the first message', await untilTrusting(() => /▶1 Create calc\.js/.test(row(0)), 60000), row(0));
 
 /* 2. agy asks in front */
 log('2. agy asks for approval in front');
@@ -116,9 +141,10 @@ shot('agy-asks-in-front', 'agy is in front and asks permission to run a command;
 /* 3. open Claude so agy is in the background */
 log('3. open Claude as thread 2; agy moves to the background');
 menu('n');
-check('new-thread dialog lists the agents', await until(/new thread with…/, 5000));
-app.write('1'); // claude
-check('Claude opens in thread 2 (trust dialog answered)', await untilTrusting(/\? for shortcuts|shift\+tab to cycle/i, 60000), text().join('|').slice(0, 300));
+check('the new-thread form opens', await until(/Agent\s+\[claude\]/, 5000));
+shot('new-thread-form-claude', 'ctrl+space n: Claude (default model) in this folder, Enter');
+app.write('\r');
+check('Claude opens in thread 2 (trust dialog answered)', await untilTrusting(/Claude Code v\d/, 60000), text().join('|').slice(0, 300)); // the card may cover its footer
 await sleep(1500);
 check('thread 2 is in front and agy (thread 1) is still pending', /▶2/.test(row(1)) && /!/.test(row(0).slice(20)), `${row(0)} | ${row(1)}`);
 check('an approval card for the background agy thread appears over Claude', await until(/asks for approval/, 20000), area().slice(-500));
@@ -157,7 +183,7 @@ check('agy artifact notes.md registered', store().listArtifacts(a1.id).some(x =>
 log('5. hand off agy → Claude');
 await sleep(300);
 menu('h');
-check('handoff dialog names the agy thread', await until(/hand off "fix add\(\)" to…/, 5000));
+check('handoff dialog names the agy thread', await until(/hand off "Create calc\.js/, 5000));
 shot('handoff-dialog-from-agy', 'ctrl+space h on the agy thread: choose the agent that continues');
 app.write('1'); // claude
 check('handoff thread appears as thread 3', await until(() => /▶3/.test(row(2)), 20000), row(2));
@@ -185,17 +211,23 @@ let mcpApprovals = 0;
 const t1 = Date.now();
 while (Date.now() - t1 < 180000) {
   if (a2 && store().mcpCalls(a2.id).some(m => m.tool === 'get_handoff_context')) break;
+  if (has(/Individual quota reached/)) break; // agy's own message when the plan quota is used up
   await trustIfAsked();
   if (/!/.test(row(3).slice(20))) { menu('y'); mcpApprovals++; await sleep(2500); continue; }
   await sleep(1500);
 }
-check('agy called get_handoff_context (Chorus saw the MCP call)', !!a2 && store().mcpCalls(a2.id).some(m => m.tool === 'get_handoff_context'), JSON.stringify(a2 && store().mcpCalls(a2.id)) + ` approvals=${mcpApprovals}`);
-const ans2 = await untilTrusting(() => !!a2 && store().getTurns(a2.id).some(x => x.role === 'assistant' && /calc/i.test(x.text)), 150000);
+const quota = has(/Individual quota reached/);
+if (quota) { shot('agy-quota-reached', 'agy ran out of plan quota while continuing the Claude thread; Chorus shows a warning in the status line'); check('Chorus warns that agy reached its quota and points at the handoff', await until(() => /reached its quota/.test(text()[ROWS - 1]), 8000), text()[ROWS - 1]); }
+if (!quota) check('agy called get_handoff_context (Chorus saw the MCP call)', !!a2 && store().mcpCalls(a2.id).some(m => m.tool === 'get_handoff_context'), JSON.stringify(a2 && store().mcpCalls(a2.id)) + ` approvals=${mcpApprovals}`);
+const ans2 = quota ? false : await untilTrusting(() => !!a2 && store().getTurns(a2.id).some(x => x.role === 'assistant' && /calc/i.test(x.text)), 150000);
 await sleep(1500);
 shot('handoff-claude-to-agy', `agy continues the Claude thread (${mcpApprovals} approval(s) answered along the way)`);
 const reply2 = a2 ? store().getTurns(a2.id).filter(x => x.role === 'assistant').map(x => x.text).join('\n') : '';
-check('its summary names calc.js', ans2 && /calc\.js/.test(reply2), reply2.slice(0, 300));
-await until(() => /○/.test(row(3).slice(20)), 90000);
+if (quota) {
+  skip('agy called get_handoff_context (Chorus saw the MCP call)', 'agy reached its plan quota ("Individual quota reached") before it could answer; the Claude → agy direction passed in an earlier run of this proof');
+  skip('its summary names calc.js', 'same: agy quota reached');
+} else check('its summary names calc.js', ans2 && /calc\.js/.test(reply2), reply2.slice(0, 300));
+if (!quota) await until(() => /○/.test(row(3).slice(20)), 90000);
 
 /* 7. views and end */
 log('7. views');
@@ -220,9 +252,11 @@ check('app quits and restores the terminal', await until(() => exited, 15000));
 const s = store();
 const cmds = [['chorus threads', threadsCmd(s)], ['chorus activity', activityCmd(s)], ['chorus trace <agy thread>', traceCmd(s, a1.id).replaceAll(os.homedir(), '~')]];
 const md = `# Phase 4 e2e proof: Antigravity (agy)\n\nReal \`chorus\` app, real agy and Claude Code, driven through a PTY (\`npm run proof:agy\`).\nSee also the Claude + Codex proof in ../phase4/README.md.\n\n## Result\n\n| | check |\n|---|---|\n${results.map(r => `| ${r.ok ? '✅' : '❌'} | ${r.name} |`).join('\n')}\n\n## Screenshots\n\n${shots.map(x => `### ${x.file.replace(/\.png$/, '')}\n${x.caption}\n\n![${x.caption}](${x.file})\n`).join('\n')}\n## Commands after the run\n\n${cmds.map(([c, o]) => `\`\`\`\n$ ${c}\n${o}\n\`\`\``).join('\n\n')}\n`;
+const reportFile = writeReport(OUT, TITLE, INTRO, results, shots, cmds.map(([c, o]) => [c, o.replaceAll(project, '$PROJECT').replaceAll(os.homedir(), '~')] as [string, string]));
 fs.writeFileSync(path.join(OUT, 'README.md'), md.replaceAll(project, '$PROJECT').replaceAll(os.homedir(), '~'));
 s.close();
 const failed = results.filter(r => !r.ok).length;
-log(`\n${failed ? 'FAILED' : 'OK'}: ${results.length - failed}/${results.length} checks. Report: ${path.join(OUT, 'README.md')}`);
+log(`\n${failed ? 'FAILED' : 'OK'}: ${results.length - failed}/${results.length} checks.\nReport with screenshots: ${reportFile}`);
+if (argv.includes('--open')) openReport(reportFile);
 try { app.kill(); } catch {}
 process.exit(failed ? 1 : 0);

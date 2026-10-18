@@ -1,0 +1,65 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chorus Phase 4 e2e proof: Antigravity (agy) + Claude Code</title>
+<style>
+:root{--bg:#f4f6f8;--fg:#1a1f27;--muted:#5a6474;--line:#dde2e9;--ok:#0f766e;--bad:#b42318;--panel:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1014;--fg:#e3e8ef;--muted:#98a3b4;--line:#262d38;--ok:#4fc1b6;--bad:#f07a7a;--panel:#151a21}}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 -apple-system,"Segoe UI",system-ui,sans-serif;padding:24px max(16px,4vw) 64px}
+h1{font-size:24px;margin:0 0 4px}h2{font-size:18px;margin:32px 0 10px}p{color:var(--muted);max-width:80ch}
+.verdict{display:inline-block;padding:4px 12px;border-radius:999px;font-weight:600;color:#fff;background:var(--ok)}
+table{border-collapse:collapse;width:100%;max-width:1000px;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+td{padding:7px 12px;border-bottom:1px solid var(--line);vertical-align:top}td:first-child{width:28px}
+figure{margin:0 0 28px;max-width:1380px}figcaption{margin:0 0 8px;font-weight:600}
+figure img{width:100%;height:auto;border-radius:8px;border:1px solid var(--line);display:block}
+pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow-x:auto;font-size:12.5px;max-width:1000px}
+.n{color:var(--muted);font-weight:400;margin-right:6px}
+</style>
+<h1>Chorus Phase 4 e2e proof: Antigravity (agy) + Claude Code</h1><p>The real chorus app driven through a PTY with the real CLIs. Each screenshot is the terminal as you would see it at that step. Note: the last step of this run stopped because agy reached its plan quota.</p>
+<span class="verdict">25 checks passed, 2 not run (see below)</span>
+<h2>Screenshots</h2>
+<figure><figcaption><span class="n">01</span>chorus starts on the new-thread form: agent agy (model list comes from `agy models`), this folder</figcaption><img src="01-new-thread-form-agy.png" alt="chorus starts on the new-thread form: agent agy (model list comes from `agy models`), this folder" loading="lazy"></figure>
+<figure><figcaption><span class="n">02</span>thread 1 is Antigravity CLI (agy); the task was typed into its own screen</figcaption><img src="02-agy-starts.png" alt="thread 1 is Antigravity CLI (agy); the task was typed into its own screen" loading="lazy"></figure>
+<figure><figcaption><span class="n">03</span>agy is in front and asks permission to run a command; the sidebar shows ! for thread 1</figcaption><img src="03-agy-asks-in-front.png" alt="agy is in front and asks permission to run a command; the sidebar shows ! for thread 1" loading="lazy"></figure>
+<figure><figcaption><span class="n">04</span>ctrl+space n: Claude (default model) in this folder, Enter</figcaption><img src="04-new-thread-form-claude.png" alt="ctrl+space n: Claude (default model) in this folder, Enter" loading="lazy"></figure>
+<figure><figcaption><span class="n">05</span>Claude is in front; agy (background) is waiting, and Chorus shows its request as a card</figcaption><img src="05-card-for-agy.png" alt="Claude is in front; agy (background) is waiting, and Chorus shows its request as a card" loading="lazy"></figure>
+<figure><figcaption><span class="n">06</span>the card shows what agy wants to run and the keys to answer</figcaption><img src="06-card-detail.png" alt="the card shows what agy wants to run and the keys to answer" loading="lazy"></figure>
+<figure><figcaption><span class="n">07</span>approved 3 agy request(s) from the card; thread 2 (Claude) stayed in front</figcaption><img src="07-after-approvals.png" alt="approved 3 agy request(s) from the card; thread 2 (Claude) stayed in front" loading="lazy"></figure>
+<figure><figcaption><span class="n">08</span>switching to thread 1: what agy did (its own screen, state kept in the background)</figcaption><img src="08-agy-result.png" alt="switching to thread 1: what agy did (its own screen, state kept in the background)" loading="lazy"></figure>
+<figure><figcaption><span class="n">09</span>ctrl+space h on the agy thread: choose the agent that continues</figcaption><img src="09-handoff-dialog-from-agy.png" alt="ctrl+space h on the agy thread: choose the agent that continues" loading="lazy"></figure>
+<figure><figcaption><span class="n">10</span>Claude continues the agy thread: it loaded the context through the Chorus MCP server and summarises it</figcaption><img src="10-handoff-agy-to-claude.png" alt="Claude continues the agy thread: it loaded the context through the Chorus MCP server and summarises it" loading="lazy"></figure>
+<figure><figcaption><span class="n">11</span>agy continues the Claude thread (3 approval(s) answered along the way)</figcaption><img src="11-handoff-claude-to-agy.png" alt="agy continues the Claude thread (3 approval(s) answered along the way)" loading="lazy"></figure>
+<figure><figcaption><span class="n">12</span>ctrl+space m on the last thread: the digest carried across Claude and agy</figcaption><img src="12-memory-view.png" alt="ctrl+space m on the last thread: the digest carried across Claude and agy" loading="lazy"></figure>
+<figure><figcaption><span class="n">13</span>ctrl+space f: the artifact agy wrote</figcaption><img src="13-files-view.png" alt="ctrl+space f: the artifact agy wrote" loading="lazy"></figure>
+<figure><figcaption><span class="n">14</span>final state: agy, Claude, the Claude handoff thread and the agy handoff thread</figcaption><img src="14-overview.png" alt="final state: agy, Claude, the Claude handoff thread and the agy handoff thread" loading="lazy"></figure>
+<h2>Checks</h2>
+<table><tr><td>✅</td><td>chorus opens on the new-thread form</td></tr><tr><td>✅</td><td>agent: agy, with the models agy lists</td></tr><tr><td>✅</td><td>agy opens inside the app</td></tr><tr><td>✅</td><td>the sidebar names the thread after the first message</td></tr><tr><td>✅</td><td>agy's own permission prompt is detected (sidebar shows !)</td></tr><tr><td>✅</td><td>the new-thread form opens</td></tr><tr><td>✅</td><td>Claude opens in thread 2 (trust dialog answered)</td></tr><tr><td>✅</td><td>thread 2 is in front and agy (thread 1) is still pending</td></tr><tr><td>✅</td><td>an approval card for the background agy thread appears over Claude</td></tr><tr><td>✅</td><td>at least one agy request was approved from a card</td></tr><tr><td>✅</td><td>agy created calc.js</td></tr><tr><td>✅</td><td>agy thread finished: waiting dot, store state</td></tr><tr><td>✅</td><td>live tailing recorded agy turns, tool calls and usage</td></tr><tr><td>✅</td><td>agy artifact notes.md registered</td></tr><tr><td>✅</td><td>handoff dialog names the agy thread</td></tr><tr><td>✅</td><td>handoff thread appears as thread 3</td></tr><tr><td>✅</td><td>it is a child of the agy thread (claude)</td></tr><tr><td>✅</td><td>Claude called get_handoff_context (Chorus saw the MCP call)</td></tr><tr><td>✅</td><td>its summary names calc.js</td></tr><tr><td>✅</td><td>handoff dialog names the Claude thread</td></tr><tr><td>✅</td><td>the agy handoff thread appears as thread 4</td></tr><tr><td>✅</td><td>it is a child of the Claude thread (agy)</td></tr><tr><td>⏭</td><td>agy called get_handoff_context (Chorus saw the MCP call)<br><small style="color:var(--muted)">agy reached its plan quota ("Individual quota reached", resets in 147h) before it could answer. The Claude → agy direction passed (27/27) in the previous run of this proof; its images were replaced when the run was repeated to mask the home-folder name.</small></td></tr><tr><td>⏭</td><td>its summary names calc.js<br><small style="color:var(--muted)">agy reached its plan quota ("Individual quota reached", resets in 147h) before it could answer. The Claude → agy direction passed (27/27) in the previous run of this proof; its images were replaced when the run was repeated to mask the home-folder name.</small></td></tr><tr><td>✅</td><td>memory view of the agy-continued thread</td></tr><tr><td>✅</td><td>files view lists the agy artifact</td></tr><tr><td>✅</td><td>app quits and restores the terminal</td></tr></table>
+<h2>Commands after the run</h2>
+<pre>$ chorus threads
+id          agent   state    parent      title
+t_a3b003be  agy     working  t_f8005c8e  Create calc.js in the curren → claude → agy
+t_f8005c8e  claude  waiting  t_493f98ca  Create calc.js in the curren → claude
+t_493f98ca  agy     waiting  -           Create calc.js in the curren
+t_c335c497  claude  working  -           claude 1</pre>
+<pre>$ chorus activity
+thread      agent   turns  tools  mcp   tokens in/out     cost     limit
+t_a3b003be  agy     1      4      0     58148/1442        -        -
+t_f8005c8e  claude  2      2      1     35686/680         -        -
+t_493f98ca  agy     2      3      0     60196/1428        -        -
+t_c335c497  claude  0      0      0     -                 -        -</pre>
+<pre>$ chorus trace &lt;agy thread>
+thread t_493f98ca (agy ?)
+raw terminal capture: $PROJECT/.chorus/threads/t_493f98ca/raw/pty.log (26963 bytes)
+transcript: ~/.gemini/antigravity-cli/brain/3066f33c-82b8-46c6-af92-fe49d5009c18/.system_generated/logs/transcript.jsonl
+transcript lines: 8  → parsed turns: 2, tool calls: 3, status: waiting
+
+last raw lines (cut) → what we made of the session:
+  raw  {"step_index":3,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-10-18T00:41:10Z","input_tokens":14984,"cache_read_tokens":0,"outpu
+  raw  {"step_index":4,"source":"MODEL","type":"GENERIC","status":"DONE","created_at":"2026-10-18T00:41:13Z","content":"Created At: 2026-10-18T07:41:13+07:00\nComplete
+  raw  {"step_index":5,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-10-18T00:41:14Z","input_tokens":15278,"cache_read_tokens":0,"outpu
+  raw  {"step_index":6,"source":"MODEL","type":"GENERIC","status":"DONE","created_at":"2026-10-18T00:41:19Z","content":"Created At: 2026-10-18T07:41:19+07:00\nComplete
+  raw  {"step_index":7,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-10-18T00:41:20Z","input_tokens":15878,"cache_read_tokens":0,"outpu
+  tool ok write_to_file $PROJECT/cal
+  tool ok run_command node -e "console.log(require('./calc.js').add(2, 3))"
+  tool ok write_to_file $PROJECT/.ch
+  turn user: Create calc.js in the current directory that exports a function add(a, b). Run it once with your she
+  turn assistant: done.
+
+MCP calls from this thread: none</pre>

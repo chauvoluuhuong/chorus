@@ -1,0 +1,44 @@
+ CHORUS                   │^[[?1;2c
+                          │
+▶1 agy 1                 ●│      ▄▀▀▄        Antigravity CLI 1.4.1
+                          │     ▀▀▀▀▀▀       •••••••••••••••••••••• (Antigravity Starter Quota)
+                          │    ▀▀▀▀▀▀▀▀      Gemini 3.8 Flash (High)
+                          │   ▄▀▀    ▀▀▄     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-Ehl4pX
+                          │  ▄▀▀      ▀▀▄
+                          │
+                          │
+                          │ ┃ Verbosity now defaults to medium
+                          │ ┃ Verbosity is now medium by default, so tool calls and thoughts roll up into summaries. You can change your preferred
+                          │ ┃ verbosity anytime in /config > Verbosity.
+                          │ ┃ esc to dismiss
+                          │───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                          │> Create calc.js in the current directory that exports a function add(a, b). Run it once with your shell tool as: node -e
+                          │  "console.log(require('./calc.js').add(2, 3))" . Then write a short markdown note about what you did into notes.md in
+                          │  the artifacts folder. Reply with one line: done. (The artifacts folder is
+                          │  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-Ehl4pX/.chorus/threads/t_493f98ca/artifacts)
+                          │───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                          │                                                                                                    Gemini 3.8 Flash · high
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+                          │
+ 1/1  agy 1  ·  agy                                                                                                                  ctrl+space: menu

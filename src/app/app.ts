@@ -42,6 +42,10 @@ export interface AppOpts {
   ptyFactory?: PtyFactory;
 }
 
+export type FormField =
+  | { kind: 'select'; label: string; options: string[] | ((values: Record<string, string>) => string[]); index?: number }
+  | { kind: 'text'; label: string; value: string; hint?: string };
+
 export interface Card {
   threadId: string;
   title: string;
@@ -73,6 +77,7 @@ export class App extends EventEmitter {
   private applied = { appCursor: false, bracketedPaste: false };
   private offResize: (() => void) | undefined;
   private pane: { title: string; lines: string[]; scroll: number } | undefined;
+  private formState: { title: string; fields: FormField[]; focus: number; error: string; validate?: (v: Record<string, string>) => string | undefined; resolve: (v: Record<string, string> | undefined) => void } | undefined;
   private dialog: { title: string; options: string[]; sel: number; resolve: (i: number | undefined) => void } | undefined;
   private card: Card | undefined;
   private onData = (d: string | Buffer) => this.router.feed(String(d));
@@ -216,6 +221,56 @@ export class App extends EventEmitter {
     });
   }
 
+  /** A small form: select fields (←/→) and text fields; Enter submits, Esc cancels. Resolves with label → value. */
+  form(title: string, fields: FormField[], validate?: (v: Record<string, string>) => string | undefined): Promise<Record<string, string> | undefined> {
+    return new Promise(resolve => {
+      this.formState = { title, fields: fields.map(f => ({ ...f })), focus: 0, error: '', validate, resolve };
+      this.router.capture = true;
+      this.schedule();
+    });
+  }
+
+  private formValues(): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const f of this.formState!.fields) out[f.label] = f.kind === 'text' ? f.value : this.optionsOf(f, out)[f.index ?? 0] ?? '';
+    return out;
+  }
+
+  private optionsOf(f: Extract<FormField, { kind: 'select' }>, values: Record<string, string>): string[] {
+    return typeof f.options === 'function' ? f.options(values) : f.options;
+  }
+
+  private formKey(key: string) {
+    const st = this.formState!;
+    const f = st.fields[st.focus];
+    const finish = (v: Record<string, string> | undefined) => {
+      this.formState = undefined;
+      this.router.capture = !!this.pane || !!this.dialog;
+      st.resolve(v);
+      this.schedule();
+    };
+    st.error = '';
+    if (key === '\x1b') return finish(undefined);
+    if (key === '\r' || key === '\n') {
+      const v = this.formValues();
+      const err = st.validate?.(v);
+      if (err) st.error = err;
+      else return finish(v);
+    } else if (key === '\t' || key === '\x1b[B') st.focus = (st.focus + 1) % st.fields.length;
+    else if (key === '\x1b[Z' || key === '\x1b[A') st.focus = (st.focus + st.fields.length - 1) % st.fields.length;
+    else if (f.kind === 'select' && (key === '\x1b[C' || key === '\x1b[D')) {
+      const n = this.optionsOf(f, this.formValues()).length;
+      f.index = ((f.index ?? 0) + (key === '\x1b[C' ? 1 : n - 1)) % Math.max(1, n);
+      // later selects depend on earlier ones (the model list depends on the agent): start them over
+      for (const g of st.fields.slice(st.focus + 1)) if (g.kind === 'select') g.index = 0;
+    } else if (f.kind === 'text') {
+      if (key === '\x7f' || key === '\b') f.value = f.value.slice(0, -1);
+      else if (key === '\x15') f.value = '';
+      else if (key.length === 1 && key >= ' ') f.value += key;
+    }
+    this.schedule();
+  }
+
   setCard(card: Card | undefined) {
     if (JSON.stringify(card) === JSON.stringify(this.card)) return;
     this.card = card;
@@ -303,6 +358,7 @@ export class App extends EventEmitter {
   }
 
   private onCaptured(key: string) {
+    if (this.formState) return this.formKey(key);
     if (this.dialog) {
       const d = this.dialog;
       const done = (i: number | undefined) => {
@@ -356,7 +412,7 @@ export class App extends EventEmitter {
     const act = this.current;
     const L = layout(cols, rows, this.sidebarOn ? this.sidebarWidth : 0);
     const dialog = this.dialog;
-    const overlay = dialog
+    const overlay = this.formState ? this.formOverlay() : dialog
       ? { title: dialog.title, lines: dialog.options.map((o, i) => `${i + 1}  ${o}`), selected: dialog.sel }
       : this.router.menuOpen
         ? { title: 'chorus', lines: this.menuItems().map(i => i.label), selected: this.menuSel }
@@ -387,6 +443,23 @@ export class App extends EventEmitter {
     if (cursor) out += `\x1b[${cursor.y + 1};${cursor.x + 1}H\x1b[?25h`;
     out += '\x1b[?2026l';
     this.io.stdout.write(out);
+  }
+
+  private formOverlay() {
+    const st = this.formState!;
+    const values: Record<string, string> = {};
+    const lines = st.fields.map(f => {
+      if (f.kind === 'text') {
+        values[f.label] = f.value;
+        return `${f.label.padEnd(7)} ${f.value}${st.fields[st.focus] === f ? '▌' : ''}`;
+      }
+      const opts = this.optionsOf(f, values);
+      values[f.label] = opts[f.index ?? 0] ?? '';
+      const shown = opts.slice(Math.max(0, (f.index ?? 0) - 3), Math.max(0, (f.index ?? 0) - 3) + 7).map(o => (o === values[f.label] ? `[${o}]` : ` ${o} `));
+      return `${f.label.padEnd(7)} ${shown.join(' ')}`;
+    });
+    const hint = st.error ? `! ${st.error}` : '⏎ start   tab next field   ←/→ change   esc cancel';
+    return { title: st.title, lines: [...lines, '', hint], selected: st.focus };
   }
 
   /** Mirror the modes the active agent set on its (virtual) terminal onto the real one, so keys encode the way it expects. */

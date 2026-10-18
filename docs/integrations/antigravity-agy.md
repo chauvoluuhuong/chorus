@@ -100,7 +100,8 @@ Tool names seen: `view_file` (`AbsolutePath`), `run_command` (`CommandLine`; out
 | exit `1` | bad `--agent`, invalid `--json-schema` | 📄 |
 | exit `2` | `--print` combined with `--prompt-interactive` | 📄 |
 | exit `3` | model/agent error during a headless run; stderr line `AGY_ERROR: {…, "retryable", "error_id"}` | 📄 |
-| Quota exhausted | reported immediately (1.3.3+); expected as `RESOURCE_EXHAUSTED` in `AGY_ERROR` | 📄 🌐 ❓ not captured |
+| Quota exhausted | reported immediately (1.3.3+); expected as `RESOURCE_EXHAUSTED` in `AGY_ERROR` | 📄 🌐 (headless not captured) |
+| Quota exhausted in the **TUI** (1.4.1) | the thread area shows `⚠ Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 147h16m18s.` and `Error ID: <uuid>`; the agent just stops. Fixture: `fixtures/agy/1.4.1/quota/screen.txt`; detector `src/app/limits.ts` | ✅ |
 | Quota check without spending | `agy --output-format json -p /usage` (don't use `--disable-slash-commands`) | 🌐 |
 | Denied actions | `denied_actions` in JSON output | 📄 |
 
@@ -130,5 +131,5 @@ billing may be the safer path.
 - [x] `--conversation <id>` resume keeps the id
 - [x] Interactive (PTY) session: transcript tail while the TUI runs
 - [ ] Approval prompts in the TUI (Phase 4 research)
-- [ ] Capture one quota-exhausted run when it happens
+- [x] Quota-exhausted run captured (TUI message above)
 - [ ] Get a clear ToS answer (§6)

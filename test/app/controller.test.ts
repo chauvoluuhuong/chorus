@@ -26,14 +26,14 @@ function rig() {
   const io: AppIO = { stdin, stdout, size: () => ({ cols: 120, rows: 30 }), onResize: () => () => {} };
   const app = new App(io);
   const store = new Store(project);
-  const launches: { agent: AgentId; prompt?: string; resumeId?: string }[] = [];
+  const launches: { agent: AgentId; prompt?: string; resumeId?: string; model?: string; cwd?: string }[] = [];
   const c = new Controller({
     project,
     store,
     app,
     tailPollMs: 100,
     launcher: (agent, o) => {
-      launches.push({ agent, prompt: o.prompt, resumeId: o.resumeId });
+      launches.push({ agent, prompt: o.prompt, resumeId: o.resumeId, model: o.model, cwd: o.cwd });
       return { bin: process.execPath, args: [FAKE, `${agent}`], cwd: o.cwd };
     },
   });
@@ -198,10 +198,70 @@ test('views: memory, tools and files panes; limit warning; new-thread dialog', a
   r.c['checkLimit'](e.id);
   await r.until(() => /93% of its plan limit/.test(r.screen()[29]), 'limit warning in the status line');
 
+  // the new-thread form: agent, model, folder (default: this project)
   r.type('\x00n');
-  await r.until(() => has(r.screen(), /new thread with…/), 'dialog');
-  r.type('\x1b[B'); r.type('\r');
+  await r.until(() => has(r.screen(), /Agent\s+\[claude\]/), 'form');
+  assert.match(r.screen().join('\n'), /Model\s+\[default\]/);
+  assert.match(r.screen().join('\n'), new RegExp('Folder\\s+' + r.project.replace(/[/.]/g, '\\$&')));
+  r.type('\x1b[C'); // agent: codex
+  r.type('\r');
   await r.until(() => r.app.entries.length === 2 && r.launches.at(-1)?.agent === 'codex', 'new codex thread');
+  assert.equal(r.launches.at(-1)!.cwd, r.project);
+  assert.equal(r.launches.at(-1)!.model, undefined, 'default model passes no flag');
+  } finally {
+    r.close();
+  }
+});
+
+test('new-thread form: model list follows the agent, folder is validated and becomes the thread folder', async () => {
+  const r = rig();
+  try {
+    const other = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-other-')));
+    r.type('\x00n');
+    await r.until(() => has(r.screen(), /Agent\s+\[claude\]/), 'form');
+    r.type('\t'); // → model
+    r.type('\x1b[C'); // sonnet
+    await r.until(() => has(r.screen(), /Model\s+default\s+\[sonnet\]/), 'model changed');
+    r.type('\x1b[Z'); // back to agent
+    r.type('\x1b[C'); // codex: the model list is the codex one again, starting at default
+    await r.until(() => has(r.screen(), /Agent\s+claude\s+\[codex\]/) && has(r.screen(), /Model\s+\[default\]/), 'model reset for codex');
+    r.type('\x1b[D'); // claude again
+    r.type('\t');
+    r.type('\x1b[C');
+    r.type('\t'); // folder: clear it and type a wrong one
+    r.type('\x15');
+    for (const ch of '/no/such/dir') r.type(ch);
+    r.type('\r');
+    await r.until(() => has(r.screen(), /! \/no\/such\/dir is not a folder/), 'folder error');
+    assert.equal(r.app.entries.length, 0, 'nothing started');
+    r.type('\x15');
+    for (const ch of other) r.type(ch);
+    r.type('\r');
+    await r.until(() => r.app.entries.length === 1, 'thread started');
+    assert.deepEqual({ agent: r.launches[0].agent, model: r.launches[0].model, cwd: r.launches[0].cwd }, { agent: 'claude', model: 'sonnet', cwd: other });
+    const row = r.store.listThreads()[0];
+    assert.equal(row.cwd, other);
+    assert.equal(row.model, 'sonnet');
+    r.type('\x00n');
+    await r.until(() => has(r.screen(), /Agent\s+\[claude\]/), 'form again');
+    r.type('\x1b');
+    await r.until(() => !has(r.screen(), /Agent\s+\[claude\]/), 'esc cancels');
+    assert.equal(r.app.entries.length, 1);
+  } finally {
+    r.close();
+  }
+});
+
+test('a thread started from the form is named after the first message', async () => {
+  const r = rig();
+  try {
+    const e = r.c.newThread({ agent: 'codex' });
+    assert.equal(r.store.getThread(e.id)!.title, 'codex 1');
+    const w = writeRollout(r.home, r.project, { done: false });
+    void w;
+    await r.until(() => r.store.getThread(e.id)!.title !== 'codex 1', 'title from the first message');
+    assert.match(r.store.getThread(e.id)!.title, /^Use your shell/);
+    assert.equal(r.app.entry(e.id)!.title, r.store.getThread(e.id)!.title);
   } finally {
     r.close();
   }
@@ -218,6 +278,18 @@ test('restore: threads from a previous run are parked and resume with the stored
   r.type('\x001');
   await r.until(() => has(r.screen(), /READY codex/), 'resumed process');
   assert.equal(r.launches.at(-1)!.resumeId, 'abc-123');
+  } finally {
+    r.close();
+  }
+});
+
+test('quota: an agy thread whose screen says the quota is used up gets a status-line warning that points at the handoff', async () => {
+  const r = rig();
+  try {
+    const e = r.c.newThread({ agent: 'agy', title: 'out of quota' });
+    await r.until(() => has(r.screen(), /READY agy/), 'ready');
+    r.app.entry(e.id)!.host!.write(`show ${path.join(ROOT, 'fixtures/agy/1.4.1/quota/screen.txt')}\r`);
+    await r.until(() => /agy reached its quota \(resets in 147h16m18s\): ctrl\+space h continues in another agent/.test(r.screen()[29]), 'quota warning');
   } finally {
     r.close();
   }

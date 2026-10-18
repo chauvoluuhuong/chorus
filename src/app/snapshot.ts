@@ -47,6 +47,8 @@ function css(s: string): string {
 
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
+const reEscape = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const HOME_USER = new RegExp(`${reEscape(path.dirname(os.homedir()))}/(${reEscape(path.basename(os.homedir()))})`, 'g');
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 
 /** Screens of the agents show the signed-in account; proof images and texts must not carry it. Cells keep their width. */
@@ -54,11 +56,13 @@ export function maskRow(cells: { t: string; s: string }[]): { t: string; s: stri
   const text = cells.map(c => c.t || '\0').join('');
   const out = cells.map(c => ({ ...c }));
   for (const m of text.matchAll(EMAIL)) for (let i = m.index!; i < m.index! + m[0].length; i++) if (out[i].t) out[i].t = '•';
+  // the account name inside home-folder paths (/Users/<name>/…) keeps its width
+  for (const m of text.matchAll(HOME_USER)) for (let i = m.index! + m[0].length - m[1].length; i < m.index! + m[0].length; i++) if (out[i].t) out[i].t = '•';
   return out;
 }
 
 export function maskText(line: string): string {
-  return line.replace(EMAIL, m => '•'.repeat(m.length));
+  return line.replace(EMAIL, m => '•'.repeat(m.length)).replace(HOME_USER, (m, u: string) => m.slice(0, m.length - u.length) + '•'.repeat(u.length));
 }
 
 export function screenToHtml(screen: VirtualScreen, caption?: string): string {

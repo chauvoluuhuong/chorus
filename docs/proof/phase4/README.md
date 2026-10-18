@@ -7,10 +7,14 @@ Each screenshot is the terminal as the user sees it at that step.
 
 | | check |
 |---|---|
+| ✅ | chorus opens on the new-thread form |
+| ✅ | the form offers agent, model and the project folder |
+| ✅ | model list is Claude's: haiku selected |
 | ✅ | Claude opens inside the app |
-| ✅ | sidebar shows the thread and the status line the menu key |
+| ✅ | the sidebar names the thread after the first message |
+| ✅ | status line shows the menu key |
 | ✅ | the agent's own permission prompt is detected (sidebar shows !) |
-| ✅ | new-thread dialog lists the agents |
+| ✅ | the new-thread form opens over the work in progress |
 | ✅ | Codex opens in thread 2 |
 | ✅ | thread 2 is in front and Claude (thread 1) is still pending |
 | ✅ | an approval card for the background thread appears over Codex |
@@ -33,117 +37,128 @@ Each screenshot is the terminal as the user sees it at that step.
 
 ## Screenshots
 
-### 01-claude-starts
-Chorus app: thread 1 is Claude Code, started with a task
+### 01-new-thread-form
+chorus starts on the new-thread form: agent, model, folder (default: this project). Nothing else to fill in
 
-![Chorus app: thread 1 is Claude Code, started with a task](01-claude-starts.png)
+![chorus starts on the new-thread form: agent, model, folder (default: this project). Nothing else to fill in](01-new-thread-form.png)
 
-### 02-claude-asks-in-front
+### 02-new-thread-form-choices
+Claude + haiku, in this folder: Enter starts it
+
+![Claude + haiku, in this folder: Enter starts it](02-new-thread-form-choices.png)
+
+### 03-claude-starts
+thread 1 is Claude Code (haiku); the task was typed into its own screen
+
+![thread 1 is Claude Code (haiku); the task was typed into its own screen](03-claude-starts.png)
+
+### 04-claude-asks-in-front
 Claude is in front and asks permission; the sidebar already shows ! for thread 1
 
-![Claude is in front and asks permission; the sidebar already shows ! for thread 1](02-claude-asks-in-front.png)
+![Claude is in front and asks permission; the sidebar already shows ! for thread 1](04-claude-asks-in-front.png)
 
-### 03-new-thread-dialog
-ctrl+space n: choose which agent to open in a new thread
+### 05-new-thread-form-codex
+ctrl+space n again: pick Codex (its model list is Codex's own), Enter
 
-![ctrl+space n: choose which agent to open in a new thread](03-new-thread-dialog.png)
+![ctrl+space n again: pick Codex (its model list is Codex's own), Enter](05-new-thread-form-codex.png)
 
-### 04-card-for-background-thread
+### 06-card-for-background-thread
 Codex is in front; Claude (background) is waiting, and Chorus shows its request as a card
 
-![Codex is in front; Claude (background) is waiting, and Chorus shows its request as a card](04-card-for-background-thread.png)
+![Codex is in front; Claude (background) is waiting, and Chorus shows its request as a card](06-card-for-background-thread.png)
 
-### 05-card-detail
+### 07-card-detail
 the card names the thread, the command or file, and the key to answer
 
-![the card names the thread, the command or file, and the key to answer](05-card-detail.png)
+![the card names the thread, the command or file, and the key to answer](07-card-detail.png)
 
-### 06-after-approvals
-approved 3 request(s) from the card; thread 2 stayed in front
+### 08-after-approvals
+approved 4 request(s) from the card; thread 2 stayed in front
 
-![approved 3 request(s) from the card; thread 2 stayed in front](06-after-approvals.png)
+![approved 4 request(s) from the card; thread 2 stayed in front](08-after-approvals.png)
 
-### 07-codex-own-thread
+### 09-codex-own-thread
 thread 2 (Codex) answers independently while thread 1 is parked in the background
 
-![thread 2 (Codex) answers independently while thread 1 is parked in the background](07-codex-own-thread.png)
+![thread 2 (Codex) answers independently while thread 1 is parked in the background](09-codex-own-thread.png)
 
-### 08-handoff-dialog
+### 10-handoff-dialog
 ctrl+space h on thread 1: choose the agent that continues the work
 
-![ctrl+space h on thread 1: choose the agent that continues the work](08-handoff-dialog.png)
+![ctrl+space h on thread 1: choose the agent that continues the work](10-handoff-dialog.png)
 
-### 09-handoff-summary
+### 11-handoff-summary
 the continuing Codex thread loaded the context through the Chorus MCP server and summarises the work
 
-![the continuing Codex thread loaded the context through the Chorus MCP server and summarises the work](09-handoff-summary.png)
+![the continuing Codex thread loaded the context through the Chorus MCP server and summarises the work](11-handoff-summary.png)
 
-### 10-memory-view
+### 12-memory-view
 ctrl+space m: the digest a handoff carries (first request, files touched, commands, tests, last message)
 
-![ctrl+space m: the digest a handoff carries (first request, files touched, commands, tests, last message)](10-memory-view.png)
+![ctrl+space m: the digest a handoff carries (first request, files touched, commands, tests, last message)](12-memory-view.png)
 
-### 11-tool-calls-view
+### 13-tool-calls-view
 ctrl+space t: every tool call of the thread with status and result
 
-![ctrl+space t: every tool call of the thread with status and result](11-tool-calls-view.png)
+![ctrl+space t: every tool call of the thread with status and result](13-tool-calls-view.png)
 
-### 12-files-view
+### 14-files-view
 ctrl+space f: artifacts per thread and files written by tools
 
-![ctrl+space f: artifacts per thread and files written by tools](12-files-view.png)
+![ctrl+space f: artifacts per thread and files written by tools](14-files-view.png)
 
-### 13-help-view
+### 15-help-view
 ctrl+space ?: the keys
 
-![ctrl+space ?: the keys](13-help-view.png)
+![ctrl+space ?: the keys](15-help-view.png)
 
-### 14-overview
+### 16-overview
 final state: three threads (Claude, Codex, and the Codex handoff thread), all waiting
 
-![final state: three threads (Claude, Codex, and the Codex handoff thread), all waiting](14-overview.png)
+![final state: three threads (Claude, Codex, and the Codex handoff thread), all waiting](16-overview.png)
 
 ## Commands after the run
 
 ```
 $ chorus threads
 id          agent   state    parent      title
-t_d48928bd  codex   waiting  t_31360515  fix add() → codex
-t_bac30bfb  codex   waiting  -           codex 1
-t_31360515  claude  waiting  -           fix add()
+t_ffb7cc7d  codex   waiting  t_240842a6  Create calc.js in the curren → codex
+t_e4fc8837  codex   waiting  -           Reply with only the text cod
+t_240842a6  claude  waiting  -           Create calc.js in the curren
 ```
 
 ```
 $ chorus activity
 thread      agent   turns  tools  mcp   tokens in/out     cost     limit
-t_d48928bd  codex   3      1      1     59130/203         -        33%
-t_bac30bfb  codex   2      0      0     19294/9           -        33%
-t_31360515  claude  2      3      0     22988/858         -        -
+t_ffb7cc7d  codex   3      1      1     59204/218         -        0%
+t_e4fc8837  codex   2      0      0     19294/9           -        0%
+t_240842a6  claude  2      4      0     38410/1039        -        -
 ```
 
 ```
 $ chorus artifacts
-t_31360515	6694b69ba451	/private$TMPDIR/chorus-proof-WBzI1J/.chorus/threads/t_31360515/artifacts/notes.md
+t_240842a6	cc8abd049deb	/private$TMPDIR/chorus-proof-r6Bz4j/.chorus/threads/t_240842a6/artifacts/notes.md
 ```
 
 ```
 $ chorus trace <claude thread>
-thread t_31360515 (claude 2.1.284)
-raw terminal capture: $PROJECT/.chorus/threads/t_31360515/raw/pty.log (25348 bytes)
-transcript: ~/.claude/projects/-private-var-folders-hj-b9dgqj-s11738sh6-z2w79bm0000gn-T-chorus-proof-WBzI1J/59212ad1-99a4-42f2-8e8d-a90173a13cb3.jsonl
-transcript lines: 47  → parsed turns: 2, tool calls: 3, status: waiting
+thread t_240842a6 (claude 2.1.302)
+raw terminal capture: $PROJECT/.chorus/threads/t_240842a6/raw/pty.log (33797 bytes)
+transcript: ~/.claude/projects/-private-var-folders-hj-b9dgqj-s11738sh6-z2w79bm0000gn-T-chorus-proof-r6Bz4j/0d99f123-6199-4313-af56-da054dbea930.jsonl
+transcript lines: 59  → parsed turns: 2, tool calls: 4, status: waiting
 
 last raw lines (cut) → what we made of the session:
-  raw  {"parentUuid":"b2a86202-6ae1-439d-854b-7a27b35a4fad","isSidechain":false,"message":{"model":"claude-haiku-4-5-20251001","id":"msg_011Cg7L133rZSD8ySLEJ1GHG","typ
-  raw  {"parentUuid":"d41c513e-0cb4-44da-adf3-d34f1417e71c","isSidechain":false,"type":"system","subtype":"turn_duration","durationMs":6952,"messageCount":28,"timestam
-  raw  {"type":"cost-state","sessionId":"59212ad1-99a4-42f2-8e8d-a90173a13cb3","totalCostUSD":0.056118400000000006,"totalAPIDuration":8029,"totalAPIDurationWithoutRetr
+  raw  {"parentUuid":"a0e700af-95f2-4b4b-9478-926198818a95","isSidechain":false,"message":{"model":"claude-haiku-5-5","id":"msg_011Cg8jZp1PcsbfWNFP4aKpL","type":"messa
+  raw  {"parentUuid":"47997ad1-3e3f-408f-b427-246deb8e42a1","isSidechain":false,"type":"system","subtype":"turn_duration","durationMs":9781,"messageCount":30,"timestam
+  raw  {"type":"cost-state","sessionId":"0d99f123-6199-4313-af56-da054dbea930","totalCostUSD":0.010984840000000001,"totalAPIDuration":11149,"totalAPIDurationWithoutRet
   raw  {"type":"last-prompt","lastPrompt":"Create calc.js in the current directory that exports a function add(a, b). Run it once with your shell tool as: node -e \"co
-  raw  {"type":"cost-state","sessionId":"59212ad1-99a4-42f2-8e8d-a90173a13cb3","totalCostUSD":0.056118400000000006,"totalAPIDuration":8029,"totalAPIDurationWithoutRetr
+  raw  {"type":"cost-state","sessionId":"0d99f123-6199-4313-af56-da054dbea930","totalCostUSD":0.010984840000000001,"totalAPIDuration":11149,"totalAPIDurationWithoutRet
   tool ok Write $PROJECT/cal
   tool ok Bash node -e "console.log(require('./calc.js').add(2, 3))"
+  tool ok Bash mkdir -p /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-r
   tool ok Write $PROJECT/.ch
   turn user: Create calc.js in the current directory that exports a function add(a, b). Run it once with your she
-  turn assistant: done.
+  turn assistant: done
 
 MCP calls from this thread: none
 ```
@@ -156,10 +171,12 @@ node v26.10.0
 project: $PROJECT
 store: $PROJECT/.chorus/chorus.db (exists)
 
-claude  2.1.284   verified 2.1.301  logged in
+claude  2.1.302   verified 2.1.301  logged in
+        ⚠ claude 2.1.302 is newer than the last verified 2.1.301; re-run tools/probe and check docs/integrations/claude.md
         data: ~/.claude
 codex   0.163.0   verified 0.163.0  logged in
         data: ~/.codex
-agy     1.4.0     verified 1.4.0    has a settings file (no status command; start agy once to sign in)
+agy     1.4.1     verified 1.4.0    has a settings file (no status command; start agy once to sign in)
+        ⚠ agy 1.4.1 is newer than the last verified 1.4.0; re-run tools/probe and check docs/integrations/agy.md
         data: ~/.gemini/antigravity-cli
 ```

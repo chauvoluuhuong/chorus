@@ -8,6 +8,8 @@ import type { Store, ThreadRow } from '../core/store.ts';
 import type { AgentId, Session } from '../core/types.ts';
 import { App, type Entry } from './app.ts';
 import { detectApproval, type PendingApproval } from './approval.ts';
+import { detectLimit } from './limits.ts';
+import { modelsFor } from './models.ts';
 import type { ItemState } from './compositor.ts';
 import { Tailer } from './tailer.ts';
 
@@ -33,6 +35,7 @@ export class Controller {
   private tailers = new Map<string, Tailer>();
   private claimed = new Set<string>();
   private pending = new Map<string, PendingApproval>();
+  private limited = new Set<string>();
   private sessions = new Map<string, Session>();
   private sawStart = new Map<string, number>();
   private detectTimer: NodeJS.Timeout | undefined;
@@ -70,12 +73,14 @@ export class Controller {
    * `raw` prompts (handoffs) are typed exactly as given. Any other first prompt gets a line telling the agent
    * where this thread's artifacts go (docs/architecture.md §9).
    */
-  newThread(o: { agent: AgentId; title?: string; prompt?: string; parent?: ThreadRow; raw?: boolean }): Entry {
-    if (fs.existsSync(sourceDir(this.project))) syncSkills(this.project, { agents: [o.agent] });
+  newThread(o: { agent: AgentId; title?: string; prompt?: string; parent?: ThreadRow; raw?: boolean; model?: string; cwd?: string }): Entry {
+    const cwd = o.cwd ?? this.project;
+    const model = o.model && o.model !== 'default' ? o.model : this.o.models?.[o.agent];
+    if (fs.existsSync(sourceDir(this.project))) syncSkills(this.project, { agents: [o.agent], into: cwd });
     const n = this.store.listThreads().filter(t => t.agent === o.agent).length + 1;
-    const row = this.store.createThread({ title: o.title ?? `${o.agent} ${n}`, agent: o.agent, cwd: this.project, parent_thread_id: o.parent?.id, state: 'working' });
+    const row = this.store.createThread({ title: o.title ?? `${o.agent} ${n}`, agent: o.agent, cwd, model: model ?? null, parent_thread_id: o.parent?.id, state: 'working' });
     const prompt = o.prompt && !o.raw ? `${o.prompt}\n\n(Files meant for the user, such as notes or reports, go in ${this.store.artifactsDir(row.id)})` : o.prompt;
-    const launch = (this.o.launcher ?? buildInteractive)(o.agent, { prompt, cwd: this.project, project: this.project, threadId: row.id, model: this.o.models?.[o.agent] });
+    const launch = (this.o.launcher ?? buildInteractive)(o.agent, { prompt, cwd, project: this.project, threadId: row.id, model });
     if (launch.sessionId) this.store.updateThread(row.id, { native_session_id: launch.sessionId });
     this.sawStart.set(row.id, o.prompt ? Date.now() : 0);
     const host = this.app.addThread({ id: row.id, title: row.title, agent: o.agent, file: launch.bin, args: launch.args, cwd: launch.cwd }, true);
@@ -129,10 +134,23 @@ export class Controller {
   private onSession(id: string, s: Session) {
     if (this.closed) return;
     this.sessions.set(id, s);
+    this.nameFromFirstMessage(id, s);
     this.refreshState(id);
     this.store.updateThread(id, { state: s.status === 'working' ? 'working' : 'waiting' });
     this.checkLimit(id);
     this.checkContext(id);
+  }
+
+  /** A thread started from the form has no title: it takes the first line of your first message. */
+  private nameFromFirstMessage(id: string, s: Session) {
+    const t = this.store.getThread(id);
+    const first = s.turns.find(x => x.role === 'user')?.text;
+    if (!t || !first || !/^(claude|codex|agy) \d+$/.test(t.title)) return;
+    const title = first.split('\n')[0].replace(/\s+/g, ' ').trim().slice(0, 28);
+    if (!title) return;
+    this.store.updateThread(id, { title });
+    const e = this.app.entry(id);
+    if (e) e.title = title;
   }
 
   private refreshState(id: string) {
@@ -196,7 +214,20 @@ export class Controller {
       }
       if (changed) this.refreshState(e.id);
     }
+    this.checkQuota();
     this.syncCard(); // also after a switch: the card is only for threads you are not looking at
+  }
+
+  /** An agent that ran out of quota says so on its screen: warn and point at the handoff. */
+  private checkQuota() {
+    for (const e of this.app.entries) {
+      if (!e.host || e.host.state !== 'running') continue;
+      const hit = detectLimit(e.agent as AgentId, e.host.screen.text());
+      if (hit && !this.limited.has(e.id)) {
+        this.limited.add(e.id);
+        this.app.notice = `⚠ ${e.title}: ${e.agent} reached its quota${hit.resets ? ` (resets in ${hit.resets})` : ''}: ctrl+space h continues in another agent`;
+      } else if (!hit && this.limited.delete(e.id) && this.app.notice.startsWith(`⚠ ${e.title}: ${e.agent} reached`)) this.app.notice = '';
+    }
   }
 
   private syncCard() {
@@ -231,11 +262,9 @@ export class Controller {
   private async onAction(a: string) {
     const cur = this.app.current;
     switch (a) {
-      case 'new': {
-        const i = await this.app.choose('new thread with…', AGENTS);
-        if (i !== undefined) this.newThread({ agent: AGENTS[i] });
+      case 'new':
+        await this.newThreadForm();
         break;
-      }
       case 'handoff': {
         if (!cur) return this.app.setFlash('no thread to hand off');
         const i = await this.app.choose(`hand off "${cur.title}" to…`, AGENTS);
@@ -261,6 +290,24 @@ export class Controller {
         this.app.showPane('help', HELP);
         break;
     }
+  }
+
+  /** Agent, model, folder: nothing else to decide. The thread is named after your first message. */
+  async newThreadForm(preset: { agent?: AgentId; model?: string; folder?: string } = {}): Promise<Entry | undefined> {
+    const v = await this.app.form(
+      'new thread',
+      [
+        { kind: 'select', label: 'Agent', options: AGENTS, index: Math.max(0, AGENTS.indexOf(preset.agent ?? 'claude')) },
+        { kind: 'select', label: 'Model', options: vals => modelsFor((vals.Agent || 'claude') as AgentId) },
+        { kind: 'text', label: 'Folder', value: preset.folder ?? this.project },
+      ],
+      vals => {
+        const dir = path.resolve(vals.Folder.replace(/^~(?=\/|$)/, process.env.HOME ?? '~'));
+        return fs.existsSync(dir) && fs.statSync(dir).isDirectory() ? undefined : `${vals.Folder} is not a folder`;
+      },
+    );
+    if (!v) return undefined;
+    return this.newThread({ agent: v.Agent as AgentId, model: v.Model, cwd: path.resolve(v.Folder.replace(/^~(?=\/|$)/, process.env.HOME ?? '~')) });
   }
 
   private retryContext() {

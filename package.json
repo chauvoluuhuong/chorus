@@ -20,8 +20,8 @@
     "probe:pty": "node tools/probe/pty-probe.mjs",
     "probe:skills": "node tools/probe/skills-probe.mjs",
     "smoke:app": "node test/smoke/app.ts",
-    "proof": "node test/smoke/proof.ts",
-    "proof:agy": "node test/smoke/proof-agy.ts"
+    "proof": "node test/smoke/proof.ts --open",
+    "proof:agy": "node test/smoke/proof-agy.ts --open"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

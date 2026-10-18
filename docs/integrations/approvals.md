@@ -43,6 +43,8 @@ the `$ …` lines; agy: lines above the question). Fixtures of the three real pr
 
 ## Gotchas
 
+0. **Claude Code 2.1.302 starts in "auto mode"** (footer `⏵⏵ auto mode on`): a classifier approves tool calls for the user, so it rarely shows the prompts above. Earlier versions started in manual mode. A folder's `.claude/settings.local.json` with `{"permissions":{"defaultMode":"default"}}` (or `--permission-mode default`) gives manual mode (`⏸ manual mode on`); the e2e proof does this so there is something to approve. Chorus does not change the user's mode.
+
 1. Codex only asks when the **model** requests escalation (`-a on-request`); the same prompt may or may not
    trigger on repeated runs, so the probe retries until the prompt appears.
 2. In the TUIs, text and Enter arriving in one chunk are read as a paste; Chorus and the probes send the key alone.

@@ -100,7 +100,7 @@ function exclude(project: string, rel: string[]) {
   if (missing.length) fs.appendFileSync(file, (have.endsWith('\n') || !have ? '' : '\n') + missing.join('\n') + '\n');
 }
 
-export function syncSkills(project: string, opts: { agents?: AgentId[]; mode?: 'symlink' | 'copy' } = {}): SyncReport {
+export function syncSkills(project: string, opts: { agents?: AgentId[]; mode?: 'symlink' | 'copy'; into?: string } = {}): SyncReport {
   const agents = opts.agents ?? (['claude', 'codex', 'agy'] as AgentId[]);
   fs.mkdirSync(sourceDir(project), { recursive: true });
   const src = fs.realpathSync(sourceDir(project));
@@ -110,7 +110,7 @@ export function syncSkills(project: string, opts: { agents?: AgentId[]; mode?: '
   const excludes: string[] = [];
 
   for (const rel of dirs) {
-    const targetRoot = path.join(project, rel);
+    const targetRoot = path.join(opts.into ?? project, rel);
     fs.mkdirSync(targetRoot, { recursive: true });
     const wanted = new Set(skills.map(s => path.basename(s.dir)));
     for (const skill of skills) {
@@ -143,7 +143,7 @@ export function syncSkills(project: string, opts: { agents?: AgentId[]; mode?: '
       }
     }
   }
-  exclude(project, excludes);
+  exclude(opts.into ?? project, excludes);
   return report;
 }
 

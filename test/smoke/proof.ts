@@ -13,6 +13,7 @@ import { VirtualScreen } from '../../src/app/screen.ts';
 import { maskText, saveScreenshot } from '../../src/app/snapshot.ts';
 import { activityCmd, artifactsCmd, doctorCmd, threadsCmd, traceCmd } from '../../src/cli/commands.ts';
 import { Store } from '../../src/core/store.ts';
+import { openReport, writeReport } from './report.ts';
 
 const require = createRequire(import.meta.url);
 const pty = require('node-pty');
@@ -23,11 +24,17 @@ const OUT = path.resolve(argv.includes('--out') ? argv[argv.indexOf('--out') + 1
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
 
+const TITLE = 'Chorus Phase 4 e2e proof: Claude Code + Codex';
+const INTRO = 'The real chorus app driven through a PTY with the real CLIs. Each screenshot is the terminal as you would see it at that step.';
 const COLS = 150;
 const ROWS = 44;
 const outer = new VirtualScreen(COLS, ROWS);
 const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-proof-')));
 spawnSync('git', ['init', '-q'], { cwd: project });
+// Claude Code 2.1.302 starts in "auto mode" (a classifier approves for you) and would never ask. Pin this folder to manual
+// mode so there is an approval to answer from a card.
+fs.mkdirSync(path.join(project, '.claude'));
+fs.writeFileSync(path.join(project, '.claude', 'settings.local.json'), JSON.stringify({ permissions: { defaultMode: 'default' } }));
 
 const results: { ok: boolean; name: string; detail?: string }[] = [];
 const shots: { file: string; caption: string }[] = [];
@@ -53,7 +60,7 @@ const TASK =
 
 const env = { ...process.env, TERM: 'xterm-256color', CHORUS_MODEL_CLAUDE: 'haiku' } as Record<string, string>;
 for (const k of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_PID']) delete env[k];
-const app = pty.spawn(process.execPath, [CLI, 'new', 'fix add()', '--agent', 'claude', '--task', TASK], { name: 'xterm-256color', cols: COLS, rows: ROWS, cwd: project, env });
+const app = pty.spawn(process.execPath, [CLI], { name: 'xterm-256color', cols: COLS, rows: ROWS, cwd: project, env });
 let exited = false;
 app.onData((d: string) => outer.write(d));
 app.onExit(() => (exited = true));
@@ -85,16 +92,37 @@ const store = () => new Store(project);
 
 log(`project: ${project}\nscreenshots: ${OUT}\n`);
 
-/* 1. Claude starts with a task */
-log('1. a Claude thread starts with a task');
-check('Claude opens inside the app', await until(/Claude Code|trust this folder|Yes, I trust/i, 60000), text().join('|'));
-shot('claude-starts', 'Chorus app: thread 1 is Claude Code, started with a task');
-if (has(/trust this folder|Yes, I trust/i)) {
-  app.write('\x1b[A');
-  await sleep(400);
+/* 1. the new-thread form: agent, model, folder */
+log('1. new thread: agent, model, folder');
+check('chorus opens on the new-thread form', await until(/Agent\s+\[claude\]/, 20000), text().join('|'));
+check('the form offers agent, model and the project folder', has(/Model\s+\[default\]/) && text().join('\n').replace(/\s/g, '').includes(project.replace(/\s/g, '')), text().join('|').slice(0, 400));
+shot('new-thread-form', 'chorus starts on the new-thread form: agent, model, folder (default: this project). Nothing else to fill in');
+app.write('\t'); // → Model
+await sleep(300);
+for (let i = 0; i < 3; i++) { app.write('\x1b[C'); await sleep(250); } // default → sonnet → opus → haiku
+check('model list is Claude\'s: haiku selected', await until(/Model\s+default\s+sonnet\s+opus\s+\[haiku\]/, 5000), text().join('|').slice(0, 300));
+shot('new-thread-form-choices', 'Claude + haiku, in this folder: Enter starts it');
+app.write('\r');
+
+/* 1b. Claude starts; the task is typed into its own screen */
+log('1b. Claude opens; the task is typed into its own screen');
+check('Claude opens inside the app', await until(/Enter to confirm|\? for shortcuts/i, 60000), text().join('|'));
+if (has(/Yes, I trust this folder/i) && has(/Enter to confirm/)) {
+  // The dialog is drawn before Claude reads the keyboard, so a key sent too early is lost: press Up until the
+  // cursor really is on "Yes, I trust this folder", and only then Enter.
+  const sel = () => text().find(l => /❯/.test(l))?.slice(27).trim() ?? '';
+  for (let i = 0; i < 10 && !/^❯\s*Yes/.test(sel()); i++) { app.write('\x1b[A'); await sleep(1500); }
+  log(`  trust dialog: cursor on "${sel()}"`);
   app.write('\r');
 }
-check('sidebar shows the thread and the status line the menu key', /▶1 fix add\(\)/.test(row(0)) && /ctrl\+space: menu/.test(text()[ROWS - 1]), `${row(0)} | ${text()[ROWS - 1]}`);
+await until(/\? for shortcuts|shift\+tab to cycle/i, 30000);
+const dir0 = store().listThreads()[0];
+app.write(`${TASK} (The artifacts folder is ${path.join(project, '.chorus', 'threads', dir0.id, 'artifacts')})`);
+await sleep(600);
+app.write('\r');
+shot('claude-starts', 'thread 1 is Claude Code (haiku); the task was typed into its own screen');
+check('the sidebar names the thread after the first message', await until(() => /▶1 Create calc\.js/.test(row(0)), 20000), row(0));
+check('status line shows the menu key', /ctrl\+space: menu/.test(text()[ROWS - 1]), text()[ROWS - 1]);
 
 /* 2. Claude asks for approval while it is in front */
 log('2. Claude asks for approval in front');
@@ -106,10 +134,11 @@ shot('claude-asks-in-front', 'Claude is in front and asks permission; the sideba
 /* 3. open a second thread (Codex) so Claude is in the background */
 log('3. a second thread (Codex) from the menu; Claude moves to the background');
 menu('n');
-check('new-thread dialog lists the agents', await until(/new thread with…/, 5000));
+check('the new-thread form opens over the work in progress', await until(/Agent\s+\[claude\]/, 5000));
+app.write('\x1b[C'); // agent: codex
 await sleep(400);
-shot('new-thread-dialog', 'ctrl+space n: choose which agent to open in a new thread');
-app.write('2'); // codex
+shot('new-thread-form-codex', 'ctrl+space n again: pick Codex (its model list is Codex\'s own), Enter');
+app.write('\r');
 check('Codex opens in thread 2', await until(/Trust and continue|Ask Codex to do anything/i, 40000), text().join('|'));
 if (has(/Trust and continue/i)) {
   app.write('\r'); // "1. Trust and continue"
@@ -161,10 +190,10 @@ log('6. hand off the Claude thread to Codex');
 menu('1');
 await sleep(800);
 menu('h');
-check('handoff dialog names the thread', await until(/hand off "fix add\(\)" to…/, 5000));
+check('handoff dialog names the thread', await until(/hand off "Create calc\.js/, 5000));
 await sleep(400);
 shot('handoff-dialog', 'ctrl+space h on thread 1: choose the agent that continues the work');
-app.write('2');
+app.write('2'); // codex
 check('the handoff thread appears as thread 3', await until(() => /▶3/.test(row(2)), 20000), row(2));
 const child = (() => { const s = store(); return s.listThreads().find(t => t.parent_thread_id === t1.id); })();
 check('the new thread is a child of the Claude thread in the store', !!child && child!.agent === 'codex', JSON.stringify(child));
@@ -218,9 +247,11 @@ const cmds = [
   ['chorus doctor', doctorCmd(project).replaceAll(os.homedir(), '~')],
 ];
 let md = `# Phase 4 e2e proof\n\nReal \`chorus\` app, real Claude Code and Codex, driven through a PTY (\`npm run proof\`).\nEach screenshot is the terminal as the user sees it at that step.\n\n## Result\n\n| | check |\n|---|---|\n${results.map(r => `| ${r.ok ? '✅' : '❌'} | ${r.name} |`).join('\n')}\n\n## Screenshots\n\n${shots.map(x => `### ${x.file.replace(/\.png$/, '')}\n${x.caption}\n\n![${x.caption}](${x.file})\n`).join('\n')}\n## Commands after the run\n\n${cmds.map(([c, o]) => `\`\`\`\n$ ${c}\n${o}\n\`\`\``).join('\n\n')}\n`;
+const reportFile = writeReport(OUT, TITLE, INTRO, results, shots, cmds.map(([c, o]) => [c, o.replaceAll(project, '$PROJECT').replaceAll(os.homedir(), '~')] as [string, string]));
 fs.writeFileSync(path.join(OUT, 'README.md'), md.replaceAll(project, '$PROJECT').replaceAll(os.homedir(), '~'));
 s.close();
 const failed = results.filter(r => !r.ok).length;
-log(`\n${failed ? 'FAILED' : 'OK'}: ${results.length - failed}/${results.length} checks. Report: ${path.join(OUT, 'README.md')}`);
+log(`\n${failed ? 'FAILED' : 'OK'}: ${results.length - failed}/${results.length} checks.\nReport with screenshots: ${reportFile}`);
+if (argv.includes('--open')) openReport(reportFile);
 try { app.kill(); } catch {}
 process.exit(failed ? 1 : 0);

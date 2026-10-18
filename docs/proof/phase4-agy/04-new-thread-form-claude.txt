@@ -1,0 +1,44 @@
+ CHORUS                   │^[[?1;2c
+                          │
+▶1 Create calc.js in the !│      ▄▀▀▄        Antigravity CLI 1.4.1
+                          │     ▀▀▀▀▀▀       •••••••••••••••••••••• (Antigravity Starter Quota)
+                          │    ▀▀▀▀▀▀▀▀      Gemini 3.8 Flash (High)
+                          │   ▄▀▀    ▀▀▄     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-Ehl4pX
+                          │  ▄▀▀      ▀▀▄
+                          │
+                          │────────────────────────────────────────────────────────────
+                          │> Create calc.js in the current directory that exports a function add(a, b). Run it once with your shell tool as: node -e
+                          │  "console.log(require('./calc.js').add(2, 3))" . Then write a short markdown note about what you did into notes.md in the
+                          │  artifacts folder. Reply with one line: done. (The artifacts folder is
+                          │  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-Ehl4pX/.chorus/threads/t_493f98ca/artifacts)
+                          │
+                          │○ Thought for 6.5s (Create a JavaScript file containing an addition function, then execute it using the shell. Afterwa...)
+                          │● Edited 1 file (calc.js) (ctrl+o to expand)
+                          │
+                          │Create file
+                          │───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                          │
+                          │/private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-Ehl4pX/calc.js  +5
+                          │  1  +  function add(a, b) {
+                          │  2  +    return a + b;
+                          │  3  +  }
+                          │  4  +
+                          │  5  +  module.exports = { add };
+                          │
+                          │Allow creation of this file?
+                          │> 1. Yes, allow creation
+                          │  2. No, deny creation
+                          │
+                          │  ↑/↓ Navigate · tab Amend · f full diff
+                          │esc to cancel                                                                                       Gemini 3.8 Flash · high
+                          │
+                          │
+                          │ ┌─ new thread ─────────────────────────────────────────────────────────────────────────┐
+                          │ │ Agent   [claude]  codex   agy                                                        │
+                          │ │ Model   [default]  sonnet   opus   haiku                                             │
+                          │ │ Folder  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-Ehl4pX │
+                          │ │                                                                                      │
+                          │ │ ⏎ start   tab next field   ←/→ change   esc cancel                                   │
+                          │ └──────────────────────────────────────────────────────────────────────────────────────┘
+                          │
+ 1/1  Create calc.js in the curren  ·  agy                                                                                           ctrl+space: menu

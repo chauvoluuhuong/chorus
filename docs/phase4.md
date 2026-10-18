@@ -91,6 +91,15 @@ resize, quit).
   scrollback in the thread area yet (agents keep their own); no copy/selection support beyond the
   terminal's own.
 
+### New thread: agent, model, folder (as in the mockup)
+
+`ctrl+space n` (or `chorus new`, or `chorus` in a project with no threads) opens a three-field form: **Agent**
+(`←/→`), **Model** (the list changes with the agent: Claude aliases, Codex's model cache, `agy models`; `default`
+passes no flag) and **Folder** (text, default = this project, checked to exist). Enter starts the agent in that
+folder with the Chorus MCP server attached; you then talk to the agent in its own screen, and the thread takes the
+name of your first message. `chorus new --agent claude --model sonnet --folder ~/x` skips the form. Code: `App.form`,
+`Controller.newThreadForm`, `src/app/models.ts`. Mockup scene: `docs/mockups/chorus-cli.html` → "New thread".
+
 ### P4.2–P4.7 as built
 
 | Package | Where | What it does / what we learned |

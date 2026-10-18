@@ -39,8 +39,13 @@ switch (cmd) {
     await app(() => {});
     break;
   case 'new': {
-    const agent = asAgent(flag('agent')) ?? 'claude';
-    await app(c => void c.newThread({ agent, title: positional[0], prompt: flag('task') }));
+    // no --agent: the form opens (agent, model, folder), preset from the other flags
+    const agent = asAgent(flag('agent'));
+    const folder = flag('folder') ? path.resolve(flag('folder')!.replace(/^~(?=\/|$)/, process.env.HOME ?? '~')) : undefined;
+    await app(c => {
+      if (agent) c.newThread({ agent, title: positional[0], prompt: flag('task'), model: flag('model'), cwd: folder });
+      else void c.newThreadForm({ folder });
+    });
     break;
   }
   case 'run': {

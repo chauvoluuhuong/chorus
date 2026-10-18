@@ -192,7 +192,7 @@ section > p { margin: 0 0 14px; color: var(--muted); max-width: 72ch; }
         <thead><tr><th>Command</th><th>What it does</th></tr></thead>
         <tbody>
           <tr><td>chorus</td><td>Home screen: agents, threads, open or create one</td></tr>
-          <tr><td>chorus new "&lt;title&gt;" --agent claude [--task "…"]</td><td>Create a thread and start the agent on it</td></tr>
+          <tr><td>chorus new [--agent claude] [--model sonnet] [--folder ~/projects/x]</td><td>Create a thread and start the agent on it (no flags: the form opens)</td></tr>
           <tr><td>chorus run &lt;agent&gt; [--thread &lt;id&gt;]</td><td>Open an agent on a thread (latest thread if omitted)</td></tr>
           <tr><td>chorus handoff --to &lt;agent&gt; [--from &lt;thread&gt;]</td><td>Start a new thread with another agent that loads the previous thread's context</td></tr>
           <tr><td>chorus threads · chorus show &lt;id&gt;</td><td>List threads; show a thread's turns, tool calls and the threads it continued</td></tr>
@@ -254,25 +254,27 @@ const SCENES = [
     title: 'New thread',
     cmd: 'n  (or chorus new)',
     chrome: '~/projects/cake-shop — chorus',
-    caption: 'A thread has a title, a first agent and a task. The task becomes the agent\'s first message.',
+    caption: 'Three choices and Enter: which agent, which model, which folder it works in. No title and no task to type: you talk to the agent in its own screen, and the thread is named after your first message.',
     screen:
 `  <span class="ch b">New thread</span>
 
-  <span class="d">Title</span>   Cake order page<span class="cur"> </span>
+  <span class="d">Agent</span>    <span class="sel"> <span class="cl">claude</span> </span>    <span class="cx">codex</span>     <span class="ag">agy</span>
 
-  <span class="d">Agent</span>   <span class="sel"> ▸ <span class="cl">claude</span> </span>   codex    agy
+  <span class="d">Model</span>    <span class="sel"> default </span>   sonnet    opus    haiku
 
-  <span class="d">Task</span>    Build an order page with a live price calculator
-          (size, layers, toppings). Use the existing Next.js app.
-
-
+  <span class="d">Folder</span>   ~/projects/cake-shop<span class="cur"> </span>
+           <span class="d">this project · recent: ~/projects/landing  ~/work/api</span>
 
 
-  <span class="ch">⏎</span> start   <span class="ch">tab</span> next field   <span class="ch">esc</span> cancel`,
+
+
+  <span class="ch">⏎</span> start   <span class="ch">tab</span> next field   <span class="ch">←/→</span> change   <span class="ch">esc</span> cancel`,
     behind: [
-      'Creates thread <code>t_7k2</code> and <code>.chorus/threads/t_7k2/artifacts/</code>.',
-      'Starts <code>claude</code> with <code>--session-id &lt;uuid&gt;</code>, a per-session MCP config <code>chorus mcp --thread t_7k2</code>, and <code>--append-system-prompt</code> saying where artifacts go.',
-      'Removes leaked parent-session env vars before spawning.',
+      'Starts the agent in the chosen folder with its own screen. For Claude: <code>claude --model sonnet --session-id &lt;uuid&gt;</code> and a per-session MCP config <code>chorus mcp --thread t_7k2</code>.',
+      'The model list comes from each CLI: Claude aliases (<code>default</code>, <code>sonnet</code>, <code>opus</code>, <code>haiku</code>), Codex from its model cache, agy from <code>agy models</code>. <code>default</code> passes no model flag.',
+      'Folder defaults to the project where you ran <code>chorus</code>. Another folder works too: the agent runs there, Chorus skills are linked into it, and the thread is still stored in this project\'s <code>.chorus/</code>.',
+      'Creates thread <code>t_7k2</code> and <code>.chorus/threads/t_7k2/artifacts/</code>. Removes leaked parent-session env vars before spawning.',
+      'The title is set from your first message (you can ignore it: threads are also numbered in the sidebar).',
     ],
   },
   {
