@@ -87,16 +87,27 @@ async function untilTrusting(pred: RegExp | (() => boolean), ms: number) {
   }
   return false;
 }
-const row = (i: number) => text()[2 + i] ?? ''; // sidebar row of thread i (0-based)
+// sidebar: thread i takes two rows (title line, then agent · state), starting below the header
+/** the sidebar row (title line + agent line) of the thread whose title matches */
+const rowOf = (re: RegExp) => {
+  const t = text();
+  for (let y = 1; y < ROWS - 4; y += 2) if (re.test(t[y] ?? '')) return { title: t[y] ?? '', info: t[y + 1] ?? '', dot: (t[y] ?? '').slice(0, 10) };
+  return { title: '', info: '', dot: '' };
+};
+const row = (i: number) => (text()[1 + 2 * i] ?? '') + ' ' + (text()[2 + 2 * i] ?? '');
+const dot = (i: number) => (text()[1 + 2 * i] ?? '').slice(0, 10);
 const store = () => new Store(project);
 
 log(`project: ${project}\nscreenshots: ${OUT}\n`);
 
 /* 1. the new-thread form: agent, model, folder */
 log('1. new thread: agent, model, folder');
-check('chorus opens on the new-thread form', await until(/Agent\s+\[claude\]/, 20000), text().join('|'));
+check('chorus opens on the home screen: agents with versions, and this project\'s threads', await until(/Agents\s+claude\s+\d/, 40000), text().join('|'));
+shot('home', 'chorus in a project: the installed agents with their versions, and this project\'s threads (none yet). n starts one');
+app.write('n');
+check('n opens the new-thread form', await until(/Agent\s+\[claude\]/, 5000), text().join('|'));
 check('the form offers agent, model and the project folder', has(/Model\s+\[default\]/) && text().join('\n').replace(/\s/g, '').includes(project.replace(/\s/g, '')), text().join('|').slice(0, 400));
-shot('new-thread-form', 'chorus starts on the new-thread form: agent, model, folder (default: this project). Nothing else to fill in');
+shot('new-thread-form', 'n: the new-thread form: agent, model, folder (default: this project). Nothing else to fill in');
 app.write('\t'); // → Model
 await sleep(300);
 for (let i = 0; i < 3; i++) { app.write('\x1b[C'); await sleep(250); } // default → sonnet → opus → haiku
@@ -121,13 +132,13 @@ app.write(`${TASK} (The artifacts folder is ${path.join(project, '.chorus', 'thr
 await sleep(600);
 app.write('\r');
 shot('claude-starts', 'thread 1 is Claude Code (haiku); the task was typed into its own screen');
-check('the sidebar names the thread after the first message', await until(() => /▶1 Create calc\.js/.test(row(0)), 20000), row(0));
-check('status line shows the menu key', /ctrl\+space: menu/.test(text()[ROWS - 1]), text()[ROWS - 1]);
+check('the sidebar names the thread after the first message', await until(() => /▎ . Create calc\.js/.test(row(0)), 20000), row(0));
+check('status line shows the menu key', /Space menu/.test(text()[ROWS - 1]), text()[ROWS - 1]);
 
 /* 2. Claude asks for approval while it is in front */
 log('2. Claude asks for approval in front');
 await until(() => has(/Do you want to (proceed|create|make)/), 120000);
-const asked = await until(() => /!/.test(row(0).slice(20)), 10000);
+const asked = await until(() => /!/.test(dot(0)), 10000);
 check('the agent\'s own permission prompt is detected (sidebar shows !)', asked, `${row(0)} | ${area().slice(-400)}`);
 shot('claude-asks-in-front', 'Claude is in front and asks permission; the sidebar already shows ! for thread 1');
 
@@ -144,7 +155,7 @@ if (has(/Trust and continue/i)) {
   app.write('\r'); // "1. Trust and continue"
   await until(/Ask Codex to do anything/i, 20000);
 }
-check('thread 2 is in front and Claude (thread 1) is still pending', /▶2/.test(row(1)) && /!/.test(row(0).slice(20)), `${row(0)} | ${row(1)}`);
+check('thread 2 is in front and Claude (thread 1) is still pending', /▎/.test(dot(1)) && /!/.test(dot(0)), `${row(0)} | ${row(1)}`);
 const card = await until(/asks for approval/, 15000);
 check('an approval card for the background thread appears over Codex', card, area().slice(-500));
 shot('card-for-background-thread', 'Codex is in front; Claude (background) is waiting, and Chorus shows its request as a card');
@@ -163,7 +174,7 @@ while (Date.now() - t0 < 240000) {
     continue;
   }
   const s = store().listThreads()[0];
-  const done = fs.existsSync(path.join(project, 'calc.js')) && store().listArtifacts(s?.id).some(a => a.path === 'notes.md') && /○/.test(row(0).slice(20));
+  const done = fs.existsSync(path.join(project, 'calc.js')) && store().listArtifacts(s?.id).some(a => a.path === 'notes.md') && /[○◐]/.test(dot(0));
   if (done) break;
   await sleep(1200);
 }
@@ -171,7 +182,7 @@ check('at least one request was approved from a card', approvals > 0, String(app
 check('Claude created calc.js', fs.existsSync(path.join(project, 'calc.js')));
 shot('after-approvals', `approved ${approvals} request(s) from the card; thread 2 stayed in front`);
 const t1 = store().listThreads().find(t => t.agent === 'claude')!;
-check('Claude thread finished: waiting dot, store state', /○/.test(row(0).slice(20)) && store().getThread(t1.id)!.state === 'waiting', `${row(0)} ${store().getThread(t1.id)?.state}`);
+check('Claude thread finished: waiting dot, store state', /[○◐]/.test(dot(0)) && store().getThread(t1.id)!.state === 'waiting', `${row(0)} ${store().getThread(t1.id)?.state}`);
 check('live tailing recorded the turns, the node call and the usage', (() => { const s = store(); return s.getTurns(t1.id).length >= 2 && s.getToolCalls(t1.id).some(c => /node -e/.test(c.target) && c.status === 'ok') && (s.getUsage(t1.id)?.outputTokens ?? 0) > 0; })());
 check('the artifact notes.md was registered', store().listArtifacts(t1.id).some(a => a.path === 'notes.md'), artifactsCmd(store()));
 
@@ -194,7 +205,7 @@ check('handoff dialog names the thread', await until(/hand off "Create calc\.js/
 await sleep(400);
 shot('handoff-dialog', 'ctrl+space h on thread 1: choose the agent that continues the work');
 app.write('2'); // codex
-check('the handoff thread appears as thread 3', await until(() => /▶3/.test(row(2)), 20000), row(2));
+check('the handoff thread appears in front, listed under the thread it continues (↳)', await until(() => /▎ . ↳|▎ ↳/.test(rowOf(/↳/).title) || /↳/.test(rowOf(/↳/).title), 20000), rowOf(/↳/).title);
 const child = (() => { const s = store(); return s.listThreads().find(t => t.parent_thread_id === t1.id); })();
 check('the new thread is a child of the Claude thread in the store', !!child && child!.agent === 'codex', JSON.stringify(child));
 const loaded = await untilTrusting(() => !!child && store().mcpCalls(child.id).some(m => m.tool === 'get_handoff_context'), 150000);
@@ -203,7 +214,7 @@ const answered = await untilTrusting(() => !!child && store().getTurns(child.id)
 shot('handoff-summary', 'the continuing Codex thread loaded the context through the Chorus MCP server and summarises the work');
 const reply = child ? store().getTurns(child.id).filter(x => x.role === 'assistant').map(x => x.text).join('\n') : '';
 check('its summary names calc.js', answered && /calc\.js/.test(reply), reply.slice(0, 300));
-check('the handoff thread settles as waiting', await until(() => /○/.test(row(2).slice(20)), 60000), row(2));
+check('the handoff thread settles as waiting', await until(() => /[○◐]/.test(rowOf(/↳/).dot + rowOf(/↳/).title.slice(0, 8)), 60000), rowOf(/↳/).title);
 
 /* 7. views */
 log('7. views');
@@ -212,14 +223,16 @@ check('memory view shows what the next agent reads', await until(/memory · /, 5
 shot('memory-view', 'ctrl+space m: the digest a handoff carries (first request, files touched, commands, tests, last message)');
 app.write('\x1b');
 await sleep(500);
-menu('t');
-check('tool call view lists the commands', await until(/tool calls · /, 5000) && /✓/.test(text().join('\n')));
-shot('tool-calls-view', 'ctrl+space t: every tool call of the thread with status and result');
+menu('e');
+check('activity view lists the tool calls with their status', await until(/Activity · /, 5000) && /mcp\s+chorus\.get_handoff_context\s+ok/.test(text().join('\n')), text().join('|').slice(0, 300));
+shot('activity-view', 'ctrl+space e on the handoff thread: its timeline shows the chorus.get_handoff_context MCP call that loaded the context');
 app.write('\x1b');
 await sleep(500);
-menu('f');
-check('files view lists the artifact', await until(/files and artifacts/, 5000) && /notes\.md/.test(text().join('\n')), text().join('|').slice(0, 300));
-shot('files-view', 'ctrl+space f: artifacts per thread and files written by tools');
+menu('1'); // back to the Claude thread: the artifact belongs to it
+await sleep(800);
+menu('a');
+check('artifacts view lists the artifact with its version', await until(/Artifacts · /, 5000) && /notes\.md/.test(text().join('\n')), text().join('|').slice(0, 300));
+shot('artifacts-view', 'ctrl+space a: the artifacts of the thread (name, version, who wrote it) and the files its tools wrote');
 app.write('\x1b');
 await sleep(500);
 menu('?');

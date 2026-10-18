@@ -68,6 +68,19 @@ export class VirtualScreen {
     return lines;
   }
 
+  /** Screen text with soft-wrapped rows joined back into the line the program wrote (a message wider than the screen). */
+  logicalLines(): string[] {
+    const out: string[] = [];
+    const b = this.term.buffer.active;
+    for (let y = 0; y < this.rows; y++) {
+      const line = b.getLine(y);
+      const text = line?.translateToString(true) ?? '';
+      if (line?.isWrapped && out.length) out[out.length - 1] += text;
+      else out.push(text);
+    }
+    return out;
+  }
+
   cursor(): { x: number; y: number; hidden: boolean } {
     const b = this.term.buffer.active;
     const hidden = this.term._core?.coreService?.isCursorHidden ?? false;

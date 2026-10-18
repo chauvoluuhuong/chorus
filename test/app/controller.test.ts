@@ -81,18 +81,18 @@ test('new thread: store row, process, live transcript tailing and state follow t
   const e = r.c.newThread({ agent: 'codex', title: 'fix it' });
   await r.until(() => has(r.screen(), /READY codex/), 'agent screen');
   assert.equal(r.store.getThread(e.id)?.agent, 'codex');
-  assert.match(r.screen()[2], /▶1 fix it/);
+  assert.match(r.screen()[1], /▎ . fix it/);
 
   // mid-turn transcript appears: the thread is working and the store has the user turn
   const w = writeRollout(r.home, r.project, { done: false });
   await r.until(() => r.store.getTurns(e.id).length > 0, 'turns tailed into the store');
   assert.equal(r.store.getThread(e.id)?.native_session_id, w.id);
-  await r.until(() => /●/.test(r.screen()[2]), 'working dot');
+  await r.until(() => /●/.test(r.screen()[1]), 'working dot');
 
   // the rest arrives while the TUI keeps running
   fs.appendFileSync(w.file, w.rest.join('\n') + '\n');
   await r.until(() => r.store.getToolCalls(e.id).some(t => t.target.includes('chorus-probe')), 'tool call tailed');
-  await r.until(() => /○/.test(r.screen()[2]), 'waiting dot after task_complete');
+  await r.until(() => /○/.test(r.screen()[1]), 'waiting dot after task_complete');
   assert.equal(r.store.getThread(e.id)?.state, 'waiting');
   assert.ok((r.store.getUsage(e.id)?.outputTokens ?? 0) > 0);
   } finally {
@@ -111,7 +111,7 @@ test('approval: a prompt on a background thread becomes a card; ctrl+space y ans
   r.app.entry(a.id)!.host!.write(`show ${prompt}\r`);
   await r.until(() => has(r.screen(), /asks for approval/), 'approval card');
   assert.match(r.screen().join('').replace(/[┃│┏┗┓┛━\s]/g, ''), /touch\/private.*approval-probe-file\.txt/); // the command, wrapped inside the card
-  assert.match(r.screen()[2], /!/);
+  assert.match(r.screen()[1], /!/);
 
   r.type('\x00y');
   await r.until(() => !has(r.screen(), /asks for approval/), 'card gone after approving');
@@ -187,11 +187,11 @@ test('views: memory, tools and files panes; limit warning; new-thread dialog', a
   await r.until(() => has(r.screen(), /READY codex/), 'back to the agent');
 
   r.type('\x00t');
-  await r.until(() => has(r.screen(), /tool calls · viewer/), 'tools pane');
-  assert.match(r.screen().join('\n'), /✓ shell\s+echo chorus-probe/);
+  await r.until(() => has(r.screen(), /Activity · viewer/), 'activity pane');
+  assert.match(r.screen().join('\n'), /shell echo chorus-probe\S*.*ok/);
   r.type('q');
   r.type('\x00f');
-  await r.until(() => has(r.screen(), /files and artifacts/), 'files pane');
+  await r.until(() => has(r.screen(), /Artifacts · viewer/), 'artifacts pane');
   r.type('q');
 
   r.store.db.prepare('UPDATE usage SET limit_utilization = 0.93 WHERE thread_id = ?').run(e.id);

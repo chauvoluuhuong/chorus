@@ -26,7 +26,7 @@ async function app(start: (c: Controller) => Promise<void> | void) {
   c.restore();
   await start(c);
   ui.start();
-  if (!ui.entries.length) ui.emit('action', 'new');
+  if (!ui.current?.host) ui.showHome(); // `chorus` alone opens the home screen; new/run/handoff go straight to a thread
   await ui.done;
   store.close();
   process.exit(0);

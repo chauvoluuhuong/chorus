@@ -54,10 +54,10 @@ test('two threads: sidebar, switching keeps each screen, input goes to the activ
   h.app.start();
   await h.until(l => has(l, /READY alpha/), 'alpha screen');
   let s = h.screen();
-  assert.match(s[0], /CHORUS\s+│/);
-  assert.match(s[2], /▶1 alpha/);
-  assert.match(s[3], / 2 beta/);
-  assert.match(s[23], /1\/2\s+alpha\s+·\s+fake/);
+  assert.match(s[0], /THREADS\s+·\s+1\/2/);
+  assert.match(s[1], /▎.*alpha/);
+  assert.match(s[3], /beta/);
+  assert.match(s[23], /chorus\s+alpha\s+│\s*fake/);
 
   h.type('one\r');
   await h.until(l => has(l, /got: "one"/), 'alpha echo');
@@ -65,7 +65,7 @@ test('two threads: sidebar, switching keeps each screen, input goes to the activ
   h.type('\x002'); // menu key, then 2
   await h.until(l => has(l, /READY beta/), 'beta screen');
   assert.ok(!has(h.screen(), /READY alpha/));
-  assert.match(h.screen()[3], /▶2 beta/);
+  assert.match(h.screen()[3], /▎.*beta/);
   h.type('two\r');
   await h.until(l => has(l, /got: "two"/), 'beta echo');
 
@@ -101,7 +101,7 @@ test('hiding the sidebar gives the agent the full width', async () => {
   await h.until(l => has(l, /SIZE 75x23/), 'initial');
   h.type('\x00b');
   await h.until(l => has(l, /SIZE 100x23/), 'full width');
-  assert.ok(!has(h.screen(), /CHORUS/));
+  assert.ok(!has(h.screen(), /THREADS/));
   h.app.stop();
 });
 
@@ -133,8 +133,8 @@ test('a thread that exits is marked ended; quitting needs a second press and res
   h.app.start();
   await h.until(l => has(l, /READY alpha/), 'ready');
   h.type('q\r');
-  await h.until(l => has(l, /✕/), 'ended marker');
-  assert.match(h.screen()[2], /▶1 alpha\s+✕/);
+  await h.until(l => has(l, /fake · ended/), 'ended marker');
+  assert.match(h.screen()[2], /fake · ended/);
   h.type('\x00q');
   await h.until(l => has(l, /still running/), 'quit asks again while beta runs');
   const finished = h.app.done.then(() => 'done');
@@ -150,6 +150,6 @@ test('alternate-screen programs are shown in the thread area, not on the whole t
   await h.until(l => has(l, /READY alpha/), 'ready');
   h.type('alt\r');
   await h.until(l => has(l, /ALT SCREEN/), 'alt screen content');
-  assert.match(h.screen()[0], /CHORUS\s+│\s*ALT SCREEN/);
+  assert.match(h.screen()[0], /│\s*ALT SCREEN/);
   h.app.stop();
 });

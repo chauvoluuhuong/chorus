@@ -21,6 +21,6 @@ export function detectLimit(agent: AgentId, lines: string[]): LimitHit | undefin
   let at = -1;
   for (let i = lines.length - 1; i >= 0; i--) if (p.start.test(lines[i])) { at = i; break; }
   if (at < 0) return undefined;
-  const message = lines.slice(at, at + 3).join(' ').replace(/\s+/g, ' ').trim().replace(/^⚠\s*/, '');
+  const message = lines.slice(at, at + 6).join(' ').replace(/\s+/g, ' ').trim().replace(/^⚠\s*/, '');
   return { agent, resets: message.match(p.resets)?.[1], message };
 }

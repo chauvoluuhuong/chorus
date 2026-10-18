@@ -1,6 +1,6 @@
 // The chorus app shell: threads in PTYs with virtual screens, sidebar, status line, menu key, panes, dialogs, cards.
 import { EventEmitter } from 'node:events';
-import { compose, Differ, layout, type ItemState } from './compositor.ts';
+import { compose, Differ, layout, type HomeView, type ItemState, type RichLine, type StatusBar } from './compositor.ts';
 import { InputRouter, type InputEvent } from './input.ts';
 import { nodePtyFactory, type PtyFactory } from './pty.ts';
 import { ThreadHost, type HostOpts } from './thread-host.ts';
@@ -34,6 +34,10 @@ export interface Entry {
   host?: ThreadHost;
   /** set by the controller from transcripts and the approval detector; absent = derive from the process */
   state?: ItemState;
+  /** this thread continues another one: shown under it */
+  parentId?: string;
+  /** what the status bar shows besides the title (filled by the controller) */
+  meta?: { model?: string; usage?: number; artifacts?: number; from?: string; toast?: string };
 }
 
 export interface AppOpts {
@@ -54,7 +58,7 @@ export interface Card {
 
 const MODE_RESET = '\x1b[?2004l\x1b[?1l\x1b[?25h\x1b[0m\x1b[?1049l';
 /** keys the menu hands to the controller */
-export const ACTION_KEYS: Record<string, string> = { n: 'new', h: 'handoff', m: 'memory', f: 'files', t: 'tools', y: 'approve', x: 'deny', r: 'retry', '?': 'help' };
+export const ACTION_KEYS: Record<string, string> = { n: 'new', h: 'handoff', m: 'memory', a: 'files', f: 'files', e: 'activity', t: 'activity', y: 'approve', x: 'deny', r: 'retry', d: 'doctor', '?': 'help' };
 
 export class App extends EventEmitter {
   readonly entries: Entry[] = [];
@@ -76,8 +80,12 @@ export class App extends EventEmitter {
   private quitArmed = false;
   private applied = { appCursor: false, bracketedPaste: false };
   private offResize: (() => void) | undefined;
-  private pane: { title: string; lines: string[]; scroll: number } | undefined;
+  private pane: { title: string; lines: RichLine[]; scroll: number } | undefined;
+  private home: { selected: number } | undefined;
+  /** supplied by the controller: what the home screen lists */
+  homeProvider: (() => Omit<HomeView, 'selected'>) | undefined;
   private formState: { title: string; fields: FormField[]; focus: number; error: string; validate?: (v: Record<string, string>) => string | undefined; resolve: (v: Record<string, string> | undefined) => void } | undefined;
+  private alertState: { title: string; lines: string[]; options: { key: string; label: string }[]; sel: number; resolve: (k: string | undefined) => void } | undefined;
   private dialog: { title: string; options: string[]; sel: number; resolve: (i: number | undefined) => void } | undefined;
   private card: Card | undefined;
   private onData = (d: string | Buffer) => this.router.feed(String(d));
@@ -88,7 +96,7 @@ export class App extends EventEmitter {
   constructor(io: AppIO = processIO(), opts: AppOpts = {}) {
     super();
     this.io = io;
-    this.sidebarWidth = opts.sidebarWidth ?? 26;
+    this.sidebarWidth = opts.sidebarWidth ?? 30;
     this.factory = opts.ptyFactory ?? nodePtyFactory;
     this.router = new InputRouter(e => this.onInput(e), opts.menuKey);
     this.done = new Promise(r => (this.finish = r));
@@ -103,12 +111,13 @@ export class App extends EventEmitter {
   /* ---------- threads ---------- */
 
   /** Start a process for a thread and show it (also used by tests and `chorus mux`). */
-  addThread(spec: ThreadSpec, select = true): ThreadHost {
-    const entry: Entry = { id: spec.id, title: spec.title, agent: spec.agent };
-    this.entries.push(entry);
+  addThread(spec: ThreadSpec, select = true, parentId?: string): ThreadHost {
+    const entry: Entry = { id: spec.id, title: spec.title, agent: spec.agent, parentId };
+    this.insert(entry);
     const host = this.attach(entry, spec);
     if (select) {
-      this.active = this.entries.length - 1;
+      this.closeHome();
+      this.active = this.entries.indexOf(entry);
       this.emit('select', entry);
     }
     this.schedule();
@@ -117,8 +126,21 @@ export class App extends EventEmitter {
 
   /** A thread without a process (resumed on demand). */
   addParked(e: Omit<Entry, 'host' | 'state'>) {
-    this.entries.push({ ...e, state: 'parked' });
+    this.insert({ ...e, state: 'parked' });
     this.schedule();
+  }
+
+  /** A thread that continues another is listed right under it (the mockup's "↳ continued"). */
+  private insert(entry: Entry) {
+    const keepActive = this.entries[this.active];
+    const parentAt = entry.parentId ? this.entries.findIndex(e => e.id === entry.parentId) : -1;
+    if (parentAt < 0) this.entries.push(entry);
+    else {
+      let at = parentAt + 1;
+      while (at < this.entries.length && this.entries[at].parentId === entry.parentId) at++;
+      this.entries.splice(at, 0, entry);
+    }
+    if (keepActive) this.active = this.entries.indexOf(keepActive);
   }
 
   attach(entry: Entry, spec: ThreadSpec): ThreadHost {
@@ -150,6 +172,7 @@ export class App extends EventEmitter {
 
   select(i: number) {
     if (i < 0 || i >= this.entries.length) return;
+    this.closeHome();
     this.active = i;
     this.emit('select', this.entries[i]);
     this.schedule();
@@ -200,7 +223,7 @@ export class App extends EventEmitter {
 
   /* ---------- panes, dialogs, cards, flashes ---------- */
 
-  showPane(title: string, lines: string[]) {
+  showPane(title: string, lines: RichLine[]) {
     this.pane = { title, lines, scroll: 0 };
     this.router.capture = true;
     this.schedule();
@@ -293,20 +316,46 @@ export class App extends EventEmitter {
 
   /* ---------- input ---------- */
 
-  private menuItems() {
+  /** The menu of the mockup. ↑↓ walk the sidebar (Enter opens the thread), a letter runs a command. */
+  private menuRows(): [string, string, boolean?][] {
+    const art = this.current?.meta?.artifacts;
     return [
-      ...this.entries.map((t, i) => ({ label: `${i + 1}  ${t.title}${t.state === 'ended' ? ' (ended)' : t.state === 'parked' ? ' (parked)' : ''}`, run: () => this.select(i) })),
-      { label: 'n  new thread', run: () => this.emit('action', 'new') },
-      { label: 'h  hand off the current thread', run: () => this.emit('action', 'handoff') },
-      { label: 'm  memory (what a handoff carries)', run: () => this.emit('action', 'memory') },
-      { label: 'f  files and artifacts', run: () => this.emit('action', 'files') },
-      { label: 't  tool calls', run: () => this.emit('action', 'tools') },
-      { label: 'y  approve pending request', run: () => this.emit('action', 'approve') },
-      { label: 'x  deny pending request', run: () => this.emit('action', 'deny') },
-      { label: `b  ${this.sidebarOn ? 'hide' : 'show'} sidebar`, run: () => this.toggleSidebar() },
-      { label: '?  help', run: () => this.emit('action', 'help') },
-      { label: 'q  quit', run: () => this.quit() },
+      ['↑↓', 'Move in the sidebar', true],
+      ['h', 'Hand off (new thread, other agent)'],
+      ['n', 'New thread'],
+      ['m', 'Memory of this thread'],
+      ['a', `Artifacts${art ? ` (${art})` : ''}`],
+      ['e', 'Activity'],
+      ['y x', 'Approve / deny a waiting request'],
+      ['0', 'Home'],
+      ['b', 'Show / hide sidebar'],
+      ['?', 'Help'],
+      ['q', 'Quit'],
     ];
+  }
+
+  /** A warning with a few ways out (the mockup's "limit reached" box). Resolves with the chosen key, undefined on Esc. */
+  alert(title: string, lines: string[], options: { key: string; label: string }[]): Promise<string | undefined> {
+    return new Promise(resolve => {
+      this.alertState = { title, lines, options, sel: 0, resolve };
+      this.router.capture = true;
+      this.schedule();
+    });
+  }
+
+  /* ---------- home ---------- */
+
+  showHome() {
+    this.home = { selected: Math.max(0, this.active) };
+    this.router.capture = true;
+    this.schedule();
+  }
+
+  closeHome() {
+    if (!this.home) return;
+    this.home = undefined;
+    this.router.capture = !!this.pane || !!this.dialog || !!this.formState || !!this.alertState;
+    this.schedule();
   }
 
   toggleSidebar() {
@@ -337,17 +386,18 @@ export class App extends EventEmitter {
       case 'menu-close':
         break;
       case 'menu-move': {
-        const n = this.menuItems().length;
+        const n = Math.max(1, this.entries.length);
         this.menuSel = (this.menuSel + e.delta + n) % n;
         break;
       }
       case 'menu-enter':
-        this.menuItems()[this.menuSel]?.run();
+        this.select(this.menuSel);
         break;
       case 'menu-key': {
         const k = e.key;
         if (k !== 'q') this.quitArmed = false;
         if (/[1-9]/.test(k)) this.select(Number(k) - 1);
+        else if (k === '0') this.showHome();
         else if (k === 'b') this.toggleSidebar();
         else if (k === 'q') this.quit();
         else if (ACTION_KEYS[k]) this.emit('action', ACTION_KEYS[k]);
@@ -359,6 +409,7 @@ export class App extends EventEmitter {
 
   private onCaptured(key: string) {
     if (this.formState) return this.formKey(key);
+    if (this.alertState) return this.alertKey(key);
     if (this.dialog) {
       const d = this.dialog;
       const done = (i: number | undefined) => {
@@ -375,6 +426,7 @@ export class App extends EventEmitter {
       this.schedule();
       return;
     }
+    if (this.home && !this.pane) return this.homeKey(key);
     if (this.pane) {
       const { rows } = this.io.size();
       const page = Math.max(1, rows - 4);
@@ -388,6 +440,39 @@ export class App extends EventEmitter {
       else if (key === 'G') this.pane.scroll = max;
       this.schedule();
     }
+  }
+
+  private alertKey(key: string) {
+    const st = this.alertState!;
+    const done = (k: string | undefined) => {
+      this.alertState = undefined;
+      this.router.capture = !!this.pane || !!this.dialog || !!this.home;
+      st.resolve(k);
+      this.schedule();
+    };
+    if (key === '\x1b' || key === 'w') return done(undefined);
+    if (key === '\x1b[A') st.sel = (st.sel + st.options.length - 1) % st.options.length;
+    else if (key === '\x1b[B') st.sel = (st.sel + 1) % st.options.length;
+    else if (key === '\r' || key === '\n') return done(st.options[st.sel].key);
+    else if (st.options.some(o => o.key === key)) return done(key);
+    this.schedule();
+  }
+
+  private homeKey(key: string) {
+    const h = this.home!;
+    const n = this.homeProvider?.().threads.length ?? 0;
+    if (key === '\x1b[A' || key === 'k') h.selected = Math.max(0, h.selected - 1);
+    else if (key === '\x1b[B' || key === 'j') h.selected = Math.min(Math.max(0, n - 1), h.selected + 1);
+    else if (key === '\r' || key === '\n') {
+      const t = this.homeProvider?.().threads[h.selected];
+      const at = t ? this.entries.findIndex(e => e.id === t.id) : -1;
+      if (at >= 0) this.select(at);
+    } else if (key === 'n') this.emit('action', 'new');
+    else if (key === 'a') this.emit('action', 'files');
+    else if (key === 'd') this.emit('action', 'doctor');
+    else if (key === 'q') this.quit();
+    else if (key === '\x1b' && this.entries.length) this.closeHome();
+    this.schedule();
   }
 
   /* ---------- drawing ---------- */
@@ -410,36 +495,47 @@ export class App extends EventEmitter {
     if (!this.started) return;
     const { cols, rows } = this.io.size();
     const act = this.current;
-    const L = layout(cols, rows, this.sidebarOn ? this.sidebarWidth : 0);
+    const L = layout(cols, rows, this.sidebarOn && !this.home ? this.sidebarWidth : 0);
     const dialog = this.dialog;
-    const overlay = this.formState ? this.formOverlay() : dialog
-      ? { title: dialog.title, lines: dialog.options.map((o, i) => `${i + 1}  ${o}`), selected: dialog.sel }
-      : this.router.menuOpen
-        ? { title: 'chorus', lines: this.menuItems().map(i => i.label), selected: this.menuSel }
-        : undefined;
+    const alert = this.alertState;
+    const actName = act?.title ?? 'thread';
+    const overlay = this.formState
+      ? this.formOverlay()
+      : alert
+        ? { title: alert.title, lines: alert.lines, rows: alert.options.map((o, i) => [o.key === '\r' ? '⏎' : o.key, o.label, i === alert.sel] as [string, string, boolean]), alert: true }
+        : dialog
+          ? { title: dialog.title, rows: dialog.options.map((o, i) => [String(i + 1), o, i === dialog.sel] as [string, string, boolean]), foot: '⏎ choose   esc cancel' }
+          : this.router.menuOpen
+            ? { title: `chorus · ${actName}`, rows: this.menuRows().map(([k, l], i) => [k, l, i === 0] as [string, string, boolean]), foot: `esc  back to ${act?.agent ?? 'the thread'}` }
+            : undefined;
     const pane = this.pane && {
       title: this.pane.title,
       lines: this.pane.lines.slice(this.pane.scroll, this.pane.scroll + L.contentRows - 2),
       hint: `↑/↓ PgUp/PgDn scroll · g/G top/bottom · esc close  (${Math.min(this.pane.lines.length, this.pane.scroll + 1)}-${Math.min(this.pane.lines.length, this.pane.scroll + L.contentRows - 2)} of ${this.pane.lines.length})`,
     };
     const card = this.card && { title: this.card.title, lines: [...this.card.lines, 'ctrl+space y  approve    ctrl+space x  deny    (or switch to the thread and answer there)'] };
-    const status =
-      this.flash ||
-      this.notice ||
-      (act ? `${this.active + 1}/${this.entries.length}  ${act.title}  ·  ${act.agent}${act.host?.state === 'ended' ? `  (exited ${act.host.exitCode})` : ''}` : 'no threads');
+    const home = this.home && this.homeProvider ? { ...this.homeProvider(), selected: this.home.selected } : undefined;
+    const meta = act?.meta ?? {};
+    const exited = act?.host?.state === 'ended' ? `  (exited ${act.host.exitCode})` : '';
+    const statusBar: StatusBar | undefined = act
+      ? { title: act.title + exited, agent: act.agent, model: meta.model, from: meta.from, usage: meta.usage, artifacts: meta.artifacts ?? 0, toast: meta.toast, warn: (meta.usage ?? 0) >= 90 }
+      : undefined;
+    const message = this.flash || this.notice || (this.home ? 'home' : undefined);
     const { grid, cursor } = compose({
       cols,
       rows,
       sidebarWidth: this.sidebarOn ? this.sidebarWidth : 0,
-      items: this.entries.map((t, i) => ({ title: t.title, agent: t.agent, state: this.stateOf(t), active: i === this.active })),
+      items: this.entries.map((t, i) => ({ title: t.title, agent: t.agent, state: this.stateOf(t), active: i === this.active, child: !!t.parentId })),
       screen: act?.host?.screen,
-      status,
-      statusRight: this.router.menuOpen ? '1-9 switch · n new · h handoff · m memory · ? help · esc' : 'ctrl+space: menu',
+      statusBar,
+      message,
+      statusRight: this.router.menuOpen ? '1-9 switch · n new · h handoff · m memory · ? help · esc' : this.home ? 'esc: back to the thread' : '⌃Space menu',
       overlay,
       pane,
       card,
+      home,
     });
-    let out = '\x1b[?2026h\x1b[?25l' + this.differ.frame(grid) + this.modeSync(pane ? undefined : act);
+    let out = '\x1b[?2026h\x1b[?25l' + this.differ.frame(grid) + this.modeSync(pane || home ? undefined : act);
     if (cursor) out += `\x1b[${cursor.y + 1};${cursor.x + 1}H\x1b[?25h`;
     out += '\x1b[?2026l';
     this.io.stdout.write(out);

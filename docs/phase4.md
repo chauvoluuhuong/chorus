@@ -91,6 +91,29 @@ resize, quit).
   scrollback in the thread area yet (agents keep their own); no copy/selection support beyond the
   terminal's own.
 
+### Look and screens of the mockup (P4.9, first pass)
+
+Built to match `docs/mockups/chorus-cli.html`, scene by scene (colors are the mockup's: Claude orange, Codex blue,
+agy green, Chorus teal):
+
+| Mockup scene | In the app |
+|---|---|
+| Home screen | `chorus` opens it: agents with versions and login state, this project's threads (a continued thread indented under its source with `↳`), state, age, artifact count; `n ⏎ a d q` |
+| New thread | form: agent, model, folder (below) |
+| Working / sidebar | two-line items (`● title`, then `agent · state`), `THREADS · n/N` header, key hints at the bottom, children under their source, `waiting for you` for threads that finished their turn |
+| Status bar | `chorus` chip · thread · agent · model · plan meter `5h ▮▮▮▮▮▮▱▱▱▱ 62%` (when the transcript reports it, e.g. Codex) · artifact count with a `+ file` toast · menu hint |
+| Chorus menu | key + label rows, `esc back to <agent>`, `↑↓` walks the sidebar, `0` home |
+| Hand off | agent picker (`h`) |
+| Memory | `m` |
+| Limit | status-line warning at ≥ 90 % plus the "reached its limit" box (`⏎` continue with another agent, `w` not now) when an agent runs out: Codex/Claude by plan usage ≥ 99 %, agy by its quota message |
+| Artifacts | `a`: name, version, who wrote it, age, path, files written by tools |
+| Activity | `e`: timeline of tool calls with status, MCP calls, artifacts, continuations |
+| Doctor | `d` (also on the home screen): versions, login, data folders, "newer than verified" warnings |
+
+Not done yet from the mockup: mouse clicks on the sidebar, the artifact preview server with live reload and the `o/p/v`
+keys on that view, `r`/`f` in Activity, dimming the agent behind an overlay, plan meter for Claude interactive threads
+(Claude only reports plan usage in the headless stream, not in the transcript).
+
 ### New thread: agent, model, folder (as in the mockup)
 
 `ctrl+space n` (or `chorus new`, or `chorus` in a project with no threads) opens a three-field form: **Agent**

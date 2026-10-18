@@ -1,0 +1,44 @@
+ THREADS  · 1/1               │
+▎ ● claude 1                  │ ▐▛███▛█   Claude Code v2.1.302
+▎   claude · working          │▝▜██████▀  Haiku 5.5 · Claude Pro
+                              │ ▝▝   ▝▝   /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-plbPcb
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │                                                                                                   ◐ medium · /effort
+                              │───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                              │❯ Create calc.js in the current directory that exports a function add(a, b). Run it once with your shell tool as:
+                              │  node -e "console.log(require('./calc.js').add(2, 3))" . Then write a short markdown note about what you did into
+                              │  notes.md in the artifacts folder. Reply with one line: done. (The artifacts folder is
+──────────────────────────────│  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-plbPcb/.chorus/threads/t_94a1ab3d/artifacts)
+ ⌃Space ↑↓ move  ⏎ open       │───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ⌃Space n new  b hide         │  ⏸ manual mode on
+ chorus  claude 1 │ claude · haiku │ 0 artifacts                                                                                          ⌃Space menu

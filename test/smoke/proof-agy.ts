@@ -80,7 +80,9 @@ async function until(pred: RegExp | (() => boolean), ms: number, tick = 300) {
   }
   return false;
 }
-const row = (i: number) => text()[2 + i] ?? ''; // sidebar row of thread i (0-based)
+// sidebar: thread i takes two rows (title line, then agent · state), starting below the header
+const row = (i: number) => (text()[1 + 2 * i] ?? '') + ' ' + (text()[2 + 2 * i] ?? '');
+const dot = (i: number) => (text()[1 + 2 * i] ?? '').slice(0, 10);
 const store = () => new Store(project);
 
 
@@ -111,7 +113,10 @@ log(`project: ${project}\nscreenshots: ${OUT}\n`);
 
 /* 1. the new-thread form: agy */
 log('1. new thread: agent, model, folder');
-check('chorus opens on the new-thread form', await until(/Agent\s+\[claude\]/, 20000), text().join('|').slice(0, 300));
+check('chorus opens on the home screen: agents with versions, and this project\'s threads', await until(/Agents\s+claude\s+\d/, 40000), text().join('|').slice(0, 300));
+shot('home', 'chorus in a project: the installed agents with their versions, and this project\'s threads (none yet). n starts one');
+app.write('n');
+check('n opens the new-thread form', await until(/Agent\s+\[claude\]/, 5000), text().join('|').slice(0, 300));
 app.write('\x1b[C'); await sleep(300); app.write('\x1b[C'); // claude → codex → agy
 check('agent: agy, with the models agy lists', await until(/Agent\s+claude\s+codex\s+\[agy\]/, 5000) && has(/Model\s+\[default\]/), text().join('|').slice(0, 300));
 shot('new-thread-form-agy', 'chorus starts on the new-thread form: agent agy (model list comes from `agy models`), this folder');
@@ -129,12 +134,12 @@ await sleep(1500);
   app.write('\r');
 }
 shot('agy-starts', 'thread 1 is Antigravity CLI (agy); the task was typed into its own screen');
-check('the sidebar names the thread after the first message', await untilTrusting(() => /▶1 Create calc\.js/.test(row(0)), 60000), row(0));
+check('the sidebar names the thread after the first message', await untilTrusting(() => /▎ . Create calc\.js/.test(row(0)), 60000), row(0));
 
 /* 2. agy asks in front */
 log('2. agy asks for approval in front');
 await untilTrusting(() => has(/Run this command\?/i), 300000);
-const asked = await until(() => /!/.test(row(0).slice(20)), 10000);
+const asked = await until(() => /!/.test(dot(0)), 10000);
 check('agy\'s own permission prompt is detected (sidebar shows !)', asked, `${row(0)} | ${area().slice(-400)}`);
 shot('agy-asks-in-front', 'agy is in front and asks permission to run a command; the sidebar shows ! for thread 1');
 
@@ -146,7 +151,7 @@ shot('new-thread-form-claude', 'ctrl+space n: Claude (default model) in this fol
 app.write('\r');
 check('Claude opens in thread 2 (trust dialog answered)', await untilTrusting(/Claude Code v\d/, 60000), text().join('|').slice(0, 300)); // the card may cover its footer
 await sleep(1500);
-check('thread 2 is in front and agy (thread 1) is still pending', /▶2/.test(row(1)) && /!/.test(row(0).slice(20)), `${row(0)} | ${row(1)}`);
+check('thread 2 is in front and agy (thread 1) is still pending', /▎/.test(dot(1)) && /!/.test(dot(0)), `${row(0)} | ${row(1)}`);
 check('an approval card for the background agy thread appears over Claude', await until(/asks for approval/, 20000), area().slice(-500));
 shot('card-for-agy', 'Claude is in front; agy (background) is waiting, and Chorus shows its request as a card');
 
@@ -164,7 +169,7 @@ while (Date.now() - t0 < 240000) {
     continue;
   }
   const a = store().listThreads().find(t => t.agent === 'agy');
-  const done = fs.existsSync(path.join(project, 'calc.js')) && !!a && store().listArtifacts(a.id).some(x => x.path === 'notes.md') && /○/.test(row(0).slice(20));
+  const done = fs.existsSync(path.join(project, 'calc.js')) && !!a && store().listArtifacts(a.id).some(x => x.path === 'notes.md') && /[○◐]/.test(dot(0));
   if (done) break;
   await sleep(1500);
 }
@@ -175,7 +180,7 @@ menu('1');
 await sleep(1200);
 shot('agy-result', 'switching to thread 1: what agy did (its own screen, state kept in the background)');
 const a1 = store().listThreads().find(t => t.agent === 'agy')!;
-check('agy thread finished: waiting dot, store state', /○/.test(row(0).slice(20)) && store().getThread(a1.id)!.state === 'waiting', `${row(0)} ${store().getThread(a1.id)?.state}`);
+check('agy thread finished: waiting dot, store state', /[○◐]/.test(dot(0)) && store().getThread(a1.id)!.state === 'waiting', `${row(0)} ${store().getThread(a1.id)?.state}`);
 check('live tailing recorded agy turns, tool calls and usage', (() => { const s = store(); return s.getTurns(a1.id).length >= 2 && s.getToolCalls(a1.id).some(c => c.status === 'ok') && (s.getUsage(a1.id)?.outputTokens ?? 0) > 0; })(), JSON.stringify(store().getToolCalls(a1.id).map(c => c.tool + ':' + c.target.slice(0, 40))));
 check('agy artifact notes.md registered', store().listArtifacts(a1.id).some(x => x.path === 'notes.md'), artifactsCmd(store()));
 
@@ -186,7 +191,7 @@ menu('h');
 check('handoff dialog names the agy thread', await until(/hand off "Create calc\.js/, 5000));
 shot('handoff-dialog-from-agy', 'ctrl+space h on the agy thread: choose the agent that continues');
 app.write('1'); // claude
-check('handoff thread appears as thread 3', await until(() => /▶3/.test(row(2)), 20000), row(2));
+check('handoff thread appears as thread 3', await until(() => /▎/.test(dot(2)), 20000), row(2));
 const c1 = store().listThreads().find(t => t.parent_thread_id === a1.id);
 check('it is a child of the agy thread (claude)', !!c1 && c1!.agent === 'claude', JSON.stringify(c1));
 const loaded1 = await untilTrusting(() => !!c1 && store().mcpCalls(c1.id).some(m => m.tool === 'get_handoff_context'), 150000);
@@ -199,11 +204,11 @@ check('its summary names calc.js', ans1 && /calc\.js/.test(reply1), reply1.slice
 
 /* 6. hand off Claude → agy */
 log('6. hand off the Claude thread to agy');
-await until(() => /○/.test(row(2).slice(20)), 60000);
+await until(() => /[○◐]/.test(dot(2)), 60000);
 menu('h');
 check('handoff dialog names the Claude thread', await until(/hand off ".*" to…/, 5000));
 app.write('3'); // agy
-check('the agy handoff thread appears as thread 4', await until(() => /▶4/.test(row(3)), 20000), row(3));
+check('the agy handoff thread appears as thread 4', await until(() => /▎/.test(dot(3)), 20000), row(3));
 const a2 = store().listThreads().find(t => t.parent_thread_id === c1?.id);
 check('it is a child of the Claude thread (agy)', !!a2 && a2!.agent === 'agy', JSON.stringify(a2));
 // agy may ask before calling the MCP tool: answer from the card/prompt like a person would
@@ -213,7 +218,7 @@ while (Date.now() - t1 < 180000) {
   if (a2 && store().mcpCalls(a2.id).some(m => m.tool === 'get_handoff_context')) break;
   if (has(/Individual quota reached/)) break; // agy's own message when the plan quota is used up
   await trustIfAsked();
-  if (/!/.test(row(3).slice(20))) { menu('y'); mcpApprovals++; await sleep(2500); continue; }
+  if (/!/.test(dot(3))) { menu('y'); mcpApprovals++; await sleep(2500); continue; }
   await sleep(1500);
 }
 const quota = has(/Individual quota reached/);
@@ -227,7 +232,7 @@ if (quota) {
   skip('agy called get_handoff_context (Chorus saw the MCP call)', 'agy reached its plan quota ("Individual quota reached") before it could answer; the Claude → agy direction passed in an earlier run of this proof');
   skip('its summary names calc.js', 'same: agy quota reached');
 } else check('its summary names calc.js', ans2 && /calc\.js/.test(reply2), reply2.slice(0, 300));
-if (!quota) await until(() => /○/.test(row(3).slice(20)), 90000);
+if (!quota) await until(() => /[○◐]/.test(dot(3)), 90000);
 
 /* 7. views and end */
 log('7. views');
