@@ -57,7 +57,9 @@ Plan and results: [phase4.md](phase4.md). D1 decided: TypeScript. E2E proof with
   - [x] Approvals inbox with risk tags, Decided history (`approvals_log`), y / x / ⏎; menu = the mockup's ten rows (↑↓ ⏎, click, letter)
   - [x] One shared database `~/.chorus/chorus.db` with a `project` column (`CHORUS_STORE=project` keeps the old per-project file); Memory screen across projects; `get_handoff_context` works for any project
   - [x] Skills screen: on/off, import what the agents already have. The global library and the opt-in links outside Chorus stay TD-1
-  - [ ] Real-CLI proof of the new screens (`npm run proof`): to rewrite for the new layout and run
+  - [x] **Proof:** `npm run proof` rewritten for the new screens and run with the real Claude Code 2.1.302 and Codex 0.163.0: 50/50 checks, 22 screenshots in `docs/proof/phase4/` (New chat, skip permissions, inbox, handoff, Memory, Skills, menu, artifacts, window sizes)
+  - [x] Also built: bell and flash for a request on another chat, artifacts open on ⏎/click with the "open failed: choose how" dialog (`.chorus/open.json`), `chorus skills on|off|import`
+  - [ ] Not built: ctx % in the status line (TD-11), the hand pointer (OSC 22, probe first)
 
 ## Risk harness (before Phase 4.5 / 5)
 
@@ -140,3 +142,10 @@ Probed ([risks/memory-adoption](risks/memory-adoption.md)): agents save a memory
 ### TD-10 · "Skip permissions" flags: ✅ resolved 2026-10-18 (verified in the interactive screen, see [approvals.md §C](integrations/approvals.md))
 Claude `--dangerously-skip-permissions`, Codex `--dangerously-bypass-approvals-and-sandbox`, agy `--dangerously-skip-permissions` (ui-plan item 4).
 - [x] Checked each flag in the interactive TUI with a probe; the status line shows `skip` in amber.
+
+### TD-11 · Context-window meter (`ctx 34%` in the status line)
+The status line already has the slot and drops it first when narrow (`StatusBar.ctx`); nothing fills it. What the fixtures show:
+- Codex: the rollout's `token_count` events carry `last_token_usage` and `model_context_window` (258400 in `fixtures/codex/0.163.0`), so ctx % = last input tokens / window is derivable.
+- Claude: the headless `result` has `modelUsage[model].contextWindow` (200000 / 1000000) but the interactive transcript has per-message `usage` only, no window size; the window per model would have to come from a table that is not verified (same gap as the open "plan meter for Claude interactive threads").
+- agy: not looked at.
+- [ ] Add `last_input_tokens` and `context_window` to `Session.usage` (adapter + store column), Codex first; probe Claude and agy for a source of the window before showing a number for them (rule 1: no assumed values). Until then the status line shows no ctx, never a guess.

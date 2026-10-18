@@ -66,17 +66,21 @@ node tools/probe/probe.mjs <cli>           # recapture fixtures after a CLI upda
 
 ## Current state and next steps
 
-Phases 1–4 are built and proven with the real Claude Code 2.1.284, Codex 0.163.0 and agy 1.4.0
-(`docs/roadmap.md`). The Phase 4 e2e proof, with screenshots of every step, is `docs/proof/phase4/README.md`
-(`npm run proof`).
+Phases 1–4 are built and proven with the real Claude Code 2.1.302, Codex 0.163.0 and agy 1.4.2 (`docs/roadmap.md`).
+Phase 4 includes UI pass 2 (P4.10): the CLI app now matches `docs/mockups/chorus-cli.html` (top bar, project-tree sidebar, New chat
+screen with skip-permissions, approvals inbox, shared Memory across projects in `~/.chorus/chorus.db`, Skills screen, window-size
+steps). The e2e proof with screenshots of every step is `docs/proof/phase4/README.md` (`npm run proof`).
 
-1. Phase 5 (desktop): `chorus serve` local API over the same core, then the UI; decide D3 (Electron vs Tauri) there.
+The risks found before Phase 5 are probed and written down in `docs/risks/`; the fixes wait for their triggers and are listed as
+technical debt TD-2..TD-10 in `docs/roadmap.md` (memory must be injected, not left to agents; errors and file changes are invisible
+to the adapters; transcript matching; kitty keyboard; Windows; plan-limit capture).
+
+1. Technical debt that a buyer would hit first: TD-3 (a failed run looks empty), TD-4 (two Codex/agy chats started together), TD-2
+   (memory digest at chat start), TD-1 (one global skill library).
+2. Phase 5 (desktop): `chorus serve` local API over the same core, then the UI; decide D3 (Electron vs Tauri) there.
    The packaging spike (`docs/phase4.md`) says the JS core ships fine as an npm package or a Node single executable.
-2. D4 (provider terms) before selling.
-3. Hardening backlog: agy and Codex approvals were proven by fixtures of their real prompts and keys (Claude
-   end to end in the proof); run the proof with agy as a thread too; Codex/agy session matching when two
-   threads start in the same second in one folder; mouse and kitty keyboard protocol are not forwarded.
+3. D4 (provider terms) before selling.
 
-Known gaps: `file_change`, `reasoning`, `turn.failed` Codex events, agy errors/quota and the Claude plan-limit hit
-are not captured (no fixture yet); the `skills` table in architecture §4 is not stored (skills are read from
-`.chorus/skills`).
+Known gaps: `file_change`, `reasoning`, `turn.failed` Codex events, agy errors/quota and the Claude plan-limit hit are not
+captured by the adapters (fixtures of the first three are in `fixtures/risks/capture-errors/`, TD-3); ctx % in the status line is not built
+(TD-11); the hand pointer (OSC 22) is not probed.

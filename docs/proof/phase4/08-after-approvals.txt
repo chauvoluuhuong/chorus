@@ -1,0 +1,44 @@
+  ‹ Back   chorus › Approvals                                                                                                                 ☰ Menu
+  + New chat                │  Approvals  ·  0 waiting
+ ▾ chorus-proof-api-Aoj… 1  │
+   ◌ Rate limiter     codex │  Nothing is waiting for you.
+ ▾ chorus-proof-OBrfD6   2  │
+   ◐ Create calc.js… claude │  Decided
+   ◐ codex 2          codex │    ✓ approved  d }`.                                         claude  15:23
+                            │    ✓ approved  Run calc.js add(2, 3) …e artifacts directory  claude  15:23
+                            │    ✓ approved  calc.js                                       claude  15:23
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+────────────────────────────│
+ ✦ Skills                   │
+ ◫ Memory                   │  ↑↓  select    y  approve    x  deny    ⏎  open chat    esc  back
+ chorus  approved: Create file · .chorus/threads/t_9d5f1701/artifacts/notes.md                                                                ⌃\ menu

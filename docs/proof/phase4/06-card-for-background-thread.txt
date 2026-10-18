@@ -1,0 +1,44 @@
+  ‹ Back   chorus › chorus-proof-OBrfD6 › codex 2                                                                              ! 1 waiting    ☰ Menu
+  + New chat                │
+ ▾ chorus-proof-api-Aoj… 1  │  >_ OpenAI Codex (v0.163.0)
+   ◌ Rate limiter     codex │     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-OBrfD6
+ ▾ chorus-proof-OBrfD6   2  │  permissions: YOLO mode
+   ! Create calc.js… claude │
+▎  ● codex 2          codex │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │                                                       ⣀⣤⣤⣤⣀⣀
+                            │                                                    ⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⣦⣤⣤⣤⣤⣤⣤⡀
+                            │                                                  ⢀⣾⣿⣿⠿⠋⠉⠉⢉⣭⣿⣿⣿⣿⣿⠿⣿⣿⣿⣿⣷⣄
+                            │                                                 ⣀⣾⣿⣿⠃ ⣀⣴⣾⣿⣿⡿⠟⠋ ⣀⡀ ⠈⠙⢿⣿⣿⣧
+                            │                                              ⣀⣶⣿⣿⣿⣿⡇ ⢸⣿⣿⡿⠛⠉⢀⣠⣴⣿⣿⣿⣷⣦⣀⠈⢻⣿⣿⡇
+                            │                                             ⣰⣿⣿⡿⢿⣿⣿⡇ ⢸⣿⣿⢀⣤⣶⣿⣿⣿⠟⠛⠻⣿⣿⣿⣿⣮⣿⣿⡷
+                            │                                            ⢰⣿⣿⡟⠁⢸⣿⣿⡇ ⢸⣿⣿⣿⣿⠿⠿⣿⣿⣿⣦⣄⡀⠈⠛⠿⣿⣿⣿⣧⡀
+                            │                                            ⣾⣿⣿⠃ ⢸⣿⣿⡇ ⢸⣿⣿⠋⠁  ⠈⠙⢻⣿⣿⣿⣶⣤⡀ ⠹⢿⣿⣷⡄
+                            │                                            ⢸⣿⣿⣇ ⠸⣿⣿⣷⣦⣼⣿⣿      ⢸⣿⣿⠻⢿⣿⣿⡇ ⠘⣿⣿⣿
+                            │                                            ⠈⢿⣿⣿⣦⡀⠈⠛⠿⣿⣿⣿⣿⣄⡀  ⢀⣠⣼⣿⣿  ⣿⣿⡇  ⣿⣿⣿⠇
+                            │                                              ⢻⣿⣿⣿⣷⣦⣀⠈⠙⠻⣿⣿⣿⣶⣶⣿⣿⣿⣿⣿  ⣿⣿⡇ ⣠⣿⣿⣿
+                            │                                              ⢸⣿⣿⡿⢿⣿⣿⣿⣦⣠⣴⣿⣿⣿⡿⠟⠋⢸⣿⣿  ⣿⣿⣷⣴⣿⣿⣿⠃
+                            │                                              ⠘⣿⣿⣷ ⠈⠛⢿⣿⣿⣿⠿⠋⠉ ⣠⣴⣿⣿⣿  ⣿⣿⣿⣿⣿⠟⠁
+                            │                                               ⠻⣿⣿⣿⣤⣀ ⠈⠉ ⢀⣤⣶⣿⣿⣿⠿⠟⠁ ⣰⣿⣿⡟⠋⠁
+                            │                                                ⠈⠿⣿⣿⣿⣿⣶⣾⣿⣿⣿⣿⠟⠋⠁  ⣠⣼⣿⣿⡟
+                            │                                                   ⠙⠛⠛⠛⠻⠛⢿⣿⣿⣿⣿⣷⣾⣿⣿⣿⡿⠏
+                            │                                                          ⠈⠙⠛⠿⠿⠿⠿⠛⠉
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │ ┌─ Create calc.js in the curre… (claude) asks for approval ───────────────────────────────────────────────────────────┐
+                            │›│ Create file · calc.js                                                                                               │
+────────────────────────────│ │ Do you want to create calc.js?                                                                                      │
+ ✦ Skills                   │ │ ⌃\ y  approve    ⌃\ x  deny    (or switch to the chat and answer there)                                             │
+ ◫ Memory                   │ └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ chorus  codex 2 │ codex skip │ 0 artifacts                                                                                                   ⌃\ menu

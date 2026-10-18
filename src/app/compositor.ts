@@ -117,7 +117,7 @@ export interface View {
   statusRight: string;
   overlay?: Overlay;
   /** replaces the thread area (new chat, approvals, memory, skills, files, activity, help …) */
-  pane?: { title: string; lines: PaneLine[]; hint: RichLine };
+  pane?: { title: string; lines: PaneLine[]; hint: RichLine; /** the lines carry their own heading: no title row */ bare?: boolean };
   /** approval card, drawn over the bottom of the thread area */
   card?: { title: string; lines: string[] };
   /** how the menu key is named in the hints */
@@ -206,10 +206,13 @@ export function compose(v: View): { grid: Grid; cursor: { x: number; y: number }
   if (L.sidebar) drawSidebar(grid, v.side, L.mode, L.sidebar, Y, L.contentRows, hits);
 
   if (v.pane) {
-    fill(grid, Y, L.contentX, right, T.bgStatus);
-    put(grid, Y, L.contentX + 1, v.pane.title, join('1', T.chorus, T.bgStatus), right);
-    v.pane.lines.slice(0, L.contentRows - 2).forEach((line, i) => {
-      const y = Y + 1 + i;
+    const titled = !v.pane.bare;
+    if (titled) {
+      fill(grid, Y, L.contentX, right, T.bgStatus);
+      put(grid, Y, L.contentX + 1, v.pane.title, join('1', T.chorus, T.bgStatus), right);
+    }
+    v.pane.lines.slice(0, paneRoom(L.contentRows, titled)).forEach((line, i) => {
+      const y = Y + (titled ? 1 : 0) + i;
       if (isRow(line)) {
         if (line.sel) fill(grid, y, L.contentX, right, T.bgSel);
         if (line.hit) hits.push({ id: line.hit, x0: L.contentX, x1: right, y0: y, y1: y + 1 });
@@ -239,6 +242,9 @@ export function compose(v: View): { grid: Grid; cursor: { x: number; y: number }
   return { grid, cursor, hits };
 }
 
+/** Lines a pane can show: the content area minus its title row (unless bare) and the hint row. */
+export const paneRoom = (contentRows: number, titled: boolean) => contentRows - (titled ? 2 : 1);
+
 /** Hover: the region under the mouse gets the selection background. */
 function lightUp(grid: Grid, hits: Hit[], id: string) {
   for (const h of hits) {
@@ -258,16 +264,7 @@ function drawTop(grid: Grid, v: View, hits: Hit[]) {
   fill(grid, 0, 0, cols, T.bgStatus);
   const top = v.top;
   if (!top) return;
-  let x = 1;
-  if (top.back) {
-    x = putRich(grid, 0, x, [[' ‹ Back ', BTN, 'back']], T.bgStatus, cols, hits) + 2;
-  }
-  top.crumb.forEach((part, i) => {
-    const last = i === top.crumb.length - 1;
-    if (i) x = putRich(grid, 0, x, [[' › ', T.dim]], T.bgStatus, cols) ;
-    x = putRich(grid, 0, x, [[part, last ? join('1', T.fg) : LINK, last ? undefined : `crumb:${i}`]], T.bgStatus, cols, hits);
-  });
-  // right side: waiting badge and menu button
+  // right side first, so the path can be cut before it touches the buttons
   const menu = ` ☰ Menu `;
   const waiting = top.waiting ? ` ! ${top.waiting} waiting ` : '';
   let rx = cols - menu.length - 1;
@@ -276,6 +273,25 @@ function drawTop(grid: Grid, v: View, hits: Hit[]) {
     rx -= waiting.length + 2;
     putRich(grid, 0, rx, [[waiting, join('1', T.err, T.bgErr), 'approvals']], T.bgStatus, cols, hits);
   }
+  const room = rx - 2; // the path ends here, with a gap before the buttons
+  let x = 1;
+  if (top.back) x = putRich(grid, 0, x, [[' ‹ Back ', BTN, 'back']], T.bgStatus, room, hits) + 2;
+  let cut = false;
+  top.crumb.forEach((part, i) => {
+    if (cut) return;
+    const last = i === top.crumb.length - 1;
+    // no room for a separator and at least two characters of the next part: the path ends in an ellipsis
+    if (i && x + 3 + 2 > room) {
+      put(grid, 0, x, '…', join(T.dim, T.bgStatus), room + 1);
+      cut = true;
+      return;
+    }
+    if (i) x = putRich(grid, 0, x, [[' › ', T.dim]], T.bgStatus, room);
+    const w = [...part].length;
+    // a part that does not fit is cut with an ellipsis (the last part, the chat title, goes first)
+    const text = x + w > room && room - x > 1 ? [...part].slice(0, Math.max(1, room - x - 1)).join('') + '…' : part;
+    x = putRich(grid, 0, x, [[text, last ? join('1', T.fg) : LINK, last ? undefined : `crumb:${i}`]], T.bgStatus, room, hits);
+  });
 }
 
 /* ---------- sidebar ---------- */
@@ -327,6 +343,11 @@ function drawSideRow(grid: Grid, r: SideRow, mode: SideMode, w: number, y: numbe
     const b = bg(false);
     rowHit(`project:${r.cwd}`);
     put(grid, y, 1, r.open ? '▾' : '▸', join(T.dim, b), w);
+    if (icons) {
+      // no room for a name: the caret, and a ! when a folded project has a chat waiting
+      if (r.alert) put(grid, y, 3, '!', join('1', T.err, b), w);
+      return;
+    }
     put(grid, y, 3, clip(r.name, w - 7), join('1', T.fg, b), w);
     if (r.alert) put(grid, y, w - 2, '!', join('1', T.err, b), w);
     else put(grid, y, w - 3, String(r.count), join(T.dim, b), w);

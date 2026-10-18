@@ -1,0 +1,44 @@
+  ‹ Back   chorus › New chat                                                                                                   ! 1 waiting    ☰ Menu
+  + New chat                │  New chat
+ ▾ chorus-proof-api-Aoj… 1  │
+   ◌ Rate limiter     codex │  Agent         claude    codex    agy
+ ▾ chorus-proof-OBrfD6   1  │
+   ! Create calc.js… claude │
+                            │  Model         default   gpt-6-luna   gpt-5.6-terra   gpt-5.6-luna
+                            │
+                            │  Project      /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-OBrfD6  ▾
+                            │               recent: /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-api-AojvIm  · or type any fo
+                            │
+                            │  Permissions  [x] Skip permission prompts  --dangerously-bypass-approvals-and-sandbox
+                            │               The agent runs every command and edit without asking.
+                            │               Nothing reaches the approvals inbox for this chat.
+                            │
+                            │                ⏎ Start chat
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+────────────────────────────│
+ ✦ Skills                   │
+ ◫ Memory                   │  ⏎  start    tab  next field    ←/→  change    space  tick    esc  back
+ chorus  New chat                                                                                                                             ⌃\ menu

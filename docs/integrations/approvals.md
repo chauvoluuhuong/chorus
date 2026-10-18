@@ -52,7 +52,7 @@ the `$ …` lines; agy: lines above the question). Fixtures of the three real pr
 | CLI | flag | what the screen shows | result |
 |---|---|---|---|
 | Claude Code | `--dangerously-skip-permissions` | footer `⏵⏵ bypass permissions on (shift+tab to cycle)`; no extra confirmation dialog | command ran, file created, no prompt ✅ |
-| Codex | `--dangerously-bypass-approvals-and-sandbox` | nothing special on screen | command ran, file created, no prompt ✅ |
+| Codex | `--dangerously-bypass-approvals-and-sandbox` | banner line `permissions: YOLO mode` under the folder path (seen in the UI-pass-2 proof) | command ran, file created, no prompt ✅ |
 | agy | `--dangerously-skip-permissions` | nothing special on screen | command ran, file created, no prompt ✅ |
 
 Only the folder-trust dialog of a new folder still appears (first start in a folder); it is separate from permission prompts. Chorus sets the flag per chat

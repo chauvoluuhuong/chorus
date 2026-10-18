@@ -7,7 +7,7 @@ import { AGENTS, Controller } from '../app/controller.ts';
 import { PreviewServer } from '../core/preview.ts';
 import { Store } from '../core/store.ts';
 import type { AgentId } from '../core/types.ts';
-import { syncSkills, listSkills } from '../core/skills.ts';
+import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, syncSkills } from '../core/skills.ts';
 import { runMcp } from '../mcp/server.ts';
 import { activityCmd, artifactsCmd, doctorCmd, memoryCmd, showCmd, threadsCmd, traceCmd } from './commands.ts';
 
@@ -128,11 +128,30 @@ switch (cmd) {
   case 'mcp':
     await runMcp(project, flag('thread'), flag('home'));
     break;
-  case 'skills':
-    if (argv[1] === 'sync') console.log(JSON.stringify(syncSkills(project), null, 2));
-    else if (argv[1] === 'list') for (const s of listSkills(project)) console.log(`${s.name}\t${s.description}`);
-    else console.error('usage: chorus skills <sync|list> [--project dir]');
+  case 'skills': {
+    // the shared skill library: list, turn on or off for all three agents, import what the agents already have
+    const sub = argv[1];
+    const name = positional[1];
+    const folderOf = (n?: string) => listSkills(project).map(s => path.basename(s.dir)).find(f => f === n);
+    if (sub === 'sync') console.log(JSON.stringify(syncSkills(project), null, 2));
+    else if (sub === 'list' || sub === undefined) {
+      const off = disabledSkills(project);
+      for (const s of listSkills(project)) console.log(`${off.includes(path.basename(s.dir)) ? '[off]' : '[on] '} ${s.name}\t${s.description}`);
+      const found = findNativeSkills(project);
+      if (found.length) console.log(`\nfound in the agents' own folders (chorus skills import <name>):\n${found.map(f => `  ${f.name}\t${f.from}`).join('\n')}`);
+    } else if ((sub === 'on' || sub === 'off') && folderOf(name)) {
+      setSkillEnabled(project, name, sub === 'on');
+      console.log(JSON.stringify(syncSkills(project)));
+    } else if (sub === 'import' && name) {
+      const f = findNativeSkills(project).find(x => x.name === name || path.basename(x.dir) === name);
+      if (!f) console.error(`no skill "${name}" found in the agents' folders`);
+      else {
+        importSkill(project, f);
+        console.log(`imported ${f.name}: ${JSON.stringify(syncSkills(project))}`);
+      }
+    } else console.error('usage: chorus skills [list|on <name>|off <name>|import <name>|sync] [--project dir]');
     break;
+  }
   case 'mux': {
     // dev command: run each shell command as a thread, e.g. chorus mux codex agy
     const ui = new App();

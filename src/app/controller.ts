@@ -13,11 +13,12 @@ import { modelsFor } from './models.ts';
 import type { ItemState } from './compositor.ts';
 import { Tailer } from './tailer.ts';
 import { spawn } from 'node:child_process';
-import { T, agentStyle, type RichLine, type Seg } from './compositor.ts';
+import { LINK, T, agentStyle, type PaneLine, type RichLine, type Seg } from './compositor.ts';
 import { riskOf } from './risk.ts';
-import { APPROVALS_HINT, MEMORY_HINT, NEW_CHAT_HINT, SKILLS_HINT, approvalLines, memoryLines as memoryScreenLines, newChatForm, newChatHit, newChatKey, newChatLines, skillLines, type NewChatForm, type NewChatInfo } from './screens.ts';
+import { ARTIFACTS_HINT, APPROVALS_HINT, MEMORY_HINT, NEW_CHAT_HINT, SKILLS_HINT, approvalLines, memoryLines as memoryScreenLines, newChatForm, newChatHit, newChatKey, newChatLines, skillLines, type NewChatForm, type NewChatInfo } from './screens.ts';
 import { VERIFIED_VERSION, versionWarning } from '../core/adapters/index.ts';
 import { PreviewServer } from '../core/preview.ts';
+import { defaultOpener, readOpenConfig, writeOpenConfig, type OpenConfig, type Opener } from '../core/opener.ts';
 import { traceCmd } from '../cli/commands.ts';
 
 export const AGENTS: AgentId[] = ['claude', 'codex', 'agy'];
@@ -32,6 +33,8 @@ export interface ControllerOpts {
   tailPollMs?: number;
   /** how a thread's agent is started (tests start a fake TUI instead) */
   launcher?: (agent: AgentId, o: InteractiveOpts) => Launch;
+  /** how files and links are opened for the user (tests replace it) */
+  opener?: Opener;
 }
 
 export class Controller {
@@ -166,7 +169,8 @@ export class Controller {
     const t = this.store.getThread(id);
     const first = s.turns.find(x => x.role === 'user')?.text;
     if (!t || !first || !/^(claude|codex|agy) \d+$/.test(t.title)) return;
-    const title = first.split('\n')[0].replace(/\s+/g, ' ').trim().slice(0, 28);
+    const line = first.split('\n')[0].replace(/\s+/g, ' ').trim();
+    const title = line.length > 28 ? line.slice(0, 27) + '…' : line;
     if (!title) return;
     this.store.updateThread(id, { title });
     const e = this.app.entry(id);
@@ -249,6 +253,11 @@ export class Controller {
       if (found && !had) {
         this.pending.set(e.id, found);
         this.pendingSince.set(e.id, Date.now());
+        // a request on a chat you are not looking at: one-line flash and the bell, on top of the badge and the sidebar !
+        if (e.id !== this.app.current?.id || this.app.paneId) {
+          this.app.setFlash(`${e.title} needs approval`);
+          this.app.bell();
+        }
         changed = true;
       } else if (!found && had) {
         this.pending.delete(e.id);
@@ -388,7 +397,9 @@ export class Controller {
    * defaults. The chat is named after your first message; you type it in the agent itself.
    */
   newChatScreen(preset: { agent?: AgentId; model?: string; folder?: string; skip?: boolean } = {}) {
-    const folder = preset.folder ?? this.app.current?.cwd ?? this.project;
+    // the project you are in: the folder of the chat in front, else the folder chorus was started in (a parked chat does not count)
+    const cur = this.app.current;
+    const folder = preset.folder ?? (cur?.host ? cur.cwd : this.project);
     const f: NewChatForm = newChatForm({ agent: preset.agent, model: preset.model, folder, models: a => this.modelList(a) });
     f.skip = !!preset.skip;
     const info = (): NewChatInfo => ({ models: a => this.modelList(a), quota: this.quotaInfo(), recent: this.recentFolders(f.folder), skipFlag: SKIP_FLAG });
@@ -408,6 +419,7 @@ export class Controller {
     };
     this.app.showPane('New chat', newChatLines(f, info()), {
       id: 'new',
+      bare: true,
       hint: NEW_CHAT_HINT,
       crumb: ['New chat'],
       onKey: key => {
@@ -455,6 +467,7 @@ export class Controller {
     };
     this.app.showPane('Approvals', approvalLines(this.approvalItems(), 0, this.decidedItems()), {
       id: 'approvals',
+      bare: true,
       hint: APPROVALS_HINT,
       crumb: ['Approvals'],
       onKey: key => {
@@ -533,6 +546,7 @@ export class Controller {
     };
     this.app.showPane('Memory', memoryScreenLines(this.memoryItems(), 0, where()), {
       id: 'memory',
+      bare: true,
       hint: MEMORY_HINT,
       crumb: ['Memory'],
       onKey: key => {
@@ -597,6 +611,7 @@ export class Controller {
     };
     this.app.showPane('Skills', skillLines(items(), found(), 0, where()), {
       id: 'skills',
+      bare: true,
       hint: SKILLS_HINT,
       crumb: ['Skills'],
       onKey: key => {
@@ -736,42 +751,95 @@ export class Controller {
     return out;
   }
 
-  /** The Artifacts view: ↑↓ select, o open in the browser (live reload), p copy the path, v versions. */
+  /** The Artifacts view: ↑↓ select, ⏎ or a click opens, f shows the folder, p copies the path, v shows versions. */
   artifactsView(threadId: string | undefined, title = '') {
     const st = { sel: 0, versions: false };
     const rows = () => this.store.listArtifacts(threadId);
-    const lines = () => this.artifactLines(threadId, st.sel, st.versions);
-    this.app.showPane(title ? `Artifacts · ${title}` : 'Artifacts', lines(), {
-      hint: '↑↓ select   o open in the browser (live reload)   p copy path   v versions   esc back',
+    const draw = () => {
+      st.sel = Math.min(st.sel, Math.max(0, rows().length - 1));
+      this.app.updatePane(this.artifactLines(threadId, st.sel, st.versions));
+    };
+    const open = (mode?: OpenConfig['mode']) => {
+      const a = rows()[st.sel];
+      if (a) void this.openArtifact(a.thread_id, a.path, mode).then(() => draw());
+    };
+    this.app.showPane(title ? `Artifacts · ${title}` : 'Artifacts', this.artifactLines(threadId, 0, false), {
+      id: 'artifacts',
+      hint: ARTIFACTS_HINT,
+      crumb: title ? [title, 'Artifacts'] : ['Artifacts'],
       onKey: key => {
         const n = rows().length;
         if (key === '\x1b[A' || key === 'k') st.sel = Math.max(0, st.sel - 1);
         else if (key === '\x1b[B' || key === 'j') st.sel = Math.min(Math.max(0, n - 1), st.sel + 1);
         else if (key === 'v') st.versions = !st.versions;
         else if (key === 'p' && rows()[st.sel]) this.copy(rows()[st.sel].abs);
-        else if (key === 'o' && rows()[st.sel]) {
-          const a = rows()[st.sel];
-          void this.openPreview(a.thread_id, a.path).then(() => this.app.updatePane(lines()));
-          return true;
-        } else return false;
-        this.app.updatePane(lines());
+        else if (key === 'o' || key === '\r' || key === '\n') return void open(), true;
+        else if (key === 'f') return void open('folder'), true;
+        else return false;
+        draw();
         return true;
+      },
+      onHit: id => {
+        if (id.startsWith('row:')) {
+          const at = Number(id.slice(4));
+          if (at === st.sel) open();
+          else {
+            st.sel = at;
+            draw();
+          }
+        } else if (id === 'open') open();
+        else if (id === 'folder') open('folder');
+        else if (id === 'copy' && rows()[st.sel]) this.copy(rows()[st.sel].abs);
+        else if (id === 'versions') {
+          st.versions = !st.versions;
+          draw();
+        } else if (id === 'link' && this.preview?.url) open();
       },
     });
   }
 
-  async openPreview(threadId: string, rel: string): Promise<string> {
+  /**
+   * Opens an artifact for the user: the served preview link (it reloads while the agent edits) with the system default, or the way
+   * this project chose before. When the way fails, the user picks another and it is remembered in <project>/.chorus/open.json.
+   */
+  async openArtifact(threadId: string, rel: string, via?: OpenConfig['mode']): Promise<void> {
+    const url = await this.openPreview(threadId, rel, false);
+    const abs = path.join(this.store.artifactsDir(threadId), rel);
+    const project = this.store.projectOf(threadId);
+    let cfg = via ? { mode: via } : readOpenConfig(project);
+    const opener: Opener = this.o.opener ?? (process.env.CHORUS_NO_OPEN === '1' ? async () => ({ ok: true }) : defaultOpener);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const r = await opener(cfg, { url, path: abs });
+      if (r.ok) {
+        this.app.setFlash(r.shown ? `${cfg.mode === 'copy' ? 'copied: ' : ''}${r.shown}` : `opened ${rel}`);
+        return;
+      }
+      const k = await this.app.alert(`Couldn't open ${rel}`, [`${r.error ?? 'the open command failed'}.`, 'How do you want to open files?'], [
+        { key: '\r', label: 'Copy the link to the clipboard' },
+        { key: '2', label: 'Show the folder in the file manager' },
+        { key: '3', label: 'Use another command…   e.g. firefox {url}' },
+        { key: '4', label: "Just show the link, don't try again" },
+      ]);
+      if (k === undefined) return;
+      if (k === '\r') cfg = { mode: 'copy' };
+      else if (k === '2') cfg = { mode: 'folder' };
+      else if (k === '4') cfg = { mode: 'show' };
+      else {
+        const command = await this.app.prompt('Open files with…', ['Use {url} for the preview link and {path} for the file.', 'Example: firefox {url}'], 'firefox {url}');
+        if (!command) return;
+        cfg = { mode: 'custom', command };
+      }
+      writeOpenConfig(project, cfg);
+    }
+  }
+
+  /** Starts the preview server (once) and returns the link of one artifact. `open` also opens it with the project's way (used by `o` in older views and tests). */
+  async openPreview(threadId: string, rel: string, open = true): Promise<string> {
     this.preview ??= new PreviewServer(this.store);
     await this.preview.start();
     const url = this.preview.urlFor(threadId, rel);
     this.previewOpened = url;
-    if (process.env.CHORUS_NO_OPEN !== '1') {
-      try {
-        spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { stdio: 'ignore', detached: true }).unref();
-      } catch {
-        /* no browser here: the URL is on screen */
-      }
-    }
+    if (open && process.env.CHORUS_NO_OPEN !== '1') await (this.o.opener ?? defaultOpener)(readOpenConfig(this.store.projectOf(threadId)), { url, path: path.join(this.store.artifactsDir(threadId), rel) });
     this.app.setFlash(`preview: ${url}`);
     return url;
   }
@@ -788,10 +856,9 @@ export class Controller {
     }
   }
 
-  artifactLines(threadId?: string, sel = 0, showVersions = false): RichLine[] {
+  artifactLines(threadId?: string, sel = 0, showVersions = false): PaneLine[] {
     const rows = this.store.listArtifacts(threadId);
-    const out: RichLine[] = [];
-    const hl = (i: number, segs: Seg[]): Seg[] => (i === sel ? segs.map(([t, st]) => [t, [st, T.bgSel].filter(Boolean).join(';')] as Seg) : segs);
+    const out: PaneLine[] = [];
     const versionsOf = (tid: string, p: string) => this.store.db.prepare('SELECT version, ts FROM artifacts WHERE thread_id=? AND path=? ORDER BY ts').all(tid, p) as { version: string; ts: string }[];
     if (!rows.length) out.push([['No artifacts yet. Files the agents write into the thread artifacts folder show up here.', T.dim]] as Seg[]);
     else {
@@ -799,19 +866,19 @@ export class Controller {
       rows.forEach((a, i) => {
         const t = this.store.getThread(a.thread_id);
         const n = versionsOf(a.thread_id, a.path).length;
-        out.push(hl(i, [[i === sel ? '▸ ' : '  ', T.chorus], [a.path.padEnd(32)], [`v${n}`.padEnd(6)], [(t?.agent ?? '').padEnd(9), agentStyle(t?.agent ?? '')], [this.ago(a.ts).padEnd(12), T.dim]]));
+        out.push({ line: [[i === sel ? '▸ ' : '  ', T.chorus], [a.path.padEnd(32)], [`v${n}`.padEnd(6)], [(t?.agent ?? '').padEnd(9), agentStyle(t?.agent ?? '')], [this.ago(a.ts).padEnd(12), T.dim]] as Seg[], hit: `row:${i}`, sel: i === sel });
       });
       const cur = rows[Math.min(sel, rows.length - 1)];
       out.push('');
-      out.push([['Preview  ', T.dim], this.preview?.url ? [this.preview.urlFor(cur.thread_id, cur.path), T.chorus] : ['press o to open it in the browser: it reloads while the agent keeps editing', T.dim], ...(this.preview?.url ? ([['   ● live reload', T.ok]] as Seg[]) : [])] as Seg[]);
-      out.push([['Path     ', T.dim], [cur.abs]] as Seg[]);
+      out.push([['Link     ', T.dim], this.preview?.url ? [this.preview.urlFor(cur.thread_id, cur.path), LINK, 'link'] : ['press ⏎ to open it in the browser: it reloads while the agent keeps editing', T.dim], ...(this.preview?.url ? ([['   ● live reload', T.ok]] as Seg[]) : [])] as Seg[]);
+      out.push([['File     ', T.dim], [cur.abs]] as Seg[]);
       if (showVersions) {
         out.push('', [[`Versions of ${cur.path}`, T.dim]] as Seg[]);
         versionsOf(cur.thread_id, cur.path).forEach((v, i) => out.push([[`  v${i + 1}  `, T.chorus], [v.version + '  '], [this.ago(v.ts), T.dim]] as Seg[]));
       }
     }
     const touched = new Set<string>();
-    for (const t of this.store.listThreads()) if (!threadId || t.id === threadId) for (const c of this.store.getToolCalls(t.id)) if (/^(Write|Edit|write_to_file|replace_file_content|apply_patch)$/.test(c.tool) && c.target) touched.add(c.target);
+    for (const t of this.store.listThreads()) if (!threadId || t.id === threadId) for (const c of this.store.getToolCalls(t.id)) if (/^(Write|Edit|write_to_file|replace_file_content|apply_patch|file_change)$/.test(c.tool) && c.target) touched.add(c.target);
     out.push('', [['Files written by tools', T.dim]] as Seg[], ...(touched.size ? [...touched].slice(0, 30).map(f => `  ${f}`) : [[['  (none)', T.dim]] as Seg[]]));
     return out;
   }

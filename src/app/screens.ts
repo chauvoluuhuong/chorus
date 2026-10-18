@@ -226,3 +226,7 @@ export function skillLines(items: SkillItem[], found: FoundItem[], sel: number, 
 }
 
 export const SKILLS_HINT: RichLine = hints(chip('⏎', 'on/off', 'toggle'), chip('i', 'import', 'import'), chip('esc', 'back', 'back'));
+
+/* ---------- Artifacts ---------- */
+
+export const ARTIFACTS_HINT: RichLine = hints([[' ↑↓ ', BTN], [' select']], chip('⏎', 'open', 'open'), chip('f', 'show in folder', 'folder'), chip('p', 'copy path', 'copy'), chip('v', 'versions', 'versions'), chip('esc', 'back', 'back'));

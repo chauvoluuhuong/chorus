@@ -187,9 +187,9 @@ export interface FoundSkill extends Skill {
 
 /**
  * Skills the agents already have in their own folders (project and user level) that are not Chorus's own links or copies and not
- * a CLI default. Offered for import. `home` is a parameter so tests do not touch the real home folder.
+ * a CLI default. Offered for import. `home` is a parameter (and CHORUS_SKILLS_HOME overrides it) so tests and proofs do not read the real home folder.
  */
-export function findNativeSkills(project: string, home = os.homedir()): FoundSkill[] {
+export function findNativeSkills(project: string, home = process.env.CHORUS_SKILLS_HOME ?? os.homedir()): FoundSkill[] {
   const places: { dir: string; label: string; agent: FoundSkill['agent'] }[] = [
     { dir: path.join(project, '.claude/skills'), label: '.claude/skills', agent: 'claude' },
     { dir: path.join(project, '.agents/skills'), label: '.agents/skills', agent: 'shared' },

@@ -117,6 +117,15 @@ test('narrow, icon and hidden sidebars; the agent area grows as they shrink', ()
   assert.ok(hidden.hits.some(h => h.id === 'menu'), 'the top bar stays');
 });
 
+test('narrow window: the path is cut with an ellipsis before the buttons, which keep their gap', () => {
+  const t = gridText(compose(view({ cols: 78, side: SIDE.slice(0, 4), top: { back: true, crumb: ['chorus', 'a-very-long-project-folder-name', 'a very long chat title that cannot fit'], waiting: 2 } })).grid)[0];
+  assert.match(t, /…\s{2,}! 2 waiting\s+☰ Menu\s*$/, t);
+  const icons = gridText(compose(view({ cols: 78 })).grid);
+  assert.ok(!/▾\w/.test(icons[2]), 'icon mode: a project row is just its caret, no clipped name');
+  assert.match(icons[2], /^\s*▾\s*│/);
+  assert.match(icons[5], /^\s*▸\s*!\s*│/, 'a folded project with an approval waiting keeps its !');
+});
+
 test('too small: only a notice, no hit regions', () => {
   const { grid, hits } = compose(view({ cols: 40, rows: 10 }));
   assert.match(gridText(grid).join('\n'), /window too small: 40×10/);
@@ -178,6 +187,17 @@ test('pane: title, whole-row hits with a selected background, segment hits, hint
   const ap = hits.find(h => h.id === 'approve:a')!;
   assert.equal(hitAt(hits, ap.x0 + 1, ap.y0), 'approve:a');
   assert.ok(hits.some(h => h.id === 'back' && h.y0 === 22), 'hint buttons are hits too');
+});
+
+test('a bare pane has no title row: its own heading is the first line and it gets one more row', () => {
+  const lines = Array.from({ length: 40 }, (_, i) => `line ${i}`);
+  const titled = gridText(compose(view({ pane: { title: 'Doctor', lines, hint: 'esc' } })).grid);
+  const bare = gridText(compose(view({ pane: { title: 'Memory', bare: true, lines, hint: 'esc' } })).grid);
+  assert.match(titled[1], /Doctor/);
+  assert.match(titled[2], /line 0/);
+  assert.match(bare[1], /line 0/, 'no title row above the first line');
+  assert.ok(bare.join('\n').includes('line 20') && !titled.join('\n').includes('line 21'), 'one more line fits');
+  assert.ok(!bare[1].includes('Memory'));
 });
 
 test('hover lights up the region under the mouse', () => {

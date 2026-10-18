@@ -2,7 +2,7 @@
 // panes, dialogs, cards. Clicks are looked up in the hit regions of the last frame (compositor.ts), never recomputed.
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
-import { compose, Differ, hitAt, layout, type Hit, type ItemState, type PaneLine, type RichLine, type SideRow, type StatusBar } from './compositor.ts';
+import { compose, Differ, hitAt, layout, paneRoom, type Hit, type ItemState, type PaneLine, type RichLine, type SideRow, type StatusBar } from './compositor.ts';
 import { InputRouter, parseMenuKeys, type InputEvent } from './input.ts';
 import { nodePtyFactory, type PtyFactory } from './pty.ts';
 import { ThreadHost, type HostOpts } from './thread-host.ts';
@@ -70,6 +70,8 @@ export interface PaneOpts {
   onClose?: () => void;
   /** breadcrumb after "chorus" (default: the title) */
   crumb?: string[];
+  /** the lines carry their own heading: no title row (the screens of the mockup) */
+  bare?: boolean;
 }
 
 interface PaneState extends PaneOpts {
@@ -115,6 +117,7 @@ export class App extends EventEmitter {
   private hover: string | undefined;
   private alertState: { title: string; lines: string[]; options: { key: string; label: string }[]; sel: number; resolve: (k: string | undefined) => void } | undefined;
   private dialog: { title: string; options: string[]; sel: number; resolve: (i: number | undefined) => void } | undefined;
+  private promptState: { title: string; lines: string[]; value: string; resolve: (v: string | undefined) => void } | undefined;
   private card: Card | undefined;
   private mouseOn: boolean;
   private mousePending = '';
@@ -309,6 +312,15 @@ export class App extends EventEmitter {
     });
   }
 
+  /** One line of text (a command, a folder); Enter accepts, Esc cancels. */
+  prompt(title: string, lines: string[], initial = ''): Promise<string | undefined> {
+    return new Promise(resolve => {
+      this.promptState = { title, lines, value: initial, resolve };
+      this.router.capture = true;
+      this.schedule();
+    });
+  }
+
   /** A warning with a few ways out (the mockup's "limit reached" box). Resolves with the chosen key, undefined on Esc. */
   alert(title: string, lines: string[], options: { key: string; label: string }[]): Promise<string | undefined> {
     return new Promise(resolve => {
@@ -326,6 +338,11 @@ export class App extends EventEmitter {
 
   get currentCard() {
     return this.card;
+  }
+
+  /** Terminal bell: a request needs you while you look at another chat (CHORUS_BELL=0 mutes it). */
+  bell() {
+    if (this.started && process.env.CHORUS_BELL !== '0') this.io.stdout.write('\x07');
   }
 
   setFlash(msg: string) {
@@ -432,6 +449,21 @@ export class App extends EventEmitter {
   }
 
   private onCaptured(key: string) {
+    if (this.promptState) {
+      const st = this.promptState;
+      const done = (v: string | undefined) => {
+        this.promptState = undefined;
+        this.router.capture = !!this.pane || !!this.dialog || !!this.alertState;
+        st.resolve(v);
+        this.schedule();
+      };
+      if (key === '\x1b') return done(undefined);
+      if (key === '\r' || key === '\n') return done(st.value.trim() || undefined);
+      if (key === '\x7f' || key === '\b') st.value = st.value.slice(0, -1);
+      else if (key === '\x15') st.value = '';
+      else if (key.length >= 1 && key >= ' ' && !key.startsWith('\x1b')) st.value += key;
+      return void this.schedule();
+    }
     if (this.alertState) return this.alertKey(key);
     if (this.dialog) {
       const d = this.dialog;
@@ -596,19 +628,23 @@ export class App extends EventEmitter {
     const alert = this.alertState;
     const actName = act?.title ?? 'chat';
     const menuRows = this.menuRows();
-    const overlay = alert
+    const overlay = this.promptState
+      ? { title: this.promptState.title, lines: [...this.promptState.lines, '', `> ${this.promptState.value}▌`], selected: this.promptState.lines.length + 1, foot: '⏎ accept   esc cancel' }
+      : alert
       ? { title: alert.title, lines: alert.lines, rows: alert.options.map((o, i) => [o.key === '\r' ? '⏎' : o.key, o.label, i === alert.sel, `alert:${i}`] as [string, string, boolean, string]), alert: true }
       : dialog
         ? { title: dialog.title, rows: dialog.options.map((o, i) => [String(i + 1), o, i === dialog.sel, `choice:${i}`] as [string, string, boolean, string]), foot: '⏎ choose   esc cancel' }
         : this.router.menuOpen
           ? { title: `chorus · ${actName}`, rows: menuRows.map((r, i) => [r.key, r.label, i === this.menuSel, `menu:${r.key}`] as [string, string, boolean, string]), foot: `↑↓ move   ⏎ run   esc  back to ${act?.agent ?? 'the chat'}` }
           : undefined;
+    const room = this.pane ? paneRoom(L.contentRows, !this.pane.bare) : 0;
     const pane = this.pane && {
       title: this.pane.title,
-      lines: this.pane.lines.slice(this.pane.scroll, this.pane.scroll + L.contentRows - 2),
+      bare: this.pane.bare,
+      lines: this.pane.lines.slice(this.pane.scroll, this.pane.scroll + room),
       hint:
         this.pane.hint ??
-        `↑/↓ PgUp/PgDn scroll · g/G top/bottom · esc back  (${Math.min(this.pane.lines.length, this.pane.scroll + 1)}-${Math.min(this.pane.lines.length, this.pane.scroll + L.contentRows - 2)} of ${this.pane.lines.length})`,
+        `↑/↓ PgUp/PgDn scroll · g/G top/bottom · esc back  (${Math.min(this.pane.lines.length, this.pane.scroll + 1)}-${Math.min(this.pane.lines.length, this.pane.scroll + room)} of ${this.pane.lines.length})`,
     };
     const card = this.card && { title: this.card.title, lines: [...this.card.lines, `${this.menuLabel} y  approve    ${this.menuLabel} x  deny    (or switch to the chat and answer there)`] };
     const meta = act?.meta ?? {};

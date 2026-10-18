@@ -1,0 +1,44 @@
+  ‹ Back   chorus › Skills                                                                                                                    ☰ Menu
+  + New chat                │  Skills  ·  one library      .chorus/skills (this project; one global library is TD-1)
+ ▾ chorus-proof-api-Aoj… 1  │
+   ◌ Rate limiter     codex │        NAME             WHAT IT DOES                          claude codex agy
+ ▾ chorus-proof-OBrfD6   3  │  ▸ [on]  cake-pricing     Price a cake from size, layers and …  ✓      ✓     ✓
+   ◐ Create calc.js… claude │
+   ↳ ◐ Create calc.j… codex │  Found in the agents' own folders
+   ◐ Reply with only… codex │    pdf-tools         ~/.agents/skills    codex agy  import ›
+                            │    release-notes     ~/.claude/skills    claude     import ›
+                            │
+                            │  Reach  [x] every project you open in Chorus
+                            │         [ ] also when you run claude, codex or agy without Chorus  (later, TD-1)
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+────────────────────────────│
+ ✦ Skills                   │
+ ◫ Memory                   │  ⏎  on/off    i  import    esc  back
+ chorus  Skills                                                                                                                               ⌃\ menu

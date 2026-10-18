@@ -1,0 +1,44 @@
+  ‹ Back   chorus › New chat                                                                                                                  ☰ Menu
+  + New chat                │  New chat
+ ▾ chorus-proof-api-Aoj… 1  │
+   ◌ Rate limiter     codex │  Agent         claude    codex    agy
+                            │
+                            │
+                            │  Model         default   sonnet   opus   haiku
+                            │
+                            │  Project      /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-OBrfD6  ▾
+                            │               recent: /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-api-AojvIm  · or type any fo
+                            │
+                            │  Permissions  [ ] Skip permission prompts  --dangerously-skip-permissions
+                            │               off: the agent asks, and Chorus shows it in the approvals inbox
+                            │
+                            │                ⏎ Start chat
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+────────────────────────────│
+ ✦ Skills                   │
+ ◫ Memory                   │  ⏎  start    tab  next field    ←/→  change    space  tick    esc  back
+ chorus  New chat                                                                                                                             ⌃\ menu

@@ -16,14 +16,18 @@ const ROOT = path.resolve(import.meta.dirname, '../..');
 const FAKE = path.join(ROOT, 'tools/fake-agent/fake-tui.mjs');
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-function rig() {
+function rig(extra: Partial<ConstructorParameters<typeof Controller>[0]> = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-home-'));
   process.env.CODEX_HOME = home; // the codex adapter looks for rollouts here
   const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-proj-')));
   const stdin = Object.assign(new PassThrough(), { setRawMode: () => {}, isTTY: true });
   const outer = new VirtualScreen(120, 30);
+  let raw = '';
   const stdout = new PassThrough();
-  stdout.on('data', d => outer.write(d));
+  stdout.on('data', d => {
+    raw += d;
+    outer.write(d);
+  });
   const io: AppIO = { stdin, stdout, size: () => ({ cols: 120, rows: 30 }), onResize: () => () => {} };
   const app = new App(io);
   const store = new Store(project);
@@ -33,6 +37,7 @@ function rig() {
     store,
     app,
     tailPollMs: 100,
+    ...extra,
     launcher: (agent, o) => {
       launches.push({ agent, prompt: o.prompt, resumeId: o.resumeId, model: o.model, cwd: o.cwd, skipPermissions: o.skipPermissions, project: o.project });
       return { bin: process.execPath, args: [FAKE, `${agent}`], cwd: o.cwd };
@@ -43,6 +48,7 @@ function rig() {
     app, c, store, project, home, launches,
     type: (s: string) => stdin.write(s),
     screen: () => outer.text(),
+    raw: () => raw,
     async until(pred: () => boolean, what: string, ms = 8000) {
       const t0 = Date.now();
       while (Date.now() - t0 < ms) {
@@ -239,6 +245,28 @@ test('New chat screen: Enter alone starts with the defaults; esc and Back return
   }
 });
 
+test('New chat screen: the folder defaults to the project you are in, not to a parked chat of another project', async () => {
+  const r = rig();
+  try {
+    const other = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-parked-')));
+    r.store.createThread({ id: 't_parked', title: 'old chat', agent: 'codex', cwd: other, project: other, native_session_id: 'x', state: 'waiting' });
+    r.c.restore();
+    assert.equal(r.app.current?.cwd, other, 'the parked chat of the other project is the selected entry');
+    r.type('\x00n');
+    await r.until(() => has(r.screen(), /Agent\s+claude\s+codex/), 'screen');
+    assert.match(r.screen().join('\n'), /Project\s+\S*chorus-proj-/); // the folder chorus was started in (the path is cut at the pane edge)
+    r.type('\x1b');
+    // with a chat running in front, the project is that chat's folder
+    r.c.newThread({ agent: 'claude', title: 'front', cwd: other });
+    await r.until(() => has(r.screen(), /READY claude/), 'front chat');
+    r.type('\x00n');
+    await r.until(() => has(r.screen(), /Agent\s+claude\s+codex/), 'screen again');
+    assert.match(r.screen().join('\n'), /Project\s+\S*chorus-parked-/);
+  } finally {
+    r.close();
+  }
+});
+
 test('New chat screen: click the agent and model, tick skip permissions, type a folder; the folder is validated and becomes the chat project', async () => {
   const r = rig();
   try {
@@ -334,11 +362,11 @@ test('artifacts view: select, open the live preview, versions; activity view: fi
 
     r.type('\x00a');
     await r.until(() => has(r.screen(), /Artifacts · viewer/) && has(r.screen(), /plan\.md\s+v2/), 'artifacts table with two versions');
-    assert.match(r.screen().join('\n'), /press o to open it in the browser/);
+    assert.match(r.screen().join('\n'), /press ⏎ to open it in the browser/);
     r.type('v');
     await r.until(() => has(r.screen(), /Versions of plan\.md/) && has(r.screen(), /v1 /) && has(r.screen(), /v2 /), 'versions list');
     r.type('o');
-    await r.until(() => /Preview\s+http:\/\/localhost:\d+\/t_/.test(r.screen().join('\n')) && has(r.screen(), /live reload/), 'preview url on screen');
+    await r.until(() => /Link\s+http:\/\/localhost:\d+\/t_/.test(r.screen().join('\n')) && has(r.screen(), /live reload/), 'preview url on screen');
     const url = r.c.previewOpened;
     assert.match(url, /^http:\/\/localhost:\d+\/t_\w+\/plan\.md$/);
     const body = await new Promise<string>(res => http.get(url, m => { let b = ''; m.on('data', d => (b += d)); m.on('end', () => res(b)); }));
@@ -395,6 +423,43 @@ test('approvals inbox: every waiting chat in one list with a risk tag; y / x / c
     await r.until(() => has(r.screen(), /Approvals\s+·\s+1 waiting/), 'third request');
     r.type('\r'); // ⏎ opens the chat
     await r.until(() => r.app.active === 0 && !has(r.screen(), /Approvals\s+·/), 'chat opened');
+  } finally {
+    r.close();
+  }
+});
+
+test('a request on a chat you are not looking at rings the bell and flashes its title; CHORUS_BELL=0 mutes the bell', async () => {
+  const r = rig();
+  try {
+    const a = r.c.newThread({ agent: 'codex', title: 'Stripe webhook' });
+    r.c.newThread({ agent: 'claude', title: 'front' });
+    await r.until(() => has(r.screen(), /READY claude/), 'front');
+    const prompt = path.join(ROOT, 'fixtures/codex/0.163.0/approval-ask-nohook-enter/prompt-screen.txt');
+    const before = r.raw().length;
+    r.app.entry(a.id)!.host!.write(`show ${prompt}\r`);
+    await r.until(() => has(r.screen(), /Stripe webhook needs approval/), 'flash in the status line');
+    assert.ok(r.raw().slice(before).includes('\x07'), 'bell');
+    r.type('\x00x');
+    await r.until(() => !has(r.screen(), /asks for approval/), 'denied');
+    process.env.CHORUS_BELL = '0';
+    const mid = r.raw().length;
+    r.app.entry(a.id)!.host!.write(`show ${prompt}\r`);
+    await r.until(() => has(r.screen(), /asks for approval/), 'second request');
+    assert.ok(!r.raw().slice(mid).includes('\x07'), 'muted');
+  } finally {
+    delete process.env.CHORUS_BELL;
+    r.close();
+  }
+});
+
+test('a long first message becomes a title with an ellipsis, not a cut word', async () => {
+  const r = rig();
+  try {
+    const e = r.c.newThread({ agent: 'codex' });
+    writeRollout(r.home, r.project, { done: false });
+    await r.until(() => r.store.getThread(e.id)!.title !== 'codex 1', 'title');
+    const title = r.store.getThread(e.id)!.title;
+    assert.ok(title.endsWith('…') && title.length === 28, title);
   } finally {
     r.close();
   }
@@ -504,5 +569,85 @@ test('Skills screen: on/off by ⏎ or click, import what the agents already have
   } finally {
     r.close();
     process.env.HOME = oldHome;
+  }
+});
+
+test('artifacts: ⏎ or a click opens the selected file, f shows the folder, the way is the project\'s own', async () => {
+  const opened: { mode: string; command?: string; url?: string; path: string }[] = [];
+  const r = rig({ opener: async (cfg, t) => (opened.push({ mode: cfg.mode, command: cfg.command, url: t.url, path: t.path }), { ok: true, shown: cfg.mode === 'show' ? t.url : undefined }) });
+  try {
+    const e = r.c.newThread({ agent: 'codex', title: 'viewer' });
+    await r.until(() => has(r.screen(), /READY codex/), 'ready');
+    fs.writeFileSync(path.join(r.store.artifactsDir(e.id), 'plan.md'), '# plan');
+    fs.writeFileSync(path.join(r.store.artifactsDir(e.id), 'order.html'), '<h1>order</h1>');
+    r.store.scanArtifacts(e.id);
+    r.type('\x00a');
+    await r.until(() => has(r.screen(), /Artifacts · viewer/) && has(r.screen(), /order\.html/) && has(r.screen(), /plan\.md/), 'two artifacts');
+    r.type('\r'); // opens the selected row
+    await r.until(() => opened.length === 1, 'opened');
+    assert.equal(opened[0].mode, 'default');
+    assert.match(opened[0].url!, /^http:\/\/localhost:\d+\/t_\w+\/(order\.html|plan\.md)$/);
+    assert.ok(opened[0].path.startsWith(r.store.artifactsDir(e.id)));
+    await r.until(() => has(r.screen(), /Link\s+http:\/\/localhost/) && has(r.screen(), /live reload/), 'link and live reload shown');
+    r.app.click('row:1'); // a click selects the other row
+    await sleep(200);
+    r.app.click('row:1'); // a second click opens it
+    await r.until(() => opened.length === 2 && opened[1].path !== opened[0].path, 'second file opened');
+    r.type('f');
+    await r.until(() => opened.length === 3, 'folder');
+    assert.equal(opened[2].mode, 'folder');
+    r.app.click('copy'); // the hint chips are buttons
+    assert.match(r.screen().join('\n'), /⏎\s+open\s+f\s+show in folder\s+p\s+copy path\s+v\s+versions/);
+  } finally {
+    r.close();
+  }
+});
+
+test('artifacts: when the open command fails the user chooses another way, which is remembered per project', async () => {
+  let calls = 0;
+  const r = rig({
+    opener: async (cfg, t) => {
+      calls++;
+      if (cfg.mode === 'default') return { ok: false, error: 'xdg-open: command not found' };
+      if (cfg.mode === 'custom') return { ok: cfg.command === 'firefox {url}', error: 'no such command' };
+      return { ok: true, shown: t.url };
+    },
+  });
+  try {
+    const e = r.c.newThread({ agent: 'codex', title: 'viewer' });
+    await r.until(() => has(r.screen(), /READY codex/), 'ready');
+    fs.writeFileSync(path.join(r.store.artifactsDir(e.id), 'order.html'), '<h1>order</h1>');
+    r.store.scanArtifacts(e.id);
+    r.type('\x00a');
+    await r.until(() => has(r.screen(), /order\.html/), 'artifact');
+    r.type('\r');
+    await r.until(() => has(r.screen(), /Couldn't open order\.html/), 'the dialog');
+    const t = r.screen().join('\n');
+    assert.match(t, /xdg-open: command not found\./);
+    assert.match(t, /How do you want to open files\?/);
+    assert.match(t, /Copy the link to the clipboard/);
+    assert.match(t, /Show the folder in the file manager/);
+    assert.match(t, /Use another command… {3}e\.g\. firefox \{url\}/);
+    assert.match(t, /Just show the link, don't try again/);
+    r.type('4'); // just show the link
+    await r.until(() => has(r.screen(), /http:\/\/localhost:\d+\/t_\w+\/order\.html/) && !has(r.screen(), /Couldn't open/), 'link shown');
+    const saved = JSON.parse(fs.readFileSync(path.join(r.project, '.chorus', 'open.json'), 'utf8'));
+    assert.deepEqual(saved, { mode: 'show' }, 'remembered in the project');
+    const before = calls;
+    r.type('\r'); // next time the remembered way is used, no dialog
+    await r.until(() => calls === before + 1, 'opened again');
+    assert.ok(!has(r.screen(), /Couldn't open/));
+
+    // another way: a custom command typed into the prompt
+    fs.rmSync(path.join(r.project, '.chorus', 'open.json'));
+    r.type('\r');
+    await r.until(() => has(r.screen(), /Couldn't open order\.html/), 'dialog again');
+    r.type('3');
+    await r.until(() => has(r.screen(), /Open files with…/) && has(r.screen(), /> firefox \{url\}/), 'prompt with an example');
+    r.type('\r');
+    await r.until(() => fs.existsSync(path.join(r.project, '.chorus', 'open.json')), 'saved');
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(r.project, '.chorus', 'open.json'), 'utf8')), { mode: 'custom', command: 'firefox {url}' });
+  } finally {
+    r.close();
   }
 });

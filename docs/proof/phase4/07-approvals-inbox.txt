@@ -1,0 +1,44 @@
+  ‹ Back   chorus › Approvals                                                                                                  ! 1 waiting    ☰ Menu
+  + New chat                │  Approvals  ·  1 waiting
+ ▾ chorus-proof-api-Aoj… 1  │
+   ◌ Rate limiter     codex │  ▸ Create calc.js in the curre…  claude  waiting 6s
+ ▾ chorus-proof-OBrfD6   2  │      calc.js   [edits a file]
+   ! Create calc.js… claude │       y Approve   x Deny   ⏎ Open chat
+   ● codex 2          codex │
+                            │  Decided
+                            │    nothing yet
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+────────────────────────────│
+ ✦ Skills                   │
+ ◫ Memory                   │  ↑↓  select    y  approve    x  deny    ⏎  open chat    esc  back
+ chorus  Approvals                                                                                                                            ⌃\ menu
