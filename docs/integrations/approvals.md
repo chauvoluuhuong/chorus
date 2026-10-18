@@ -33,7 +33,8 @@ The prompts, as captured on the virtual screen (`fixtures/<cli>/<version>/approv
 |---|---|---|---|
 | Claude Code | `Do you want to proceed?` / `Do you want to create calc.js?` with `❯ 1. Yes`, `2. …`, `3. No` | **Enter** ✅ (file created) | **Esc** ✅ (file not created) |
 | Codex | `Would you like to run the following command?` + `$ <command>` + `1. Yes, proceed (y)` … `Press enter to confirm or esc to cancel` | **Enter** ✅ (file created; `y` is the labelled shortcut) | **Esc** ✅ ("Conversation interrupted", not created) |
-| agy | `Run this command?` + `> 1. Yes, run command` … `4. No, cancel` | **Enter** ✅ (file created) | **4** ✅ (cancelled); Esc is also offered ("esc to cancel") |
+| agy (command) | `Run this command?` + `> 1. Yes, run command` … `4. No, cancel` | **Enter** ✅ (file created) | **4** ✅ (cancelled); Esc is also offered ("esc to cancel") |
+| agy (file change, 1.4.2) | `Create file` / rule / `<path>  +5` + the code, then `Allow creation of this file?` with `> 1. Yes, allow creation` and `2. No, deny creation`. Fixture `fixtures/agy/1.4.2/approval-file/prompt-screen.txt`. The card shows `Create file · <path>`, not the code | **Enter** ✅ (approved in the e2e proof) | **Esc** ✅ (file not created; "Interrupted · What should Antigravity CLI do instead?") |
 
 Chorus sends Enter / Esc. Detection reads the thread's virtual screen: the question line plus its option line
 right below it (so prose that merely mentions "Do you want to proceed?" does not match), then extracts what the

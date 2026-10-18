@@ -29,3 +29,12 @@ test('prose that only mentions a prompt is not an approval', () => {
   assert.equal(detectApproval('claude', ['I will ask: Do you want to proceed?', 'and then continue']), undefined);
   assert.equal(detectApproval('codex', ['Would you like to run the tests? sure']), undefined);
 });
+
+test('agy: a file change shows what is being written (file and kind), not the code', () => {
+  const lines = fs.readFileSync(path.join(FIX, 'agy', '1.4.2', 'approval-file', 'prompt-screen.txt'), 'utf8').split('\n');
+  const a = detectApproval('agy', lines);
+  assert.ok(a, 'prompt detected');
+  assert.equal(a.what, 'Create file · /tmp/chorus-proof-nkh0uy/calc.js');
+  assert.equal(a.question, 'Allow creation of this file?');
+  assert.deepEqual(a.keys, { approve: '\r', deny: '\x1b' });
+});

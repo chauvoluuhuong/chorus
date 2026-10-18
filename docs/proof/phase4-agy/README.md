@@ -161,3 +161,9 @@ last raw lines (cut) → what we made of the session:
 
 MCP calls from this thread: none
 ```
+
+## After the run: card text for agy file changes
+
+The first run showed the last lines of the code in the card. It now names the kind of change and the file; checked on agy's real prompt screen (`fixtures/agy/1.4.2/approval-file`) and Esc was verified to deny it on real agy.
+
+![card for agy's file-creation prompt](17-card-for-agy-file.png)

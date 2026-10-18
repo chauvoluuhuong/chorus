@@ -52,7 +52,16 @@ export function detectApproval(agent: AgentId, lines: string[]): PendingApproval
       .slice(0, 3)
       .join(' · ');
   }
-  const what = fromBelow || framed || lines
+  // agy frames a file change as "Create file" / rule / "<path>  +5" / the code: say what it is, not the code
+  let fileChange = '';
+  if (agent === 'agy') {
+    const head = findLastIndex(lines.slice(0, qi), l => /^\s*(Create|Edit|Delete|Overwrite|Write|Rename)\s+(a\s+)?files?\b/i.test(l));
+    if (head >= 0) {
+      const target = lines.slice(head + 1, qi).map(l => l.trim()).find(l => l && !/^[─━═┄\-]+$/.test(l));
+      if (target) fileChange = `${lines[head].trim()} · ${target.replace(/\s+[+-]\d+(\s+[+-]\d+)?$/, '')}`;
+    }
+  }
+  const what = fromBelow || framed || fileChange || lines
     .slice(Math.max(0, qi - 8), qi)
     .map(l => l.replace(/^[\s│┃|]+/, '').replace(/\s+$/, ''))
     .filter(l => l && !/^[─━═┄\-]+$/.test(l) && !/^(Run shell command|Reason:|Environment:|Hook |settings\.json)/.test(l))
