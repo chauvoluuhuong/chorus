@@ -1,0 +1,40 @@
+{
+  "id": "session-race",
+  "status": "risk",
+  "summary": "cwd cannot separate the two threads (both rollouts share it); 2/2 trials found both files; birth-order DID disagree with launch order; birth gap 19.72021484375, 96.3935546875 ms",
+  "facts": {
+    "trials": [
+      {
+        "n": 0,
+        "found": 2,
+        "birthsMs": [
+          732.691650390625,
+          752.411865234375
+        ],
+        "markers": [
+          "BRAVO0",
+          "ALPHA0"
+        ],
+        "firstBornIsFirstLaunched": false,
+        "aOk": true,
+        "bOk": true
+      },
+      {
+        "n": 1,
+        "found": 2,
+        "birthsMs": [
+          712.51708984375,
+          808.91064453125
+        ],
+        "markers": [
+          "BRAVO1",
+          "ALPHA1"
+        ],
+        "firstBornIsFirstLaunched": false,
+        "aOk": true,
+        "bOk": true
+      }
+    ]
+  },
+  "at": "2026-10-18T07-26-20-403Z"
+}

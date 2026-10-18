@@ -1,0 +1,29 @@
+{
+  "writers_4": {
+    "crashed": 0,
+    "busyErrors": 0,
+    "worstWriteMs": 152,
+    "threads": 4,
+    "mcpCallsLogged": 600,
+    "mcpCallsExpected": 600,
+    "lost": 0
+  },
+  "writers_12": {
+    "crashed": 0,
+    "busyErrors": 0,
+    "worstWriteMs": 347,
+    "threads": 12,
+    "mcpCallsLogged": 1800,
+    "mcpCallsExpected": 1800,
+    "lost": 0
+  },
+  "writers_24": {
+    "crashed": 0,
+    "busyErrors": 0,
+    "worstWriteMs": 992,
+    "threads": 24,
+    "mcpCallsLogged": 3600,
+    "mcpCallsExpected": 3600,
+    "lost": 0
+  }
+}

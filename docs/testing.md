@@ -55,4 +55,5 @@ Rules:
 - **App (Phase 4)**: `test/app/` (input router, compositor, app shell with a fake TUI in real PTYs; part of `npm test`) and
   `npm run smoke:app` (the real app hosting real claude, codex and agy).
 - **Phase 4 proof**: `npm run proof` (`test/smoke/proof.ts`) drives the real `chorus` app in a PTY with real Claude and Codex and saves a PNG per step to `docs/proof/phase4/` and a `report.html` (screenshots + checks) that `npm run proof` opens when it ends. `npm run proof:agy` is the same with agy (30/30 on agy 1.4.2 + Claude 2.1.302); agy's free plan has a small quota, so don't repeat it often (rendered by Chrome headless from the virtual screen). Unit-level app tests: `test/app/` (controller, approval detector on real prompt screens, commands).
+- **Risk harness** `tools/risk/` (`npm run risk -- free|cheap|<case>`): probes known risks with the real CLIs and writes the findings to [risks/](risks/README.md); not part of `npm test`.
 - `npm run typecheck`.

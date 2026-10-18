@@ -51,6 +51,14 @@ Plan and results: [phase4.md](phase4.md). D1 decided: TypeScript. E2E proof with
 - [x] **Proof:** `npm run proof` drives the real app with real Claude and Codex: two threads, switch, approval from a card, handoff, artifacts; screenshots in `docs/proof/phase4/`
 - [ ] P4.10 UI pass 2 (simpler, like an AI chat app): project-tree sidebar, New chat form with skip-permissions, shared Memory and Skills. Plan: [ui-plan.md](ui-plan.md), mockup `docs/mockups/chorus-cli.html`
 
+## Risk harness (before Phase 4.5 / 5)
+
+Probe the known risks first, document the fix for each, build only when its trigger fires. Results: [risks/README.md](risks/README.md).
+
+- [x] Harness `tools/risk/` + 6 probed cases (store concurrency, terminal protocols, approval drift, memory adoption, capture errors, session race)
+- [ ] Windows (R7) and a real plan-limit capture (R8): manual, waiting for an environment / an event
+- [ ] agy session matching (R6) and a Codex tool-list check for memory (R4): one cheap call each
+
 ## Phase 5 · Desktop app
 
 - [ ] `chorus serve` local API

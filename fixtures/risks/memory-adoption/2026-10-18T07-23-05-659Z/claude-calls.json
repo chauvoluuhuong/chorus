@@ -1,0 +1,12 @@
+{
+  "afterA": [
+    "remember"
+  ],
+  "afterB": [],
+  "memory": [
+    {
+      "text": "User preferences for all projects: use pnpm, never npm. Use two-space indentation.",
+      "scope": "global"
+    }
+  ]
+}

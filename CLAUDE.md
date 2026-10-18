@@ -22,6 +22,7 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 | `docs/testing.md` | Test layers; what runs in the cloud vs locally |
 | `docs/integrations/` | Verified facts per CLI (flags, events, file paths, fields, gotchas) |
 | `docs/mockups/chorus-cli.html` | Clickable mockup of the CLI app |
+| `docs/risks/` | Risk harness results: one page per risk (finding, fix when needed, trigger). Runner `tools/risk/`, evidence `fixtures/risks/` |
 | `tools/probe/` | Capability probes: `probe.mjs` (headless scenarios), `pty-probe.mjs` (interactive), `skills-probe.mjs` |
 | `src/core/` | Adapters (`adapters/`), store, handoff, skills sync, launch, capture (TypeScript, Node 22+, no build step: `node file.ts`) |
 | `src/mcp/`, `src/cli/` | The `chorus mcp` server and the `chorus` entry point |
@@ -59,6 +60,7 @@ npm run smoke:artifacts                    # each real agent saves a note in the
 npm run proof                              # Phase 4 e2e with screenshots → docs/proof/phase4/report.html, opened in the browser (real Claude + Codex, ~10 min)
 npm run proof:agy                          # the same with agy (docs/proof/phase4-agy/, 30/30); agy has a small plan quota, don't repeat it often
 node src/cli/index.ts mux codex agy        # try the app by hand
+npm run risk -- free|cheap|<case>          # risk harness (docs/risks/README.md); `cheap` makes a few real model calls
 node tools/probe/probe.mjs <cli>           # recapture fixtures after a CLI update
 ```
 

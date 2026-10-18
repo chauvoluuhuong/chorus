@@ -1,0 +1,45 @@
+{
+  "id": "terminal-protocols",
+  "status": "risk",
+  "summary": "claude: bracketed-paste-2004, focus-events-1004, kitty-keyboard-query | codex: mouse-1000, mouse-1002, mouse-1003, mouse-sgr-1006, bracketed-paste-2004, focus-events-1004, sync-output-2026, kitty-keyboard-push, kitty-keyboard-query, modifyOtherKeys, alt-screen-1049 | agy: bracketed-paste-2004, kitty-keyboard-push, kitty-keyboard-query, modifyOtherKeys, alt-screen-1049",
+  "facts": {
+    "claude": {
+      "version": "2.1.302",
+      "bytes": 1049,
+      "seen": [
+        "bracketed-paste-2004",
+        "focus-events-1004",
+        "kitty-keyboard-query"
+      ]
+    },
+    "codex": {
+      "version": "0.163.0",
+      "bytes": 3414,
+      "seen": [
+        "mouse-1000",
+        "mouse-1002",
+        "mouse-1003",
+        "mouse-sgr-1006",
+        "bracketed-paste-2004",
+        "focus-events-1004",
+        "sync-output-2026",
+        "kitty-keyboard-push",
+        "kitty-keyboard-query",
+        "modifyOtherKeys",
+        "alt-screen-1049"
+      ]
+    },
+    "agy": {
+      "version": "1.4.2",
+      "bytes": 1126,
+      "seen": [
+        "bracketed-paste-2004",
+        "kitty-keyboard-push",
+        "kitty-keyboard-query",
+        "modifyOtherKeys",
+        "alt-screen-1049"
+      ]
+    }
+  },
+  "at": "2026-10-18T07-22-02-787Z"
+}

@@ -19,6 +19,7 @@
     "probe": "node tools/probe/probe.mjs",
     "probe:pty": "node tools/probe/pty-probe.mjs",
     "probe:skills": "node tools/probe/skills-probe.mjs",
+    "risk": "node tools/risk/run.ts",
     "smoke:app": "node test/smoke/app.ts",
     "proof": "node test/smoke/proof.ts --open",
     "proof:agy": "node test/smoke/proof-agy.ts --open",

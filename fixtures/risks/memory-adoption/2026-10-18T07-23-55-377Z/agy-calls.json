@@ -1,0 +1,15 @@
+{
+  "afterA": [
+    "remember"
+  ],
+  "afterB": [
+    "list_memory",
+    "recall"
+  ],
+  "memory": [
+    {
+      "text": "In all projects, use pnpm (never npm) and two-space indentation.",
+      "scope": "global"
+    }
+  ]
+}

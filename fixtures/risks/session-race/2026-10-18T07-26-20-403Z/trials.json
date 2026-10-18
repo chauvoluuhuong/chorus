@@ -1,0 +1,32 @@
+[
+  {
+    "n": 0,
+    "found": 2,
+    "birthsMs": [
+      732.691650390625,
+      752.411865234375
+    ],
+    "markers": [
+      "BRAVO0",
+      "ALPHA0"
+    ],
+    "firstBornIsFirstLaunched": false,
+    "aOk": true,
+    "bOk": true
+  },
+  {
+    "n": 1,
+    "found": 2,
+    "birthsMs": [
+      712.51708984375,
+      808.91064453125
+    ],
+    "markers": [
+      "BRAVO1",
+      "ALPHA1"
+    ],
+    "firstBornIsFirstLaunched": false,
+    "aOk": true,
+    "bOk": true
+  }
+]
