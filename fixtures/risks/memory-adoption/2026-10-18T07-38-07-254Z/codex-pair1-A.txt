@@ -1,0 +1,9 @@
+{"type":"thread.started","thread_id":"01a14df2-cda3-7580-8a21-e2604b1be7c5"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"mcp_tool_call","server":"chorus","tool":"remember","arguments":{"scope":"global","text":"The user always writes commit messages in Vietnamese."},"result":null,"error":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_0","type":"mcp_tool_call","server":"chorus","tool":"remember","arguments":{"scope":"global","text":"The user always writes commit messages in Vietnamese."},"result":{"content":[{"type":"text","text":"saved"}],"structured_content":null},"error":null,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"OK"}}
+{"type":"turn.completed","usage":{"input_tokens":61450,"cached_input_tokens":51840,"cache_write_input_tokens":0,"output_tokens":80,"reasoning_output_tokens":0}}
+
+--stderr--
+Reading additional input from stdin...

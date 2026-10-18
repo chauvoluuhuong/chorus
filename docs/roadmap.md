@@ -57,7 +57,8 @@ Probe the known risks first, document the fix for each, build only when its trig
 
 - [x] Harness `tools/risk/` + 6 probed cases (store concurrency, terminal protocols, approval drift, memory adoption, capture errors, session race)
 - [ ] Windows (R7) and a real plan-limit capture (R8): manual, waiting for an environment / an event
-- [ ] agy session matching (R6) and a Codex tool-list check for memory (R4): one cheap call each
+- [x] agy session matching (R6: `--log-file`), MCP tool visibility (R4: all three CLIs see the tools), Claude 2.1.302 approval prompt (R3), Codex reasoning (R5: encrypted, skip)
+- [ ] Verify agy `--log-file` with an interactive `-i` launch; re-probe memory with a stronger Claude model and interactive sessions
 
 ## Phase 5 · Desktop app
 

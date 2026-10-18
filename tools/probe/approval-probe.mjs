@@ -56,6 +56,11 @@ for (const k of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESS
 const PROMPT = `Use your shell tool to run exactly: mkdir -p ${path.dirname(target)} && touch ${target} . Then reply with only: finished`;
 let argv;
 if (cli === 'claude') {
+  // 2.1.302+ starts in auto mode and rarely asks: --manual pins manual mode for THIS workspace only (never the user's global config)
+  if (args.includes('--manual')) {
+    fs.mkdirSync(path.join(ws, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(ws, '.claude', 'settings.local.json'), JSON.stringify({ permissions: { defaultMode: 'default' } }));
+  }
   const settings = { hooks: { PreToolUse: [{ matcher: '.*', hooks: [{ type: 'command', command: hookCmd, timeout: 60 }] }] } };
   argv = ['--settings', JSON.stringify(settings), '--model', 'haiku', PROMPT];
 } else if (cli === 'agy') {

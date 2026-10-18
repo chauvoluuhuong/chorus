@@ -25,6 +25,14 @@ for (const [agent, v] of cases) {
   });
 }
 
+test('claude 2.1.302 (manual mode, hook asks): the prompt is recognised', () => {
+  const a = detectApproval('claude', screen('claude', '2.1.302', 'approval-ask-manual-enter'));
+  assert.ok(a, 'prompt detected');
+  assert.match(a.what, /touch/);
+  assert.equal(a.keys.approve, '\r');
+  assert.equal(a.keys.deny, '\x1b');
+});
+
 test('prose that only mentions a prompt is not an approval', () => {
   assert.equal(detectApproval('claude', ['I will ask: Do you want to proceed?', 'and then continue']), undefined);
   assert.equal(detectApproval('codex', ['Would you like to run the tests? sure']), undefined);

@@ -6,7 +6,7 @@ changes product code. A fix gets built only when its trigger fires (or when a ph
 
 ```bash
 node tools/risk/run.ts free      # no model calls: store-concurrency, terminal-protocols, approval-drift
-node tools/risk/run.ts cheap     # a few real model calls: memory-adoption, capture-errors, session-race
+node tools/risk/run.ts cheap     # a few real model calls: memory-adoption, mcp-visibility, capture-errors, session-race, agy-thread-id
 node tools/risk/run.ts <case> [--agents claude,codex,agy]
 ```
 
@@ -32,10 +32,10 @@ To add a case: one file in `tools/risk/cases/`, one doc here with the sections b
 |---|---|---|---|---|
 | R1 shared store under load | [store-concurrency](store-concurrency.md) | free | ✅ pass | never for the move; revisit at 50+ live threads |
 | R2 mouse and kitty keyboard | [terminal-protocols](terminal-protocols.md) | free | ⚠️ risk | Codex mouse / modified keys misbehave in a thread |
-| R3 approval prompt drift | [approval-drift](approval-drift.md) | free | ⚠️ risk | any CLI update; Claude 2.1.302 has no prompt fixture |
-| R4 memory adoption | [memory-adoption](memory-adoption.md) | cheap | ⚠️ risk | **before** building the Memory feature: design around it |
+| R3 approval prompt drift | [approval-drift](approval-drift.md) | free | ✅ resolved for current versions | any CLI update (rerun the case) |
+| R4 memory adoption | [memory-adoption](memory-adoption.md) | cheap | ⚠️ risk (save 7/9, use 3/9) | **before** building the Memory feature: inject a digest, don't rely on `recall` |
 | R5 capture gaps | [capture-errors](capture-errors.md) | cheap | ⚠️ risk | before the UI shows errors or file changes |
-| R6 same-second session matching | [session-race](session-race.md) | cheap | ⚠️ risk | before shipping Codex/agy multi-thread in one folder |
+| R6 same-second session matching | [session-race](session-race.md) | cheap | ⚠️ risk, fixes found (Codex: thread id in rollout; agy: `--log-file`) | before shipping Codex/agy multi-thread in one folder |
 | R7 Windows | [windows](windows.md) | manual | ❓ unknown | before any Windows build |
 | R8 plan-limit hit | [plan-limit](plan-limit.md) | manual | ❓ unknown | when one happens naturally; capture then |
 
