@@ -17,6 +17,8 @@ const size = () => `${process.stdout.columns}x${process.stdout.rows}`;
 process.stdout.on('resize', () => out(`SIZE ${size()}\r\n`));
 out(`SIZE ${size()}\r\n`);
 process.stdin.on('data', d => {
+  const mouse = d.match(/\x1b\[<(\d+);(\d+);(\d+)([Mm])/);
+  if (mouse) { out(`MOUSE ${mouse[1]} ${mouse[2]} ${mouse[3]} ${mouse[4]}\r\n`); return; }
   // terminal replies to our DSR query arrive as \x1b[<row>;<col>R
   const m = d.match(/\x1b\[(\d+);(\d+)R/);
   if (m) { out(`CPR ${m[1]};${m[2]}\r\n`); d = d.replace(m[0], ''); }
@@ -31,6 +33,7 @@ process.stdin.on('data', d => {
     if (line === 'q') process.exit(0);
     else if (line === 'alt') out('\x1b[?1049h\x1b[2J\x1b[HALT SCREEN\r\n');
     else if (line === 'dsr') out('\x1b[6n');
+    else if (line === 'mouse') out('\x1b[?1000h\x1b[?1006h');
     else if (line.startsWith('show ')) out(require('node:fs').readFileSync(line.slice(5), 'utf8').replace(/\n/g, '\r\n') + '\r\n');
     else out(`got: ${JSON.stringify(line)}\r\n`);
   }

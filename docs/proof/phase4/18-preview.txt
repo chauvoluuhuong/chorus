@@ -2,12 +2,12 @@
 ▎ ○ Create calc.js in the cu… │  NAME                              VER   BY       UPDATED
 ▎   claude · idle             │  ▸ notes.md                        v1    claude   just now
   ↳ ◐ Create calc.js in the … │
-      codex · waiting for you │  Path     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-plbPcb/.chorus/threads/t_94a1ab3d/arti
-  ◐ Reply with only the text… │
-    codex · waiting for you   │  Files written by tools
-                              │    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-plbPcb/calc.js
-                              │    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-plbPcb/.chorus/threads/t_94a1ab3d/artifacts/n
-                              │
+      codex · waiting for you │  Preview  http://localhost:4317/t_753e7378/notes.md   ● live reload
+  ◐ Reply with only the text… │  Path     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-iPIUTf/.chorus/threads/t_753e7378/arti
+    codex · waiting for you   │
+                              │  Files written by tools
+                              │    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-iPIUTf/calc.js
+                              │    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-iPIUTf/.chorus/threads/t_753e7378/artifacts/n
                               │
                               │
                               │
@@ -40,5 +40,5 @@
                               │
 ──────────────────────────────│
  ⌃Space ↑↓ move  ⏎ open       │
- ⌃Space n new  b hide         │ ↑/↓ PgUp/PgDn scroll · g/G top/bottom · esc close  (1-8 of 8)
- chorus  Create calc.js in the curren │ claude · claude-haiku-5-5 │ 1 artifact                                                            ⌃Space menu
+ ⌃Space n new  b hide         │ ↑↓ select   o open in the browser (live reload)   p copy path   v versions   esc back
+ chorus  preview: http://localhost:4317/t_753e7378/notes.md                                                                               ⌃Space menu

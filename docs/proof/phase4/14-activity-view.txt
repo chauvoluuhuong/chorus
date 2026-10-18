@@ -1,8 +1,8 @@
  THREADS  · 2/3               │ Activity · Create calc.js in the curren → codex
-  ◐ Create calc.js in the cu… │  Create calc.js in the curren → codex   in 59084  out 198 tokens · plan 1%
+  ◐ Create calc.js in the cu… │  Create calc.js in the curren → codex   in 58657  out 243 tokens · plan 1%
     claude · waiting for you  │
-▎ ↳ ○ Create calc.js in the … │  08:28:03  codex  tool   mcp:chorus get_handoff_context                  ok
-▎     codex · idle            │  08:28:05  codex  mcp    chorus.get_handoff_context  ok
+▎ ↳ ○ Create calc.js in the … │  08:37:18  codex  tool   mcp:chorus get_handoff_context                  ok
+▎     codex · idle            │  08:37:20  codex  mcp    chorus.get_handoff_context  ok
   ◐ Reply with only the text… │
     codex · waiting for you   │
                               │
@@ -40,5 +40,5 @@
                               │
 ──────────────────────────────│
  ⌃Space ↑↓ move  ⏎ open       │
- ⌃Space n new  b hide         │ ↑/↓ PgUp/PgDn scroll · g/G top/bottom · esc close  (1-4 of 4)
+ ⌃Space n new  b hide         │ f filter: [all] tool mcp file   r raw trace   ↑↓ scroll   esc back
  chorus  Create calc.js in the curren → codex │ codex · gpt-6-luna from claude │ 5h ▱▱▱▱▱▱▱▱▱▱ 1% │ 0 artifacts                           ⌃Space menu

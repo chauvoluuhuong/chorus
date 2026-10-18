@@ -46,7 +46,8 @@ Plan and results: [phase4.md](phase4.md). D1 decided: TypeScript. E2E proof with
 - [x] P4.8 Packaging spike: Node single executable works (147 MB), Bun does not (node-pty); npm package is the main route
 - [x] New-thread form: agent, model, folder (mockup scene "New thread")
 - [x] P4.9 Mockup look and screens (first pass): home, sidebar, status bar, menu, limit box, Artifacts, Activity, Doctor (`docs/phase4.md`)
-- [ ] P4.9 remaining: mouse clicks on the sidebar, artifact preview server with live reload, `o/p/v` and `r/f` keys on those views, plan meter for Claude interactive threads
+- [x] P4.9 remaining parts: mouse clicks, artifact preview server with live reload, `o/p/v`, `r/f`
+- [ ] Plan meter for Claude interactive threads (Claude reports plan usage only in the headless stream)
 - [x] **Proof:** `npm run proof` drives the real app with real Claude and Codex: two threads, switch, approval from a card, handoff, artifacts; screenshots in `docs/proof/phase4/`
 
 ## Phase 5 · Desktop app

@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import http from 'node:http';
 import { VirtualScreen } from '../../src/app/screen.ts';
 import { maskText, saveScreenshot } from '../../src/app/snapshot.ts';
 import { activityCmd, artifactsCmd, doctorCmd, threadsCmd, traceCmd } from '../../src/cli/commands.ts';
@@ -58,7 +59,7 @@ const TASK =
   `Run it once with your shell tool as: node -e "console.log(require('./calc.js').add(2, 3))" . ` +
   'Then write a short markdown note about what you did into notes.md in the artifacts folder. Reply with one line: done.';
 
-const env = { ...process.env, TERM: 'xterm-256color', CHORUS_MODEL_CLAUDE: 'haiku' } as Record<string, string>;
+const env = { ...process.env, TERM: 'xterm-256color', CHORUS_MODEL_CLAUDE: 'haiku', CHORUS_NO_OPEN: '1' } as Record<string, string>; // NO_OPEN: the preview URL is fetched below, not shown in a browser
 for (const k of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_PID']) delete env[k];
 const app = pty.spawn(process.execPath, [CLI], { name: 'xterm-256color', cols: COLS, rows: ROWS, cwd: project, env });
 let exited = false;
@@ -226,13 +227,34 @@ await sleep(500);
 menu('e');
 check('activity view lists the tool calls with their status', await until(/Activity · /, 5000) && /mcp\s+chorus\.get_handoff_context\s+ok/.test(text().join('\n')), text().join('|').slice(0, 300));
 shot('activity-view', 'ctrl+space e on the handoff thread: its timeline shows the chorus.get_handoff_context MCP call that loaded the context');
+app.write('f');
+check('f filters the timeline by kind', await until(/\[tool\]/, 3000));
+app.write('f');
+check('the mcp filter keeps the MCP call', await until(/\[mcp\]/, 3000) && /get_handoff_context/.test(text().join('\n')));
+shot('activity-filter', 'f cycles the filter (all, tool, mcp, file): here only the MCP calls');
+app.write('r');
+check('r shows the raw trace next to what was parsed', await until(/Raw trace · /, 3000) && /transcript lines:/.test(text().join('\n')), text().join('|').slice(0, 300));
+shot('raw-trace', 'r: the raw transcript lines and how Chorus parsed them (for debugging an adapter)');
+app.write('\x1b');
+await sleep(400);
 app.write('\x1b');
 await sleep(500);
-menu('1'); // back to the Claude thread: the artifact belongs to it
+// a click on the first sidebar item (row 2, 1-based) opens the Claude thread: the artifact belongs to it
+app.write('\x1b[<0;6;2M\x1b[<0;6;2m');
+check('a mouse click on the first sidebar item opens the Claude thread', await until(() => /▎/.test(dot(0)), 5000), dot(0));
 await sleep(800);
 menu('a');
-check('artifacts view lists the artifact with its version', await until(/Artifacts · /, 5000) && /notes\.md/.test(text().join('\n')), text().join('|').slice(0, 300));
+check('artifacts view lists the artifact with its version', await until(/Artifacts · /, 5000) && /notes\.md\s+v1/.test(text().join('\n')), text().join('|').slice(0, 300));
 shot('artifacts-view', 'ctrl+space a: the artifacts of the thread (name, version, who wrote it) and the files its tools wrote');
+app.write('o');
+check('o starts the live preview and shows its address', await until(/Preview\s+http:\/\/localhost:\d+\/t_\w+\/notes\.md/, 8000), text().join('|').slice(0, 300));
+const previewUrl = text().join('\n').match(/http:\/\/localhost:\d+\/t_\w+\/notes\.md/)?.[0] ?? '';
+const page = await new Promise<string>(res => http.get(previewUrl, m => { let b = ''; m.on('data', d => (b += d)); m.on('end', () => res(b)); }).on('error', () => res('')));
+check('the preview page serves what the agent wrote and reloads when it changes', /Notes: calc\.js/.test(page) && /EventSource/.test(page), page.slice(0, 200));
+shot('preview', 'o: the artifact is served at a local address that reloads while the agent keeps editing it');
+app.write('v');
+check('v lists the versions of the artifact', await until(/Versions of notes\.md/, 3000));
+shot('versions', 'v: every version of the artifact (a hash per change)');
 app.write('\x1b');
 await sleep(500);
 menu('?');

@@ -13,6 +13,8 @@ export interface TermModes {
   appCursor: boolean;
   bracketedPaste: boolean;
   alt: boolean;
+  /** the program asked to receive mouse events */
+  mouse: boolean;
 }
 
 export class VirtualScreen {
@@ -89,7 +91,7 @@ export class VirtualScreen {
 
   modes(): TermModes {
     const m = this.term.modes;
-    return { appCursor: !!m.applicationCursorKeysMode, bracketedPaste: !!m.bracketedPasteMode, alt: this.term.buffer.active.type === 'alternate' };
+    return { appCursor: !!m.applicationCursorKeysMode, bracketedPaste: !!m.bracketedPasteMode, alt: this.term.buffer.active.type === 'alternate', mouse: m.mouseTrackingMode !== undefined && m.mouseTrackingMode !== 'none' };
   }
 }
 

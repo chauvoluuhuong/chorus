@@ -13,7 +13,7 @@ pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;paddi
 .n{color:var(--muted);font-weight:400;margin-right:6px}
 </style>
 <h1>Chorus Phase 4 e2e proof: Claude Code + Codex</h1><p>The real chorus app driven through a PTY with the real CLIs. Each screenshot is the terminal as you would see it at that step.</p>
-<span class="verdict">28 checks passed</span>
+<span class="verdict">35 checks passed</span>
 <h2>Screenshots</h2>
 <figure><figcaption><span class="n">01</span>chorus in a project: the installed agents with their versions, and this project's threads (none yet). n starts one</figcaption><img src="01-home.png" alt="chorus in a project: the installed agents with their versions, and this project's threads (none yet). n starts one" loading="lazy"></figure>
 <figure><figcaption><span class="n">02</span>n: the new-thread form: agent, model, folder (default: this project). Nothing else to fill in</figcaption><img src="02-new-thread-form.png" alt="n: the new-thread form: agent, model, folder (default: this project). Nothing else to fill in" loading="lazy"></figure>
@@ -29,41 +29,44 @@ pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;paddi
 <figure><figcaption><span class="n">12</span>the continuing Codex thread loaded the context through the Chorus MCP server and summarises the work</figcaption><img src="12-handoff-summary.png" alt="the continuing Codex thread loaded the context through the Chorus MCP server and summarises the work" loading="lazy"></figure>
 <figure><figcaption><span class="n">13</span>ctrl+space m: the digest a handoff carries (first request, files touched, commands, tests, last message)</figcaption><img src="13-memory-view.png" alt="ctrl+space m: the digest a handoff carries (first request, files touched, commands, tests, last message)" loading="lazy"></figure>
 <figure><figcaption><span class="n">14</span>ctrl+space e on the handoff thread: its timeline shows the chorus.get_handoff_context MCP call that loaded the context</figcaption><img src="14-activity-view.png" alt="ctrl+space e on the handoff thread: its timeline shows the chorus.get_handoff_context MCP call that loaded the context" loading="lazy"></figure>
-<figure><figcaption><span class="n">15</span>ctrl+space a: the artifacts of the thread (name, version, who wrote it) and the files its tools wrote</figcaption><img src="15-artifacts-view.png" alt="ctrl+space a: the artifacts of the thread (name, version, who wrote it) and the files its tools wrote" loading="lazy"></figure>
-<figure><figcaption><span class="n">16</span>ctrl+space ?: the keys</figcaption><img src="16-help-view.png" alt="ctrl+space ?: the keys" loading="lazy"></figure>
-<figure><figcaption><span class="n">17</span>final state: three threads (Claude, Codex, and the Codex handoff thread), all waiting</figcaption><img src="17-overview.png" alt="final state: three threads (Claude, Codex, and the Codex handoff thread), all waiting" loading="lazy"></figure>
+<figure><figcaption><span class="n">15</span>f cycles the filter (all, tool, mcp, file): here only the MCP calls</figcaption><img src="15-activity-filter.png" alt="f cycles the filter (all, tool, mcp, file): here only the MCP calls" loading="lazy"></figure>
+<figure><figcaption><span class="n">16</span>r: the raw transcript lines and how Chorus parsed them (for debugging an adapter)</figcaption><img src="16-raw-trace.png" alt="r: the raw transcript lines and how Chorus parsed them (for debugging an adapter)" loading="lazy"></figure>
+<figure><figcaption><span class="n">17</span>ctrl+space a: the artifacts of the thread (name, version, who wrote it) and the files its tools wrote</figcaption><img src="17-artifacts-view.png" alt="ctrl+space a: the artifacts of the thread (name, version, who wrote it) and the files its tools wrote" loading="lazy"></figure>
+<figure><figcaption><span class="n">18</span>o: the artifact is served at a local address that reloads while the agent keeps editing it</figcaption><img src="18-preview.png" alt="o: the artifact is served at a local address that reloads while the agent keeps editing it" loading="lazy"></figure>
+<figure><figcaption><span class="n">19</span>v: every version of the artifact (a hash per change)</figcaption><img src="19-versions.png" alt="v: every version of the artifact (a hash per change)" loading="lazy"></figure>
+<figure><figcaption><span class="n">20</span>ctrl+space ?: the keys</figcaption><img src="20-help-view.png" alt="ctrl+space ?: the keys" loading="lazy"></figure>
+<figure><figcaption><span class="n">21</span>final state: three threads (Claude, Codex, and the Codex handoff thread), all waiting</figcaption><img src="21-overview.png" alt="final state: three threads (Claude, Codex, and the Codex handoff thread), all waiting" loading="lazy"></figure>
 <h2>Checks</h2>
-<table><tr><td>✅</td><td>chorus opens on the home screen: agents with versions, and this project's threads</td></tr><tr><td>✅</td><td>n opens the new-thread form</td></tr><tr><td>✅</td><td>the form offers agent, model and the project folder</td></tr><tr><td>✅</td><td>model list is Claude's: haiku selected</td></tr><tr><td>✅</td><td>Claude opens inside the app</td></tr><tr><td>✅</td><td>the sidebar names the thread after the first message</td></tr><tr><td>✅</td><td>status line shows the menu key</td></tr><tr><td>✅</td><td>the agent's own permission prompt is detected (sidebar shows !)</td></tr><tr><td>✅</td><td>the new-thread form opens over the work in progress</td></tr><tr><td>✅</td><td>Codex opens in thread 2</td></tr><tr><td>✅</td><td>thread 2 is in front and Claude (thread 1) is still pending</td></tr><tr><td>✅</td><td>an approval card for the background thread appears over Codex</td></tr><tr><td>✅</td><td>at least one request was approved from a card</td></tr><tr><td>✅</td><td>Claude created calc.js</td></tr><tr><td>✅</td><td>Claude thread finished: waiting dot, store state</td></tr><tr><td>✅</td><td>live tailing recorded the turns, the node call and the usage</td></tr><tr><td>✅</td><td>the artifact notes.md was registered</td></tr><tr><td>✅</td><td>Codex answers in its own thread</td></tr><tr><td>✅</td><td>handoff dialog names the thread</td></tr><tr><td>✅</td><td>the handoff thread appears in front, listed under the thread it continues (↳)</td></tr><tr><td>✅</td><td>the new thread is a child of the Claude thread in the store</td></tr><tr><td>✅</td><td>Codex called get_handoff_context (Chorus saw the MCP call)</td></tr><tr><td>✅</td><td>its summary names calc.js</td></tr><tr><td>✅</td><td>the handoff thread settles as waiting</td></tr><tr><td>✅</td><td>memory view shows what the next agent reads</td></tr><tr><td>✅</td><td>activity view lists the tool calls with their status</td></tr><tr><td>✅</td><td>artifacts view lists the artifact with its version</td></tr><tr><td>✅</td><td>app quits and restores the terminal</td></tr></table>
+<table><tr><td>✅</td><td>chorus opens on the home screen: agents with versions, and this project's threads</td></tr><tr><td>✅</td><td>n opens the new-thread form</td></tr><tr><td>✅</td><td>the form offers agent, model and the project folder</td></tr><tr><td>✅</td><td>model list is Claude's: haiku selected</td></tr><tr><td>✅</td><td>Claude opens inside the app</td></tr><tr><td>✅</td><td>the sidebar names the thread after the first message</td></tr><tr><td>✅</td><td>status line shows the menu key</td></tr><tr><td>✅</td><td>the agent's own permission prompt is detected (sidebar shows !)</td></tr><tr><td>✅</td><td>the new-thread form opens over the work in progress</td></tr><tr><td>✅</td><td>Codex opens in thread 2</td></tr><tr><td>✅</td><td>thread 2 is in front and Claude (thread 1) is still pending</td></tr><tr><td>✅</td><td>an approval card for the background thread appears over Codex</td></tr><tr><td>✅</td><td>at least one request was approved from a card</td></tr><tr><td>✅</td><td>Claude created calc.js</td></tr><tr><td>✅</td><td>Claude thread finished: waiting dot, store state</td></tr><tr><td>✅</td><td>live tailing recorded the turns, the node call and the usage</td></tr><tr><td>✅</td><td>the artifact notes.md was registered</td></tr><tr><td>✅</td><td>Codex answers in its own thread</td></tr><tr><td>✅</td><td>handoff dialog names the thread</td></tr><tr><td>✅</td><td>the handoff thread appears in front, listed under the thread it continues (↳)</td></tr><tr><td>✅</td><td>the new thread is a child of the Claude thread in the store</td></tr><tr><td>✅</td><td>Codex called get_handoff_context (Chorus saw the MCP call)</td></tr><tr><td>✅</td><td>its summary names calc.js</td></tr><tr><td>✅</td><td>the handoff thread settles as waiting</td></tr><tr><td>✅</td><td>memory view shows what the next agent reads</td></tr><tr><td>✅</td><td>activity view lists the tool calls with their status</td></tr><tr><td>✅</td><td>f filters the timeline by kind</td></tr><tr><td>✅</td><td>the mcp filter keeps the MCP call</td></tr><tr><td>✅</td><td>r shows the raw trace next to what was parsed</td></tr><tr><td>✅</td><td>a mouse click on the first sidebar item opens the Claude thread</td></tr><tr><td>✅</td><td>artifacts view lists the artifact with its version</td></tr><tr><td>✅</td><td>o starts the live preview and shows its address</td></tr><tr><td>✅</td><td>the preview page serves what the agent wrote and reloads when it changes</td></tr><tr><td>✅</td><td>v lists the versions of the artifact</td></tr><tr><td>✅</td><td>app quits and restores the terminal</td></tr></table>
 <h2>Commands after the run</h2>
 <pre>$ chorus threads
 id          agent   state    parent      title
-t_c8136e68  codex   waiting  t_94a1ab3d  Create calc.js in the curren → codex
-t_a22c6c29  codex   waiting  -           Reply with only the text cod
-t_94a1ab3d  claude  waiting  -           Create calc.js in the curren</pre>
+t_3fe2da8e  codex   waiting  t_753e7378  Create calc.js in the curren → codex
+t_48903be3  codex   waiting  -           Reply with only the text cod
+t_753e7378  claude  waiting  -           Create calc.js in the curren</pre>
 <pre>$ chorus activity
 thread      agent   turns  tools  mcp   tokens in/out     cost     limit
-t_c8136e68  codex   3      1      1     59084/198         -        1%
-t_a22c6c29  codex   2      0      0     19278/9           -        1%
-t_94a1ab3d  claude  3      3      0     38070/841         -        -</pre>
+t_3fe2da8e  codex   3      1      1     58657/243         -        1%
+t_48903be3  codex   2      0      0     19278/9           -        1%
+t_753e7378  claude  2      3      0     38100/865         -        -</pre>
 <pre>$ chorus artifacts
-t_94a1ab3d	e59e17e295aa	/private$TMPDIR/chorus-proof-plbPcb/.chorus/threads/t_94a1ab3d/artifacts/notes.md</pre>
+t_753e7378	2648178a6503	/private$TMPDIR/chorus-proof-iPIUTf/.chorus/threads/t_753e7378/artifacts/notes.md</pre>
 <pre>$ chorus trace &lt;claude thread>
-thread t_94a1ab3d (claude 2.1.302)
-raw terminal capture: $PROJECT/.chorus/threads/t_94a1ab3d/raw/pty.log (28206 bytes)
-transcript: ~/.claude/projects/-private-var-folders-hj-b9dgqj-s11738sh6-z2w79bm0000gn-T-chorus-proof-plbPcb/d0017f14-c00d-4311-9941-231ce817982d.jsonl
-transcript lines: 54  → parsed turns: 3, tool calls: 3, status: waiting
+thread t_753e7378 (claude 2.1.302)
+raw terminal capture: $PROJECT/.chorus/threads/t_753e7378/raw/pty.log (27109 bytes)
+transcript: ~/.claude/projects/-private-var-folders-hj-b9dgqj-s11738sh6-z2w79bm0000gn-T-chorus-proof-iPIUTf/4eaaca6e-389b-470a-bea3-8aa98c4d6b05.jsonl
+transcript lines: 55  → parsed turns: 2, tool calls: 3, status: waiting
 
 last raw lines (cut) → what we made of the session:
-  raw  {"parentUuid":"2787d0ae-560d-4fce-ab31-2d908dff51f7","isSidechain":false,"message":{"model":"claude-haiku-5-5","id":"msg_011Cg8qL69ofD4B7Qhow6Dp7","type":"messa
-  raw  {"parentUuid":"3bbc26ff-3ed2-4380-aec1-76e8ec77df7d","isSidechain":false,"type":"system","subtype":"turn_duration","durationMs":8067,"messageCount":28,"timestam
-  raw  {"type":"cost-state","sessionId":"d0017f14-c00d-4311-9941-231ce817982d","totalCostUSD":0.0101643,"totalAPIDuration":10905,"totalAPIDurationWithoutRetries":10877
+  raw  {"parentUuid":"56d37003-7a80-4030-adc8-e06b8e1d96fe","isSidechain":false,"message":{"model":"claude-haiku-5-5","id":"msg_011Cg8r2tXShTwSHtPE4KHAD","type":"messa
+  raw  {"parentUuid":"ad860db1-ab36-443d-b353-afd697ec2843","isSidechain":false,"type":"system","subtype":"turn_duration","durationMs":10254,"messageCount":28,"timesta
+  raw  {"type":"cost-state","sessionId":"4eaaca6e-389b-470a-bea3-8aa98c4d6b05","totalCostUSD":0.01017227,"totalAPIDuration":12976,"totalAPIDurationWithoutRetries":1295
   raw  {"type":"last-prompt","lastPrompt":"Create calc.js in the current directory that exports a function add(a, b). Run it once with your shell tool as: node -e \"co
-  raw  {"type":"cost-state","sessionId":"d0017f14-c00d-4311-9941-231ce817982d","totalCostUSD":0.0101643,"totalAPIDuration":10905,"totalAPIDurationWithoutRetries":10877
+  raw  {"type":"cost-state","sessionId":"4eaaca6e-389b-470a-bea3-8aa98c4d6b05","totalCostUSD":0.01017227,"totalAPIDuration":12976,"totalAPIDurationWithoutRetries":1295
   tool ok Write $PROJECT/cal
   tool ok Bash node -e "console.log(require('./calc.js').add(2, 3))"
   tool ok Write $PROJECT/.ch
   turn user: Create calc.js in the current directory that exports a function add(a, b). Run it once with your she
-  turn assistant: Calc.js is written. Now I'll run the requested check and write the notes file.
   turn assistant: done
 
 MCP calls from this thread: none</pre>

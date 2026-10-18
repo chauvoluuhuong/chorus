@@ -153,3 +153,49 @@ test('alternate-screen programs are shown in the thread area, not on the whole t
   assert.match(h.screen()[0], /│\s*ALT SCREEN/);
   h.app.stop();
 });
+
+test('mouse: a click on a sidebar item opens that thread; releases and wheel events do nothing', async () => {
+  const h = harness();
+  h.app.addThread(h.spec('alpha'), true);
+  h.app.addThread(h.spec('beta'), false);
+  h.app.start();
+  await h.until(l => has(l, /READY alpha/), 'alpha');
+  assert.match(h.raw(), /\x1b\[\?1000h\x1b\[\?1006h/, 'mouse reporting switched on');
+  h.type('\x1b[<64;5;4M'); // wheel over the sidebar
+  h.type('\x1b[<0;5;4M\x1b[<0;5;4m'); // press + release on the second item (rows 4-5, 1-based)
+  await h.until(l => has(l, /READY beta/), 'beta opened by the click');
+  assert.ok(!has(h.screen(), /READY alpha/));
+  h.type('\x1b[<0;5;2M'); // first item again
+  await h.until(l => has(l, /READY alpha/), 'alpha opened by the click');
+  h.app.stop();
+  assert.match(h.raw(), /\x1b\[\?1000l\x1b\[\?1006l/, 'mouse reporting switched off on exit');
+});
+
+test('mouse: clicks in the thread area reach only agents that asked for the mouse, shifted by the sidebar', async () => {
+  const h = harness();
+  h.app.addThread(h.spec('alpha'));
+  h.app.start();
+  await h.until(l => has(l, /READY alpha/), 'ready');
+  h.type('\x1b[<0;40;5M');
+  await sleep(400);
+  assert.ok(!has(h.screen(), /MOUSE/), 'not forwarded: the agent did not ask');
+  h.type('mouse\r');
+  await sleep(400);
+  h.type('\x1b[<0;40;5M');
+  await h.until(l => has(l, /MOUSE 0 15 5 M/), 'forwarded with the x shifted by the sidebar (40 - 25)');
+  h.type('\x1b[<0;10;5M');
+  await sleep(400);
+  assert.ok(!has(h.screen(), /MOUSE 0 10/), 'a click in the sidebar never reaches the agent');
+  h.app.stop();
+});
+
+test('mouse can be switched off', async () => {
+  const stdin = Object.assign(new PassThrough(), { setRawMode: () => {}, isTTY: true });
+  let raw = '';
+  const stdout = new PassThrough();
+  stdout.on('data', d => (raw += d));
+  const app = new App({ stdin, stdout, size: () => ({ cols: 100, rows: 24 }), onResize: () => () => {} }, { mouse: false });
+  app.start();
+  assert.ok(!/\x1b\[\?1000h/.test(raw));
+  app.stop();
+});

@@ -110,9 +110,14 @@ agy green, Chorus teal):
 | Activity | `e`: timeline of tool calls with status, MCP calls, artifacts, continuations |
 | Doctor | `d` (also on the home screen): versions, login, data folders, "newer than verified" warnings |
 
-Not done yet from the mockup: mouse clicks on the sidebar, the artifact preview server with live reload and the `o/p/v`
-keys on that view, `r`/`f` in Activity, dimming the agent behind an overlay, plan meter for Claude interactive threads
-(Claude only reports plan usage in the headless stream, not in the transcript).
+Also built after the first pass: **mouse** (a click on a sidebar item or a home row opens the thread; clicks in the thread
+area go to the agent only if it asked for the mouse, shifted by the sidebar; wheel scrolls panes; `CHORUS_MOUSE=0` turns it
+off and Shift-drag selects text), the **artifact preview server** (`src/core/preview.ts`: 127.0.0.1 only, serves a thread's
+artifacts, reloads the page when the agent edits the file; `o` in the Artifacts view, or `chorus artifacts --serve`), `p` copy
+path, `v` versions, and in Activity `f` filter (all/tool/mcp/file) and `r` raw trace.
+
+Not done from the mockup: dimming the agent behind an overlay; a plan meter for Claude interactive threads (Claude only
+reports plan usage in the headless stream, not in the transcript).
 
 ### New thread: agent, model, folder (as in the mockup)
 

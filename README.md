@@ -4,11 +4,34 @@
 > from one agent to another without losing context, keep every thread in one place, and see what
 > the agents do and make.
 
-**Status:** Phase 1 (research) on branch `feat/refactor`. The v1 desktop prototype was removed
-(still in git history on `dev`). First product: the **`chorus`** CLI app (package `chorus-cli`).
-The desktop app comes after.
+**Status:** Phases 1–4 are built and proven with the real CLIs (branch `feat/phase-1`); the desktop app (Phase 5)
+comes after. First product: the **`chorus`** CLI app (package `chorus-cli`).
 
 **Goal:** $5 lifetime license, ~5,000 buyers. See [docs/product.md](docs/product.md).
+
+## Run it
+
+Needs Node 22+ and at least one of `claude`, `codex`, `agy` installed and logged in (`chorus doctor` checks).
+Open a **real terminal** (Terminal.app, iTerm), go to the project you want to work on, and run:
+
+```bash
+cd ~/path/to/your/project
+node /Users/huong/chorus/src/cli/index.ts          # the home screen: agents, threads, n = new thread
+```
+
+Shorter: run `npm link` once in this repo (it installs a global `chorus` command), then just `chorus` in any project.
+Other ways in:
+
+```bash
+chorus new --agent claude --model sonnet --folder ~/work/api   # skip the form
+chorus handoff --to codex                                       # continue the latest thread in Codex
+chorus doctor | threads | show <id> | memory <id> | activity | trace <id>
+chorus artifacts --serve --open                                 # artifacts in the browser, live reload
+```
+
+Keys inside the app: `Ctrl+Space` then `n` new thread · `h` hand off · `1-9` switch (or click the sidebar) ·
+`m` memory · `a` artifacts · `e` activity · `y`/`x` approve/deny a waiting request · `0` home · `?` help · `q` quit.
+Hold Shift while dragging to select text (the app uses the mouse for the sidebar; `CHORUS_MOUSE=0` turns that off).
 
 ## Why
 

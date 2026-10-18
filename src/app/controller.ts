@@ -15,6 +15,8 @@ import { Tailer } from './tailer.ts';
 import { spawn } from 'node:child_process';
 import { T, agentStyle, type HomeView, type RichLine, type Seg } from './compositor.ts';
 import { VERIFIED_VERSION, versionWarning } from '../core/adapters/index.ts';
+import { PreviewServer } from '../core/preview.ts';
+import { traceCmd } from '../cli/commands.ts';
 
 export const AGENTS: AgentId[] = ['claude', 'codex', 'agy'];
 const RAW_CAP = 2 * 1024 * 1024;
@@ -40,6 +42,8 @@ export class Controller {
   private pending = new Map<string, PendingApproval>();
   private limited = new Map<string, string>();
   private limitShown = new Set<string>();
+  preview: PreviewServer | undefined;
+  previewOpened = '';
   private agentInfo = new Map<AgentId, { version?: string; login?: string; ok: boolean }>();
   private sessions = new Map<string, Session>();
   private sawStart = new Map<string, number>();
@@ -62,6 +66,7 @@ export class Controller {
 
   stop() {
     this.closed = true;
+    this.preview?.close();
     clearInterval(this.detectTimer);
     for (const t of this.tailers.values()) t.stop();
   }
@@ -312,10 +317,10 @@ export class Controller {
       case 'memory':
         return cur ? this.app.showPane(`memory · ${cur.title}`, this.memoryLines(cur.id)) : undefined;
       case 'files':
-        return this.app.showPane(cur ? `Artifacts · ${cur.title}` : 'Artifacts', this.artifactLines(cur?.id));
+        return this.artifactsView(cur?.id, cur?.title);
       case 'activity':
       case 'tools':
-        return cur ? this.app.showPane(`Activity · ${cur.title}`, this.activityLines(cur.id)) : undefined;
+        return cur ? this.activityView(cur.id, cur.title) : undefined;
       case 'doctor':
         return this.app.showPane('Doctor', this.doctorLines());
       case 'approve':
@@ -480,18 +485,79 @@ export class Controller {
     return out;
   }
 
-  artifactLines(threadId?: string): RichLine[] {
+  /** The Artifacts view: ↑↓ select, o open in the browser (live reload), p copy the path, v versions. */
+  artifactsView(threadId: string | undefined, title = '') {
+    const st = { sel: 0, versions: false };
+    const rows = () => this.store.listArtifacts(threadId);
+    const lines = () => this.artifactLines(threadId, st.sel, st.versions);
+    this.app.showPane(title ? `Artifacts · ${title}` : 'Artifacts', lines(), {
+      hint: '↑↓ select   o open in the browser (live reload)   p copy path   v versions   esc back',
+      onKey: key => {
+        const n = rows().length;
+        if (key === '\x1b[A' || key === 'k') st.sel = Math.max(0, st.sel - 1);
+        else if (key === '\x1b[B' || key === 'j') st.sel = Math.min(Math.max(0, n - 1), st.sel + 1);
+        else if (key === 'v') st.versions = !st.versions;
+        else if (key === 'p' && rows()[st.sel]) this.copy(rows()[st.sel].abs);
+        else if (key === 'o' && rows()[st.sel]) {
+          const a = rows()[st.sel];
+          void this.openPreview(a.thread_id, a.path).then(() => this.app.updatePane(lines()));
+          return true;
+        } else return false;
+        this.app.updatePane(lines());
+        return true;
+      },
+    });
+  }
+
+  async openPreview(threadId: string, rel: string): Promise<string> {
+    this.preview ??= new PreviewServer(this.store);
+    await this.preview.start();
+    const url = this.preview.urlFor(threadId, rel);
+    this.previewOpened = url;
+    if (process.env.CHORUS_NO_OPEN !== '1') {
+      try {
+        spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { stdio: 'ignore', detached: true }).unref();
+      } catch {
+        /* no browser here: the URL is on screen */
+      }
+    }
+    this.app.setFlash(`preview: ${url}`);
+    return url;
+  }
+
+  private copy(text: string) {
+    try {
+      const c = process.platform === 'darwin' ? spawn('pbcopy', [], { stdio: ['pipe', 'ignore', 'ignore'] }) : spawn('xclip', ['-selection', 'clipboard'], { stdio: ['pipe', 'ignore', 'ignore'] });
+      c.on('error', () => {});
+      c.stdin.on('error', () => {});
+      c.stdin.end(text);
+      this.app.setFlash('path copied');
+    } catch {
+      this.app.setFlash(text);
+    }
+  }
+
+  artifactLines(threadId?: string, sel = 0, showVersions = false): RichLine[] {
     const rows = this.store.listArtifacts(threadId);
     const out: RichLine[] = [];
+    const hl = (i: number, segs: Seg[]): Seg[] => (i === sel ? segs.map(([t, st]) => [t, [st, T.bgSel].filter(Boolean).join(';')] as Seg) : segs);
+    const versionsOf = (tid: string, p: string) => this.store.db.prepare('SELECT version, ts FROM artifacts WHERE thread_id=? AND path=? ORDER BY ts').all(tid, p) as { version: string; ts: string }[];
     if (!rows.length) out.push([['No artifacts yet. Files the agents write into the thread artifacts folder show up here.', T.dim]] as Seg[]);
     else {
       out.push([['NAME'.padEnd(34) + 'VER   BY       UPDATED', T.dim]] as Seg[]);
-      const versions = (tid: string, p: string) => (this.store.db.prepare('SELECT COUNT(*) AS n FROM artifacts WHERE thread_id=? AND path=?').get(tid, p) as { n: number }).n;
       rows.forEach((a, i) => {
         const t = this.store.getThread(a.thread_id);
-        out.push([[i === 0 ? '▸ ' : '  ', T.chorus], [a.path.padEnd(32)], [`v${versions(a.thread_id, a.path)}`.padEnd(6)], [(t?.agent ?? '').padEnd(9), agentStyle(t?.agent ?? '')], [this.ago(a.ts), T.dim]] as Seg[]);
+        const n = versionsOf(a.thread_id, a.path).length;
+        out.push(hl(i, [[i === sel ? '▸ ' : '  ', T.chorus], [a.path.padEnd(32)], [`v${n}`.padEnd(6)], [(t?.agent ?? '').padEnd(9), agentStyle(t?.agent ?? '')], [this.ago(a.ts).padEnd(12), T.dim]]));
       });
-      out.push('', [['Path     ', T.dim], [rows[0].abs]] as Seg[]);
+      const cur = rows[Math.min(sel, rows.length - 1)];
+      out.push('');
+      out.push([['Preview  ', T.dim], this.preview?.url ? [this.preview.urlFor(cur.thread_id, cur.path), T.chorus] : ['press o to open it in the browser: it reloads while the agent keeps editing', T.dim], ...(this.preview?.url ? ([['   ● live reload', T.ok]] as Seg[]) : [])] as Seg[]);
+      out.push([['Path     ', T.dim], [cur.abs]] as Seg[]);
+      if (showVersions) {
+        out.push('', [[`Versions of ${cur.path}`, T.dim]] as Seg[]);
+        versionsOf(cur.thread_id, cur.path).forEach((v, i) => out.push([[`  v${i + 1}  `, T.chorus], [v.version + '  '], [this.ago(v.ts), T.dim]] as Seg[]));
+      }
     }
     const touched = new Set<string>();
     for (const t of this.store.listThreads()) if (!threadId || t.id === threadId) for (const c of this.store.getToolCalls(t.id)) if (/^(Write|Edit|write_to_file|replace_file_content|apply_patch)$/.test(c.tool) && c.target) touched.add(c.target);
@@ -499,7 +565,31 @@ export class Controller {
     return out;
   }
 
-  activityLines(id: string): RichLine[] {
+  /** The Activity view: f cycles the filter, r shows the raw trace next to what was parsed. */
+  activityView(id: string, title: string) {
+    const kinds = ['all', 'tool', 'mcp', 'file'] as const;
+    let k = 0;
+    const lines = () => this.activityLines(id, kinds[k]);
+    const hint = () => `f filter: ${kinds.map((x, i) => (i === k ? `[${x}]` : x)).join(' ')}   r raw trace   ↑↓ scroll   esc back`;
+    this.app.showPane(`Activity · ${title}`, lines(), {
+      hint: hint(),
+      onKey: key => {
+        if (key === 'f') {
+          k = (k + 1) % kinds.length;
+          this.app.updatePane(lines());
+          this.app.showPaneHint(hint());
+          return true;
+        }
+        if (key === 'r') {
+          this.app.showPane(`Raw trace · ${title}`, traceCmd(this.store, id).replaceAll(process.env.HOME ?? '\0', '~').split('\n'));
+          return true;
+        }
+        return false;
+      },
+    });
+  }
+
+  activityLines(id: string, filter: 'all' | 'tool' | 'mcp' | 'file' = 'all'): RichLine[] {
     const t = this.store.getThread(id)!;
     const u = this.store.getUsage(id);
     const turns = this.store.getTurns(id, { limit: 100000 });
@@ -511,12 +601,12 @@ export class Controller {
       [[`${t.title}`, T.chorus], [`   in ${u?.inputTokens ?? 0}  out ${u?.outputTokens ?? 0} tokens${u?.costUsd != null ? ` · $${u.costUsd.toFixed(2)}` : ''}${u?.limitUtilization != null ? ` · plan ${Math.round(u.limitUtilization * 100)}%` : ''}`, T.dim]] as Seg[],
       '',
     ];
-    for (const c of this.store.getToolCalls(id)) {
+    for (const c of filter === 'all' || filter === 'tool' ? this.store.getToolCalls(id) : []) {
       out.push([[clock(c.turnSeq) + '  ', T.dim], [t.agent.padEnd(7), agentStyle(t.agent)], ['tool   '], [`${c.tool} ${c.target}`.slice(0, 46).padEnd(48)], [c.status === 'ok' ? 'ok' : c.status === 'failed' ? 'failed' : '…', c.status === 'ok' ? T.ok : c.status === 'failed' ? T.err : T.dim]] as Seg[]);
     }
-    for (const m of this.store.mcpCalls(id)) out.push([[new Date(m.ts).toTimeString().slice(0, 8) + '  ', T.dim], [t.agent.padEnd(7), agentStyle(t.agent)], ['mcp    '], [`chorus.${m.tool}`], ['  ok', T.ok]] as Seg[]);
-    for (const a of this.store.listArtifacts(id)) out.push([[new Date(a.ts).toTimeString().slice(0, 8) + '  ', T.dim], [t.agent.padEnd(7), agentStyle(t.agent)], ['file   '], [`${a.path} v1`]] as Seg[]);
-    for (const c of this.store.listThreads().filter(x => x.parent_thread_id === id)) out.push('', [[`──── continued in "${c.title}" with ${c.agent} ────`, T.chorus]] as Seg[]);
+    for (const m of filter === 'all' || filter === 'mcp' ? this.store.mcpCalls(id) : []) out.push([[new Date(m.ts).toTimeString().slice(0, 8) + '  ', T.dim], [t.agent.padEnd(7), agentStyle(t.agent)], ['mcp    '], [`chorus.${m.tool}`], ['  ok', T.ok]] as Seg[]);
+    for (const a of filter === 'all' || filter === 'file' ? this.store.listArtifacts(id) : []) out.push([[new Date(a.ts).toTimeString().slice(0, 8) + '  ', T.dim], [t.agent.padEnd(7), agentStyle(t.agent)], ['file   '], [`${a.path} v1`]] as Seg[]);
+    for (const c of filter === 'all' ? this.store.listThreads().filter(x => x.parent_thread_id === id) : []) out.push('', [[`──── continued in "${c.title}" with ${c.agent} ────`, T.chorus]] as Seg[]);
     if (out.length === 2) out.push([['Nothing recorded yet.', T.dim]] as Seg[]);
     return out;
   }

@@ -1,6 +1,6 @@
  THREADS  · 2/2               │
   ◐ Create calc.js in the cu… │  >_ OpenAI Codex (v0.163.0)
-    claude · waiting for you  │     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-plbPcb
+    claude · waiting for you  │     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-iPIUTf
 ▎ ○ codex 1                   │
 ▎   codex · idle              │
                               │
@@ -39,6 +39,6 @@
                               │
                               │› Ask Codex to do anything
 ──────────────────────────────│
- ⌃Space ↑↓ move  ⏎ open       │  GPT-6-Luna default · /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-plbPcb
+ ⌃Space ↑↓ move  ⏎ open       │  GPT-6-Luna default · /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-iPIUTf
  ⌃Space n new  b hide         │  ? for shortcuts                                                                             ⚠ 1 warning · f2 to view
- chorus  approved: Create file · .chorus/threads/t_94a1ab3d/artifacts/notes.md                                                            ⌃Space menu
+ chorus  approved: Create file · .chorus/threads/t_753e7378/artifacts/notes.md                                                            ⌃Space menu

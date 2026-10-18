@@ -33,7 +33,14 @@ Each screenshot is the terminal as the user sees it at that step.
 | ✅ | the handoff thread settles as waiting |
 | ✅ | memory view shows what the next agent reads |
 | ✅ | activity view lists the tool calls with their status |
+| ✅ | f filters the timeline by kind |
+| ✅ | the mcp filter keeps the MCP call |
+| ✅ | r shows the raw trace next to what was parsed |
+| ✅ | a mouse click on the first sidebar item opens the Claude thread |
 | ✅ | artifacts view lists the artifact with its version |
+| ✅ | o starts the live preview and shows its address |
+| ✅ | the preview page serves what the agent wrote and reloads when it changes |
+| ✅ | v lists the versions of the artifact |
 | ✅ | app quits and restores the terminal |
 
 ## Screenshots
@@ -108,62 +115,81 @@ ctrl+space e on the handoff thread: its timeline shows the chorus.get_handoff_co
 
 ![ctrl+space e on the handoff thread: its timeline shows the chorus.get_handoff_context MCP call that loaded the context](14-activity-view.png)
 
-### 15-artifacts-view
+### 15-activity-filter
+f cycles the filter (all, tool, mcp, file): here only the MCP calls
+
+![f cycles the filter (all, tool, mcp, file): here only the MCP calls](15-activity-filter.png)
+
+### 16-raw-trace
+r: the raw transcript lines and how Chorus parsed them (for debugging an adapter)
+
+![r: the raw transcript lines and how Chorus parsed them (for debugging an adapter)](16-raw-trace.png)
+
+### 17-artifacts-view
 ctrl+space a: the artifacts of the thread (name, version, who wrote it) and the files its tools wrote
 
-![ctrl+space a: the artifacts of the thread (name, version, who wrote it) and the files its tools wrote](15-artifacts-view.png)
+![ctrl+space a: the artifacts of the thread (name, version, who wrote it) and the files its tools wrote](17-artifacts-view.png)
 
-### 16-help-view
+### 18-preview
+o: the artifact is served at a local address that reloads while the agent keeps editing it
+
+![o: the artifact is served at a local address that reloads while the agent keeps editing it](18-preview.png)
+
+### 19-versions
+v: every version of the artifact (a hash per change)
+
+![v: every version of the artifact (a hash per change)](19-versions.png)
+
+### 20-help-view
 ctrl+space ?: the keys
 
-![ctrl+space ?: the keys](16-help-view.png)
+![ctrl+space ?: the keys](20-help-view.png)
 
-### 17-overview
+### 21-overview
 final state: three threads (Claude, Codex, and the Codex handoff thread), all waiting
 
-![final state: three threads (Claude, Codex, and the Codex handoff thread), all waiting](17-overview.png)
+![final state: three threads (Claude, Codex, and the Codex handoff thread), all waiting](21-overview.png)
 
 ## Commands after the run
 
 ```
 $ chorus threads
 id          agent   state    parent      title
-t_c8136e68  codex   waiting  t_94a1ab3d  Create calc.js in the curren → codex
-t_a22c6c29  codex   waiting  -           Reply with only the text cod
-t_94a1ab3d  claude  waiting  -           Create calc.js in the curren
+t_3fe2da8e  codex   waiting  t_753e7378  Create calc.js in the curren → codex
+t_48903be3  codex   waiting  -           Reply with only the text cod
+t_753e7378  claude  waiting  -           Create calc.js in the curren
 ```
 
 ```
 $ chorus activity
 thread      agent   turns  tools  mcp   tokens in/out     cost     limit
-t_c8136e68  codex   3      1      1     59084/198         -        1%
-t_a22c6c29  codex   2      0      0     19278/9           -        1%
-t_94a1ab3d  claude  3      3      0     38070/841         -        -
+t_3fe2da8e  codex   3      1      1     58657/243         -        1%
+t_48903be3  codex   2      0      0     19278/9           -        1%
+t_753e7378  claude  2      3      0     38100/865         -        -
 ```
 
 ```
 $ chorus artifacts
-t_94a1ab3d	e59e17e295aa	/private$TMPDIR/chorus-proof-plbPcb/.chorus/threads/t_94a1ab3d/artifacts/notes.md
+t_753e7378	2648178a6503	/private$TMPDIR/chorus-proof-iPIUTf/.chorus/threads/t_753e7378/artifacts/notes.md
 ```
 
 ```
 $ chorus trace <claude thread>
-thread t_94a1ab3d (claude 2.1.302)
-raw terminal capture: $PROJECT/.chorus/threads/t_94a1ab3d/raw/pty.log (28206 bytes)
-transcript: ~/.claude/projects/-private-var-folders-hj-b9dgqj-s11738sh6-z2w79bm0000gn-T-chorus-proof-plbPcb/d0017f14-c00d-4311-9941-231ce817982d.jsonl
-transcript lines: 54  → parsed turns: 3, tool calls: 3, status: waiting
+thread t_753e7378 (claude 2.1.302)
+raw terminal capture: $PROJECT/.chorus/threads/t_753e7378/raw/pty.log (27109 bytes)
+transcript: ~/.claude/projects/-private-var-folders-hj-b9dgqj-s11738sh6-z2w79bm0000gn-T-chorus-proof-iPIUTf/4eaaca6e-389b-470a-bea3-8aa98c4d6b05.jsonl
+transcript lines: 55  → parsed turns: 2, tool calls: 3, status: waiting
 
 last raw lines (cut) → what we made of the session:
-  raw  {"parentUuid":"2787d0ae-560d-4fce-ab31-2d908dff51f7","isSidechain":false,"message":{"model":"claude-haiku-5-5","id":"msg_011Cg8qL69ofD4B7Qhow6Dp7","type":"messa
-  raw  {"parentUuid":"3bbc26ff-3ed2-4380-aec1-76e8ec77df7d","isSidechain":false,"type":"system","subtype":"turn_duration","durationMs":8067,"messageCount":28,"timestam
-  raw  {"type":"cost-state","sessionId":"d0017f14-c00d-4311-9941-231ce817982d","totalCostUSD":0.0101643,"totalAPIDuration":10905,"totalAPIDurationWithoutRetries":10877
+  raw  {"parentUuid":"56d37003-7a80-4030-adc8-e06b8e1d96fe","isSidechain":false,"message":{"model":"claude-haiku-5-5","id":"msg_011Cg8r2tXShTwSHtPE4KHAD","type":"messa
+  raw  {"parentUuid":"ad860db1-ab36-443d-b353-afd697ec2843","isSidechain":false,"type":"system","subtype":"turn_duration","durationMs":10254,"messageCount":28,"timesta
+  raw  {"type":"cost-state","sessionId":"4eaaca6e-389b-470a-bea3-8aa98c4d6b05","totalCostUSD":0.01017227,"totalAPIDuration":12976,"totalAPIDurationWithoutRetries":1295
   raw  {"type":"last-prompt","lastPrompt":"Create calc.js in the current directory that exports a function add(a, b). Run it once with your shell tool as: node -e \"co
-  raw  {"type":"cost-state","sessionId":"d0017f14-c00d-4311-9941-231ce817982d","totalCostUSD":0.0101643,"totalAPIDuration":10905,"totalAPIDurationWithoutRetries":10877
+  raw  {"type":"cost-state","sessionId":"4eaaca6e-389b-470a-bea3-8aa98c4d6b05","totalCostUSD":0.01017227,"totalAPIDuration":12976,"totalAPIDurationWithoutRetries":1295
   tool ok Write $PROJECT/cal
   tool ok Bash node -e "console.log(require('./calc.js').add(2, 3))"
   tool ok Write $PROJECT/.ch
   turn user: Create calc.js in the current directory that exports a function add(a, b). Run it once with your she
-  turn assistant: Calc.js is written. Now I'll run the requested check and write the notes file.
   turn assistant: done
 
 MCP calls from this thread: none

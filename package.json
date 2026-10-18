@@ -21,7 +21,8 @@
     "probe:skills": "node tools/probe/skills-probe.mjs",
     "smoke:app": "node test/smoke/app.ts",
     "proof": "node test/smoke/proof.ts --open",
-    "proof:agy": "node test/smoke/proof-agy.ts --open"
+    "proof:agy": "node test/smoke/proof-agy.ts --open",
+    "start": "node src/cli/index.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

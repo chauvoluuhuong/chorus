@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // chorus: the CLI app (Phase 4) and its plain commands. `chorus mcp` is started by the agents, not by you.
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { App } from '../app/app.ts';
 import { AGENTS, Controller } from '../app/controller.ts';
+import { PreviewServer } from '../core/preview.ts';
 import { Store } from '../core/store.ts';
 import type { AgentId } from '../core/types.ts';
 import { syncSkills, listSkills } from '../core/skills.ts';
@@ -87,9 +89,20 @@ switch (cmd) {
   case 'memory':
     console.log(memoryCmd(new Store(project), positional[0] ?? ''));
     break;
-  case 'artifacts':
-    console.log(artifactsCmd(new Store(project), flag('thread')));
+  case 'artifacts': {
+    const store = new Store(project);
+    console.log(artifactsCmd(store, flag('thread')));
+    if (argv.includes('--serve')) {
+      // a local page per artifact that reloads while the agent edits it
+      const srv = new PreviewServer(store);
+      const base = await srv.start(Number(flag('port') ?? 4317));
+      console.log(`\nserving ${base}  (ctrl+c to stop)`);
+      for (const a of store.listArtifacts(flag('thread'))) console.log(`  ${srv.urlFor(a.thread_id, a.path)}`);
+      if (argv.includes('--open')) spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [base], { stdio: 'ignore', detached: true }).unref();
+      await new Promise(() => {});
+    }
     break;
+  }
   case 'activity':
     console.log(activityCmd(new Store(project), flag('thread')));
     break;

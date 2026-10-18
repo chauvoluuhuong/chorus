@@ -1,6 +1,7 @@
 // Controller tests: threads, live tailing, state, approvals, handoff, views, with a fake TUI as the agent.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -292,5 +293,47 @@ test('quota: an agy thread whose screen says the quota is used up gets a status-
     await r.until(() => /agy reached its quota \(resets in 147h16m18s\): ctrl\+space h continues in another agent/.test(r.screen()[29]), 'quota warning');
   } finally {
     r.close();
+  }
+});
+
+test('artifacts view: select, open the live preview, versions; activity view: filter and raw trace', async () => {
+  process.env.CHORUS_NO_OPEN = '1'; // do not start a browser from a test
+  const r = rig();
+  try {
+    const e = r.c.newThread({ agent: 'codex', title: 'viewer' });
+    await r.until(() => has(r.screen(), /READY codex/), 'ready');
+    const w = writeRollout(r.home, r.project, { done: true });
+    void w;
+    await r.until(() => r.store.getToolCalls(e.id).length > 0, 'tailed');
+    fs.writeFileSync(path.join(r.store.artifactsDir(e.id), 'plan.md'), '# the plan\nstep one');
+    r.store.scanArtifacts(e.id);
+    fs.writeFileSync(path.join(r.store.artifactsDir(e.id), 'plan.md'), '# the plan\nstep one\nstep two');
+    r.store.scanArtifacts(e.id);
+
+    r.type('\x00a');
+    await r.until(() => has(r.screen(), /Artifacts · viewer/) && has(r.screen(), /plan\.md\s+v2/), 'artifacts table with two versions');
+    assert.match(r.screen().join('\n'), /press o to open it in the browser/);
+    r.type('v');
+    await r.until(() => has(r.screen(), /Versions of plan\.md/) && has(r.screen(), /v1 /) && has(r.screen(), /v2 /), 'versions list');
+    r.type('o');
+    await r.until(() => /Preview\s+http:\/\/localhost:\d+\/t_/.test(r.screen().join('\n')) && has(r.screen(), /live reload/), 'preview url on screen');
+    const url = r.c.previewOpened;
+    assert.match(url, /^http:\/\/localhost:\d+\/t_\w+\/plan\.md$/);
+    const body = await new Promise<string>(res => http.get(url, m => { let b = ''; m.on('data', d => (b += d)); m.on('end', () => res(b)); }));
+    assert.match(body, /step two/);
+    assert.match(body, /EventSource/);
+    r.type('\x1b');
+
+    r.type('\x00e');
+    await r.until(() => has(r.screen(), /Activity · viewer/) && has(r.screen(), /tool\s+shell/), 'activity');
+    r.type('f');
+    await r.until(() => has(r.screen(), /\[tool\]/) && !has(r.screen(), /file\s+plan\.md/), 'filter: tool');
+    r.type('f');
+    await r.until(() => has(r.screen(), /\[mcp\]/) && !has(r.screen(), /tool\s+shell/), 'filter: mcp');
+    r.type('r');
+    await r.until(() => has(r.screen(), /Raw trace · viewer/) && has(r.screen(), /transcript lines:/), 'raw trace');
+  } finally {
+    r.close();
+    delete process.env.CHORUS_NO_OPEN;
   }
 });

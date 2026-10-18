@@ -1,4 +1,4 @@
-  chorus 0.1  ·  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-plbPcb
+  chorus 0.1  ·  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-iPIUTf
 
   Agents   claude 2.1.302 ✓     codex 0.163.0 ✓     agy 1.4.1 ✓
 
@@ -18,7 +18,7 @@
                                ├──────────────────────────────────────────────────────────────────────────────────────┤
                                │ Agent   [claude]  codex   agy                                                        │
                                │ Model   [default]  sonnet   opus   haiku                                             │
-                               │ Folder  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-plbPcb │
+                               │ Folder  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-iPIUTf │
                                │                                                                                      │
                                │ ⏎ start   tab next field   ←/→ change   esc cancel                                   │
                                └──────────────────────────────────────────────────────────────────────────────────────┘

@@ -41,6 +41,8 @@ export interface Entry {
 }
 
 export interface AppOpts {
+  /** mouse clicks in the sidebar and on the home list (default on; CHORUS_MOUSE=0 turns it off) */
+  mouse?: boolean;
   sidebarWidth?: number;
   menuKey?: string;
   ptyFactory?: PtyFactory;
@@ -56,7 +58,9 @@ export interface Card {
   lines: string[];
 }
 
-const MODE_RESET = '\x1b[?2004l\x1b[?1l\x1b[?25h\x1b[0m\x1b[?1049l';
+const MODE_RESET = '\x1b[?2004l\x1b[?1l\x1b[?1000l\x1b[?1006l\x1b[?25h\x1b[0m\x1b[?1049l';
+const MOUSE_ON = '\x1b[?1000h\x1b[?1006h'; // button press/release, SGR encoding
+const MOUSE = /\x1b\[<(\d+);(\d+);(\d+)([Mm])/g;
 /** keys the menu hands to the controller */
 export const ACTION_KEYS: Record<string, string> = { n: 'new', h: 'handoff', m: 'memory', a: 'files', f: 'files', e: 'activity', t: 'activity', y: 'approve', x: 'deny', r: 'retry', d: 'doctor', '?': 'help' };
 
@@ -80,7 +84,7 @@ export class App extends EventEmitter {
   private quitArmed = false;
   private applied = { appCursor: false, bracketedPaste: false };
   private offResize: (() => void) | undefined;
-  private pane: { title: string; lines: RichLine[]; scroll: number } | undefined;
+  private pane: { title: string; lines: RichLine[]; scroll: number; hint?: string; onKey?: (key: string) => boolean | void } | undefined;
   private home: { selected: number } | undefined;
   /** supplied by the controller: what the home screen lists */
   homeProvider: (() => Omit<HomeView, 'selected'>) | undefined;
@@ -88,7 +92,21 @@ export class App extends EventEmitter {
   private alertState: { title: string; lines: string[]; options: { key: string; label: string }[]; sel: number; resolve: (k: string | undefined) => void } | undefined;
   private dialog: { title: string; options: string[]; sel: number; resolve: (i: number | undefined) => void } | undefined;
   private card: Card | undefined;
-  private onData = (d: string | Buffer) => this.router.feed(String(d));
+  private mouseOn: boolean;
+  private mousePending = '';
+  private onData = (d: string | Buffer) => {
+    let s = this.mousePending + String(d);
+    this.mousePending = '';
+    if (this.mouseOn) {
+      const tail = s.match(/\x1b(?:\[(?:<[\d;]*)?)?$/); // a mouse report cut in two chunks
+      if (tail && tail.index !== undefined && tail[0].length > 2) {
+        this.mousePending = tail[0];
+        s = s.slice(0, tail.index);
+      }
+      s = s.replace(MOUSE, (_m, b, x, y, kind) => (this.onMouse(Number(b), Number(x), Number(y), kind === 'M'), ''));
+    }
+    if (s) this.router.feed(s);
+  };
   private onExitSignal = () => this.stop();
   readonly done: Promise<void>;
   private finish!: () => void;
@@ -97,6 +115,7 @@ export class App extends EventEmitter {
     super();
     this.io = io;
     this.sidebarWidth = opts.sidebarWidth ?? 30;
+    this.mouseOn = (opts.mouse ?? true) && process.env.CHORUS_MOUSE !== '0';
     this.factory = opts.ptyFactory ?? nodePtyFactory;
     this.router = new InputRouter(e => this.onInput(e), opts.menuKey);
     this.done = new Promise(r => (this.finish = r));
@@ -190,7 +209,7 @@ export class App extends EventEmitter {
     process.on('exit', this.onExitSignal);
     process.on('SIGTERM', this.onExitSignal);
     process.on('SIGHUP', this.onExitSignal);
-    this.io.stdout.write('\x1b[?1049h\x1b[2J');
+    this.io.stdout.write('\x1b[?1049h\x1b[2J' + (this.mouseOn ? MOUSE_ON : ''));
     this.tick = setInterval(() => this.schedule(), 700);
     this.render();
   }
@@ -223,9 +242,22 @@ export class App extends EventEmitter {
 
   /* ---------- panes, dialogs, cards, flashes ---------- */
 
-  showPane(title: string, lines: RichLine[]) {
-    this.pane = { title, lines, scroll: 0 };
+  /** A full-area view. `onKey` sees every key first (return true when it used it); `hint` replaces the scrolling hint. */
+  showPane(title: string, lines: RichLine[], opts: { hint?: string; onKey?: (key: string) => boolean | void } = {}) {
+    this.pane = { title, lines, scroll: 0, ...opts };
     this.router.capture = true;
+    this.schedule();
+  }
+
+  showPaneHint(hint: string) {
+    if (this.pane) this.pane.hint = hint;
+    this.schedule();
+  }
+
+  updatePane(lines: RichLine[], title?: string) {
+    if (!this.pane) return;
+    this.pane.lines = lines;
+    if (title) this.pane.title = title;
     this.schedule();
   }
 
@@ -427,6 +459,7 @@ export class App extends EventEmitter {
       return;
     }
     if (this.home && !this.pane) return this.homeKey(key);
+    if (this.pane?.onKey?.(key)) return void this.schedule();
     if (this.pane) {
       const { rows } = this.io.size();
       const page = Math.max(1, rows - 4);
@@ -456,6 +489,42 @@ export class App extends EventEmitter {
     else if (key === '\r' || key === '\n') return done(st.options[st.sel].key);
     else if (st.options.some(o => o.key === key)) return done(key);
     this.schedule();
+  }
+
+  /**
+   * Mouse: a click in the sidebar or on the home list is Chorus's; in the thread area it goes to the agent if the agent
+   * asked for the mouse (coordinates shifted by the sidebar), otherwise it is ignored. Wheel in a pane scrolls it.
+   */
+  private onMouse(b: number, x: number, y: number, press: boolean) {
+    if (this.formState || this.alertState || this.dialog || this.router.menuOpen) return;
+    const wheel = (b & 64) !== 0;
+    if (this.pane) {
+      if (wheel && press) this.pane.scroll = Math.max(0, this.pane.scroll + ((b & 1) ? 3 : -3));
+      this.schedule();
+      return;
+    }
+    if (this.home) {
+      const i = y - 6; // first thread row of the home screen (1-based terminal rows)
+      const t = this.homeProvider?.().threads ?? [];
+      if (press && !wheel && i >= 0 && i < t.length) {
+        this.home.selected = i;
+        const at = this.entries.findIndex(e => e.id === t[i].id);
+        if (at >= 0) this.select(at);
+      }
+      this.schedule();
+      return;
+    }
+    const { cols, rows } = this.io.size();
+    const L = layout(cols, rows, this.sidebarOn ? this.sidebarWidth : 0);
+    if (L.sidebar && x <= L.sidebar) {
+      const i = Math.floor((y - 2) / 2); // threads take two rows each, below the header
+      if (press && !wheel && (b & 3) === 0 && i >= 0 && i < this.entries.length) this.select(i);
+      return;
+    }
+    const host = this.current?.host;
+    if (host && host.state === 'running' && host.screen.modes().mouse && x > L.contentX && y <= L.contentRows) {
+      host.write(`\x1b[<${b};${x - L.contentX};${y}${press ? 'M' : 'm'}`);
+    }
   }
 
   private homeKey(key: string) {
@@ -511,7 +580,7 @@ export class App extends EventEmitter {
     const pane = this.pane && {
       title: this.pane.title,
       lines: this.pane.lines.slice(this.pane.scroll, this.pane.scroll + L.contentRows - 2),
-      hint: `↑/↓ PgUp/PgDn scroll · g/G top/bottom · esc close  (${Math.min(this.pane.lines.length, this.pane.scroll + 1)}-${Math.min(this.pane.lines.length, this.pane.scroll + L.contentRows - 2)} of ${this.pane.lines.length})`,
+      hint: this.pane.hint ?? `↑/↓ PgUp/PgDn scroll · g/G top/bottom · esc close  (${Math.min(this.pane.lines.length, this.pane.scroll + 1)}-${Math.min(this.pane.lines.length, this.pane.scroll + L.contentRows - 2)} of ${this.pane.lines.length})`,
     };
     const card = this.card && { title: this.card.title, lines: [...this.card.lines, 'ctrl+space y  approve    ctrl+space x  deny    (or switch to the thread and answer there)'] };
     const home = this.home && this.homeProvider ? { ...this.homeProvider(), selected: this.home.selected } : undefined;
