@@ -19,25 +19,32 @@ const hints = (...parts: Seg[][]): RichLine => parts.flatMap((p, i) => (i ? ([['
 export interface NewChatForm {
   agent: number;
   model: number;
+  /** index into the effort list of the chosen agent and model (0 = default) */
+  effort: number;
   folder: string;
   skip: boolean;
-  /** 0 agent, 1 model, 2 project, 3 permissions, 4 start */
+  /** 0 agent, 1 model, 2 effort, 3 project, 4 permissions, 5 start */
   focus: number;
   error: string;
 }
+const FIELDS = 6;
 
 export interface NewChatInfo {
   /** model list for an agent (first is "default") */
   models(agent: Agent): string[];
+  /** effort levels for an agent and model (first is "default") */
+  efforts(agent: Agent, model: string): string[];
   /** short plan text under each agent: "5h 62%", "quota ok" … */
   quota: Partial<Record<Agent, { text: string; level: 'ok' | 'warn' | 'err' | 'dim' }>>;
   recent: string[];
   skipFlag: Record<Agent, string>;
 }
 
-export const newChatForm = (preset: { agent?: string; model?: string; folder: string; models: (a: Agent) => string[] }): NewChatForm => {
+export const newChatForm = (preset: { agent?: string; model?: string; effort?: string; folder: string; models: (a: Agent) => string[]; efforts: (a: Agent, model: string) => string[] }): NewChatForm => {
   const agent = Math.max(0, AGENTS.indexOf((preset.agent ?? 'claude') as Agent));
-  return { agent, model: Math.max(0, preset.models(AGENTS[agent]).indexOf(preset.model ?? 'default')), folder: preset.folder, skip: false, focus: 4, error: '' };
+  const model = Math.max(0, preset.models(AGENTS[agent]).indexOf(preset.model ?? 'default'));
+  const effort = Math.max(0, preset.efforts(AGENTS[agent], preset.models(AGENTS[agent])[model]).indexOf(preset.effort ?? 'default'));
+  return { agent, model, effort, folder: preset.folder, skip: false, focus: FIELDS - 1, error: '' };
 };
 
 export function newChatLines(f: NewChatForm, info: NewChatInfo): PaneLine[] {
@@ -46,6 +53,7 @@ export function newChatLines(f: NewChatForm, info: NewChatInfo): PaneLine[] {
   const agent = AGENTS[f.agent];
   const quotaStyle = { ok: T.ok, warn: T.warn, err: T.err, dim: T.dim };
   const models = info.models(agent);
+  const efforts = info.efforts(agent, models[f.model] ?? 'default');
   const out: PaneLine[] = [
     [['New chat', join('1', T.chorus)]],
     '',
@@ -57,16 +65,18 @@ export function newChatLines(f: NewChatForm, info: NewChatInfo): PaneLine[] {
     '',
     [label(1, 'Model'), ...models.slice(0, 8).flatMap((m, i): Seg[] => [chipText(m, i === f.model, `model:${i}`), [' ']])],
     '',
-    { line: [label(2, 'Project'), [home(f.folder), f.focus === 2 ? T.fg : LINK, 'folder'], f.focus === 2 ? ['▌', T.chorus] : ['  ▾', T.dim]], hit: 'folder' },
+    [label(2, 'Effort'), ...efforts.flatMap((e, i): Seg[] => [chipText(e, i === f.effort, `effort:${i}`), [' ']]), ['  how hard the model thinks', T.dim]],
+    '',
+    { line: [label(3, 'Project'), [home(f.folder), f.focus === 3 ? T.fg : LINK, 'folder'], f.focus === 3 ? ['▌', T.chorus] : ['  ▾', T.dim]], hit: 'folder' },
     [['             '], ['recent: ', T.dim], ...info.recent.slice(0, 3).flatMap((r, i): Seg[] => [[home(r), LINK, `recent:${i}`], ['  ']]), ['· or type any folder', T.dim]],
     '',
-    { line: [label(3, 'Permissions'), [f.skip ? '[x]' : '[ ]', f.skip ? T.warn : T.fg, 'skip'], [' Skip permission prompts', T.fg, 'skip'], ['  ' + info.skipFlag[agent], T.dim]], hit: 'skip' },
+    { line: [label(4, 'Permissions'), [f.skip ? '[x]' : '[ ]', f.skip ? T.warn : T.fg, 'skip'], [' Skip permission prompts', T.fg, 'skip'], ['  ' + info.skipFlag[agent], T.dim]], hit: 'skip' },
     f.skip
       ? [['             The agent runs every command and edit without asking.', T.warn]]
       : [['             off: the agent asks, and Chorus shows it in the approvals inbox', T.dim]],
     ...(f.skip ? [[['             Nothing reaches the approvals inbox for this chat.', T.warn]] as Seg[]] : []),
     '',
-    [['             '], [' ⏎ Start chat ', f.focus === 4 ? join('1', T.fgBrand, T.bgBrand) : BTN, 'start']],
+    [['             '], [' ⏎ Start chat ', f.focus === 5 ? join('1', T.fgBrand, T.bgBrand) : BTN, 'start']],
   ];
   if (f.error) out.push('', [['  ! ' + f.error, T.err]]);
   return out;
@@ -75,20 +85,25 @@ export function newChatLines(f: NewChatForm, info: NewChatInfo): PaneLine[] {
 export const NEW_CHAT_HINT: RichLine = hints(chip('⏎', 'start', 'start'), chip('tab', 'next field', 'next'), [[' ←/→ ', BTN], [' change']], [[' space ', BTN], [' tick']], chip('esc', 'back', 'back'));
 
 /** Keys of the form. Returns what the caller must do. Printable keys edit the folder only while it has the focus. */
-export function newChatKey(f: NewChatForm, key: string, info: Pick<NewChatInfo, 'models'>): 'start' | 'cancel' | undefined {
+export function newChatKey(f: NewChatForm, key: string, info: Pick<NewChatInfo, 'models' | 'efforts'>): 'start' | 'cancel' | undefined {
   f.error = '';
   if (key === '\x1b') return 'cancel';
   if (key === '\r' || key === '\n') return 'start';
-  if (key === '\t' || key === '\x1b[B') f.focus = (f.focus + 1) % 5;
-  else if (key === '\x1b[Z' || key === '\x1b[A') f.focus = (f.focus + 4) % 5;
+  if (key === '\t' || key === '\x1b[B') f.focus = (f.focus + 1) % FIELDS;
+  else if (key === '\x1b[Z' || key === '\x1b[A') f.focus = (f.focus + FIELDS - 1) % FIELDS;
   else if (f.focus === 0 && (key === '\x1b[C' || key === '\x1b[D')) {
     f.agent = (f.agent + (key === '\x1b[C' ? 1 : 2)) % 3;
-    f.model = 0; // the model list depends on the agent
+    f.model = 0; // the model list depends on the agent, and the effort list on the model
+    f.effort = 0;
   } else if (f.focus === 1 && (key === '\x1b[C' || key === '\x1b[D')) {
     const n = info.models(AGENTS[f.agent]).length;
     f.model = (f.model + (key === '\x1b[C' ? 1 : n - 1)) % Math.max(1, n);
-  } else if (f.focus === 3 && key === ' ') f.skip = !f.skip;
-  else if (f.focus === 2) {
+    f.effort = Math.min(f.effort, info.efforts(AGENTS[f.agent], info.models(AGENTS[f.agent])[f.model]).length - 1);
+  } else if (f.focus === 2 && (key === '\x1b[C' || key === '\x1b[D')) {
+    const n = info.efforts(AGENTS[f.agent], info.models(AGENTS[f.agent])[f.model]).length;
+    f.effort = (f.effort + (key === '\x1b[C' ? 1 : n - 1)) % Math.max(1, n);
+  } else if (f.focus === 4 && key === ' ') f.skip = !f.skip;
+  else if (f.focus === 3) {
     if (key === '\x7f' || key === '\b') f.folder = f.folder.slice(0, -1);
     else if (key === '\x15') f.folder = '';
     else if (key.length >= 1 && key >= ' ' && !key.startsWith('\x1b')) f.folder += key;
@@ -101,21 +116,26 @@ export function newChatHit(f: NewChatForm, id: string, info: NewChatInfo): 'star
   f.error = '';
   if (id === 'start') return 'start';
   if (id === 'back') return 'cancel';
-  if (id === 'next') f.focus = (f.focus + 1) % 5;
+  if (id === 'next') f.focus = (f.focus + 1) % FIELDS;
   else if (id.startsWith('agent:')) {
     f.agent = Number(id.slice(6));
     f.model = 0;
+    f.effort = 0;
     f.focus = 0;
   } else if (id.startsWith('model:')) {
     f.model = Number(id.slice(6));
+    f.effort = Math.min(f.effort, info.efforts(AGENTS[f.agent], info.models(AGENTS[f.agent])[f.model]).length - 1);
     f.focus = 1;
-  } else if (id === 'folder') f.focus = 2;
+  } else if (id.startsWith('effort:')) {
+    f.effort = Number(id.slice(7));
+    f.focus = 2;
+  } else if (id === 'folder') f.focus = 3;
   else if (id.startsWith('recent:')) {
     f.folder = info.recent[Number(id.slice(7))] ?? f.folder;
-    f.focus = 2;
+    f.focus = 3;
   } else if (id === 'skip') {
     f.skip = !f.skip;
-    f.focus = 3;
+    f.focus = 4;
   }
   return undefined;
 }
@@ -145,8 +165,11 @@ const riskStyle = { err: T.err, warn: T.warn, dim: T.dim };
 const short = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, Math.ceil((n - 1) / 2))}…${s.slice(s.length - Math.floor((n - 1) / 2))}`);
 const waitText = (s: number) => (s < 60 ? `${Math.max(1, Math.floor(s))}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h`);
 
-export function approvalLines(items: ApprovalItem[], sel: number, decided: Decided[]): PaneLine[] {
-  const out: PaneLine[] = [[['Approvals', join('1', T.chorus)], [`  ·  ${items.length} waiting`, T.dim]], ''];
+export type ApprovalScope = 'this' | 'all';
+
+export function approvalLines(items: ApprovalItem[], sel: number, decided: Decided[], scope: ApprovalScope = 'all'): PaneLine[] {
+  const chip = (on: boolean, text: string, hit: string): Seg => [` ${text} `, on ? join('1', T.fg, T.bgSel) : T.dim, hit];
+  const out: PaneLine[] = [[['Approvals', join('1', T.chorus)], [`  ·  ${items.length} waiting`, T.dim], ['          '], chip(scope === 'this', 'this project', 'scope:this'), [' '], chip(scope === 'all', 'all projects', 'scope:all')], ''];
   if (!items.length) out.push([['Nothing is waiting for you.', T.dim]], '');
   items.forEach((a, i) => {
     const on = i === sel;
@@ -155,13 +178,13 @@ export function approvalLines(items: ApprovalItem[], sel: number, decided: Decid
     out.push({ line: [['    '], [short(home(a.what.split(' · ').slice(-1)[0]), 52), T.warn], ['   '], [`[${a.risk.label}]`, riskStyle[a.risk.level]]], hit: `row:${a.id}`, sel: on });
     out.push([['    '], [' y Approve ', BTN_OK, `approve:${a.id}`], [' '], [' x Deny ', BTN_BAD, `deny:${a.id}`], [' '], [' ⏎ Open chat ', BTN, `open:${a.id}`]], '');
   });
-  out.push([['Decided', T.dim]]);
+  out.push([['Decided today', T.dim]]);
   if (!decided.length) out.push([['  nothing yet', T.dim]]);
   for (const d of decided.slice(0, 6)) out.push([['  '], d.decision === 'approved' ? ['✓ approved', T.ok] : ['✗ denied  ', T.err], ['  '], [short(home(d.what.split(' · ').slice(-1)[0]), 44).padEnd(46)], [d.agent.padEnd(8), agentStyle(d.agent)], [d.time, T.dim]]);
   return out;
 }
 
-export const APPROVALS_HINT: RichLine = hints([[' ↑↓ ', BTN], [' select']], chip('y', 'approve', 'approve'), chip('x', 'deny', 'deny'), chip('⏎', 'open chat', 'open'), chip('esc', 'back', 'back'));
+export const APPROVALS_HINT: RichLine = hints([[' ↑↓ ', BTN], [' select']], chip('y', 'approve', 'approve'), chip('x', 'deny', 'deny'), chip('⏎', 'open chat', 'open'), chip('tab', 'this / all projects', 'scope'), chip('esc', 'back', 'back'));
 
 /* ---------- Memory ---------- */
 
@@ -178,9 +201,10 @@ export interface MemoryItem {
   files: string;
 }
 
-export function memoryLines(items: MemoryItem[], sel: number, where: string): PaneLine[] {
-  const out: PaneLine[] = [[['Memory', join('1', T.chorus)], [`  ·  all projects`, T.dim], [`      ${where}`, T.dim]], ''];
-  if (!items.length) out.push([['No chats recorded yet.', T.dim]]);
+export function memoryLines(items: MemoryItem[], sel: number, where: string, search?: { query: string; typing: boolean }): PaneLine[] {
+  const right: Seg[] = search?.typing || search?.query ? [['/ ', T.chorus], [`${search.query}${search.typing ? '▌' : ''}`, T.fg]] : [[where, T.dim], ['   '], ['/ search', T.dim, 'search']];
+  const out: PaneLine[] = [[['Memory', join('1', T.chorus)], [`  ·  all projects`, T.dim], ['      '], ...right], ''];
+  if (!items.length) out.push([[search?.query ? `Nothing matches "${search.query}".` : 'No chats recorded yet.', T.dim]]);
   items.forEach((m, i) => {
     const t = (m.child ? '↳ ' : '') + m.title;
     out.push({ line: [[i === sel ? '▸ ' : '  ', T.chorus], [(t.length > 24 ? t.slice(0, 23) + '…' : t).padEnd(25), T.fg], [(m.project.length > 13 ? m.project.slice(0, 12) + '…' : m.project).padEnd(15), T.dim], [m.agent.padEnd(8), agentStyle(m.agent)], [`${m.turns} turns`.padEnd(10)], [m.ago, T.dim]], hit: `row:${m.id}`, sel: i === sel });
@@ -193,7 +217,7 @@ export function memoryLines(items: MemoryItem[], sel: number, where: string): Pa
   return out;
 }
 
-export const MEMORY_HINT: RichLine = hints(chip('⏎', 'open chat', 'open'), chip('h', 'continue with another agent', 'handoff'), chip('esc', 'back', 'back'));
+export const MEMORY_HINT: RichLine = hints(chip('⏎', 'open chat', 'open'), chip('h', 'continue with another agent', 'handoff'), chip('/', 'search', 'search'), chip('esc', 'back', 'back'));
 
 /* ---------- Skills ---------- */
 
@@ -225,7 +249,7 @@ export function skillLines(items: SkillItem[], found: FoundItem[], sel: number, 
   return out;
 }
 
-export const SKILLS_HINT: RichLine = hints(chip('⏎', 'on/off', 'toggle'), chip('i', 'import', 'import'), chip('esc', 'back', 'back'));
+export const SKILLS_HINT: RichLine = hints(chip('⏎', 'on/off', 'toggle'), chip('e', 'edit', 'edit'), chip('n', 'new', 'new'), chip('i', 'import', 'import'), chip('esc', 'back', 'back'));
 
 /* ---------- Artifacts ---------- */
 

@@ -1,9 +1,10 @@
-  ‹ Back   chorus › Activity · Create calc.js in the curre… → codex                                                                           ☰ Menu
-  + New chat                │ Activity · Create calc.js in the curre… → codex
- ▾ chorus-proof-api-Aoj… 1  │  Create calc.js in the curre… → codex   in 59978  out 234 tokens · plan 5%
-   ◌ Rate limiter     codex │
- ▾ chorus-proof-OBrfD6   3  │  15:23:41  codex  tool   mcp:chorus get_handoff_context                  ok
-   ◐ Create calc.js… claude │  15:23:42  codex  mcp    chorus.get_handoff_context  ok
+  ‹ Back   Create calc.js in the curre… → codex › Activity                                                                                 ☰ Menu ⌃\
+  + New chat                │  Activity  ·  Create calc.js in the curre… → codex          in 60072  out 202 tokens
+ PROJECTS                   │  [all 3]  tool 1   mcp 1   approval 0   file 0   usage 1   error 0    f cycles
+ ▾ chorus-proof-api-23e… 1  │
+   ◌ Rate limiter     codex │  16:30:04  codex  tool    mcp:chorus get_handoff_context                  ok
+ ▾ chorus-proof-bgAz9m   3  │  16:30:05  codex  mcp     chorus.get_handoff_context                      ok
+   ◐ Create calc.js… claude │  16:30:07  codex  usage   5h 5%
    ↳ ◐ Create calc.j… codex │
    ◐ Reply with only… codex │
                             │
@@ -39,6 +40,5 @@
                             │
                             │
 ────────────────────────────│
- ✦ Skills                   │
- ◫ Memory                   │ f filter: [all] tool mcp file   r raw trace   ↑↓ scroll   esc back
- chorus  Imported release-notes: now in the library, seen by all three                                                                        ⌃\ menu
+  ✦ Skills   ◫ Memory       │  f  filter   r  raw trace   ↑↓  scroll   esc  back
+ chorus  Imported release-notes: now in the library, seen by all three                                                                        ☰ menu

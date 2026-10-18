@@ -64,7 +64,7 @@ const isRow = (l: PaneLine): l is PaneRow => typeof l === 'object' && !Array.isA
 
 export type SideRow =
   | { kind: 'new' }
-  | { kind: 'project'; cwd: string; name: string; open: boolean; count: number; alert: boolean; active: boolean }
+  | { kind: 'project'; cwd: string; name: string; open: boolean; count: number; /** chats in it waiting for an approval */ waiting: number; active: boolean }
   | { kind: 'chat'; index: number; title: string; agent: string; state: ItemState; active: boolean; child?: boolean }
   | { kind: 'skills'; active: boolean }
   | { kind: 'memory'; active: boolean };
@@ -84,6 +84,8 @@ export interface StatusBar {
   title: string;
   agent: string;
   model?: string;
+  /** reasoning effort chosen for the chat */
+  effort?: string;
   from?: string;
   /** plan usage 0..100 */
   usage?: number;
@@ -227,7 +229,7 @@ export function compose(v: View): { grid: Grid; cursor: { x: number; y: number }
     }
   }
 
-  drawStatus(grid, v);
+  drawStatus(grid, v, hits);
 
   let cursor: { x: number; y: number } | null = null;
   if (v.screen && !v.overlay && !v.pane) {
@@ -265,10 +267,11 @@ function drawTop(grid: Grid, v: View, hits: Hit[]) {
   const top = v.top;
   if (!top) return;
   // right side first, so the path can be cut before it touches the buttons
-  const menu = ` ☰ Menu `;
-  const waiting = top.waiting ? ` ! ${top.waiting} waiting ` : '';
+  const small = cols < 90; // icons or hidden sidebar: the buttons shrink to their glyphs
+  const menu = small ? ' ☰ ' : ` ☰ Menu ${v.menuLabel ?? ''}`.trimEnd() + ' ';
+  const waiting = top.waiting ? ` ! ${top.waiting}${small ? '' : ' waiting'} ` : '';
   let rx = cols - menu.length - 1;
-  putRich(grid, 0, rx, [[menu, BTN, 'menu']], T.bgStatus, cols, hits);
+  putRich(grid, 0, rx, [small || !v.menuLabel ? [menu, BTN, 'menu'] : [' ☰ Menu ', BTN, 'menu'], ...(small || !v.menuLabel ? [] : ([[`${v.menuLabel} `, join(T.dim, T.bgSel), 'menu']] as Seg[]))], T.bgStatus, cols, hits);
   if (waiting) {
     rx -= waiting.length + 2;
     putRich(grid, 0, rx, [[waiting, join('1', T.err, T.bgErr), 'approvals']], T.bgStatus, cols, hits);
@@ -308,15 +311,33 @@ function drawSidebar(grid: Grid, rows: SideRow[], mode: SideMode, w: number, y0:
   }
   const top = rows.filter(r => r.kind !== 'skills' && r.kind !== 'memory');
   const foot = rows.filter(r => r.kind === 'skills' || r.kind === 'memory');
-  const footH = foot.length ? foot.length + 1 : 0;
+  const stacked = mode === 'icons'; // narrow sidebars keep the two shared things side by side, icons stack them
+  const footH = foot.length ? (stacked ? foot.length : 1) + 1 : 0;
   const listH = Math.max(1, height - footH);
   // keep the selected row visible
   const sel = Math.max(0, top.findIndex(r => (r.kind === 'chat' || r.kind === 'project') && r.active));
   const offset = Math.max(0, Math.min(top.length - listH, sel - listH + 2));
-  top.slice(offset, offset + listH).forEach((r, i) => drawSideRow(grid, r, mode, w, y0 + i, hits));
+  // the header sits under the New chat button, like the mockup: PROJECTS
+  const lines: (SideRow | 'heading')[] = [];
+  for (const r of top) {
+    lines.push(r);
+    if (r.kind === 'new' && mode !== 'icons') lines.push('heading');
+  }
+  lines.slice(offset, offset + listH).forEach((r, i) => {
+    if (r === 'heading') put(grid, y0 + i, 1, 'PROJECTS', join(T.dim, T.bgSide), w);
+    else drawSideRow(grid, r, mode, w, y0 + i, hits);
+  });
   if (footH) {
     for (let x = 0; x < w; x++) grid[y0 + listH][x] = { t: '─', s: join(T.line, T.bgSide) };
-    foot.forEach((r, i) => drawSideRow(grid, r, mode, w, y0 + listH + 1 + i, hits));
+    if (stacked) foot.forEach((r, i) => drawSideRow(grid, r, mode, w, y0 + listH + 1 + i, hits));
+    else {
+      let x = 1;
+      for (const r of foot) {
+        const label = r.kind === 'skills' ? '✦ Skills' : '◫ Memory';
+        const on = (r.kind === 'skills' || r.kind === 'memory') && r.active;
+        x = putRich(grid, y0 + listH + 1, x, [[` ${label} `, on ? join('1', T.chorus, T.bgSel) : BTN, r.kind]], T.bgSide, w, hits) + 1;
+      }
+    }
   }
 }
 
@@ -344,12 +365,12 @@ function drawSideRow(grid: Grid, r: SideRow, mode: SideMode, w: number, y: numbe
     rowHit(`project:${r.cwd}`);
     put(grid, y, 1, r.open ? '▾' : '▸', join(T.dim, b), w);
     if (icons) {
-      // no room for a name: the caret, and a ! when a folded project has a chat waiting
-      if (r.alert) put(grid, y, 3, '!', join('1', T.err, b), w);
+      // no room for a name: the caret, and a ! when a chat in it is waiting
+      if (r.waiting) put(grid, y, 3, '!', join('1', T.err, b), w);
       return;
     }
     put(grid, y, 3, clip(r.name, w - 7), join('1', T.fg, b), w);
-    if (r.alert) put(grid, y, w - 2, '!', join('1', T.err, b), w);
+    if (r.waiting) put(grid, y, w - 3, `!${r.waiting}`, join('1', T.err, b), w);
     else put(grid, y, w - 3, String(r.count), join(T.dim, b), w);
     return;
   }
@@ -359,8 +380,7 @@ function drawSideRow(grid: Grid, r: SideRow, mode: SideMode, w: number, y: numbe
   rowHit(`chat:${r.index}`);
   if (r.active) put(grid, y, 0, '▎', join(T.chorus, b), w);
   if (icons) {
-    put(grid, y, 1, g.ch, join(g.s, b), w);
-    put(grid, y, 3, r.agent[0], join(agentStyle(r.agent), b), w);
+    put(grid, y, 2, g.ch, join(g.s, b), w); // just the state dot
     return;
   }
   let x = r.child ? 5 : 3;
@@ -386,7 +406,7 @@ function statusSegs(v: View, bg: string, level: number): Seg[] {
   const sb = v.statusBar;
   if (v.message || !sb) return [...segs, [` ${v.message ?? 'no chats'} `, join(T.fg, bg)]];
   segs.push([` ${sb.title} `, join(T.fg, bg)], sep);
-  segs.push([` ${sb.agent}${sb.model && level < 1 ? ' · ' + sb.model : ''}`, join(agentStyle(sb.agent), bg)]);
+  segs.push([` ${sb.agent}${sb.model && level < 1 ? ' · ' + sb.model : ''}${sb.effort && level < 1 ? ' · ' + sb.effort : ''}`, join(agentStyle(sb.agent), bg)]);
   if (sb.skip) segs.push([' skip', join('1', T.warn, bg)]);
   if (sb.from) segs.push([' from ', join(T.dim, bg)], [sb.from, join(agentStyle(sb.from), bg)]);
   segs.push([' ', bg], sep);
@@ -405,18 +425,23 @@ function statusSegs(v: View, bg: string, level: number): Seg[] {
   return segs;
 }
 
-function drawStatus(grid: Grid, v: View) {
+function drawStatus(grid: Grid, v: View, hits: Hit[]) {
   const y = v.rows - 1;
   const bg = v.statusBar?.warn ? T.bgWarn : T.bgStatus;
   fill(grid, y, 0, v.cols, bg);
-  const right = ` ${v.statusRight} `;
+  // right side: a hint while the menu is open, else the menu button (a chip, like the mockup's "☰ menu")
+  const chipText = v.cols < 90 ? ' ☰ ' : ' ☰ menu ';
+  const right = v.statusRight ? ` ${v.statusRight} ` : chipText;
   let segs = statusSegs(v, bg, 0);
   for (let level = 0; level <= 3; level++) {
     segs = statusSegs(v, bg, level);
     if (width(segs) + right.length + 1 <= v.cols) break;
   }
   const used = putRich(grid, y, 0, segs, '', v.cols);
-  if (used + right.length < v.cols) put(grid, y, v.cols - right.length, right, join(T.dim, bg));
+  if (used + right.length < v.cols) {
+    if (v.statusRight) put(grid, y, v.cols - right.length, right, join(T.dim, bg));
+    else putRich(grid, y, v.cols - right.length - 1, [[right, join('1', T.chorus, T.bgSel), 'menu']], '', v.cols, hits);
+  }
 }
 
 /* ---------- card and overlay ---------- */

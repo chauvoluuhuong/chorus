@@ -134,7 +134,7 @@ log(`project: ${project}\nshared database: ${sharedHome}\nscreenshots: ${OUT}\n`
 log('1. New chat: agent, model, project, skip permissions');
 check('chorus opens on New chat with the top bar, the project tree, Skills and Memory', await until(/Agent\s+claude\s+codex\s+agy/, 40000) && /‹ Back|chorus/.test(text()[0]) && /☰ Menu/.test(text()[0]) && has(/\+ New chat/) && has(/✦ Skills/) && has(/◫ Memory/), text().join('|').slice(0, 500));
 check('the sidebar already lists the chat recorded in another project (one shared database)', has(/▾ chorus-proof-api/) && has(/Rate limiter/), text().slice(0, 12).join('|'));
-check('the screen offers agent, model, project folder and permissions', has(/Model\s+default\s+sonnet\s+opus\s+haiku/) && text().join('\n').replace(/\s/g, '').includes(project.replace(/\s/g, '')) && has(/\[ \] Skip permission prompts\s+--dangerously-skip-permissions/), text().join('|').slice(0, 500));
+check('the screen offers agent, model, effort, project folder and permissions', has(/Model\s+default\s+sonnet\s+opus\s+haiku/) && has(/Effort\s+default\s+low\s+medium\s+high\s+xhigh\s+max/) && text().join('\n').replace(/\s/g, '').includes(project.replace(/\s/g, '')) && has(/\[ \] Skip permission prompts\s+--dangerously-skip-permissions/), text().join('|').slice(0, 500));
 shot('new-chat', 'chorus opens on New chat: pick agent, model, project folder and whether it may skip permission prompts. Enter alone starts with the defaults. The sidebar is the map: projects and their chats, Skills and Memory at the bottom');
 await click(/haiku/, 0, 0, SIDE); // a click on the model chip, no keyboard
 check('clicking haiku selects it (the model list is Claude\'s)', await until(/Model\s+default\s+sonnet\s+opus\s+haiku/, 3000), text().join('|').slice(0, 300));
@@ -156,9 +156,9 @@ await until(/\? for shortcuts|shift\+tab to cycle/i, 30000);
 app.write(TASK); // the folder for notes is not mentioned: the agent is told through Chorus's instructions
 await sleep(600);
 app.write('\r');
-shot('claude-starts', 'chat 1 is Claude Code (haiku) under its project; the task was typed into its own screen. The top bar says where you are (chorus › project › chat)');
-check('the top bar shows the path and the sidebar names the chat after the first message', await until(() => /Create calc\.js/.test(side(/Create calc/)) && /chorus › .* › Create calc/.test(text()[0]), 20000), `${text()[0]} | ${side(/Create calc/)}`);
-check('status line shows the menu key', /\\ menu/.test(text()[ROWS - 1]), text()[ROWS - 1]);
+shot('claude-starts', 'chat 1 is Claude Code (haiku) under its project; the task was typed into its own screen. The top bar says where you are: the chat title');
+check('the top bar shows the path and the sidebar names the chat after the first message', await until(() => /Create calc\.js/.test(side(/Create calc/)) && /‹ Back\s+Create calc/.test(text()[0]), 20000), `${text()[0]} | ${side(/Create calc/)}`);
+check('status line has the menu button', /☰ menu/.test(text()[ROWS - 1]), text()[ROWS - 1]);
 
 /* 2. Claude asks for approval while it is in front */
 log('2. Claude asks for approval in front');
@@ -173,9 +173,12 @@ await click(/\+ New chat/);
 check('+ New chat opens the screen over the work in progress', await until(/Agent\s+claude\s+codex\s+agy/, 5000));
 await click(/codex/, 0, 3, SIDE);
 await sleep(300);
+check('the effort list follows the agent (Codex lists the levels of its own models)', await until(/Effort\s+default\s+low\s+medium\s+high/, 3000), text().join('|').slice(0, 400));
+await click(/(?<=Effort\s+default\s+)low/, 0, 0, SIDE); // the effort chip, by mouse
+await sleep(300);
 await click(/Skip permission prompts/, 0, 0, SIDE);
 check('ticking skip shows the warning and the Codex flag', await until(/\[x\] Skip permission prompts\s+--dangerously-bypass-approvals-and-sandbox/, 4000) && has(/Nothing reaches the approvals inbox for this chat/), text().join('|').slice(0, 500));
-shot('new-chat-skip', '+ New chat: Codex, "Skip permission prompts" ticked. The screen says what that means and which flag is used (per chat, never global)');
+shot('new-chat-skip', '+ New chat: Codex with effort low and "Skip permission prompts" ticked. The screen says what that means and which flag is used (per chat, never global)');
 app.write('\r');
 check('Codex opens in chat 2 and its own banner says what skip means (permissions: YOLO mode)', await untilTrusting(/Ask Codex to do anything|permissions: YOLO mode/i, 40000) && await until(/permissions: YOLO mode/, 10000), text().join('|'));
 check('chat 2 is in front, shows the amber skip marker, and Claude (chat 1) is still pending', /claude.*|codex/.test(text()[ROWS - 1]) && /skip/.test(text()[ROWS - 1]) && /!/.test(side(/Create calc/).slice(0, 8)), `${text()[ROWS - 1]} | ${side(/Create calc/)}`);
@@ -187,7 +190,7 @@ shot('card-for-background-thread', 'Codex (skip) is in front; Claude (background
 log('4. approvals inbox: approve without switching');
 await click(/! 1 waiting/);
 check('clicking the badge opens the approvals inbox', await until(/Approvals\s+·\s+1 waiting/, 5000) && has(/y Approve\s+x Deny\s+⏎ Open chat/), text().join('|').slice(0, 400));
-check('the inbox lists the request with its risk tag', has(/\[(runs a command|edits a file|writes outside the folder|installs a package)\]/) && has(/▸ Create calc/), text().join('|').slice(0, 500));
+check('the inbox has the this project / all projects switch and lists the request with its risk tag', has(/this project\s+all projects/) && has(/\[(runs a command|edits a file|writes outside the folder|installs a package)\]/) && has(/▸ Create calc/), text().join('|').slice(0, 500));
 shot('approvals-inbox', 'the approvals inbox: every chat waiting on you in one list, with the request and a risk tag. y approves, x denies, ⏎ opens the chat; the agent gets the same key you would have typed');
 let approvals = 0;
 let t0 = Date.now();
@@ -215,7 +218,7 @@ const t1 = store().listThreads().find(t => t.agent === 'claude')!;
 check('Claude chat finished: waiting dot, store state', /[○◐]/.test(side(/Create calc/).slice(0, 8)) && store().getThread(t1.id)!.state === 'waiting', `${side(/Create calc/)} ${store().getThread(t1.id)?.state}`);
 check('live tailing recorded the turns, the node call and the usage', (() => { const s = store(); return s.getTurns(t1.id).length >= 2 && s.getToolCalls(t1.id).some(c => /node -e/.test(c.target) && c.status === 'ok') && (s.getUsage(t1.id)?.outputTokens ?? 0) > 0; })());
 check('the artifact notes.md was registered in the chat project', store().listArtifacts(t1.id).some(a => a.path === 'notes.md') && store().artifactsDir(t1.id).startsWith(project), artifactsCmd(store()));
-check('the Codex chat was started with its skip flag and remembers it', store().listThreads().find(t => t.agent === 'codex' && t.id !== 't_seed')?.skip_permissions === 1);
+check('the Codex chat was started with its skip flag and its effort, and remembers both', (() => { const c = store().listThreads().find(t => t.agent === 'codex' && t.id !== 't_seed'); return c?.skip_permissions === 1 && c?.effort === 'low'; })(), JSON.stringify(store().listThreads().find(t => t.agent === 'codex' && t.id !== 't_seed')));
 
 /* 5. Codex chat is independent */
 log('5. the Codex chat works on its own');
@@ -232,10 +235,10 @@ log('6. hand off the Claude chat to Codex');
 await clickSide(/Create calc/); // a click in the sidebar opens it
 check('a click on a chat in the sidebar opens it', await until(() => /▎/.test(side(/Create calc/)), 5000), side(/Create calc/));
 menu('h');
-check('handoff dialog names the chat', await until(/hand off "Create calc\.js/, 5000));
+check('handoff dialog names the chat and lists the other agents first with their plan', await until(/Continue "Create calc\.js[^"]*" in a new chat/, 5000) && has(/1\s+codex\s+/) && has(/3\s+claude\s+fresh session/), text().join('|').slice(0, 400));
 await sleep(400);
 shot('handoff-dialog', 'ctrl+\\ h (or ☰ Menu → Hand off): choose the agent that continues the work');
-app.write('2'); // codex
+app.write('1'); // codex is the first of the other agents
 check('the handoff chat appears in front, listed under the chat it continues (↳)', await until(() => /↳/.test(side(/↳/)), 20000), side(/↳/));
 const child = (() => { const s = store(); return s.listThreads().find(t => t.parent_thread_id === t1.id); })();
 check('the new chat is a child of the Claude chat in the store, in the same project', !!child && child!.agent === 'codex' && child!.project === project, JSON.stringify(child));
@@ -251,6 +254,13 @@ check('the handoff chat settles as waiting', await until(() => /[○◐]/.test(s
 log('7. Memory and Skills');
 await click(/◫ Memory/);
 check('Memory lists the chats of every project', await until(/Memory\s+·\s+all projects/, 5000) && has(/Rate limiter/) && has(/Create calc/) && has(/↳/), text().join('|').slice(0, 500));
+app.write('/');
+await sleep(300);
+app.write('limiter');
+check('/ searches the memory: only the matching chat is left', await until(() => has(/\/ limiter/) && has(/Rate limiter/) && !has(/Create calc\.js.*claude.*turns/), 3000), text().join('|').slice(0, 500));
+shot('memory-search', 'Memory: / searches titles, projects, what a chat asked and its files');
+app.write('\x1b');
+await sleep(500);
 await click(/Rate limiter/, 3, 4, SIDE);
 await sleep(500);
 check('selecting a chat shows what it asked and which files it touched', has(/asked\s+Add a per-key rate limit/) && has(/files\s+src\/limit\.ts/), text().join('|').slice(0, 600));
@@ -275,12 +285,12 @@ await click(/☰ Menu/);
 check('☰ Menu opens the ten rows of the menu', await until(/Hand off to another agent/, 4000) && ['New chat', 'Artifacts', 'Approvals', 'Skills', 'Memory', 'Activity', 'Show / hide sidebar', 'Help', 'Quit'].every(r => has(new RegExp(r))), text().join('|').slice(0, 500));
 shot('menu', '☰ Menu (or ctrl+\\): hand off, new chat, artifacts, approvals, skills, memory, activity, sidebar, help, quit. ↑↓ and ⏎, a click, or the letter');
 app.write('e'); // Activity
-check('activity view lists the tool calls with their status', await until(/Activity · /, 5000) && /mcp\s+chorus\.get_handoff_context\s+ok/.test(text().join('\n')), text().join('|').slice(0, 300));
+check('activity view has the filter bar with counts and lists the tool and MCP calls', await until(/Activity\s+·\s+/, 5000) && /\[all \d+\]\s+tool \d+\s+mcp \d+\s+approval \d+\s+file \d+\s+usage \d+\s+error 0/.test(text().join('\n')) && /mcp\s+chorus\.get_handoff_context\s+ok/.test(text().join('\n')), text().join('|').slice(0, 400));
 shot('activity-view', 'Activity on the handoff chat: its timeline shows the chorus.get_handoff_context MCP call that loaded the context');
 app.write('f');
-check('f filters the timeline by kind', await until(/\[tool\]/, 3000));
+check('f filters the timeline by kind', await until(/\[tool \d+\]/, 3000));
 app.write('f');
-check('the mcp filter keeps the MCP call', await until(/\[mcp\]/, 3000) && /get_handoff_context/.test(text().join('\n')));
+check('the mcp filter keeps the MCP call', await until(/\[mcp \d+\]/, 3000) && /get_handoff_context/.test(text().join('\n')));
 app.write('r');
 check('r shows the raw trace next to what was parsed', await until(/Raw trace · /, 3000) && /transcript lines:/.test(text().join('\n')), text().join('|').slice(0, 300));
 shot('raw-trace', 'r: the raw transcript lines and how Chorus parsed them (for debugging an adapter)');
@@ -305,13 +315,13 @@ await sleep(500);
 log('9. window sizes');
 const resize = async (c: number, r: number) => { app.resize(c, r); outer.resize(c, r); await sleep(1800); };
 await resize(100, 30);
-check('100 columns: narrow sidebar (names only), the chat keeps the rest', has(/\+ New chat/) && !/claude\s*│/.test(text()[4] ?? '') && /☰ Menu/.test(text()[0]), text().slice(0, 6).join('|'));
+check('100 columns: narrow sidebar (names only), the chat keeps the rest', has(/\+ New chat/) && !text().slice(0, 9).some(l => /claude\s*│/.test(l)) && /☰ Menu/.test(text()[0]), text().slice(0, 6).join('|'));
 shot('size-narrow', '100 columns: the sidebar shrinks to names (the agent name goes), the agent screen gets the room');
 await resize(78, 30);
 check('78 columns: icon sidebar', /\+/.test(text()[1]) && !has(/Skills/), text().slice(0, 6).join('|'));
 shot('size-icons', '70-89 columns: the sidebar is just icons: state dot and agent letter');
 await resize(56, 24);
-check('56 columns: sidebar hidden, top bar and status line stay', !has(/\+ New chat/) && /☰ Menu/.test(text()[0]), text().slice(0, 4).join('|'));
+check('56 columns: sidebar hidden, top bar and status line stay (the buttons shrink to ☰)', !has(/\+ New chat/) && /☰/.test(text()[0]) && /☰/.test(text()[ROWS - 1] ?? text()[23]), text().slice(0, 4).join('|'));
 await resize(44, 10);
 check('under 50x12 only a notice shows', has(/window too small: 44×10/), text().join('|'));
 shot('size-too-small', 'under 50×12: a notice; the chats keep running');

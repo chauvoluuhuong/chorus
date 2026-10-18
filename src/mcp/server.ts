@@ -32,7 +32,7 @@ export function createServer(project: string, threadId?: string, home?: string):
     {
       description:
         'Compact digest of the Chorus thread this chat continues (first request, files touched, commands, test results, artifacts, recent turns, last assistant message). Call this first when the user says this chat continues another Chorus thread.',
-      inputSchema: { thread_id: z.string().optional().describe('Thread to load; defaults to the parent of this thread') },
+      inputSchema: { thread_id: z.string().optional().describe('Only to load some other chat: its id as listed by list_threads (like t_ab12cd34). Leave it out to load the chat this one continues.') },
     },
     async ({ thread_id }) => {
       const src = pickSourceThread(store, threadId, thread_id);

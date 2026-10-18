@@ -1,12 +1,12 @@
-  ‹ Back   chorus › Memory                                                                                                                    ☰ Menu
-  + New chat                │  Memory  ·  all projects      /var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-home-kx9gHP/chorus.db
- ▾ chorus-proof-api-Aoj… 1  │
-   ◌ Rate limiter     codex │    Reply with only the tex… chorus-proof…  codex   2 turns   just now
- ▾ chorus-proof-OBrfD6   3  │    Create calc.js in the c… chorus-proof…  claude  2 turns   just now
-   ◐ Create calc.js… claude │    ↳ Create calc.js in the… chorus-proof…  codex   3 turns   just now
-   ↳ ◐ Create calc.j… codex │  ▸ Rate limiter             chorus-proof…  codex   2 turns   just now
-   ◐ Reply with only… codex │
-                            │    Rate limiter
+  ‹ Back   Memory                                                                                                                          ☰ Menu ⌃\
+  + New chat                │  Memory  ·  all projects      /var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-home-zaUu9d/chorus.db   / se
+ PROJECTS                   │
+ ▾ chorus-proof-api-23e… 1  │    Reply with only the tex… chorus-proof…  codex   2 turns   just now
+   ◌ Rate limiter     codex │    Create calc.js in the c… chorus-proof…  claude  2 turns   just now
+ ▾ chorus-proof-bgAz9m   3  │    ↳ Create calc.js in the… chorus-proof…  codex   3 turns   just now
+   ◐ Create calc.js… claude │  ▸ Rate limiter             chorus-proof…  codex   2 turns   just now
+   ↳ ◐ Create calc.j… codex │
+   ◐ Reply with only… codex │    Rate limiter
                             │      asked  Add a per-key rate limit to the public API
                             │      last   Limiter in place; 40 tests pass.
                             │      files  src/limit.ts
@@ -38,7 +38,7 @@
                             │
                             │
                             │
+                            │
 ────────────────────────────│
- ✦ Skills                   │
- ◫ Memory                   │  ⏎  open chat    h  continue with another agent    esc  back
- chorus  Memory                                                                                                                               ⌃\ menu
+  ✦ Skills   ◫ Memory       │  ⏎  open chat    h  continue with another agent    /  search    esc  back
+ chorus  Memory                                                                                                                               ☰ menu

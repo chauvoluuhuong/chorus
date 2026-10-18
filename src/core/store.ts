@@ -22,6 +22,8 @@ export interface ThreadRow {
   project: string | null;
   /** 1 when the chat runs with permission prompts off */
   skip_permissions: number;
+  /** reasoning effort chosen for the chat (null = the agent's default) */
+  effort: string | null;
   created: string;
   updated: string;
 }
@@ -45,7 +47,7 @@ const SCHEMA = `
 CREATE TABLE IF NOT EXISTS threads (
   id TEXT PRIMARY KEY, title TEXT NOT NULL, agent TEXT NOT NULL, model TEXT, cwd TEXT NOT NULL,
   native_session_id TEXT, parent_thread_id TEXT, state TEXT NOT NULL DEFAULT 'waiting',
-  cli_version TEXT, transcript_path TEXT, project TEXT, skip_permissions INTEGER NOT NULL DEFAULT 0,
+  cli_version TEXT, transcript_path TEXT, project TEXT, skip_permissions INTEGER NOT NULL DEFAULT 0, effort TEXT,
   created TEXT NOT NULL, updated TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS turns (
@@ -109,6 +111,7 @@ export class Store {
     const cols = (this.db.prepare('PRAGMA table_info(threads)').all() as { name: string }[]).map(c => c.name);
     if (!cols.includes('project')) this.db.exec('ALTER TABLE threads ADD COLUMN project TEXT');
     if (!cols.includes('skip_permissions')) this.db.exec('ALTER TABLE threads ADD COLUMN skip_permissions INTEGER NOT NULL DEFAULT 0');
+    if (!cols.includes('effort')) this.db.exec('ALTER TABLE threads ADD COLUMN effort TEXT');
   }
 
   /**
@@ -127,9 +130,9 @@ export class Store {
       for (const t of threads) {
         if (ids.has(t.id)) continue;
         this.db.prepare(
-          `INSERT INTO threads (id,title,agent,model,cwd,native_session_id,parent_thread_id,state,cli_version,transcript_path,project,skip_permissions,created,updated)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        ).run(t.id, t.title, t.agent, t.model, t.cwd, t.native_session_id, t.parent_thread_id, t.state, t.cli_version, t.transcript_path, t.project ?? project, t.skip_permissions ?? 0, t.created, t.updated);
+          `INSERT INTO threads (id,title,agent,model,cwd,native_session_id,parent_thread_id,state,cli_version,transcript_path,project,skip_permissions,effort,created,updated)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        ).run(t.id, t.title, t.agent, t.model, t.cwd, t.native_session_id, t.parent_thread_id, t.state, t.cli_version, t.transcript_path, t.project ?? project, t.skip_permissions ?? 0, t.effort ?? null, t.created, t.updated);
         for (const [table, cols] of [
           ['turns', 'thread_id,seq,role,text,ts'],
           ['tool_calls', 'thread_id,call_id,turn_seq,tool,target,status,result,duration_ms'],
@@ -186,15 +189,16 @@ export class Store {
       transcript_path: t.transcript_path ?? null,
       project: t.project ?? this.project,
       skip_permissions: t.skip_permissions ?? 0,
+      effort: t.effort ?? null,
       created: now(),
       updated: now(),
     };
     this.db
       .prepare(
-        `INSERT INTO threads (id,title,agent,model,cwd,native_session_id,parent_thread_id,state,cli_version,transcript_path,project,skip_permissions,created,updated)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO threads (id,title,agent,model,cwd,native_session_id,parent_thread_id,state,cli_version,transcript_path,project,skip_permissions,effort,created,updated)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
-      .run(row.id, row.title, row.agent, row.model, row.cwd, row.native_session_id, row.parent_thread_id, row.state, row.cli_version, row.transcript_path, row.project, row.skip_permissions, row.created, row.updated);
+      .run(row.id, row.title, row.agent, row.model, row.cwd, row.native_session_id, row.parent_thread_id, row.state, row.cli_version, row.transcript_path, row.project, row.skip_permissions, row.effort, row.created, row.updated);
     fs.mkdirSync(this.artifactsDir(row.id), { recursive: true });
     return row;
   }

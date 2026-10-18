@@ -1,8 +1,9 @@
-  ‹ Back   chorus › chorus-proof-OBrfD6 › codex 2                                                                                             ☰ Menu
+  ‹ Back   codex 2                                                                                                                         ☰ Menu ⌃\
   + New chat                │
- ▾ chorus-proof-api-Aoj… 1  │  >_ OpenAI Codex (v0.163.0)
-   ◌ Rate limiter     codex │     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-OBrfD6
- ▾ chorus-proof-OBrfD6   2  │  permissions: YOLO mode
+ PROJECTS                   │  >_ OpenAI Codex (v0.163.0)
+ ▾ chorus-proof-api-23e… 1  │     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-bgAz9m
+   ◌ Rate limiter     codex │  permissions: YOLO mode
+ ▾ chorus-proof-bgAz9m   2  │
    ◐ Create calc.js… claude │
 ▎  ● codex 2          codex │
                             │
@@ -36,9 +37,8 @@
                             │
                             │
                             │
-                            │
                             │› Reply with only the text codex-ready-42
-────────────────────────────│
- ✦ Skills                   │  GPT-6-Luna default · /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-OBrfD6
- ◫ Memory                   │                                                                                                ⚠ 1 warning · f2 to view
- chorus  codex 2 │ codex skip │ 0 artifacts                                                                                                   ⌃\ menu
+                            │
+────────────────────────────│  GPT-6-Luna low · /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-bgAz9m
+  ✦ Skills   ◫ Memory       │                                                                                                ⚠ 1 warning · f2 to view
+ chorus  codex 2 │ codex · low skip │ 0 artifacts                                                                                             ☰ menu

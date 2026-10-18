@@ -43,3 +43,23 @@ export function modelsFor(agent: AgentId): string[] {
   const list = agent === 'claude' ? CLAUDE.slice(1) : agent === 'codex' ? codexModels() : agyModels();
   return ['default', ...list];
 }
+
+const LEVELS = ['low', 'medium', 'high', 'xhigh', 'max']; // `claude --effort` and `agy --effort` (their --help)
+
+/**
+ * Effort (reasoning level) choices for a new chat: "default" passes no flag. Claude and agy take the five levels their --help
+ * lists. Codex lists the levels per model in its own cache, so the list follows the chosen model (the first listed model when
+ * the model is "default").
+ */
+export function effortsFor(agent: AgentId, model?: string): string[] {
+  if (agent !== 'codex') return ['default', ...LEVELS];
+  try {
+    const d = JSON.parse(fs.readFileSync(path.join(homes.codex(), 'models_cache.json'), 'utf8')) as { models: { slug: string; visibility?: string; priority?: number; supported_reasoning_levels?: { effort: string }[] }[] };
+    const listed = d.models.filter(m => m.visibility === 'list').sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
+    const m = (model && model !== 'default' ? listed.find(x => x.slug === model) : undefined) ?? listed[0];
+    const levels = (m?.supported_reasoning_levels ?? []).map(l => l.effort);
+    return ['default', ...(levels.length ? levels : LEVELS)];
+  } catch {
+    return ['default', ...LEVELS];
+  }
+}

@@ -5,10 +5,10 @@ import { VirtualScreen } from '../../src/app/screen.ts';
 
 const SIDE: SideRow[] = [
   { kind: 'new' },
-  { kind: 'project', cwd: '/w/cake-shop', name: 'cake-shop', open: true, count: 2, alert: false, active: false },
+  { kind: 'project', cwd: '/w/cake-shop', name: 'cake-shop', open: true, count: 2, waiting: 0, active: false },
   { kind: 'chat', index: 0, title: 'fix bug', agent: 'claude', state: 'busy', active: true },
   { kind: 'chat', index: 1, title: 'review', agent: 'codex', state: 'ended', active: false, child: true },
-  { kind: 'project', cwd: '/w/api', name: 'api', open: false, count: 1, alert: true, active: false },
+  { kind: 'project', cwd: '/w/api', name: 'api', open: false, count: 1, waiting: 1, active: false },
   { kind: 'skills', active: false },
   { kind: 'memory', active: false },
 ];
@@ -20,10 +20,11 @@ function view(over: Partial<View> = {}): View & { screen: VirtualScreen } {
     rows: 24,
     sidebarOn: true,
     side: SIDE,
-    top: { back: true, crumb: ['chorus', 'cake-shop', 'fix bug'], waiting: 2 },
+    top: { back: true, crumb: ['fix bug'], waiting: 2 },
     screen,
     statusBar: { title: 'fix bug', agent: 'claude', model: 'sonnet', usage: 62, ctx: 34, artifacts: 3 },
-    statusRight: '⌃\\ menu',
+    statusRight: '',
+    menuLabel: '⌃\\',
     ...over,
   };
 }
@@ -49,16 +50,16 @@ test('top bar, project tree, child screen and status bar land in the right cells
   await flush(v.screen, 'hello from the agent\r\n\x1b[31mred\x1b[0m 漢字 end');
   const { grid, cursor } = compose(v);
   const t = gridText(grid);
-  assert.match(t[0], /^\s+‹ Back\s+chorus › cake-shop › fix bug\s+! 2 waiting\s+☰ Menu\s*$/);
+  assert.match(t[0], /^\s+‹ Back\s+fix bug\s+! 2 waiting\s+☰ Menu ⌃\\\s*$/);
   assert.match(t[1], /^\s+\+ New chat\s+│hello from the agent/);
-  assert.match(t[2], /^ ▾ cake-shop\s+2\s*│red 漢字 end/);
-  assert.match(t[3], /^▎ ?\s*● fix bug\s+claude\s*│/);
-  assert.match(t[4], /^\s+↳ ○ review\s+codex\s*│/);
-  assert.match(t[5], /^ ▸ api\s+!\s*│/); // folded project with an approval waiting
-  assert.match(t[20], /^─+/); // rule above the footer rows (Skills, Memory)
-  assert.match(t[21], /^ ✦ Skills/);
-  assert.match(t[22], /^ ◫ Memory/);
-  assert.match(t[23], /^ chorus  fix bug │ claude · sonnet │ 5h ▮▮▮▮▮▮▱▱▱▱ 62% │ ctx 34% │ 3 artifacts/);
+  assert.match(t[2], /^ PROJECTS\s+│red 漢字 end/);
+  assert.match(t[3], /^ ▾ cake-shop\s+2\s*│/);
+  assert.match(t[4], /^▎ ?\s*● fix bug\s+claude\s*│/);
+  assert.match(t[5], /^\s+↳ ○ review\s+codex\s*│/);
+  assert.match(t[6], /^ ▸ api\s+!1\s*│/); // a project with a chat waiting for approval shows how many
+  assert.match(t[21], /^─+/); // rule above the footer
+  assert.match(t[22], /^\s+✦ Skills\s+◫ Memory\s*│/); // the two shared things side by side
+  assert.match(t[23], /^ chorus  fix bug │ claude · sonnet │ 5h ▮▮▮▮▮▮▱▱▱▱ 62% │ ctx 34% │ 3 artifacts\s+☰ menu\s*$/);
   assert.deepEqual(cursor, { x: 29 + 12, y: 2 }); // 4 + two wide chars (4) + 4
 });
 
@@ -66,22 +67,25 @@ test('the brand chip, the agent colour, the state colour and the selection follo
   const { grid } = compose(view());
   const status = grid[23];
   assert.ok(status[1].s.includes(T.bgBrand) && status[1].s.includes(T.fgBrand), 'chorus chip');
-  const x = gridText(grid)[3].indexOf('claude');
-  assert.ok(grid[3][x].s.includes(T.claude), 'agent name in its colour');
-  assert.ok(grid[3][3].s.includes(T.ok), 'working dot is green');
-  assert.ok(grid[3][3].s.includes(T.bgSel), 'active chat has the selection background');
+  const x = gridText(grid)[4].indexOf('claude');
+  assert.ok(grid[4][x].s.includes(T.claude), 'agent name in its colour');
+  assert.ok(grid[4][3].s.includes(T.ok), 'working dot is green');
+  assert.ok(grid[4][3].s.includes(T.bgSel), 'active chat has the selection background');
   const menu = gridText(grid)[0].indexOf('☰ Menu');
   assert.ok(grid[0][menu].s.includes(T.bgSel) && grid[0][menu].s.includes('1'), 'the Menu button is a filled chip');
-  const crumb = gridText(grid)[0].indexOf('cake-shop');
-  assert.ok(grid[0][crumb].s.includes('4'), 'a path part that goes somewhere is underlined');
+  assert.ok(grid[23][gridText(grid)[23].indexOf('☰ menu')].s.includes(T.bgSel), 'so is the menu button of the status line');
+  const linked = gridText(compose(view({ top: { back: true, crumb: ['fix bug', 'Artifacts'], waiting: 0 } })).grid);
+  const crumb = linked[0].indexOf('fix bug');
+  assert.ok(compose(view({ top: { back: true, crumb: ['fix bug', 'Artifacts'], waiting: 0 } })).grid[0][crumb].s.includes('4'), 'an earlier path part goes back and is underlined');
 });
 
 test('every clickable thing is a hit region and a click finds it', () => {
   const { hits } = compose(view());
   const at = (id: string) => hits.find(h => h.id === id)!;
-  for (const id of ['back', 'crumb:0', 'crumb:1', 'approvals', 'menu', 'new', 'project:/w/cake-shop', 'project:/w/api', 'chat:0', 'chat:1', 'skills', 'memory'])
+  for (const id of ['back', 'approvals', 'menu', 'new', 'project:/w/cake-shop', 'project:/w/api', 'chat:0', 'chat:1', 'skills', 'memory'])
     assert.ok(at(id), `hit ${id}`);
-  assert.equal(hits.find(h => h.id === 'crumb:2'), undefined, 'the last part of the path is plain text');
+  assert.equal(hits.find(h => h.id === 'crumb:0'), undefined, 'the last (here the only) part of the path is plain text');
+  assert.ok(compose(view({ top: { back: true, crumb: ['fix bug', 'Artifacts'], waiting: 0 } })).hits.some(h => h.id === 'crumb:0'), 'an earlier part is a link');
   const chat = at('chat:1');
   assert.equal(hitAt(hits, 3, chat.y0), 'chat:1');
   assert.equal(hitAt(hits, 27, chat.y0), 'chat:1', 'the whole sidebar row is the target');
@@ -108,18 +112,18 @@ test('wide characters keep the row width', async () => {
 
 test('narrow, icon and hidden sidebars; the agent area grows as they shrink', () => {
   const narrow = gridText(compose(view({ cols: 100 })).grid);
-  assert.match(narrow[3], /● fix bug/);
-  assert.ok(!/claude\s*│/.test(narrow[3]), 'narrow drops the agent name');
+  assert.match(narrow[4], /● fix bug/);
+  assert.ok(!/claude\s*│/.test(narrow[4]), 'narrow drops the agent name');
   const icons = gridText(compose(view({ cols: 80 })).grid);
-  assert.match(icons[3], /^▎\s*● c\s*│/);
+  assert.match(icons[3], /^▎\s*●\s*│/, 'icons: just the state dot');
   const hidden = compose(view({ cols: 60 }));
   assert.ok(!hidden.hits.some(h => h.id.startsWith('chat:')));
   assert.ok(hidden.hits.some(h => h.id === 'menu'), 'the top bar stays');
 });
 
 test('narrow window: the path is cut with an ellipsis before the buttons, which keep their gap', () => {
-  const t = gridText(compose(view({ cols: 78, side: SIDE.slice(0, 4), top: { back: true, crumb: ['chorus', 'a-very-long-project-folder-name', 'a very long chat title that cannot fit'], waiting: 2 } })).grid)[0];
-  assert.match(t, /…\s{2,}! 2 waiting\s+☰ Menu\s*$/, t);
+  const t = gridText(compose(view({ cols: 78, side: SIDE.slice(0, 4), top: { back: true, crumb: ['a-very-long-chat-title-that-comes-first', 'a very long second part that cannot fit'], waiting: 2 } })).grid)[0];
+  assert.match(t, /…\s{2,}! 2\s+☰\s*$/, t);
   const icons = gridText(compose(view({ cols: 78 })).grid);
   assert.ok(!/▾\w/.test(icons[2]), 'icon mode: a project row is just its caret, no clipped name');
   assert.match(icons[2], /^\s*▾\s*│/);

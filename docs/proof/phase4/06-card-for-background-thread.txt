@@ -1,11 +1,11 @@
-  ‹ Back   chorus › chorus-proof-OBrfD6 › codex 2                                                                              ! 1 waiting    ☰ Menu
+  ‹ Back   codex 2                                                                                                          ! 1 waiting    ☰ Menu ⌃\
   + New chat                │
- ▾ chorus-proof-api-Aoj… 1  │  >_ OpenAI Codex (v0.163.0)
-   ◌ Rate limiter     codex │     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-OBrfD6
- ▾ chorus-proof-OBrfD6   2  │  permissions: YOLO mode
+ PROJECTS                   │  >_ OpenAI Codex (v0.163.0)
+ ▾ chorus-proof-api-23e… 1  │     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-bgAz9m
+   ◌ Rate limiter     codex │  permissions: YOLO mode
+ ▾ chorus-proof-bgAz9m   !1 │
    ! Create calc.js… claude │
 ▎  ● codex 2          codex │
-                            │
                             │
                             │
                             │
@@ -35,10 +35,10 @@
                             │
                             │
                             │
-                            │
                             │ ┌─ Create calc.js in the curre… (claude) asks for approval ───────────────────────────────────────────────────────────┐
-                            │›│ Create file · calc.js                                                                                               │
-────────────────────────────│ │ Do you want to create calc.js?                                                                                      │
- ✦ Skills                   │ │ ⌃\ y  approve    ⌃\ x  deny    (or switch to the chat and answer there)                                             │
- ◫ Memory                   │ └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- chorus  codex 2 │ codex skip │ 0 artifacts                                                                                                   ⌃\ menu
+                            │ │ Bash command · Tip: auto mode handles these prompts for you — choose "switch to auto mode" below · Create calc.js a │
+                            │›│ nd run the add check                                                                                                │
+                            │ │ Do you want to proceed?                                                                                             │
+────────────────────────────│ │ ⌃\ y  approve    ⌃\ x  deny    (or switch to the chat and answer there)                                             │
+  ✦ Skills   ◫ Memory       │ └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+ chorus  codex 2 │ codex · low skip │ 0 artifacts                                                                                             ☰ menu

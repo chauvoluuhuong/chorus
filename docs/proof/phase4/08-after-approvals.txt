@@ -1,12 +1,13 @@
-  ‹ Back   chorus › Approvals                                                                                                                 ☰ Menu
-  + New chat                │  Approvals  ·  0 waiting
- ▾ chorus-proof-api-Aoj… 1  │
-   ◌ Rate limiter     codex │  Nothing is waiting for you.
- ▾ chorus-proof-OBrfD6   2  │
-   ◐ Create calc.js… claude │  Decided
-   ◐ codex 2          codex │    ✓ approved  d }`.                                         claude  15:23
-                            │    ✓ approved  Run calc.js add(2, 3) …e artifacts directory  claude  15:23
-                            │    ✓ approved  calc.js                                       claude  15:23
+  ‹ Back   Approvals                                                                                                                       ☰ Menu ⌃\
+  + New chat                │  Approvals  ·  0 waiting           this project   all projects
+ PROJECTS                   │
+ ▾ chorus-proof-api-23e… 1  │  Nothing is waiting for you.
+   ◌ Rate limiter     codex │
+ ▾ chorus-proof-bgAz9m   2  │  Decided today
+   ◐ Create calc.js… claude │    ✓ approved  .chorus/threads/t_c6b5…cd/artifacts/notes.md  claude  16:29
+   ◐ codex 2          codex │    ✓ approved  Create Chorus artifact…ectory for the thread  claude  16:29
+                            │    ✓ approved  Create calc.js and run the add check          claude  16:29
+                            │
                             │
                             │
                             │
@@ -39,6 +40,5 @@
                             │
                             │
 ────────────────────────────│
- ✦ Skills                   │
- ◫ Memory                   │  ↑↓  select    y  approve    x  deny    ⏎  open chat    esc  back
- chorus  approved: Create file · .chorus/threads/t_9d5f1701/artifacts/notes.md                                                                ⌃\ menu
+  ✦ Skills   ◫ Memory       │  ↑↓  select    y  approve    x  deny    ⏎  open chat    tab  this / all projects    esc  back
+ chorus  approved: Create file · .chorus/threads/t_c6b5e3cd/artifacts/notes.md                                                                ☰ menu

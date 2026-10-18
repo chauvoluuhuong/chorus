@@ -41,7 +41,7 @@ export interface Entry {
   /** this thread continues another one: shown under it */
   parentId?: string;
   /** what the status bar shows besides the title (filled by the controller) */
-  meta?: { model?: string; usage?: number; ctx?: number; artifacts?: number; from?: string; toast?: string; skip?: boolean };
+  meta?: { model?: string; effort?: string; usage?: number; ctx?: number; artifacts?: number; from?: string; toast?: string; skip?: boolean };
 }
 
 export interface AppOpts {
@@ -68,7 +68,7 @@ export interface PaneOpts {
   onHit?: (id: string) => void;
   /** called when the pane closes by esc / Back */
   onClose?: () => void;
-  /** breadcrumb after "chorus" (default: the title) */
+  /** the path shown in the top bar: where you are (default: the title); earlier parts are links back */
   crumb?: string[];
   /** the lines carry their own heading: no title row (the screens of the mockup) */
   bare?: boolean;
@@ -566,7 +566,7 @@ export class App extends EventEmitter {
     if (id === 'new') return void this.emit('action', 'new'), true;
     if (id === 'skills') return void this.emit('action', 'skills'), true;
     if (id === 'memory') return void this.emit('action', 'memory'), true;
-    if (id.startsWith('crumb:')) return void (id === 'crumb:0' ? this.emit('action', 'new') : this.closePane()), true;
+    if (id.startsWith('crumb:')) return void this.closePane(), true; // a path part before the last one is the chat: back to it
     if (id.startsWith('project:')) {
       const cwd = id.slice(8);
       if (this.folded.has(cwd)) this.folded.delete(cwd);
@@ -609,7 +609,7 @@ export class App extends EventEmitter {
         name: projectName(cwd),
         open,
         count: chats.length,
-        alert: !open && chats.some(c => this.stateOf(c.e) === 'approval'),
+        waiting: chats.filter(c => this.stateOf(c.e) === 'approval').length,
         active: act?.cwd === cwd && !open,
       });
       if (open)
@@ -650,10 +650,11 @@ export class App extends EventEmitter {
     const meta = act?.meta ?? {};
     const exited = act?.host?.state === 'ended' ? `  (exited ${act.host.exitCode})` : '';
     const statusBar: StatusBar | undefined = act
-      ? { title: act.title + exited, agent: act.agent, model: meta.model, from: meta.from, usage: meta.usage, ctx: meta.ctx, artifacts: meta.artifacts ?? 0, toast: meta.toast, warn: (meta.usage ?? 0) >= 90, skip: meta.skip }
+      ? { title: act.title + exited, agent: act.agent, model: meta.model, effort: meta.effort, from: meta.from, usage: meta.usage, ctx: meta.ctx, artifacts: meta.artifacts ?? 0, toast: meta.toast, warn: (meta.usage ?? 0) >= 90, skip: meta.skip }
       : undefined;
     const message = this.flash || this.notice || (!act || this.pane ? (this.pane ? this.pane.title : 'no chats yet') : undefined);
-    const crumb = this.pane ? ['chorus', ...(this.pane.crumb ?? [this.pane.title])] : act ? ['chorus', projectName(act.cwd), act.title] : ['chorus'];
+    // where you are, nothing else: the chat title, or the screen (after the chat it belongs to, for its Artifacts or Activity)
+    const crumb = this.pane ? (this.pane.crumb ?? [this.pane.title]) : act ? [act.title] : [];
     const { grid, cursor, hits } = compose({
       cols,
       rows,
@@ -663,7 +664,7 @@ export class App extends EventEmitter {
       screen: act?.host?.screen,
       statusBar: this.pane ? undefined : statusBar,
       message,
-      statusRight: this.router.menuOpen ? '↑↓ ⏎ or the letter · esc' : `${this.menuLabel} menu`,
+      statusRight: this.router.menuOpen ? '↑↓ ⏎ or the letter · esc' : '',
       overlay,
       pane,
       card: this.pane ? undefined : card,

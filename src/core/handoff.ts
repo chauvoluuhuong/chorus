@@ -15,7 +15,11 @@ function clip(s: string, n: number) {
 }
 
 export function pickSourceThread(store: Store, current: string | undefined, requested?: string): ThreadRow | undefined {
-  if (requested) return store.getThread(requested);
+  if (requested) {
+    // an id, or the title the first message quoted (models sometimes pass that); an unknown one falls back to the chat this continues
+    const found = store.getThread(requested) ?? store.listThreads().find(t => t.title.trim() === requested.trim());
+    if (found) return found;
+  }
   const me = current ? store.getThread(current) : undefined;
   if (me?.parent_thread_id) return store.getThread(me.parent_thread_id);
   // no parent and nothing asked for: the latest other chat, preferring this project's own
@@ -73,7 +77,7 @@ export function buildHandoff(store: Store, thread: ThreadRow, opts: { maxTurns?:
 export function handoffPrompt(from: ThreadRow): string {
   return (
     `This chat continues the Chorus thread "${from.title}", worked on by ${from.agent}. ` +
-    'Call the chorus MCP tool get_handoff_context first. Then reply with at most 5 bullets: ' +
+    'Call the chorus MCP tool get_handoff_context first (no arguments: it knows which chat this one continues). Then reply with at most 5 bullets: ' +
     'what was done, decisions, open work, and your next step. Wait for my OK before changing anything.'
   );
 }

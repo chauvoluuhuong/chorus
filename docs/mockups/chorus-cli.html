@@ -384,9 +384,9 @@ const SKILLS = [
 // New chat form state (mockup only)
 const nc = { agent: 0, skip: false };
 const NC_AGENTS = [
-  { name: 'claude', cls: 'cl', quota: '5h 62%', qcls: 'wn', models: ['default', 'sonnet', 'opus', 'haiku'], flag: '--dangerously-skip-permissions' },
-  { name: 'codex', cls: 'cx', quota: '5h 8%', qcls: 'ok', models: ['default', '…from codex\'s model list'], flag: '--dangerously-bypass-approvals-and-sandbox' },
-  { name: 'agy', cls: 'ag', quota: 'quota ok', qcls: 'ok', models: ['default', '…from agy models'], flag: '--dangerously-skip-permissions' },
+  { name: 'claude', cls: 'cl', quota: '5h 62%', qcls: 'wn', models: ['default', 'sonnet', 'opus', 'haiku'], efforts: ['default', 'low', 'medium', 'high', 'xhigh', 'max'], flag: '--dangerously-skip-permissions' },
+  { name: 'codex', cls: 'cx', quota: '5h 8%', qcls: 'ok', models: ['default', '…from codex\'s model list'], efforts: ['default', 'low', 'medium', 'high', 'xhigh', 'max'], flag: '--dangerously-bypass-approvals-and-sandbox' },
+  { name: 'agy', cls: 'ag', quota: 'quota ok', qcls: 'ok', models: ['default', '…from agy models'], efforts: ['default', 'low', 'medium', 'high', 'xhigh', 'max'], flag: '--dangerously-skip-permissions' },
 ];
 // The sidebar tree: projects, each with its chats. Indexes 0-3 are THREADS (this project).
 const TREE = [
@@ -431,6 +431,8 @@ const SCENES = [
 
   <span class="d">Model</span>      ${models}
 
+  <span class="d">Effort</span>     ${a.efforts.map((m, i) => i === 0 ? `<span class="sel"> ${m} </span>` : m).join('   ')}   <span class="d">how hard the model thinks</span>
+
   <span class="d">Project</span>    <span class="clk ch">~/projects/cake-shop ▾</span>
              <span class="d">recent: ~/projects/landing  ~/work/api  · or type any folder</span>
 
@@ -444,8 +446,9 @@ ${nc.skip ? `             <span class="wn">The agent runs every command and edit
   <span class="ch">⏎</span> start   <span class="ch">tab</span> next field   <span class="ch">←/→</span> change   <span class="ch">space</span> tick`;
     },
     behind: [
-      'Four choices, all with a default (last agent and model, the project you are in, prompts on), so Enter alone starts a chat. No title: the chat is named after your first message.',
+      'Five choices, all with a default (last agent and model, effort of the agent, the project you are in, prompts on), so Enter alone starts a chat. No title: the chat is named after your first message.',
       'Starts the agent in the project folder with its own screen, e.g. <code>claude --model sonnet --session-id &lt;uuid&gt;</code> plus the per-session MCP config. Plan mode and the like stay inside the agent (Claude: Shift+Tab).',
+      'Effort passes <code>claude --effort &lt;level&gt;</code>, <code>agy --effort &lt;level&gt;</code> and <code>codex -c model_reasoning_effort="&lt;level&gt;"</code> (verified in each interactive screen; the levels are Claude and agy\'s five, and for Codex the list in its own model cache, so it follows the chosen model). "default" passes nothing, and the choice is kept with the chat, so a resumed chat keeps it.',
       'Skip flags, per CLI: Claude <code>--dangerously-skip-permissions</code>, Codex <code>--dangerously-bypass-approvals-and-sandbox</code>, agy <code>--dangerously-skip-permissions</code>. All three are documented; agy\'s is verified headless only, so each still needs a check in the interactive screen before we ship it.',
       'The sidebar is the project list: click a project to open or fold its chats, click a chat to go to it. That is the whole navigation.',
     ],
@@ -818,12 +821,11 @@ function topbar(s, mode = 'full') {
   const small = mode === 'icons' || mode === 'hidden';
   const t = s.top || {};
   const back = t.back === undefined ? (s.side ? 'new' : 'work') : t.back;
-  const crumb = t.crumb || (s.side
-    ? [['chorus', 'new'], ['cake-shop'], [(s.status && s.status.title) || 'Cake order page'], [s.status ? s.status.agent : '']]
-    : [['chorus', 'new'], [s.title]]);
+  // the path says where you are, nothing else: no product name, no project (the sidebar has the project)
+  const crumb = t.crumb || (s.side ? [[(s.status && s.status.title) || 'Cake order page']] : [[s.title]]);
   const n = THREADS.filter((x, i) => ((s.side && s.side.states && s.side.states[i]) || x.state) === 'approval').length;
   // small windows keep only the last two parts of the path
-  const parts = crumb.filter(c => c[0]);
+  const parts = crumb.filter(c => c[0] && c[0] !== 'chorus' && c[0] !== 'cake-shop');
   const shown = small && parts.length > 2 ? [['…'], ...parts.slice(-2)] : parts;
   const crumbs = shown.map((c, i, a) => {
     const last = i === a.length - 1;

@@ -1,13 +1,15 @@
-  ‹ Back   chorus › New chat                                                                                                                  ☰ Menu
+  ‹ Back   New chat                                                                                                                        ☰ Menu ⌃\
   + New chat                │  New chat
- ▾ chorus-proof-api-Aoj… 1  │
-   ◌ Rate limiter     codex │  Agent         claude    codex    agy
-                            │
+ PROJECTS                   │
+ ▾ chorus-proof-api-23e… 1  │  Agent         claude    codex    agy
+   ◌ Rate limiter     codex │
                             │
                             │  Model         default   sonnet   opus   haiku
                             │
-                            │  Project      /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-OBrfD6  ▾
-                            │               recent: /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-api-AojvIm  · or type any fo
+                            │  Effort        default   low   medium   high   xhigh   max    how hard the model thinks
+                            │
+                            │  Project      /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-bgAz9m  ▾
+                            │               recent: /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-api-23extR  · or type any fo
                             │
                             │  Permissions  [ ] Skip permission prompts  --dangerously-skip-permissions
                             │               off: the agent asks, and Chorus shows it in the approvals inbox
@@ -37,8 +39,6 @@
                             │
                             │
                             │
-                            │
 ────────────────────────────│
- ✦ Skills                   │
- ◫ Memory                   │  ⏎  start    tab  next field    ←/→  change    space  tick    esc  back
- chorus  New chat                                                                                                                             ⌃\ menu
+  ✦ Skills   ◫ Memory       │  ⏎  start    tab  next field    ←/→  change    space  tick    esc  back
+ chorus  New chat                                                                                                                             ☰ menu

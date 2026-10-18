@@ -31,7 +31,7 @@ function rig(extra: Partial<ConstructorParameters<typeof Controller>[0]> = {}) {
   const io: AppIO = { stdin, stdout, size: () => ({ cols: 120, rows: 30 }), onResize: () => () => {} };
   const app = new App(io);
   const store = new Store(project);
-  const launches: { agent: AgentId; prompt?: string; resumeId?: string; model?: string; cwd?: string; skipPermissions?: boolean; project?: string }[] = [];
+  const launches: { agent: AgentId; prompt?: string; resumeId?: string; model?: string; effort?: string; cwd?: string; skipPermissions?: boolean; project?: string }[] = [];
   const c = new Controller({
     project,
     store,
@@ -39,7 +39,7 @@ function rig(extra: Partial<ConstructorParameters<typeof Controller>[0]> = {}) {
     tailPollMs: 100,
     ...extra,
     launcher: (agent, o) => {
-      launches.push({ agent, prompt: o.prompt, resumeId: o.resumeId, model: o.model, cwd: o.cwd, skipPermissions: o.skipPermissions, project: o.project });
+      launches.push({ agent, prompt: o.prompt, resumeId: o.resumeId, model: o.model, effort: o.effort, cwd: o.cwd, skipPermissions: o.skipPermissions, project: o.project });
       return { bin: process.execPath, args: [FAKE, `${agent}`], cwd: o.cwd };
     },
   });
@@ -88,18 +88,18 @@ test('new thread: store row, process, live transcript tailing and state follow t
   const e = r.c.newThread({ agent: 'codex', title: 'fix it' });
   await r.until(() => has(r.screen(), /READY codex/), 'agent screen');
   assert.equal(r.store.getThread(e.id)?.agent, 'codex');
-  assert.match(r.screen()[3], /▎.*fix it/);
+  assert.match(r.screen()[4], /▎.*fix it/);
 
   // mid-turn transcript appears: the thread is working and the store has the user turn
   const w = writeRollout(r.home, r.project, { done: false });
   await r.until(() => r.store.getTurns(e.id).length > 0, 'turns tailed into the store');
   assert.equal(r.store.getThread(e.id)?.native_session_id, w.id);
-  await r.until(() => /●/.test(r.screen()[3]), 'working dot');
+  await r.until(() => /●/.test(r.screen()[4]), 'working dot');
 
   // the rest arrives while the TUI keeps running
   fs.appendFileSync(w.file, w.rest.join('\n') + '\n');
   await r.until(() => r.store.getToolCalls(e.id).some(t => t.target.includes('chorus-probe')), 'tool call tailed');
-  await r.until(() => /○/.test(r.screen()[3]), 'waiting dot after task_complete');
+  await r.until(() => /○/.test(r.screen()[4]), 'waiting dot after task_complete');
   assert.equal(r.store.getThread(e.id)?.state, 'waiting');
   assert.ok((r.store.getUsage(e.id)?.outputTokens ?? 0) > 0);
   } finally {
@@ -201,7 +201,7 @@ test('views: memory, activity and files panes; limit warning', async () => {
   await r.until(() => has(r.screen(), /READY codex/), 'back to the agent');
 
   r.type('\x00t');
-  await r.until(() => has(r.screen(), /Activity · viewer/), 'activity pane');
+  await r.until(() => has(r.screen(), /Activity\s+·\s+viewer/), 'activity pane');
   assert.match(r.screen().join('\n'), /shell echo chorus-probe\S*.*ok/);
   r.type('q');
   r.type('\x00f');
@@ -223,10 +223,11 @@ test('New chat screen: Enter alone starts with the defaults; esc and Back return
     await r.until(() => has(r.screen(), /New chat/) && has(r.screen(), /Agent\s+claude\s+codex\s+agy/), 'screen');
     const t = r.screen().join('\n');
     assert.match(t, /Model\s+default\s+sonnet\s+opus\s+haiku/);
+    assert.match(t, /Effort\s+default\s+low\s+medium\s+high\s+xhigh\s+max\s+how hard the model thinks/);
     assert.match(t, new RegExp('Project\\s+' + r.project.replace(/[/.]/g, '\\$&')));
     assert.match(t, /\[ \] Skip permission prompts\s+--dangerously-skip-permissions/);
     assert.match(t, /off: the agent asks, and Chorus shows it in the approvals inbox/);
-    assert.match(r.screen()[0], /‹ Back\s+chorus › New chat/);
+    assert.match(r.screen()[0], /‹ Back\s+New chat\s+☰ Menu/);
     r.type('\x1b');
     await r.until(() => !has(r.screen(), /Agent\s+claude\s+codex/), 'esc cancels');
     assert.equal(r.app.entries.length, 0);
@@ -375,11 +376,11 @@ test('artifacts view: select, open the live preview, versions; activity view: fi
     r.type('\x1b');
 
     r.type('\x00e');
-    await r.until(() => has(r.screen(), /Activity · viewer/) && has(r.screen(), /tool\s+shell/), 'activity');
+    await r.until(() => has(r.screen(), /Activity\s+·\s+viewer/) && has(r.screen(), /tool\s+shell/), 'activity');
     r.type('f');
-    await r.until(() => has(r.screen(), /\[tool\]/) && !has(r.screen(), /file\s+plan\.md/), 'filter: tool');
+    await r.until(() => has(r.screen(), /\[tool \d+\]/) && !has(r.screen(), /file\s+plan\.md/), 'filter: tool');
     r.type('f');
-    await r.until(() => has(r.screen(), /\[mcp\]/) && !has(r.screen(), /tool\s+shell/), 'filter: mcp');
+    await r.until(() => has(r.screen(), /\[mcp \d+\]/) && !has(r.screen(), /tool\s+shell/), 'filter: mcp');
     r.type('r');
     await r.until(() => has(r.screen(), /Raw trace · viewer/) && has(r.screen(), /transcript lines:/), 'raw trace');
   } finally {
@@ -405,7 +406,7 @@ test('approvals inbox: every waiting chat in one list with a risk tag; y / x / c
     assert.match(t, /mkdir -p .*….*probe-file\.txt/);
     assert.match(t, /\[(runs a command|writes outside the folder)\]/);
     assert.match(t, /y Approve\s+x Deny\s+⏎ Open chat/);
-    assert.match(r.screen()[0], /chorus › Approvals/);
+    assert.match(r.screen()[0], /‹ Back\s+Approvals\s+!/);
 
     r.type('y'); // the selected request, without leaving the inbox
     await r.until(() => r.app.entry(a.id)!.host!.screen.text().some(l => /KEY enter/.test(l)), 'enter reached the waiting agent');
@@ -448,6 +449,59 @@ test('a request on a chat you are not looking at rings the bell and flashes its 
     assert.ok(!r.raw().slice(mid).includes('\x07'), 'muted');
   } finally {
     delete process.env.CHORUS_BELL;
+    r.close();
+  }
+});
+
+test('New chat screen: effort is chosen with a click or ←/→, follows the agent, is stored and passed on, and shows in the status line', async () => {
+  const r = rig();
+  try {
+    r.type('\x00n');
+    await r.until(() => has(r.screen(), /Effort\s+default\s+low/), 'effort row');
+    r.app.click('effort:3'); // high
+    await r.until(() => has(r.screen(), /Effort/), 'chosen');
+    r.app.click('agent:1'); // switching the agent starts the effort over at default
+    r.app.click('effort:1'); // low
+    r.type('\r');
+    await r.until(() => r.launches.length === 1, 'started');
+    assert.deepEqual({ agent: r.launches[0].agent, effort: r.launches[0].effort }, { agent: 'codex', effort: 'low' });
+    const row = r.store.listThreads()[0];
+    assert.equal(row.effort, 'low');
+    assert.equal(r.app.entries[0].meta?.effort, 'low');
+    await r.until(() => /codex · low/.test(r.screen()[29]), 'effort in the status line');
+
+    // keyboard: tab to Effort, → → picks the third level; default passes nothing
+    r.type('\x00n');
+    await r.until(() => has(r.screen(), /Effort\s+default\s+low/), 'again');
+    r.type('\t'); // → start is focused by default; tab wraps to agent
+    r.type('\t'); // model
+    r.type('\t'); // effort
+    r.type('\x1b[C');
+    r.type('\x1b[C');
+    r.type('\r');
+    await r.until(() => r.launches.length === 2, 'second chat');
+    assert.equal(r.launches[1].effort, 'medium');
+    r.type('\x00n');
+    await r.until(() => has(r.screen(), /Effort\s+default\s+low/), 'third');
+    r.type('\r');
+    await r.until(() => r.launches.length === 3, 'third chat');
+    assert.equal(r.launches[2].effort, undefined, 'default passes no effort');
+    assert.equal(r.store.listThreads().find(t => t.id === r.app.entries[2].id)!.effort, null);
+  } finally {
+    r.close();
+  }
+});
+
+test('a resumed chat keeps its effort and skip flag', async () => {
+  const r = rig();
+  try {
+    r.store.createThread({ id: 't_old', title: 'yesterday', agent: 'claude', cwd: r.project, native_session_id: 'abc', state: 'waiting', effort: 'high', skip_permissions: 1 });
+    r.c.restore();
+    r.type('\x001');
+    await r.until(() => r.launches.some(l => l.resumeId === 'abc'), 'resumed');
+    const l = r.launches.find(x => x.resumeId === 'abc')!;
+    assert.deepEqual({ effort: l.effort, skip: l.skipPermissions }, { effort: 'high', skip: true });
+  } finally {
     r.close();
   }
 });
@@ -647,6 +701,169 @@ test('artifacts: when the open command fails the user chooses another way, which
     r.type('\r');
     await r.until(() => fs.existsSync(path.join(r.project, '.chorus', 'open.json')), 'saved');
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(r.project, '.chorus', 'open.json'), 'utf8')), { mode: 'custom', command: 'firefox {url}' });
+  } finally {
+    r.close();
+  }
+});
+
+test('approvals inbox: "this project" / "all projects" scope and "Decided today"', async () => {
+  const r = rig();
+  try {
+    const other = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-scope-')));
+    const a1 = r.c.newThread({ agent: 'codex', title: 'Stripe webhook' });
+    const a2 = r.c.newThread({ agent: 'codex', title: 'Landing copy', cwd: other });
+    r.c.newThread({ agent: 'claude', title: 'front' });
+    await r.until(() => has(r.screen(), /READY claude/), 'front');
+    const prompt = path.join(ROOT, 'fixtures/codex/0.163.0/approval-ask-nohook-enter/prompt-screen.txt');
+    for (const e of [a1, a2]) r.app.entry(e.id)!.host!.write(`show ${prompt}\r`);
+    await r.until(() => has(r.screen(), /! 2 waiting/), 'two waiting');
+    r.type('\x00i');
+    await r.until(() => has(r.screen(), /Approvals\s+·\s+2 waiting/), 'inbox');
+    assert.match(r.screen().join('\n'), /this project\s+all projects/);
+    assert.match(r.screen().join('\n'), /Stripe webhook[\s\S]*Landing copy|Landing copy[\s\S]*Stripe webhook/, 'all projects: both');
+    r.app.click('scope:this');
+    await r.until(() => has(r.screen(), /Approvals\s+·\s+1 waiting/), 'only this project');
+    assert.ok(!has(r.screen(), /Landing copy\s+codex\s+waiting/));
+    r.type('\t'); // tab flips it back
+    await r.until(() => has(r.screen(), /Approvals\s+·\s+2 waiting/), 'all again');
+    r.type('y');
+    await r.until(() => has(r.screen(), /Decided today/) && has(r.screen(), /✓ approved/), 'Decided today');
+    // an old answer does not show under "today"
+    r.store.db.prepare("INSERT INTO approvals_log (thread_id,what,decision,ts) VALUES (?,?,?,?)").run(a1.id, 'Bash · rm old', 'denied', '2020-01-01T10:00:00.000Z');
+    r.app.click('scope:all');
+    await sleep(1200);
+    assert.ok(!has(r.screen(), /rm old/));
+  } finally {
+    r.close();
+  }
+});
+
+test('Memory: / searches titles, projects, what was asked and files; esc clears it', async () => {
+  const r = rig();
+  try {
+    r.store.createThread({ id: 't_a', title: 'Cake order page', agent: 'claude', cwd: r.project, native_session_id: 's1', state: 'waiting' });
+    r.store.createThread({ id: 't_b', title: 'Rate limiter', agent: 'codex', cwd: r.project, native_session_id: 's2', state: 'waiting' });
+    r.store.recordSession('t_b', { agent: 'codex', turns: [{ seq: 1, role: 'user', text: 'Add a per-key throttle' }], toolCalls: [], usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0 } });
+    r.type('\x00m');
+    await r.until(() => has(r.screen(), /Memory\s+·\s+all projects/) && has(r.screen(), /Cake order page/) && has(r.screen(), /Rate limiter/), 'both');
+    assert.match(r.screen().join('\n'), /\/ search/);
+    r.type('/');
+    await r.until(() => has(r.screen(), /\/ ▌/), 'typing');
+    for (const ch of 'throttle') r.type(ch);
+    await r.until(() => has(r.screen(), /\/ throttle▌/) && !has(r.screen(), /Cake order page\s+\S+\s+claude/), 'filtered by what was asked');
+    assert.ok(has(r.screen(), /Rate limiter/));
+    r.type('\r');
+    await r.until(() => has(r.screen(), /\/ throttle(?!▌)/), 'search kept, typing ended');
+    r.type('\x1b'); // clears the search, does not leave
+    await r.until(() => has(r.screen(), /Cake order page/) && has(r.screen(), /Memory\s+·\s+all projects/), 'cleared');
+    r.type('/');
+    for (const ch of 'zzzz') r.type(ch);
+    await r.until(() => has(r.screen(), /Nothing matches "zzzz"/), 'nothing matches');
+  } finally {
+    r.close();
+  }
+});
+
+test('Skills: n creates a skill, e opens it in the editor', async () => {
+  const opened: string[] = [];
+  const r = rig({ opener: async (_cfg, t) => (opened.push(t.path), { ok: true }) });
+  try {
+    r.type('\x00k');
+    await r.until(() => has(r.screen(), /Skills\s+·\s+one library/) && has(r.screen(), /e\s+edit\s+n\s+new/), 'screen with the hints');
+    r.type('n');
+    await r.until(() => has(r.screen(), /New skill/) && has(r.screen(), /Name it with lowercase words/), 'prompt');
+    for (const ch of 'Cake Pricing') r.type(ch);
+    r.type('\r');
+    await r.until(() => fs.existsSync(path.join(r.project, '.chorus', 'skills', 'cake-pricing', 'SKILL.md')), 'created');
+    assert.match(fs.readFileSync(path.join(r.project, '.chorus', 'skills', 'cake-pricing', 'SKILL.md'), 'utf8'), /^---\nname: cake-pricing\n/);
+    assert.ok(fs.existsSync(path.join(r.project, '.claude', 'skills', 'cake-pricing')), 'linked for the agents');
+    await r.until(() => has(r.screen(), /\[on\]\s+cake-pricing/), 'listed');
+    r.type('e');
+    await r.until(() => opened.length === 1, 'editor');
+    assert.equal(opened[0], path.join(r.project, '.chorus', 'skills', 'cake-pricing', 'SKILL.md'));
+  } finally {
+    r.close();
+  }
+});
+
+test('Activity: counts per kind in the filter bar, approvals and usage rows, durations, handoff separators', async () => {
+  const r = rig();
+  try {
+    const e = r.c.newThread({ agent: 'codex', title: 'viewer' });
+    await r.until(() => has(r.screen(), /READY codex/), 'ready');
+    writeRollout(r.home, r.project, { done: true });
+    await r.until(() => r.store.getToolCalls(e.id).length > 0, 'tailed');
+    r.store.logMcpCall(e.id, 'get_handoff_context');
+    r.store.logApproval(e.id, 'Bash command · npm test', 'approved');
+    r.store.db.prepare('UPDATE usage SET limit_utilization = 0.62 WHERE thread_id = ?').run(e.id);
+    fs.writeFileSync(path.join(r.store.artifactsDir(e.id), 'plan.md'), '# plan');
+    r.store.scanArtifacts(e.id);
+    const child = r.store.createThread({ title: 'viewer → claude', agent: 'claude', cwd: r.project, parent_thread_id: e.id });
+    r.store.logMcpCall(child.id, 'get_handoff_context');
+    r.type('\x00e');
+    await r.until(() => has(r.screen(), /Activity\s+·\s+viewer/) && has(r.screen(), /\[all \d+\]/), 'activity');
+    const t = r.screen().join('\n');
+    assert.match(t, /\[all \d+\]\s+tool 1\s+mcp 2\s+approval 1\s+file 1\s+usage 1\s+error 0\s+f cycles/);
+    assert.match(t, /in \d+\s+out \d+ tokens/);
+    assert.match(t, /approve\s+npm test\s+approved/);
+    assert.match(t, /usage\s+5h 62%/);
+    assert.match(t, /file\s+plan\.md v1/);
+    assert.match(t, /──── chat "viewer → claude" started with claude/);
+    assert.match(t, /claude\s+mcp\s+chorus\.get_handoff_context/, 'the continued chat is on the same timeline');
+    r.app.click('kind:approval');
+    await r.until(() => has(r.screen(), /\[approval 1\]/) && !has(r.screen(), /file\s+plan\.md/), 'filtered by click');
+    r.type('f'); // approval → file
+    await r.until(() => has(r.screen(), /\[file 1\]/) && has(r.screen(), /file\s+plan\.md/), 'f cycles');
+  } finally {
+    r.close();
+  }
+});
+
+test('Doctor shows the mouse and the open way, like the mockup', async () => {
+  const r = rig();
+  try {
+    r.app.emit('action', 'doctor');
+    await r.until(() => has(r.screen(), /mouse\s+on\s+\(CHORUS_MOUSE=0 turns it off/) && has(r.screen(), /open\s+\S+\s+\(.*override in \.chorus\/open\.json\)/), 'mouse and open lines');
+    assert.match(r.screen().join('\n'), /store\s+.*chorus\.db · 0 chats .* \d+\.\d MB/);
+  } finally {
+    r.close();
+  }
+});
+
+test('hand off: the dialog names the chat and lists the other agents first with what is left of their plans', async () => {
+  const r = rig();
+  try {
+    r.c.newThread({ agent: 'claude', title: 'Cake order page' });
+    await r.until(() => has(r.screen(), /READY claude/), 'front');
+    r.type('\x00h');
+    await r.until(() => has(r.screen(), /Continue "Cake order page" in a new chat/), 'dialog');
+    const t = r.screen().join('\n');
+    assert.match(t, /1\s+codex\s+quota ok/);
+    assert.match(t, /2\s+agy\s+quota ok/);
+    assert.match(t, /3\s+claude\s+fresh session/);
+    r.type('1');
+    await r.until(() => r.launches.at(-1)?.agent === 'codex', 'a Codex chat continues it');
+  } finally {
+    r.close();
+  }
+});
+
+test('limit box: the chat is saved (turns, artifacts, files) and the ways out follow the mockup', async () => {
+  const r = rig();
+  try {
+    const e = r.c.newThread({ agent: 'codex', title: 'busy chat' });
+    await r.until(() => has(r.screen(), /READY codex/), 'ready');
+    writeRollout(r.home, r.project, { done: true });
+    await r.until(() => r.store.getToolCalls(e.id).length > 0, 'tailed');
+    r.store.db.prepare('UPDATE usage SET limit_utilization = 0.995 WHERE thread_id = ?').run(e.id);
+    r.c['checkLimit'](e.id);
+    await r.until(() => has(r.screen(), /Codex reached its plan limit/), 'box');
+    const t = r.screen().join('\n');
+    assert.match(t, /This chat is saved:/);
+    assert.match(t, /\d+ turns · \d+ artifacts? · \d+ files? changed/);
+    assert.match(t, /Continue in a new chat with claude/);
+    assert.match(t, /2\s+Continue in a new chat with agy/);
+    assert.match(t, /w\s+Wait for the reset/);
   } finally {
     r.close();
   }

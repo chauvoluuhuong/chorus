@@ -104,6 +104,25 @@ test('mcp: a chat in one project can load a chat from another through the shared
   sa.close();
 });
 
+test('handoff: a title passed as thread_id (what a model does when the prompt quotes it) or an unknown id still loads the chat this one continues', async () => {
+  const home = tmp('home');
+  const a = tmp('proj-a');
+  const sa = new Store(a, { home });
+  sa.createThread({ id: 't_parent', title: 'Create calc.js in the curre…', agent: 'claude', cwd: a, project: a });
+  sa.recordSession('t_parent', { agent: 'claude', turns: [{ seq: 1, role: 'user', text: 'Create calc.js' }, { seq: 2, role: 'assistant', text: 'done' }], toolCalls: [], usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0 } });
+  sa.createThread({ id: 't_child', title: 'child', agent: 'codex', cwd: a, project: a, parent_thread_id: 't_parent' });
+  const m = mcpCommand(a, 't_child', home);
+  const c = new Client({ name: 'test', version: '0' });
+  await c.connect(new StdioClientTransport({ command: m.command, args: m.args }));
+  for (const thread_id of [undefined, 't_parent', 'Create calc.js in the curre…', 'no-such-thread']) {
+    const r = await c.callTool({ name: 'get_handoff_context', arguments: thread_id ? { thread_id } : {} });
+    assert.ok(!(r as any).isError, `thread_id=${thread_id}`);
+    assert.match(text(r), /Create calc\.js/, `thread_id=${thread_id}`);
+  }
+  await c.close();
+  sa.close();
+});
+
 test('skip permissions: the flag per CLI is added only when asked, and resumed chats keep it', () => {
   const w = tmp('skipflags'); // agy writes its MCP config into the chat folder
   const base = { cwd: w, project: w, threadId: 't_1' };
@@ -115,6 +134,43 @@ test('skip permissions: the flag per CLI is added only when asked, and resumed c
   }
   assert.equal(SKIP_FLAG.codex, '--dangerously-bypass-approvals-and-sandbox');
   assert.ok(buildInteractive('claude', { ...base, resumeId: 'abc', skipPermissions: true }).args.includes('--dangerously-skip-permissions'));
+});
+
+test('effort: the flag per CLI, only when a level is chosen, kept for resumed chats; Codex gets it as a config override', () => {
+  const w = tmp('lvlflags');
+  const base = { cwd: w, project: w, threadId: 't_1' };
+  for (const agent of ['claude', 'codex', 'agy'] as const) {
+    assert.ok(!buildInteractive(agent, base).args.some(a => /effort/.test(a)), `${agent}: nothing by default`);
+    assert.ok(!buildInteractive(agent, { ...base, effort: 'default' }).args.some(a => /effort/.test(a)), `${agent}: "default" passes no flag`);
+  }
+  const claude = buildInteractive('claude', { ...base, effort: 'high' }).args;
+  assert.deepEqual(claude.slice(claude.indexOf('--effort'), claude.indexOf('--effort') + 2), ['--effort', 'high']);
+  const agy = buildInteractive('agy', { ...base, effort: 'low' }).args;
+  assert.deepEqual(agy.slice(agy.indexOf('--effort'), agy.indexOf('--effort') + 2), ['--effort', 'low']);
+  const codex = buildInteractive('codex', { ...base, effort: 'xhigh' }).args;
+  assert.ok(codex.includes('model_reasoning_effort="xhigh"'), 'codex: -c model_reasoning_effort="xhigh"');
+  assert.equal(codex[codex.indexOf('model_reasoning_effort="xhigh"') - 1], '-c');
+  assert.ok(buildInteractive('claude', { ...base, resumeId: 'abc', effort: 'max' }).args.includes('max'));
+});
+
+test('effort: Codex lists the levels of the chosen model from its own cache, the other CLIs the five they document', async () => {
+  const { effortsFor } = await import('../../src/app/models.ts');
+  assert.deepEqual(effortsFor('claude'), ['default', 'low', 'medium', 'high', 'xhigh', 'max']);
+  assert.deepEqual(effortsFor('agy', 'whatever'), ['default', 'low', 'medium', 'high', 'xhigh', 'max']);
+  const home = tmp('codexhome');
+  const old = process.env.CODEX_HOME;
+  process.env.CODEX_HOME = home;
+  fs.writeFileSync(path.join(home, 'models_cache.json'), JSON.stringify({ models: [
+    { slug: 'gpt-a', visibility: 'list', priority: 1, supported_reasoning_levels: [{ effort: 'low' }, { effort: 'high' }] },
+    { slug: 'gpt-b', visibility: 'list', priority: 2, supported_reasoning_levels: [{ effort: 'low' }, { effort: 'medium' }, { effort: 'ultra' }] },
+    { slug: 'hidden', visibility: 'hide', priority: 0, supported_reasoning_levels: [{ effort: 'max' }] },
+  ] }));
+  assert.deepEqual(effortsFor('codex', 'default'), ['default', 'low', 'high'], 'the first listed model is the default');
+  assert.deepEqual(effortsFor('codex', 'gpt-b'), ['default', 'low', 'medium', 'ultra'], 'follows the chosen model');
+  fs.rmSync(path.join(home, 'models_cache.json'));
+  assert.deepEqual(effortsFor('codex', 'gpt-b'), ['default', 'low', 'medium', 'high', 'xhigh', 'max'], 'no cache: the documented five');
+  if (old === undefined) delete process.env.CODEX_HOME;
+  else process.env.CODEX_HOME = old;
 });
 
 test('skills: a skill switched off stays in the library but is not linked; switching it on links it again', () => {

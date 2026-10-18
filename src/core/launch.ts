@@ -153,6 +153,8 @@ export interface InteractiveOpts {
   home?: string;
   /** run without permission prompts (per chat, off by default; flags in docs/integrations/approvals.md) */
   skipPermissions?: boolean;
+  /** reasoning effort (low … max); omitted = the agent's own default (docs/integrations/effort.md) */
+  effort?: string;
 }
 
 /** The flag that turns permission prompts off, per CLI. */
@@ -169,6 +171,7 @@ export const SKIP_FLAG: Record<AgentId, string> = {
 export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
   const mcp = mcpCommand(o.project, o.threadId, o.home);
   const skip = o.skipPermissions ? [SKIP_FLAG[agent]] : [];
+  const effort = o.effort && o.effort !== 'default' ? o.effort : undefined;
   if (agent === 'claude') {
     const sessionId = o.resumeId ? undefined : randomUUID();
     return {
@@ -179,6 +182,7 @@ export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
         ...(o.prompt ? [o.prompt] : []),
         ...(o.resumeId ? ['--resume', o.resumeId] : ['--session-id', sessionId!]),
         ...(o.model ? ['--model', o.model] : []),
+        ...(effort ? ['--effort', effort] : []),
         ...skip,
         '--mcp-config', JSON.stringify({ mcpServers: { chorus: mcp } }),
         // Chorus's own tools are read-only: don't ask the user about them
@@ -193,6 +197,7 @@ export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
       '-c', 'mcp_servers.chorus.default_tools_approval_mode="approve"',
       '-c', `developer_instructions=${q(artifactNote(o.project, o.threadId))}`,
       ...(o.model ? ['-m', o.model] : []),
+      ...(effort ? ['-c', `model_reasoning_effort=${q(effort)}`] : []),
       ...skip,
     ];
     return { bin: 'codex', cwd: o.cwd, args: o.resumeId ? [...cfg, 'resume', o.resumeId] : [...cfg, ...(o.prompt ? [o.prompt] : [])] };
@@ -201,6 +206,6 @@ export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
   return {
     bin: 'agy',
     cwd: o.cwd,
-    args: [...(o.resumeId ? ['--conversation', o.resumeId] : []), ...(o.model ? ['--model', o.model] : []), ...skip, ...(o.prompt ? ['-i', o.prompt] : [])],
+    args: [...(o.resumeId ? ['--conversation', o.resumeId] : []), ...(o.model ? ['--model', o.model] : []), ...(effort ? ['--effort', effort] : []), ...skip, ...(o.prompt ? ['-i', o.prompt] : [])],
   };
 }

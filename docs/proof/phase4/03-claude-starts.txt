@@ -1,10 +1,10 @@
-  ‹ Back   chorus › chorus-proof-OBrfD6 › claude 1                                                                                            ☰ Menu
+  ‹ Back   claude 1                                                                                                                        ☰ Menu ⌃\
   + New chat                │
- ▾ chorus-proof-api-Aoj… 1  │ ▐▛███▛█   Claude Code v2.1.302
-   ◌ Rate limiter     codex │▝▜██████▀  Haiku 5.5 · Claude Pro
- ▾ chorus-proof-OBrfD6   1  │ ▝▝   ▝▝   /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-OBrfD6
+ PROJECTS                   │ ▐▛███▛█   Claude Code v2.1.302
+ ▾ chorus-proof-api-23e… 1  │▝▜██████▀  Haiku 5.5 · Claude Pro
+   ◌ Rate limiter     codex │ ▝▝   ▝▝   /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-bgAz9m
+ ▾ chorus-proof-bgAz9m   1  │
 ▎  ● claude 1        claude │
-                            │
                             │
                             │
                             │
@@ -38,7 +38,7 @@
                             │─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
                             │❯ Create calc.js in the current directory that exports a function add(a, b). Run it once with your shell tool as: node
                             │  -e "console.log(require('./calc.js').add(2, 3))" . Then write a short markdown note about what you did, as notes.md,
-────────────────────────────│  where Chorus keeps files for the user. Reply with one line: done.
- ✦ Skills                   │─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- ◫ Memory                   │  ⏸ manual mode on
- chorus  claude 1 │ claude · haiku │ 0 artifacts                                                                                              ⌃\ menu
+                            │  where Chorus keeps files for the user. Reply with one line: done.
+────────────────────────────│─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ✦ Skills   ◫ Memory       │  ⏸ manual mode on
+ chorus  claude 1 │ claude · haiku │ 0 artifacts                                                                                              ☰ menu

@@ -57,8 +57,10 @@ Plan and results: [phase4.md](phase4.md). D1 decided: TypeScript. E2E proof with
   - [x] Approvals inbox with risk tags, Decided history (`approvals_log`), y / x / ⏎; menu = the mockup's ten rows (↑↓ ⏎, click, letter)
   - [x] One shared database `~/.chorus/chorus.db` with a `project` column (`CHORUS_STORE=project` keeps the old per-project file); Memory screen across projects; `get_handoff_context` works for any project
   - [x] Skills screen: on/off, import what the agents already have. The global library and the opt-in links outside Chorus stay TD-1
-  - [x] **Proof:** `npm run proof` rewritten for the new screens and run with the real Claude Code 2.1.302 and Codex 0.163.0: 50/50 checks, 22 screenshots in `docs/proof/phase4/` (New chat, skip permissions, inbox, handoff, Memory, Skills, menu, artifacts, window sizes)
+  - [x] **Proof:** `npm run proof` rewritten for the new screens and run with the real Claude Code 2.1.302 and Codex 0.163.0: 52/52 checks, 23 screenshots in `docs/proof/phase4/` (New chat, skip permissions, inbox, handoff, Memory, Skills, menu, artifacts, window sizes)
   - [x] Also built: bell and flash for a request on another chat, artifacts open on ⏎/click with the "open failed: choose how" dialog (`.chorus/open.json`), `chorus skills on|off|import`
+  - [x] Second pass against the mockup (2026-10-18): top bar shows only where you are (no `chorus`, no project), `PROJECTS` heading and `!N` badge per project, Skills and Memory side by side, icon mode shows dots only, `☰ Menu ⌃\\` and a clickable `☰ menu` in the status line, inbox `this project / all projects` and `Decided today`, Memory `/` search, Skills `e` edit and `n` new, Activity with counts per kind (approval, usage, handoff rows, durations), Doctor mouse and open lines, limit and handoff dialogs in the mockup's words
+  - [x] **Effort** on New chat (asked for after the first pass; the mockup now has the row too): `--effort` for Claude and agy, `-c model_reasoning_effort` for Codex, per-model levels for Codex, stored with the chat, shown in the status line, `chorus new --effort`. Verified in the real TUIs: [integrations/effort.md](integrations/effort.md)
   - [ ] Not built: ctx % in the status line (TD-11), the hand pointer (OSC 22, probe first)
 
 ## Risk harness (before Phase 4.5 / 5)

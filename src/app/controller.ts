@@ -9,19 +9,21 @@ import type { AgentId, Session } from '../core/types.ts';
 import { App, type Entry } from './app.ts';
 import { detectApproval, type PendingApproval } from './approval.ts';
 import { detectLimit } from './limits.ts';
-import { modelsFor } from './models.ts';
+import { effortsFor, modelsFor } from './models.ts';
 import type { ItemState } from './compositor.ts';
 import { Tailer } from './tailer.ts';
 import { spawn } from 'node:child_process';
-import { LINK, T, agentStyle, type PaneLine, type RichLine, type Seg } from './compositor.ts';
+import { BTN, LINK, T, agentStyle, type PaneLine, type RichLine, type Seg } from './compositor.ts';
 import { riskOf } from './risk.ts';
-import { ARTIFACTS_HINT, APPROVALS_HINT, MEMORY_HINT, NEW_CHAT_HINT, SKILLS_HINT, approvalLines, memoryLines as memoryScreenLines, newChatForm, newChatHit, newChatKey, newChatLines, skillLines, type NewChatForm, type NewChatInfo } from './screens.ts';
+import { ARTIFACTS_HINT, APPROVALS_HINT, MEMORY_HINT, NEW_CHAT_HINT, SKILLS_HINT, approvalLines, memoryLines as memoryScreenLines, type ApprovalScope, newChatForm, newChatHit, newChatKey, newChatLines, skillLines, type NewChatForm, type NewChatInfo } from './screens.ts';
 import { VERIFIED_VERSION, versionWarning } from '../core/adapters/index.ts';
 import { PreviewServer } from '../core/preview.ts';
 import { defaultOpener, readOpenConfig, writeOpenConfig, type OpenConfig, type Opener } from '../core/opener.ts';
 import { traceCmd } from '../cli/commands.ts';
 
 export const AGENTS: AgentId[] = ['claude', 'codex', 'agy'];
+const ACTIVITY_KINDS = ['all', 'tool', 'mcp', 'approval', 'file', 'usage', 'error'] as const;
+const join2 = (...p: string[]) => p.filter(Boolean).join(';');
 const RAW_CAP = 2 * 1024 * 1024;
 
 export interface ControllerOpts {
@@ -94,14 +96,15 @@ export class Controller {
    * The first prompt is typed exactly as given: where artifacts go is told through the agent's instructions (launch.ts), not the prompt.
    * A chat belongs to the folder it works in: its artifacts live in <folder>/.chorus (Codex's sandbox only writes inside its folder).
    */
-  newThread(o: { agent: AgentId; title?: string; prompt?: string; parent?: ThreadRow; model?: string; cwd?: string; skipPermissions?: boolean }): Entry {
+  newThread(o: { agent: AgentId; title?: string; prompt?: string; parent?: ThreadRow; model?: string; effort?: string; cwd?: string; skipPermissions?: boolean }): Entry {
     const cwd = o.cwd ?? this.project;
     const model = o.model && o.model !== 'default' ? o.model : this.o.models?.[o.agent];
+    const effort = o.effort && o.effort !== 'default' ? o.effort : undefined; // "default" means: no flag
     if (fs.existsSync(sourceDir(this.project))) syncSkills(this.project, { agents: [o.agent], into: cwd });
     const n = this.store.listThreads().filter(t => t.agent === o.agent).length + 1;
-    const row = this.store.createThread({ title: o.title ?? `${o.agent} ${n}`, agent: o.agent, cwd, project: cwd, model: model ?? null, parent_thread_id: o.parent?.id, state: 'working', skip_permissions: o.skipPermissions ? 1 : 0 });
+    const row = this.store.createThread({ title: o.title ?? `${o.agent} ${n}`, agent: o.agent, cwd, project: cwd, model: model ?? null, parent_thread_id: o.parent?.id, state: 'working', skip_permissions: o.skipPermissions ? 1 : 0, effort: effort ?? null });
     const prompt = o.prompt;
-    const launch = (this.o.launcher ?? buildInteractive)(o.agent, { prompt, cwd, project: cwd, home: this.store.shared ? this.store.root : undefined, threadId: row.id, model, skipPermissions: o.skipPermissions });
+    const launch = (this.o.launcher ?? buildInteractive)(o.agent, { prompt, cwd, project: cwd, home: this.store.shared ? this.store.root : undefined, threadId: row.id, model, effort, skipPermissions: o.skipPermissions });
     if (launch.sessionId) this.store.updateThread(row.id, { native_session_id: launch.sessionId });
     this.sawStart.set(row.id, o.prompt ? Date.now() : 0);
     const host = this.app.addThread({ id: row.id, title: row.title, agent: o.agent, file: launch.bin, args: launch.args, cwd: launch.cwd }, true, o.parent?.id);
@@ -114,7 +117,7 @@ export class Controller {
   private resume(entry: Entry) {
     const row = this.store.getThread(entry.id);
     if (!row?.native_session_id) return;
-    const launch = (this.o.launcher ?? buildInteractive)(row.agent, { cwd: row.cwd, project: row.project ?? this.project, home: this.store.shared ? this.store.root : undefined, threadId: row.id, resumeId: row.native_session_id, model: this.o.models?.[row.agent], skipPermissions: !!row.skip_permissions });
+    const launch = (this.o.launcher ?? buildInteractive)(row.agent, { cwd: row.cwd, project: row.project ?? this.project, home: this.store.shared ? this.store.root : undefined, threadId: row.id, resumeId: row.native_session_id, model: this.o.models?.[row.agent], effort: row.effort ?? undefined, skipPermissions: !!row.skip_permissions });
     const host = this.app.attach(entry, { id: row.id, title: row.title, agent: row.agent, file: launch.bin, args: launch.args, cwd: launch.cwd });
     this.store.updateThread(row.id, { state: 'working' });
     this.watchRaw(row.id, host);
@@ -210,7 +213,7 @@ export class Controller {
     if (u.limitUtilization >= 0.99) void this.limitDialog(id, `${t.agent} reached its plan limit`, undefined);
   }
 
-  /** The mockup's "limit reached" box: the thread is saved, so offer to continue with another agent. */
+  /** The mockup's "limit reached" box: the chat is saved, so offer to continue with another agent. */
   private async limitDialog(id: string, title: string, resets: string | undefined) {
     if (this.limitShown.has(id)) return;
     this.limitShown.add(id);
@@ -218,11 +221,13 @@ export class Controller {
     if (!t) return;
     const turns = this.store.getTurns(id, { limit: 100000 }).length;
     const arts = this.store.listArtifacts(id).length;
+    const files = new Set(this.store.getToolCalls(id).filter(c => /^(Write|Edit|write_to_file|replace_file_content|apply_patch|file_change)$/.test(c.tool) && c.target).map(c => c.target)).size;
     const others = AGENTS.filter(a => a !== t.agent);
+    const q = this.quotaInfo();
     const key = await this.app.alert(
       title.charAt(0).toUpperCase() + title.slice(1),
-      [`${resets ? `Resets in ${resets}. ` : ''}This thread is saved:`, `${turns} turns · ${arts} artifact${arts === 1 ? '' : 's'}`],
-      [...others.map((a, i) => ({ key: i === 0 ? '\r' : String(i + 1), label: `Continue in a new thread with ${a}` })), { key: 'w', label: 'Not now' }],
+      [`${resets ? `Resets in ${resets}. ` : ''}This chat is saved:`, `${turns} turns · ${arts} artifact${arts === 1 ? '' : 's'} · ${files} file${files === 1 ? '' : 's'} changed`],
+      [...others.map((a, i) => ({ key: i === 0 ? '\r' : String(i + 1), label: `Continue in a new chat with ${a}${q[a] ? `  (${q[a]!.text})` : ''}` })), { key: 'w', label: 'Wait for the reset' }],
     );
     const i = key === undefined || key === 'w' ? -1 : key === '\r' ? 0 : Number(key) - 1;
     if (i >= 0 && others[i]) await this.handoff(id, others[i]);
@@ -329,8 +334,12 @@ export class Controller {
         break;
       case 'handoff': {
         if (!cur) return this.app.setFlash('no chat to hand off');
-        const i = await this.app.choose(`hand off "${cur.title}" to…`, AGENTS);
-        if (i !== undefined) await this.handoff(cur.id, AGENTS[i]);
+        // the other agents first, then the same one for a fresh session; each with what is left of its plan
+        const order = [...AGENTS.filter(a => a !== cur.agent), cur.agent as AgentId];
+        const q = this.quotaInfo();
+        const label = (a: AgentId) => `${a.padEnd(8)} ${a === cur.agent ? 'fresh session' : q[a] ? (q[a]!.text.startsWith('5h') ? `${q[a]!.text} used` : q[a]!.text) : 'quota ok'}`;
+        const i = await this.app.choose(`Continue "${cur.title}" in a new chat`, order.map(label));
+        if (i !== undefined) await this.handoff(cur.id, order[i]);
         break;
       }
       case 'memory':
@@ -396,13 +405,13 @@ export class Controller {
    * The New chat screen (also the first screen): agent, model, project folder, skip-permissions. Enter alone starts with the
    * defaults. The chat is named after your first message; you type it in the agent itself.
    */
-  newChatScreen(preset: { agent?: AgentId; model?: string; folder?: string; skip?: boolean } = {}) {
+  newChatScreen(preset: { agent?: AgentId; model?: string; effort?: string; folder?: string; skip?: boolean } = {}) {
     // the project you are in: the folder of the chat in front, else the folder chorus was started in (a parked chat does not count)
     const cur = this.app.current;
     const folder = preset.folder ?? (cur?.host ? cur.cwd : this.project);
-    const f: NewChatForm = newChatForm({ agent: preset.agent, model: preset.model, folder, models: a => this.modelList(a) });
+    const f: NewChatForm = newChatForm({ agent: preset.agent, model: preset.model, effort: preset.effort, folder, models: a => this.modelList(a), efforts: (a, m) => effortsFor(a, m) });
     f.skip = !!preset.skip;
-    const info = (): NewChatInfo => ({ models: a => this.modelList(a), quota: this.quotaInfo(), recent: this.recentFolders(f.folder), skipFlag: SKIP_FLAG });
+    const info = (): NewChatInfo => ({ models: a => this.modelList(a), efforts: (a, m) => effortsFor(a, m), quota: this.quotaInfo(), recent: this.recentFolders(f.folder), skipFlag: SKIP_FLAG });
     const redraw = () => this.app.updatePane(newChatLines(f, info()));
     const finish = (r: 'start' | 'cancel' | undefined) => {
       if (r === 'cancel') return this.app.closePane();
@@ -414,8 +423,9 @@ export class Controller {
       }
       const agent = AGENTS[f.agent];
       const model = this.modelList(agent)[f.model];
+      const effort = effortsFor(agent, model)[f.effort];
       this.app.closePane(false);
-      this.newThread({ agent, model, cwd: dir, skipPermissions: f.skip });
+      this.newThread({ agent, model, effort, cwd: dir, skipPermissions: f.skip });
     };
     this.app.showPane('New chat', newChatLines(f, info()), {
       id: 'new',
@@ -432,26 +442,30 @@ export class Controller {
 
   /* ---------- Approvals inbox ---------- */
 
-  private approvalItems() {
+  /** What waits for you; scope "this" keeps the chats of the project you are in (the chat in front, else where chorus started). */
+  private approvalItems(scope: ApprovalScope = 'all') {
+    const cwd = this.app.current?.cwd ?? this.project;
     return [...this.pending.entries()]
       .map(([id, p]) => {
         const e = this.app.entry(id);
-        return e && { id, title: e.title, agent: e.agent, waiting: (Date.now() - (this.pendingSince.get(id) ?? Date.now())) / 1000, what: p.what, risk: riskOf(p.what, e.cwd) };
+        return e && { id, cwd: e.cwd, title: e.title, agent: e.agent, waiting: (Date.now() - (this.pendingSince.get(id) ?? Date.now())) / 1000, what: p.what, risk: riskOf(p.what, e.cwd) };
       })
-      .filter((x): x is NonNullable<typeof x> => !!x);
+      .filter((x): x is NonNullable<typeof x> => !!x && (scope === 'all' || x.cwd === cwd));
   }
 
+  /** Today's answers ("Decided today"). */
   private decidedItems() {
-    return this.store.approvalsLog(6).map(r => ({ decision: r.decision, what: r.what, agent: this.store.getThread(r.thread_id)?.agent ?? '', time: new Date(r.ts).toTimeString().slice(0, 5) }));
+    const today = new Date().toDateString();
+    return this.store.approvalsLog(50).filter(r => new Date(r.ts).toDateString() === today).slice(0, 6).map(r => ({ decision: r.decision, what: r.what, agent: this.store.getThread(r.thread_id)?.agent ?? '', time: new Date(r.ts).toTimeString().slice(0, 5) }));
   }
 
   /** One list of everything waiting on you, from every chat: y / x answer without switching, ⏎ opens the chat. */
   approvalsView() {
-    const st = { sel: 0 };
+    const st = { sel: 0, scope: 'all' as ApprovalScope };
     const draw = () => {
-      const items = this.approvalItems();
+      const items = this.approvalItems(st.scope);
       st.sel = Math.min(st.sel, Math.max(0, items.length - 1));
-      this.app.updatePane(approvalLines(items, st.sel, this.decidedItems()));
+      this.app.updatePane(approvalLines(items, st.sel, this.decidedItems(), st.scope));
       return items;
     };
     const open = (id?: string) => {
@@ -459,21 +473,22 @@ export class Controller {
       if (at >= 0) this.app.select(at);
     };
     const act = (kind: 'approve' | 'deny' | 'open', id?: string) => {
-      const items = this.approvalItems();
+      const items = this.approvalItems(st.scope);
       const target = id ?? items[st.sel]?.id;
       if (kind === 'open') return open(target);
       if (target) this.answer(kind === 'approve', target);
       draw();
     };
-    this.app.showPane('Approvals', approvalLines(this.approvalItems(), 0, this.decidedItems()), {
+    this.app.showPane('Approvals', approvalLines(this.approvalItems(), 0, this.decidedItems(), 'all'), {
       id: 'approvals',
       bare: true,
       hint: APPROVALS_HINT,
       crumb: ['Approvals'],
       onKey: key => {
-        const n = this.pending.size;
+        const n = this.approvalItems(st.scope).length;
         if (key === '\x1b[A' || key === 'k') st.sel = Math.max(0, st.sel - 1);
         else if (key === '\x1b[B' || key === 'j') st.sel = Math.min(Math.max(0, n - 1), st.sel + 1);
+        else if (key === '\t') st.scope = st.scope === 'all' ? 'this' : 'all';
         else if (key === 'y') return void act('approve'), true;
         else if (key === 'x') return void act('deny'), true;
         else if (key === '\r' || key === '\n') return void act('open'), true;
@@ -484,7 +499,10 @@ export class Controller {
       onHit: id => {
         const [kind, tid] = [id.split(':')[0], id.split(':').slice(1).join(':')];
         if (kind === 'row') {
-          st.sel = Math.max(0, this.approvalItems().findIndex(i => i.id === tid));
+          st.sel = Math.max(0, this.approvalItems(st.scope).findIndex(i => i.id === tid));
+          draw();
+        } else if (id === 'scope' || id === 'scope:this' || id === 'scope:all') {
+          st.scope = id === 'scope' ? (st.scope === 'all' ? 'this' : 'all') : (id.slice(6) as ApprovalScope);
           draw();
         } else if (kind === 'approve' || kind === 'deny' || kind === 'open') act(kind, tid || undefined);
       },
@@ -499,13 +517,13 @@ export class Controller {
 
   /* ---------- Memory (shared by all projects) ---------- */
 
-  memoryItems() {
+  memoryItems(query = '') {
     const rows = this.store.listThreads();
     const byId = new Map(rows.map(r => [r.id, r]));
     // parents first, a continued chat right under its parent
     const roots = rows.filter(r => !r.parent_thread_id || !byId.has(r.parent_thread_id));
     const ordered = roots.flatMap(r => [r, ...rows.filter(c => c.parent_thread_id === r.id)]);
-    return ordered.map(r => {
+    const all = ordered.map(r => {
       const turns = this.store.getTurns(r.id, { limit: 100000 });
       const asked = turns.find(t => t.role === 'user')?.text ?? (r.parent_thread_id ? `(continued from ${byId.get(r.parent_thread_id)?.title ?? 'another chat'})` : '');
       const last = [...turns].reverse().find(t => t.role === 'assistant')?.text ?? '';
@@ -513,16 +531,19 @@ export class Controller {
       for (const c of this.store.getToolCalls(r.id)) if (/^(Write|Edit|write_to_file|replace_file_content|apply_patch|file_change)$/.test(c.tool) && c.target) files.add(path.relative(r.cwd, c.target) || c.target);
       return { id: r.id, title: r.title, child: !!r.parent_thread_id && byId.has(r.parent_thread_id), project: path.basename(r.project ?? r.cwd), agent: r.agent, turns: turns.length, ago: this.ago(r.updated), asked: asked.replace(/\s+/g, ' '), last: last.replace(/\s+/g, ' '), files: [...files].slice(0, 6).join(', ') };
     });
+    // search: every word must appear somewhere in the row (title, project, agent, what it asked, its last message, its files)
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    return words.length ? all.filter(m => words.every(w => `${m.title} ${m.project} ${m.agent} ${m.asked} ${m.last} ${m.files}`.toLowerCase().includes(w))) : all;
   }
 
   /** Every chat Chorus has recorded, in any project. ⏎ opens it (parked chats resume), h continues it with another agent, d shows what an agent would read. */
   memoryView() {
-    const st = { sel: 0 };
+    const st = { sel: 0, query: '', typing: false };
     const where = () => (this.store.shared ? this.store.root.replace(process.env.HOME ?? '\0', '~') + '/chorus.db' : '.chorus/chorus.db (this project)');
     const draw = () => {
-      const items = this.memoryItems();
+      const items = this.memoryItems(st.query);
       st.sel = Math.min(st.sel, Math.max(0, items.length - 1));
-      this.app.updatePane(memoryScreenLines(items, st.sel, where()));
+      this.app.updatePane(memoryScreenLines(items, st.sel, where(), { query: st.query, typing: st.typing }));
       return items;
     };
     const open = async (id?: string) => {
@@ -550,7 +571,28 @@ export class Controller {
       hint: MEMORY_HINT,
       crumb: ['Memory'],
       onKey: key => {
-        const items = this.memoryItems();
+        if (st.typing) {
+          // typing a search: Enter keeps the filter, Esc drops it
+          if (key === '\x1b') (st.typing = false), (st.query = '');
+          else if (key === '\r' || key === '\n') st.typing = false;
+          else if (key === '\x7f' || key === '\b') st.query = st.query.slice(0, -1);
+          else if (key === '\x15') st.query = '';
+          else if (key.length >= 1 && key >= ' ' && !key.startsWith('\x1b')) st.query += key;
+          st.sel = 0;
+          draw();
+          return true;
+        }
+        if (key === '/') {
+          st.typing = true;
+          draw();
+          return true;
+        }
+        if (key === '\x1b' && st.query) {
+          st.query = '';
+          draw();
+          return true;
+        }
+        const items = this.memoryItems(st.query);
         const cur = items[st.sel]?.id;
         if (key === '\x1b[A' || key === 'k') st.sel = Math.max(0, st.sel - 1);
         else if (key === '\x1b[B' || key === 'j') st.sel = Math.min(Math.max(0, items.length - 1), st.sel + 1);
@@ -564,15 +606,18 @@ export class Controller {
       onHit: id => {
         const tid = id.split(':').slice(1).join(':');
         if (id.startsWith('row:')) {
-          const items = this.memoryItems();
+          const items = this.memoryItems(st.query);
           const at = items.findIndex(i => i.id === tid);
           if (at === st.sel) void open(tid);
           else {
             st.sel = Math.max(0, at);
             draw();
           }
-        } else if (id === 'open') void open(this.memoryItems()[st.sel]?.id);
-        else if (id === 'handoff') void handoffFrom(this.memoryItems()[st.sel]?.id);
+        } else if (id === 'search') {
+          st.typing = true;
+          draw();
+        } else if (id === 'open') void open(this.memoryItems(st.query)[st.sel]?.id);
+        else if (id === 'handoff') void handoffFrom(this.memoryItems(st.query)[st.sel]?.id);
       },
     });
   }
@@ -597,6 +642,24 @@ export class Controller {
       this.app.setFlash(`${s.on ? 'Turned off' : 'Turned on'} ${s.name} for claude, codex and agy`);
       draw();
     };
+    const edit = async () => {
+      const s = listSkills(this.project)[st.sel];
+      if (!s) return;
+      const r = await (this.o.opener ?? defaultOpener)({ mode: 'default' }, { path: path.join(s.dir, 'SKILL.md') });
+      this.app.setFlash(r.ok ? `opened ${s.name}/SKILL.md in your editor` : `could not open it (${r.error}); the file is ${path.join(s.dir, 'SKILL.md')}`);
+    };
+    const create = async () => {
+      const name = await this.app.prompt('New skill', ['A skill is a folder with a SKILL.md every agent can load.', 'Name it with lowercase words and dashes.'], '');
+      const slug = (name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      if (!slug) return;
+      const dir = path.join(sourceDir(this.project), slug);
+      if (fs.existsSync(dir)) return this.app.setFlash(`${slug} already exists`);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'SKILL.md'), `---\nname: ${slug}\ndescription: Say here when an agent should use this skill.\n---\n\nWrite the instructions here.\n`);
+      syncSkills(this.project);
+      this.app.setFlash(`created ${slug}: edit it with e`);
+      draw();
+    };
     const doImport = (dir?: string) => {
       const f = found().find(x => x.dir === dir) ?? found()[0];
       if (!f) return this.app.setFlash('nothing to import');
@@ -619,6 +682,8 @@ export class Controller {
         else if (key === '\x1b[B' || key === 'j') st.sel = Math.min(Math.max(0, items().length - 1), st.sel + 1);
         else if (key === '\r' || key === '\n') toggle();
         else if (key === 'i') doImport();
+        else if (key === 'e') return void edit(), true;
+        else if (key === 'n') return void create(), true;
         else return false;
         draw();
         return true;
@@ -633,6 +698,8 @@ export class Controller {
             draw();
           }
         } else if (id === 'toggle') toggle();
+        else if (id === 'edit') void edit();
+        else if (id === 'new') void create();
         else if (id === 'import') doImport();
         else if (id.startsWith('import:')) doImport(id.slice(7));
       },
@@ -668,6 +735,7 @@ export class Controller {
       from: parent?.agent,
       toast: e.meta?.toast,
       skip: !!t.skip_permissions,
+      effort: t.effort ?? undefined,
     };
     if (arts.length > before && before >= 0 && arts.length) {
       const last = arts[arts.length - 1];
@@ -744,7 +812,13 @@ export class Controller {
     }
     out.push('');
     const n = this.store.listThreads().length;
-    out.push([['store   ', T.dim], [`${this.store.shared ? this.store.root.replace(process.env.HOME ?? '\0', '~') : '.chorus'}/chorus.db · ${n} chat${n === 1 ? '' : 's'}${this.store.shared ? ' (all projects)' : ' (this project)'}`]] as Seg[]);
+    const dbFile = path.join(this.store.root, 'chorus.db');
+    const mb = fs.existsSync(dbFile) ? Math.max(0.1, fs.statSync(dbFile).size / 1048576) : 0;
+    out.push([['store   ', T.dim], [`${this.store.shared ? this.store.root.replace(process.env.HOME ?? '\0', '~') : '.chorus'}/chorus.db · ${n} chat${n === 1 ? '' : 's'}${this.store.shared ? ' (all projects)' : ' (this project)'} · ${mb.toFixed(1)} MB`]] as Seg[]);
+    const mouse = process.env.CHORUS_MOUSE !== '0';
+    out.push([['mouse   ', T.dim], [mouse ? 'on' : 'off', mouse ? T.ok : T.warn], ['  (CHORUS_MOUSE=0 turns it off; hold Shift to select text)', T.dim]] as Seg[]);
+    const openCfg = readOpenConfig(this.project);
+    out.push([['open    ', T.dim], [openCfg.mode === 'default' ? (process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open') : openCfg.mode + (openCfg.command ? ` (${openCfg.command})` : ''), T.ok], [`  (${openCfg.mode === 'default' ? `default for ${process.platform === 'darwin' ? 'macOS' : process.platform}; ` : ''}override in .chorus/open.json)`, T.dim]] as Seg[]);
     if (process.env.CLAUDE_CODE_SESSION_ID) out.push([['env     ', T.dim], ['CLAUDE_CODE_SESSION_ID is set → removed when starting agents', T.warn]] as Seg[]);
     const notes = AGENTS.map(a => versionWarning(a, this.agentInfo.get(a)?.version)).filter((w): w is string => !!w);
     if (notes.length) out.push('', [[`${notes.length} warning${notes.length === 1 ? '' : 's'}`, T.warn]] as Seg[], ...notes.map(w => [[`  ${w}`]] as Seg[]));
@@ -885,47 +959,82 @@ export class Controller {
 
   /** The Activity view: f cycles the filter, r shows the raw trace next to what was parsed. */
   activityView(id: string, title: string) {
-    const kinds = ['all', 'tool', 'mcp', 'file'] as const;
     let k = 0;
-    const lines = () => this.activityLines(id, kinds[k]);
-    const hint = () => `f filter: ${kinds.map((x, i) => (i === k ? `[${x}]` : x)).join(' ')}   r raw trace   ↑↓ scroll   esc back`;
+    const lines = () => this.activityLines(id, ACTIVITY_KINDS[k]);
+    const hint = (): RichLine => [[' f ', BTN, 'filter'], [' filter  '], [' r ', BTN, 'raw'], [' raw trace  '], [' ↑↓ ', BTN], [' scroll  '], [' esc ', BTN, 'back'], [' back']];
+    const next = () => {
+      k = (k + 1) % ACTIVITY_KINDS.length;
+      this.app.updatePane(lines());
+    };
+    const raw = () => this.app.showPane(`Raw trace · ${title}`, traceCmd(this.store, id).replaceAll(process.env.HOME ?? '\0', '~').split('\n'));
     this.app.showPane(`Activity · ${title}`, lines(), {
+      id: 'activity',
+      bare: true,
+      crumb: [title, 'Activity'],
       hint: hint(),
       onKey: key => {
-        if (key === 'f') {
-          k = (k + 1) % kinds.length;
-          this.app.updatePane(lines());
-          this.app.showPaneHint(hint());
-          return true;
-        }
-        if (key === 'r') {
-          this.app.showPane(`Raw trace · ${title}`, traceCmd(this.store, id).replaceAll(process.env.HOME ?? '\0', '~').split('\n'));
-          return true;
-        }
+        if (key === 'f') return void next(), true;
+        if (key === 'r') return void raw(), true;
         return false;
+      },
+      onHit: hit => {
+        if (hit === 'filter') next();
+        else if (hit === 'raw') raw();
+        else if (hit.startsWith('kind:')) {
+          k = Math.max(0, ACTIVITY_KINDS.indexOf(hit.slice(5) as (typeof ACTIVITY_KINDS)[number]));
+          this.app.updatePane(lines());
+        }
       },
     });
   }
 
-  activityLines(id: string, filter: 'all' | 'tool' | 'mcp' | 'file' = 'all'): RichLine[] {
-    const t = this.store.getThread(id)!;
-    const u = this.store.getUsage(id);
-    const turns = this.store.getTurns(id, { limit: 100000 });
-    const clock = (seq: number) => {
-      const ts = [...turns].reverse().find(x => x.seq <= seq && x.ts)?.ts;
-      return ts ? new Date(ts).toTimeString().slice(0, 8) : '--:--:--';
-    };
-    const out: RichLine[] = [
-      [[`${t.title}`, T.chorus], [`   in ${u?.inputTokens ?? 0}  out ${u?.outputTokens ?? 0} tokens${u?.costUsd != null ? ` · $${u.costUsd.toFixed(2)}` : ''}${u?.limitUtilization != null ? ` · plan ${Math.round(u.limitUtilization * 100)}%` : ''}`, T.dim]] as Seg[],
+  /** One timeline across a chat and the chats continued from it: tool calls, MCP calls, approvals, files, usage, handoffs. */
+  activityLines(id: string, filter: (typeof ACTIVITY_KINDS)[number] = 'all'): PaneLine[] {
+    const root = this.store.getThread(id)!;
+    const family: ThreadRow[] = [root];
+    for (let i = 0; i < family.length; i++) for (const c of this.store.listThreads()) if (c.parent_thread_id === family[i].id && !family.includes(c)) family.push(c);
+    type Row = { ts: string; kind: (typeof ACTIVITY_KINDS)[number]; segs: Seg[] };
+    const rows: Row[] = [];
+    const clock = (iso: string) => (iso ? new Date(iso).toTimeString().slice(0, 8) : '--:--:--');
+    const dur = (ms?: number) => (ms == null ? '' : ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : ms < 1 ? '<1ms' : `${Math.round(ms)}ms`);
+    let tokensIn = 0;
+    let tokensOut = 0;
+    let cost = 0;
+    for (const t of family) {
+      const turns = this.store.getTurns(t.id, { limit: 100000 });
+      const u = this.store.getUsage(t.id);
+      tokensIn += u?.inputTokens ?? 0;
+      tokensOut += u?.outputTokens ?? 0;
+      cost += u?.costUsd ?? 0;
+      const who = (t.agent.padEnd(7)) as string;
+      const head = (ts: string, what: string): Seg[] => [[clock(ts) + '  ', T.dim], [who, agentStyle(t.agent)], [what.padEnd(8)]];
+      if (t !== root) rows.push({ ts: t.created, kind: 'all', segs: [[clock(t.created) + '  ', T.dim], [`──── chat "${t.title}" started with ${t.agent}, continuing "${family[0].title}" ────`, T.chorus]] });
+      for (const c of this.store.getToolCalls(t.id)) {
+        const ts = [...turns].reverse().find(x => x.seq <= c.turnSeq && x.ts)?.ts ?? t.created;
+        rows.push({ ts, kind: 'tool', segs: [...head(ts, 'tool'), [`${c.tool} ${c.target}`.slice(0, 46).padEnd(48)], [c.status === 'ok' ? 'ok' : c.status === 'failed' ? 'failed' : '…', c.status === 'ok' ? T.ok : c.status === 'failed' ? T.err : T.dim], [dur(c.durationMs) ? '  ' + dur(c.durationMs) : '', T.dim]] });
+      }
+      for (const m of this.store.mcpCalls(t.id)) rows.push({ ts: m.ts, kind: 'mcp', segs: [...head(m.ts, 'mcp'), [`chorus.${m.tool}`.padEnd(48)], ['ok', T.ok]] });
+      for (const r of this.store.approvalsLog(500).filter(x => x.thread_id === t.id)) rows.push({ ts: r.ts, kind: 'approval', segs: [...head(r.ts, 'approve'), [r.what.split(' · ').slice(-1)[0].slice(0, 46).padEnd(48)], r.decision === 'approved' ? ['approved', T.ok] : ['denied', T.err]] });
+      for (const a of this.store.listArtifacts(t.id)) {
+        const n = (this.store.db.prepare('SELECT COUNT(*) AS n FROM artifacts WHERE thread_id=? AND path=?').get(t.id, a.path) as { n: number }).n;
+        rows.push({ ts: a.ts, kind: 'file', segs: [...head(a.ts, 'file'), [`${a.path} v${n}`]] });
+      }
+      if (u?.limitUtilization != null) rows.push({ ts: this.store.db.prepare('SELECT updated FROM usage WHERE thread_id=?').get(t.id)?.updated as string ?? t.updated, kind: 'usage', segs: [...head(t.updated, 'usage'), [`5h ${Math.round(u.limitUtilization * 100)}%`]] });
+    }
+    rows.sort((x, y) => x.ts.localeCompare(y.ts));
+    const count = (kind: string) => rows.filter(r => (kind === 'all' ? true : r.kind === kind)).length;
+    const bar: Seg[] = ACTIVITY_KINDS.flatMap((kind): Seg[] => {
+      const label = `${kind} ${kind === 'error' ? 0 : count(kind)}`;
+      return [[kind === ACTIVITY_KINDS[ACTIVITY_KINDS.indexOf(filter)] ? `[${label}]` : ` ${label} `, kind === filter ? join2('1', T.fg, T.bgSel) : kind === 'error' ? T.err : T.fg, `kind:${kind}`], [' ']];
+    });
+    const out: PaneLine[] = [
+      [['Activity', join2('1', T.chorus)], [`  ·  ${root.title}`], [`          in ${tokensIn}  out ${tokensOut} tokens${cost ? ` · $${cost.toFixed(2)}` : ''}`, T.dim]],
+      [...bar, ['  f cycles', T.dim]],
       '',
     ];
-    for (const c of filter === 'all' || filter === 'tool' ? this.store.getToolCalls(id) : []) {
-      out.push([[clock(c.turnSeq) + '  ', T.dim], [t.agent.padEnd(7), agentStyle(t.agent)], ['tool   '], [`${c.tool} ${c.target}`.slice(0, 46).padEnd(48)], [c.status === 'ok' ? 'ok' : c.status === 'failed' ? 'failed' : '…', c.status === 'ok' ? T.ok : c.status === 'failed' ? T.err : T.dim]] as Seg[]);
-    }
-    for (const m of filter === 'all' || filter === 'mcp' ? this.store.mcpCalls(id) : []) out.push([[new Date(m.ts).toTimeString().slice(0, 8) + '  ', T.dim], [t.agent.padEnd(7), agentStyle(t.agent)], ['mcp    '], [`chorus.${m.tool}`], ['  ok', T.ok]] as Seg[]);
-    for (const a of filter === 'all' || filter === 'file' ? this.store.listArtifacts(id) : []) out.push([[new Date(a.ts).toTimeString().slice(0, 8) + '  ', T.dim], [t.agent.padEnd(7), agentStyle(t.agent)], ['file   '], [`${a.path} v1`]] as Seg[]);
-    for (const c of filter === 'all' ? this.store.listThreads().filter(x => x.parent_thread_id === id) : []) out.push('', [[`──── continued in "${c.title}" with ${c.agent} ────`, T.chorus]] as Seg[]);
-    if (out.length === 2) out.push([['Nothing recorded yet.', T.dim]] as Seg[]);
+    const shown = rows.filter(r => filter === 'all' || r.kind === filter);
+    for (const r of shown) out.push(r.segs);
+    if (!shown.length) out.push([[rows.length ? `Nothing of kind ${filter}.` : 'Nothing recorded yet.', T.dim]]);
     return out;
   }
 

@@ -12,6 +12,7 @@ probe, diff the new fixtures against the committed ones, and update the doc.
 | Antigravity | [antigravity-agy.md](antigravity-agy.md) | ✅ headless + interactive verified | 1.4.0 |
 | Skills (all three) | [skills.md](skills.md) | ✅ all three verified | see doc |
 | Approvals (all three) | [approvals.md](approvals.md) | ✅ keystrokes on the agent's prompt; hooks only deny | see doc |
+| Effort (all three) | [effort.md](effort.md) | ✅ `--effort` (Claude, agy), `-c model_reasoning_effort` (Codex) | see doc |
 
 ## Capability matrix
 

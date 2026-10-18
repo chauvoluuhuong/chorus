@@ -58,8 +58,8 @@ switch (cmd) {
     const folder = flag('folder') ? path.resolve(flag('folder')!.replace(/^~(?=\/|$)/, process.env.HOME ?? '~')) : undefined;
     const skip = argv.includes('--skip-permissions');
     await app(c => {
-      if (agent) c.newThread({ agent, title: positional[0], prompt: flag('task'), model: flag('model'), cwd: folder, skipPermissions: skip });
-      else c.newChatScreen({ folder, model: flag('model'), skip });
+      if (agent) c.newThread({ agent, title: positional[0], prompt: flag('task'), model: flag('model'), effort: flag('effort'), cwd: folder, skipPermissions: skip });
+      else c.newChatScreen({ folder, model: flag('model'), effort: flag('effort'), skip });
     });
     break;
   }
