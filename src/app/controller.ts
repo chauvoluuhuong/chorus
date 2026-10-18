@@ -9,7 +9,7 @@ import type { AgentId, Session } from '../core/types.ts';
 import { App, type Entry } from './app.ts';
 import { detectApproval, type PendingApproval } from './approval.ts';
 import { detectLimit } from './limits.ts';
-import { effortsFor, modelsFor } from './models.ts';
+import { effortsFor, loadAgyModels, modelsFor } from './models.ts';
 import type { ItemState } from './compositor.ts';
 import { Tailer } from './tailer.ts';
 import { spawn } from 'node:child_process';
@@ -372,14 +372,24 @@ export class Controller {
 
   /* ---------- New chat ---------- */
 
+  /** Never blocks: agy's list is asked for in the background and the New chat screen redraws when it arrives. */
   private modelList(agent: AgentId): string[] {
     let m = this.modelCache.get(agent);
     if (!m) {
       m = modelsFor(agent);
-      this.modelCache.set(agent, m);
+      if (agent === 'agy' && m.length <= 1) {
+        void loadAgyModels().then(list => {
+          if (!list.length || this.closed) return;
+          this.modelCache.set('agy', ['default', ...list]);
+          this.onModelsLoaded?.();
+        });
+      } else this.modelCache.set(agent, m);
     }
     return m;
   }
+
+  /** set by the New chat screen while it is open, to redraw when a model list arrives */
+  private onModelsLoaded: (() => void) | undefined;
 
   /** Plan text under each agent on the New chat screen, from the latest usage reading we stored. */
   private quotaInfo(): NewChatInfo['quota'] {
@@ -413,6 +423,9 @@ export class Controller {
     f.skip = !!preset.skip;
     const info = (): NewChatInfo => ({ models: a => this.modelList(a), efforts: (a, m) => effortsFor(a, m), quota: this.quotaInfo(), recent: this.recentFolders(f.folder), skipFlag: SKIP_FLAG });
     const redraw = () => this.app.updatePane(newChatLines(f, info()));
+    this.onModelsLoaded = () => {
+      if (this.app.paneId === 'new') redraw();
+    };
     const finish = (r: 'start' | 'cancel' | undefined) => {
       if (r === 'cancel') return this.app.closePane();
       if (r !== 'start') return redraw();

@@ -1,5 +1,5 @@
 // Models offered in the new-thread form. "default" always comes first and means: pass no model flag.
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -21,26 +21,51 @@ function codexModels(): string[] {
   }
 }
 
-/** `agy models` prints "<id>\t<name>" per line; it calls the service, so the answer is cached for a day. */
-function agyModels(): string[] {
-  const cache = path.join(os.tmpdir(), 'chorus-agy-models.json');
+const agyCacheFile = () => process.env.CHORUS_AGY_CACHE ?? path.join(os.tmpdir(), 'chorus-agy-models.json');
+
+/** What `agy models` printed in the last day, without asking again (reading a file never blocks the screen). */
+function agyCached(): string[] {
   try {
-    const c = JSON.parse(fs.readFileSync(cache, 'utf8'));
+    const c = JSON.parse(fs.readFileSync(agyCacheFile(), 'utf8'));
     if (Date.now() - c.at < DAY && c.models.length) return c.models;
   } catch {
     /* no cache yet */
   }
-  const r = spawnSync('agy', ['models'], { encoding: 'utf8', timeout: 8000 });
-  const models = (r.stdout ?? '')
-    .split('\n')
-    .map(l => l.split('\t')[0].trim())
-    .filter(id => /^[\w.\-]+$/.test(id) && !/^fetching/i.test(id));
-  if (models.length) fs.writeFileSync(cache, JSON.stringify({ at: Date.now(), models }));
-  return models;
+  return [];
 }
 
+/**
+ * `agy models` prints "<id>\t<name>" per line; it calls the service and takes a second or more, so it runs in the background
+ * (never spawnSync: that froze the whole screen) and the answer is cached for a day. Resolves with the list.
+ */
+export function loadAgyModels(): Promise<string[]> {
+  const cached = agyCached();
+  if (cached.length) return Promise.resolve(cached);
+  return new Promise(resolve => {
+    let out = '';
+    try {
+      const c = spawn('agy', ['models'], { stdio: ['ignore', 'pipe', 'ignore'] });
+      const t = setTimeout(() => c.kill(), 8000);
+      c.stdout.on('data', d => (out += d));
+      c.on('error', () => (clearTimeout(t), resolve([])));
+      c.on('close', () => {
+        clearTimeout(t);
+        const models = out
+          .split('\n')
+          .map(l => l.split('\t')[0].trim())
+          .filter(id => /^[\w.\-]+$/.test(id) && !/^fetching/i.test(id));
+        if (models.length) fs.writeFileSync(agyCacheFile(), JSON.stringify({ at: Date.now(), models }));
+        resolve(models);
+      });
+    } catch {
+      resolve([]);
+    }
+  });
+}
+
+/** The model list that is known right now. agy's comes from the cache; loadAgyModels() fills it in the background. */
 export function modelsFor(agent: AgentId): string[] {
-  const list = agent === 'claude' ? CLAUDE.slice(1) : agent === 'codex' ? codexModels() : agyModels();
+  const list = agent === 'claude' ? CLAUDE.slice(1) : agent === 'codex' ? codexModels() : agyCached();
   return ['default', ...list];
 }
 

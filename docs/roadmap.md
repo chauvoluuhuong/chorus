@@ -151,3 +151,11 @@ The status line already has the slot and drops it first when narrow (`StatusBar.
 - Claude: the headless `result` has `modelUsage[model].contextWindow` (200000 / 1000000) but the interactive transcript has per-message `usage` only, no window size; the window per model would have to come from a table that is not verified (same gap as the open "plan meter for Claude interactive threads").
 - agy: not looked at.
 - [ ] Add `last_input_tokens` and `context_window` to `Session.usage` (adapter + store column), Codex first; probe Claude and agy for a source of the window before showing a number for them (rule 1: no assumed values). Until then the status line shows no ctx, never a guess.
+
+### TD-12 · Screen glitches in some terminals ("two chorus" rows while navigating)
+Seen by a user: the sidebar showed the project and some chats twice, for a moment, while clicking around (2026-10-18). The data was fine (one project, 8 chats); the terminal showed a torn or scrolled frame that the diff renderer did not know about. Fixed defensively, not reproduced in a headless terminal:
+- [x] autowrap off while the app runs (`CSI ? 7 l`): a row that comes out too long is cut, never wrapped into a scroll
+- [x] the whole frame is sent again every 3 s (`CHORUS_REPAINT_MS`), so any desync heals itself
+- [x] `agy models` ran with `spawnSync` when agy was chosen on New chat and froze the whole screen (up to 8 s); it is now fetched in the background
+- [x] the sidebar list offset counts the PROJECTS heading, so a long list scrolls without skipping a row
+- [ ] if it still happens: record the raw output (`chorus` writes the frames of a chat to `.chorus/threads/<id>/raw/pty.log` only for agents; add a frame log behind `CHORUS_DEBUG_FRAMES=1`) and find which terminal and which sequence

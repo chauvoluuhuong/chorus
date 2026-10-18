@@ -130,6 +130,22 @@ test('narrow window: the path is cut with an ellipsis before the buttons, which 
   assert.match(icons[5], /^\s*▸\s*!\s*│/, 'a folded project with an approval waiting keeps its !');
 });
 
+test('a long chat list scrolls without losing or repeating a row, and keeps the active chat in view', () => {
+  const chats: SideRow[] = Array.from({ length: 30 }, (_, i) => ({ kind: 'chat', index: i, title: `chat ${i}`, agent: 'claude', state: 'idle', active: i === 25 }));
+  const side: SideRow[] = [{ kind: 'new' }, { kind: 'project', cwd: '/w/a', name: 'chorus', open: true, count: 30, waiting: 0, active: false }, ...chats, { kind: 'skills', active: false }, { kind: 'memory', active: false }];
+  for (const rows of [12, 16, 24, 40]) {
+    const t = gridText(compose(view({ rows, side, screen: new VirtualScreen(90, rows - 2) })).grid);
+    const sidebar = t.slice(1, rows - 1).map(l => l.slice(0, 28).trim());
+    const drawn = sidebar.filter(l => /^[●○◐!…◌■]? ?chat \d+/.test(l.replace(/^▎/, '').trim()) || /chat \d+/.test(l));
+    const titles = drawn.map(l => l.match(/chat (\d+)/)![1]);
+    assert.equal(new Set(titles).size, titles.length, `rows=${rows}: no chat is drawn twice`);
+    assert.ok(titles.includes('25'), `rows=${rows}: the active chat is visible`);
+    assert.ok(titles.every((x, i) => i === 0 || Number(x) === Number(titles[i - 1]) + 1), `rows=${rows}: the chats are consecutive`);
+    assert.equal(sidebar.filter(l => /^chorus|▾ chorus/.test(l)).length <= 1, true, `rows=${rows}: the project row is not repeated`);
+    assert.equal(sidebar.filter(l => /PROJECTS/.test(l)).length <= 1, true);
+  }
+});
+
 test('too small: only a notice, no hit regions', () => {
   const { grid, hits } = compose(view({ cols: 40, rows: 10 }));
   assert.match(gridText(grid).join('\n'), /window too small: 40×10/);

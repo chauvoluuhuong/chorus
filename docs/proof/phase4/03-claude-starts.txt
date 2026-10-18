@@ -1,9 +1,9 @@
   ‹ Back   claude 1                                                                                                                        ☰ Menu ⌃\
   + New chat                │
  PROJECTS                   │ ▐▛███▛█   Claude Code v2.1.302
- ▾ chorus-proof-api-23e… 1  │▝▜██████▀  Haiku 5.5 · Claude Pro
-   ◌ Rate limiter     codex │ ▝▝   ▝▝   /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-bgAz9m
- ▾ chorus-proof-bgAz9m   1  │
+ ▾ chorus-proof-api-k4I… 1  │▝▜██████▀  Haiku 5.5 · Claude Pro
+   ◌ Rate limiter     codex │ ▝▝   ▝▝   /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-7xWBJP
+ ▾ chorus-proof-7xWBJP   1  │
 ▎  ● claude 1        claude │
                             │
                             │

@@ -1,9 +1,9 @@
   ‹ Back   Approvals                                                                                                        ! 1 waiting    ☰ Menu ⌃\
   + New chat                │  Approvals  ·  1 waiting           this project   all projects
  PROJECTS                   │
- ▾ chorus-proof-api-23e… 1  │  ▸ Create calc.js in the curre…  claude  waiting 6s
-   ◌ Rate limiter     codex │      Create calc.js and run the add check   [edits a file]
- ▾ chorus-proof-bgAz9m   !1 │       y Approve   x Deny   ⏎ Open chat
+ ▾ chorus-proof-api-k4I… 1  │  ▸ Create calc.js in the curre…  claude  waiting 7s
+   ◌ Rate limiter     codex │      Create Chorus artifacts directory if missing   [runs a command]
+ ▾ chorus-proof-7xWBJP   !1 │       y Approve   x Deny   ⏎ Open chat
    ! Create calc.js… claude │
    ● codex 2          codex │  Decided today
                             │    nothing yet

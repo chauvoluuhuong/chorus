@@ -1,27 +1,27 @@
   ‹ Back   Create calc.js in the curre…                                                  ☰ Menu ⌃\
-  + New chat        │ ▝▝   ▝▝   /…/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-bgAz9m
- PROJECTS           │
- ▾ chorus-proof… 1  │
-   ◌ Rate limiter   │❯ Create calc.js in the current directory that exports a function add(a, b).
- ▾ chorus-proof… 3  │  Run it once with your shell tool as: node -e
-▎  ○ Create calc.j… │  "console.log(require('./calc.js').add(2, 3))" . Then write a short markdown
-   ↳ ◐ Create calc… │  note about what you did, as notes.md, where Chorus keeps files for the user.
-   ◐ Reply with on… │  Reply with one line: done.
+  + New chat        │      3 }
+ PROJECTS           │      4
+ ▾ chorus-proof… 1  │      5 module.exports = { add };
+   ◌ Rate limiter   │
+ ▾ chorus-proof… 3  │  Ran 1 shell command
+▎  ○ Create calc.j… │
+   ↳ ◐ Create calc… │⏺ Write(.chorus/threads/t_b9113784/artifacts/notes.md)
+   ◐ Reply with on… │  ⎿  Wrote 17 lines to .chorus/threads/t_b9113784/artifacts/notes.md
+                    │       1 # Notes: calc.js
+                    │       2
+                    │       3 ## What I did
+                    │       5 1. Created `calc.js` in the project root. It defines `add(a, b)
+                    │         `, which returns `a + b`, and exports it with `module.exports =
+                    │          { add }`.
+                    │       6 2. Ran it once with the shell:
+                    │       8    ```
+                    │       9    node -e "console.log(require('./calc.js').add(2, 3))"
+                    │      10    ```
+                    │     … +10 lines
                     │
-                    │  Ran 2 shell commands
+                    │⏺ done.
                     │
-                    │⏺ Write(.chorus/threads/t_c6b5e3cd/artifacts/notes.md)
-                    │  ⎿  Wrote 4 lines to .chorus/threads/t_c6b5e3cd/artifacts/notes.md
-                    │      1 # Notes: calc.js
-                    │      2
-                    │      3 - Created `calc.js` in the project root. It exports `add(a, b)`,
-                    │         which returns `a + b`.
-                    │      4 - Ran `node -e "console.log(require('./calc.js').add(2, 3))"` th
-                    │        rough the shell. Output: `5`.
-                    │
-                    │⏺ done
-                    │
-                    │✻ Cogitated for 7s · done 4:29 PM
+                    │✻ Worked for 9s · done 4:40 PM
                     │
                     │───────────────────────────────────────────────────────────────────────────────
                     │❯

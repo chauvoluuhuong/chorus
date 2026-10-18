@@ -50,6 +50,8 @@ export interface AppOpts {
   /** e.g. "ctrl+b"; default: Ctrl+\\ and Ctrl+Space (env CHORUS_MENU_KEY) */
   menuKey?: string;
   ptyFactory?: PtyFactory;
+  /** repaint the whole frame this often even when nothing changed, so a glitch in the terminal heals itself (ms, default 3000) */
+  repaintMs?: number;
 }
 
 export interface Card {
@@ -81,7 +83,7 @@ interface PaneState extends PaneOpts {
 }
 
 // 1003 = press, release and motion (hover); 1006 = SGR encoding. The agent's own mouse request is forwarded, see onMouse.
-const MODE_RESET = '\x1b[?2004l\x1b[?1l\x1b[?1000l\x1b[?1003l\x1b[?1006l\x1b[?25h\x1b[0m\x1b[?1049l';
+const MODE_RESET = '\x1b[?7h\x1b[?2004l\x1b[?1l\x1b[?1000l\x1b[?1003l\x1b[?1006l\x1b[?25h\x1b[0m\x1b[?1049l';
 const MOUSE_ON = '\x1b[?1003h\x1b[?1006h';
 const MOUSE = /\x1b\[<(\d+);(\d+);(\d+)([Mm])/g;
 /** keys the menu hands to the controller */
@@ -120,6 +122,8 @@ export class App extends EventEmitter {
   private promptState: { title: string; lines: string[]; value: string; resolve: (v: string | undefined) => void } | undefined;
   private card: Card | undefined;
   private mouseOn: boolean;
+  private repaintMs: number;
+  private lastFull = 0;
   private mousePending = '';
   private onData = (d: string | Buffer) => {
     let s = this.mousePending + String(d);
@@ -142,6 +146,7 @@ export class App extends EventEmitter {
     super();
     this.io = io;
     this.mouseOn = (opts.mouse ?? true) && process.env.CHORUS_MOUSE !== '0';
+    this.repaintMs = opts.repaintMs ?? Number(process.env.CHORUS_REPAINT_MS ?? 3000);
     this.factory = opts.ptyFactory ?? nodePtyFactory;
     const mk = parseMenuKeys(opts.menuKey ?? process.env.CHORUS_MENU_KEY);
     this.menuLabel = mk.label;
@@ -242,7 +247,8 @@ export class App extends EventEmitter {
     process.on('exit', this.onExitSignal);
     process.on('SIGTERM', this.onExitSignal);
     process.on('SIGHUP', this.onExitSignal);
-    this.io.stdout.write('\x1b[?1049h\x1b[2J' + (this.mouseOn ? MOUSE_ON : ''));
+    // autowrap off: a row that comes out one cell too long (a glyph the terminal draws wider) is cut, never wrapped, so a frame can never scroll the screen
+    this.io.stdout.write('\x1b[?1049h\x1b[?7l\x1b[2J' + (this.mouseOn ? MOUSE_ON : ''));
     this.tick = setInterval(() => this.schedule(), 700);
     this.render();
   }
@@ -672,6 +678,12 @@ export class App extends EventEmitter {
       hover: this.hover,
     });
     this.hits = hits;
+    // the Differ trusts that the terminal still shows what it last sent; every few seconds send everything again, so anything
+    // that disturbed the screen (a torn frame, a stray write, a terminal that scrolled) is gone by itself
+    if (this.repaintMs > 0 && Date.now() - this.lastFull > this.repaintMs) {
+      this.differ.reset();
+      this.lastFull = Date.now();
+    }
     let out = '\x1b[?2026h\x1b[?25l' + this.differ.frame(grid) + this.modeSync(pane ? undefined : act);
     if (cursor) out += `\x1b[${cursor.y + 1};${cursor.x + 1}H\x1b[?25h`;
     out += '\x1b[?2026l';

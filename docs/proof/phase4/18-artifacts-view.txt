@@ -1,14 +1,14 @@
   ‹ Back   Create calc.js in the curre… › Artifacts                                                                                        ☰ Menu ⌃\
   + New chat                │ Artifacts · Create calc.js in the curre…
  PROJECTS                   │  NAME                              VER   BY       UPDATED
- ▾ chorus-proof-api-23e… 1  │  ▸ notes.md                        v1    claude   just now
+ ▾ chorus-proof-api-k4I… 1  │  ▸ notes.md                        v1    claude   just now
    ◌ Rate limiter     codex │
- ▾ chorus-proof-bgAz9m   3  │  Link     press ⏎ to open it in the browser: it reloads while the agent keeps editing
-   ◐ Create calc.js… claude │  File     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-bgAz9m/.chorus/threads/t_c6b5e3cd/artifa
+ ▾ chorus-proof-7xWBJP   3  │  Link     press ⏎ to open it in the browser: it reloads while the agent keeps editing
+   ◐ Create calc.js… claude │  File     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-7xWBJP/.chorus/threads/t_b9113784/artifa
    ↳ ◐ Create calc.j… codex │
    ◐ Reply with only… codex │  Files written by tools
-                            │    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-bgAz9m/.chorus/threads/t_c6b5e3cd/artifacts/not
-                            │
+                            │    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-7xWBJP/calc.js
+                            │    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-7xWBJP/.chorus/threads/t_b9113784/artifacts/not
                             │
                             │
                             │

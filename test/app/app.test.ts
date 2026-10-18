@@ -290,6 +290,38 @@ test('panes: Back (top bar or esc) closes them and tells the pane; pane regions 
   h.app.stop();
 });
 
+test('autowrap is switched off while the app runs (a too-long row is cut, never wrapped into a scroll) and back on at exit', async () => {
+  const h = harness();
+  h.app.addThread(h.spec('alpha'));
+  h.app.start();
+  await h.until(l => has(l, /READY alpha/), 'ready');
+  assert.ok(h.raw().includes('\x1b[?7l'), 'autowrap off');
+  h.app.stop();
+  assert.ok(h.raw().includes('\x1b[?7h'), 'autowrap restored');
+});
+
+test('self-heal: the whole frame is sent again every few seconds, so a glitch in the terminal disappears by itself', async () => {
+  const stdin = Object.assign(new PassThrough(), { setRawMode: () => {}, isTTY: true });
+  const outer = new VirtualScreen(100, 24);
+  let raw = '';
+  const stdout = new PassThrough();
+  stdout.on('data', d => {
+    raw += d;
+    outer.write(d);
+  });
+  const app = new App({ stdin, stdout, size: () => ({ cols: 100, rows: 24 }), onResize: () => () => {} }, { repaintMs: 300 });
+  app.addThread({ id: 'a', title: 'alpha', agent: 'fake', file: process.execPath, args: [FAKE, 'alpha'], cwd: process.cwd() });
+  app.start();
+  await sleep(700);
+  // something scribbles on the terminal behind the app's back, the way a torn frame or a stray write would
+  await new Promise<void>(r => outer.write('\x1b[4;1H\x1b[0mXXXXXXXXXXXX', r));
+  assert.ok(outer.text()[3].includes('XXXX'));
+  await sleep(1200);
+  assert.ok(!outer.text()[3].includes('XXXX'), 'repainted');
+  assert.ok((raw.match(/☰ Menu/g) ?? []).length >= 2, 'the top bar was sent more than once');
+  app.stop();
+});
+
 test('mouse can be switched off', async () => {
   const stdin = Object.assign(new PassThrough(), { setRawMode: () => {}, isTTY: true });
   let raw = '';

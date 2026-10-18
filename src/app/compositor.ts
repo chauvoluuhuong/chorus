@@ -314,15 +314,15 @@ function drawSidebar(grid: Grid, rows: SideRow[], mode: SideMode, w: number, y0:
   const stacked = mode === 'icons'; // narrow sidebars keep the two shared things side by side, icons stack them
   const footH = foot.length ? (stacked ? foot.length : 1) + 1 : 0;
   const listH = Math.max(1, height - footH);
-  // keep the selected row visible
-  const sel = Math.max(0, top.findIndex(r => (r.kind === 'chat' || r.kind === 'project') && r.active));
-  const offset = Math.max(0, Math.min(top.length - listH, sel - listH + 2));
-  // the header sits under the New chat button, like the mockup: PROJECTS
+  // the list as drawn: New chat, the PROJECTS heading, then projects and chats
   const lines: (SideRow | 'heading')[] = [];
   for (const r of top) {
     lines.push(r);
     if (r.kind === 'new' && mode !== 'icons') lines.push('heading');
   }
+  // keep the selected row visible (indexes are of `lines`, the rows really drawn)
+  const sel = Math.max(0, lines.findIndex(r => r !== 'heading' && (r.kind === 'chat' || r.kind === 'project') && r.active));
+  const offset = Math.max(0, Math.min(lines.length - listH, sel - listH + 2));
   lines.slice(offset, offset + listH).forEach((r, i) => {
     if (r === 'heading') put(grid, y0 + i, 1, 'PROJECTS', join(T.dim, T.bgSide), w);
     else drawSideRow(grid, r, mode, w, y0 + i, hits);

@@ -506,6 +506,33 @@ test('a resumed chat keeps its effort and skip flag', async () => {
   }
 });
 
+test('choosing agy never freezes the screen: its model list is fetched in the background and appears when it arrives', async () => {
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-fakeagy-'));
+  fs.writeFileSync(path.join(bin, 'agy'), "#!/bin/sh\nsleep 1.5\nprintf 'fast-model\\tFast\\nbig-model\\tBig\\n'\n", { mode: 0o755 });
+  const cache = path.join(bin, 'agy-cache.json');
+  const oldPath = process.env.PATH;
+  process.env.PATH = `${bin}:${oldPath}`;
+  process.env.CHORUS_AGY_CACHE = cache;
+  const r = rig();
+  try {
+    r.type('\x00n');
+    await r.until(() => has(r.screen(), /Agent\s+claude\s+codex\s+agy/), 'screen');
+    // the event loop keeps running while the list loads: a timer set now fires on time
+    const t0 = Date.now();
+    r.app.click('agent:2');
+    await new Promise(res => setTimeout(res, 50));
+    assert.ok(Date.now() - t0 < 600, `the click did not block for the 1.5 s agy takes (${Date.now() - t0} ms)`);
+    await r.until(() => has(r.screen(), /Model\s+default\s*$/) || has(r.screen(), /Model\s+default/), 'screen redrawn at once with the list known so far');
+    assert.ok(!has(r.screen(), /fast-model/), 'not there yet');
+    await r.until(() => has(r.screen(), /Model\s+default\s+fast-model\s+big-model/), 'the models appear when agy answered', 6000);
+    assert.ok(fs.existsSync(cache), 'cached for the next time');
+  } finally {
+    process.env.PATH = oldPath;
+    delete process.env.CHORUS_AGY_CACHE;
+    r.close();
+  }
+});
+
 test('a long first message becomes a title with an ellipsis, not a cut word', async () => {
   const r = rig();
   try {

@@ -1,9 +1,9 @@
   ‹ Back   Memory                                                                                                                          ☰ Menu ⌃\
-  + New chat                │  Memory  ·  all projects      /var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-home-zaUu9d/chorus.db   / se
+  + New chat                │  Memory  ·  all projects      /var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-home-55KcaV/chorus.db   / se
  PROJECTS                   │
- ▾ chorus-proof-api-23e… 1  │    Reply with only the tex… chorus-proof…  codex   2 turns   just now
+ ▾ chorus-proof-api-k4I… 1  │    Reply with only the tex… chorus-proof…  codex   2 turns   just now
    ◌ Rate limiter     codex │    Create calc.js in the c… chorus-proof…  claude  2 turns   just now
- ▾ chorus-proof-bgAz9m   3  │    ↳ Create calc.js in the… chorus-proof…  codex   3 turns   just now
+ ▾ chorus-proof-7xWBJP   3  │    ↳ Create calc.js in the… chorus-proof…  codex   3 turns   just now
    ◐ Create calc.js… claude │  ▸ Rate limiter             chorus-proof…  codex   2 turns   just now
    ↳ ◐ Create calc.j… codex │
    ◐ Reply with only… codex │    Rate limiter
