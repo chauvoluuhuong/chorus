@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import http from 'node:http';
 import { VirtualScreen } from '../../src/app/screen.ts';
 import { maskText, saveScreenshot } from '../../src/app/snapshot.ts';
 import { activityCmd, artifactsCmd, doctorCmd, threadsCmd, traceCmd } from '../../src/cli/commands.ts';
@@ -61,7 +62,7 @@ const TASK =
   `Run it once with your shell tool as: node -e "console.log(require('./calc.js').add(2, 3))" . ` +
   'Then write a short markdown note about what you did into notes.md in the artifacts folder. Reply with one line: done.';
 
-const env = { ...process.env, TERM: 'xterm-256color', CHORUS_MODEL_CLAUDE: 'haiku' } as Record<string, string>;
+const env = { ...process.env, TERM: 'xterm-256color', CHORUS_NO_OPEN: '1', CHORUS_MODEL_CLAUDE: 'haiku' } as Record<string, string>;
 for (const k of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_PID']) delete env[k];
 const app = pty.spawn(process.execPath, [CLI], { name: 'xterm-256color', cols: COLS, rows: ROWS, cwd: project, env });
 let exited = false;
@@ -89,9 +90,11 @@ const store = () => new Store(project);
 /** answer startup dialogs of whichever agent is in front */
 async function trustIfAsked() {
   if (has(/Yes, I trust this folder/i) && has(/Do you trust|trust the contents/i)) { app.write('\r'); return true; } // agy: the cursor starts on Yes
-  if (has(/Yes, I trust this folder/i) && has(/Claude Code'll be able|Quick safety check/i) && has(/Enter to confirm/)) {
+  if (has(/Yes, I trust this folder/i) && has(/Claude Code'll be able|Quick safety check/i)) {
     // Claude reads the keyboard a moment after drawing the dialog: press Up until the cursor is on "Yes", then Enter
-    const sel = () => text().find(l => /❯/.test(l))?.slice(27).trim() ?? '';
+    // read the cursor only from the thread area (the sidebar and the card may contain other text), and only once it is drawn
+    const sel = () => text().map(l => l.slice(31)).find(l => /^\s*❯\s*(No, exit|Yes, I trust)/.test(l))?.trim() ?? '';
+    for (let i = 0; i < 20 && !sel(); i++) await sleep(250);
     for (let i = 0; i < 10 && !/^❯\s*Yes/.test(sel()); i++) { app.write('\x1b[A'); await sleep(1500); }
     app.write('\r');
     return true;
@@ -191,7 +194,7 @@ menu('h');
 check('handoff dialog names the agy thread', await until(/hand off "Create calc\.js/, 5000));
 shot('handoff-dialog-from-agy', 'ctrl+space h on the agy thread: choose the agent that continues');
 app.write('1'); // claude
-check('handoff thread appears as thread 3', await until(() => /▎/.test(dot(2)), 20000), row(2));
+check('the handoff thread (Claude) appears in front, listed under agy (↳)', await until(() => /▎/.test(dot(1)) && /↳/.test(text()[3] ?? ''), 20000), `${text()[3]}`);
 const c1 = store().listThreads().find(t => t.parent_thread_id === a1.id);
 check('it is a child of the agy thread (claude)', !!c1 && c1!.agent === 'claude', JSON.stringify(c1));
 const loaded1 = await untilTrusting(() => !!c1 && store().mcpCalls(c1.id).some(m => m.tool === 'get_handoff_context'), 150000);
@@ -204,11 +207,11 @@ check('its summary names calc.js', ans1 && /calc\.js/.test(reply1), reply1.slice
 
 /* 6. hand off Claude → agy */
 log('6. hand off the Claude thread to agy');
-await until(() => /[○◐]/.test(dot(2)), 60000);
+await until(() => /[○◐]/.test(dot(1)), 60000);
 menu('h');
 check('handoff dialog names the Claude thread', await until(/hand off ".*" to…/, 5000));
 app.write('3'); // agy
-check('the agy handoff thread appears as thread 4', await until(() => /▎/.test(dot(3)), 20000), row(3));
+check('the agy handoff thread appears in front, listed under the Claude thread it continues (↳)', await until(() => /▎/.test(dot(2)) && /↳/.test(text()[5] ?? ''), 20000), `${text()[5]}`);
 const a2 = store().listThreads().find(t => t.parent_thread_id === c1?.id);
 check('it is a child of the Claude thread (agy)', !!a2 && a2!.agent === 'agy', JSON.stringify(a2));
 // agy may ask before calling the MCP tool: answer from the card/prompt like a person would
@@ -218,7 +221,7 @@ while (Date.now() - t1 < 180000) {
   if (a2 && store().mcpCalls(a2.id).some(m => m.tool === 'get_handoff_context')) break;
   if (has(/Individual quota reached/)) break; // agy's own message when the plan quota is used up
   await trustIfAsked();
-  if (/!/.test(dot(3))) { menu('y'); mcpApprovals++; await sleep(2500); continue; }
+  if (/!/.test(dot(2))) { menu('y'); mcpApprovals++; await sleep(2500); continue; }
   await sleep(1500);
 }
 const quota = has(/Individual quota reached/);
@@ -232,7 +235,7 @@ if (quota) {
   skip('agy called get_handoff_context (Chorus saw the MCP call)', 'agy reached its plan quota ("Individual quota reached") before it could answer; the Claude → agy direction passed in an earlier run of this proof');
   skip('its summary names calc.js', 'same: agy quota reached');
 } else check('its summary names calc.js', ans2 && /calc\.js/.test(reply2), reply2.slice(0, 300));
-if (!quota) await until(() => /[○◐]/.test(dot(3)), 90000);
+if (!quota) await until(() => /[○◐]/.test(dot(2)), 90000);
 
 /* 7. views and end */
 log('7. views');
@@ -243,9 +246,15 @@ app.write('\x1b');
 await sleep(500);
 menu('1');
 await sleep(1000);
-menu('f');
-check('files view lists the agy artifact', await until(/files and artifacts/, 5000) && /notes\.md/.test(text().join('\n')));
-shot('files-view', 'ctrl+space f: the artifact agy wrote');
+menu('a');
+check('artifacts view lists the artifact agy wrote, with its version', await until(/Artifacts · /, 5000) && /notes\.md\s+v1/.test(text().join('\n')), text().join('|').slice(0, 300));
+shot('artifacts-view', 'ctrl+space a: the artifact agy wrote (name, version, who wrote it)');
+app.write('o');
+check('o starts the live preview and shows its address', await until(/Preview\s+http:\/\/localhost:\d+\/t_\w+\/notes\.md/, 8000), text().join('|').slice(0, 300));
+const previewUrl = text().join('\n').match(/http:\/\/localhost:\d+\/t_\w+\/notes\.md/)?.[0] ?? '';
+const page = await new Promise<string>(res => http.get(previewUrl, m => { let b = ''; m.on('data', d => (b += d)); m.on('end', () => res(b)); }).on('error', () => res('')));
+check('the preview page serves what agy wrote and reloads when it changes', /calc/i.test(page) && /EventSource/.test(page), page.slice(0, 200));
+shot('preview', 'o: the artifact agy wrote, served at a local address that reloads while the agent keeps editing it');
 app.write('\x1b');
 await sleep(500);
 shot('overview', 'final state: agy, Claude, the Claude handoff thread and the agy handoff thread');

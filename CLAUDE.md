@@ -56,7 +56,7 @@ npm run typecheck
 npm run smoke -- --agents claude,codex,agy --phase 1,2,3   # L3 against the real CLIs (not-logged-in CLIs are SKIPped)
 npm run smoke:app                          # the real app hosting the real agent TUIs in PTYs
 npm run proof                              # Phase 4 e2e with screenshots → docs/proof/phase4/report.html, opened in the browser (real Claude + Codex, ~10 min)
-npm run proof:agy                          # the same with agy (docs/proof/phase4-agy/); agy has a small plan quota, don't repeat it often
+npm run proof:agy                          # the same with agy (docs/proof/phase4-agy/, 30/30); agy has a small plan quota, don't repeat it often
 node src/cli/index.ts mux codex agy        # try the app by hand
 node tools/probe/probe.mjs <cli>           # recapture fixtures after a CLI update
 ```
