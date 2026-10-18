@@ -49,8 +49,34 @@ Plan and results: [phase4.md](phase4.md). D1 decided: TypeScript. E2E proof with
 - [x] P4.9 remaining parts: mouse clicks, artifact preview server with live reload, `o/p/v`, `r/f`
 - [ ] Plan meter for Claude interactive threads (Claude reports plan usage only in the headless stream)
 - [x] **Proof:** `npm run proof` drives the real app with real Claude and Codex: two threads, switch, approval from a card, handoff, artifacts; screenshots in `docs/proof/phase4/`
+- [ ] P4.10 UI pass 2 (simpler, like an AI chat app): project-tree sidebar, New chat form with skip-permissions, shared Memory and Skills. Plan: [ui-plan.md](ui-plan.md), mockup `docs/mockups/chorus-cli.html`
 
 ## Phase 5 · Desktop app
 
 - [ ] `chorus serve` local API
 - [ ] Desktop UI over it
+
+## Technical debt
+
+### TD-1 · Universal skills (one library that every agent finds and understands)
+
+Today skills sync per project from `<project>/.chorus/skills` (Phase 2, proven). The UI plan makes the library
+global (`~/.chorus/skills`). Not solved yet, to do later:
+
+- [ ] **Find new skills:** scan the native folders (`.claude/skills`, `.agents/skills`, `.codex/skills` and the
+  `~/` versions) at app start and chat start, plus a file watcher while chats run. New = has `SKILL.md`, is not a
+  Chorus link or `.chorus-managed` folder, is not a CLI default (`~/.codex/skills/.system`, agy `builtin/`).
+  A content hash catches changes to imported skills. Offer them for import.
+- [ ] **Global source:** move the sync source to `~/.chorus/skills`, linked into each project at chat start
+  (same links and `.git/info/exclude` as today). Opt-in links in `~/.claude/skills` and `~/.agents/skills` for
+  use outside Chorus (rule 4: off by default). agy's user-level folder is ❓: probe first.
+- [ ] **Understanding a skill written for another CLI:** the format is the same (✅ `integrations/skills.md`);
+  the text may name tools or fields only one CLI has (`TodoWrite`, `WebFetch`, `allowed-tools`, `$ARGUMENTS`).
+  Plan: a fixed ~100-token paragraph injected at chat start through the channels already verified for the
+  artifacts folder (MCP server instructions for Claude and agy, `-c developer_instructions` for Codex) that maps
+  foreign tool names to the agent's own, says to ignore unknown frontmatter and resolves paths from the skill
+  folder. No per-skill rewrite and no "works in" UI unless the probe shows it is needed.
+- [ ] **Limits to accept:** a prompt cannot make an agent see a skill (native folders do that), cannot add a tool
+  the agent lacks, and cannot grant permissions (`allowed-tools` only means something to Claude).
+- [ ] **Proof:** a probe puts a Claude-style skill (uses `TodoWrite`, `$ARGUMENTS`, `allowed-tools`) in the
+  library and checks in the Codex and agy transcripts that they load it and follow it; fixture in `fixtures/skills/`.
