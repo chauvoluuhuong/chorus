@@ -325,7 +325,7 @@ const SCENES = [
     screenFrom: 2,
     behind: [
       'While the menu is open the agent keeps running; its output is buffered and redrawn on return.',
-      'Shortcuts: Ctrl+Space then <code>1</code>–<code>9</code> jumps straight to a thread; Ctrl+Space twice goes back to the previous one.',
+      'Shortcuts: Ctrl+\\ then <code>1</code>–<code>9</code> jumps straight to a thread; pressing the menu key twice sends the key itself to the agent. Ctrl+Space works too where macOS lets it through.',
     ],
   },
   {
@@ -547,7 +547,7 @@ function statusBar(st) {
     <span class="${cls}">${st.agent}${st.model ? ' · ' + st.model : ''}${st.from ? ' <span class="d">from</span> <span class="cl">' + st.from + '</span>' : ''}</span>
     <span>5h <span class="meter ${usageCls}">${meter}</span> ${st.usage}%${st.warn ? ' <span class="er">limit</span>' : ''}</span>
     <span>${st.artifacts} artifacts${st.toast ? ' <span class="ok">' + st.toast + '</span>' : ''}</span>
-    <span>⌃Space menu</span>
+    <span>⌃\\ menu</span>
   </div>`;
 }
 
@@ -575,7 +575,7 @@ function sidebar(sd) {
       `<span class="m">${t.child ? '  ' : ''}  <span class="${agentCls}">${t.agent}</span> · ${label}</span></div>`;
   }).join('');
   return `<div class="side"><div class="hd">THREADS · <span class="ch">${i1(sd.active)}</span>/${THREADS.length}</div>${items}` +
-    `<div class="ft"><span class="ch">⌃Space ↑↓</span> move  <span class="ch">⏎</span> open\n<span class="ch">⌃Space n</span> new  <span class="ch">b</span> hide</div></div>`;
+    `<div class="ft"><span class="ch">⌃\\ ↑↓</span> move  <span class="ch">⏎</span> open\n<span class="ch">⌃\\ n</span> new  <span class="ch">b</span> hide</div></div>`;
 }
 const i1 = i => i + 1;
 

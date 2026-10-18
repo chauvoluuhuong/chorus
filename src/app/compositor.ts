@@ -89,6 +89,8 @@ export interface View {
   card?: { title: string; lines: string[] };
   /** the home screen: no sidebar, no thread */
   home?: HomeView;
+  /** how the menu key is named in the hints */
+  menuLabel?: string;
 }
 
 const GLYPH: Record<ItemState, { ch: string; s: string; label: string }> = {
@@ -138,7 +140,7 @@ export function compose(v: View): { grid: Grid; cursor: { x: number; y: number }
 
   if (v.home) drawHome(grid, v.home, L.contentCols, L.contentRows);
 
-  if (L.sidebar) drawSidebar(grid, v.items, L.sidebar, L.contentRows);
+  if (L.sidebar) drawSidebar(grid, v.items, L.sidebar, L.contentRows, v.menuLabel ?? '⌃\\');
 
   if (v.pane) {
     fill(grid, 0, L.contentX, L.contentX + L.contentCols, T.bgStatus);
@@ -171,7 +173,7 @@ function stateOf(it: SidebarItem): { ch: string; s: string; label: string; label
   return { ...g, labelStyle: it.state === 'approval' || it.state === 'limit' ? T.err : T.dim };
 }
 
-function drawSidebar(grid: Grid, items: SidebarItem[], width: number, height: number) {
+function drawSidebar(grid: Grid, items: SidebarItem[], width: number, height: number, key: string) {
   for (let y = 0; y < height; y++) {
     fill(grid, y, 0, width, T.bgSide);
     put(grid, y, width, '│', T.line);
@@ -206,8 +208,8 @@ function drawSidebar(grid: Grid, items: SidebarItem[], width: number, height: nu
     put(grid, y + 1, x2 + it.agent.length, ` · ${g.label}`, join(g.labelStyle, bg), width - 1);
   });
 
-  const f1: Seg[] = [['⌃Space ↑↓', join(T.chorus, T.bgSide)], [' move  ', join(T.dim, T.bgSide)], ['⏎', join(T.chorus, T.bgSide)], [' open', join(T.dim, T.bgSide)]];
-  const f2: Seg[] = [['⌃Space n', join(T.chorus, T.bgSide)], [' new  ', join(T.dim, T.bgSide)], ['b', join(T.chorus, T.bgSide)], [' hide', join(T.dim, T.bgSide)]];
+  const f1: Seg[] = [[`${key} ↑↓`, join(T.chorus, T.bgSide)], [' move  ', join(T.dim, T.bgSide)], ['⏎', join(T.chorus, T.bgSide)], [' open', join(T.dim, T.bgSide)]];
+  const f2: Seg[] = [[`${key} n`, join(T.chorus, T.bgSide)], [' new  ', join(T.dim, T.bgSide)], ['b', join(T.chorus, T.bgSide)], [' hide', join(T.dim, T.bgSide)]];
   for (let x = 0; x < width; x++) grid[height - 3][x] = { t: '─', s: join(T.line, T.bgSide) };
   putRich(grid, height - 2, 1, f1, '', width);
   putRich(grid, height - 1, 1, f2, '', width);

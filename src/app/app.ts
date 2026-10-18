@@ -1,7 +1,7 @@
 // The chorus app shell: threads in PTYs with virtual screens, sidebar, status line, menu key, panes, dialogs, cards.
 import { EventEmitter } from 'node:events';
 import { compose, Differ, layout, type HomeView, type ItemState, type RichLine, type StatusBar } from './compositor.ts';
-import { InputRouter, type InputEvent } from './input.ts';
+import { InputRouter, parseMenuKeys, type InputEvent } from './input.ts';
 import { nodePtyFactory, type PtyFactory } from './pty.ts';
 import { ThreadHost, type HostOpts } from './thread-host.ts';
 
@@ -44,6 +44,7 @@ export interface AppOpts {
   /** mouse clicks in the sidebar and on the home list (default on; CHORUS_MOUSE=0 turns it off) */
   mouse?: boolean;
   sidebarWidth?: number;
+  /** e.g. "ctrl+b"; default: Ctrl+\\ and Ctrl+Space (env CHORUS_MENU_KEY) */
   menuKey?: string;
   ptyFactory?: PtyFactory;
 }
@@ -66,6 +67,8 @@ export const ACTION_KEYS: Record<string, string> = { n: 'new', h: 'handoff', m: 
 
 export class App extends EventEmitter {
   readonly entries: Entry[] = [];
+  /** how the menu key is named on screen */
+  menuLabel = '⌃\\';
   active = 0;
   sidebarOn = true;
   /** extra text shown in the status line until cleared (limit warning …) */
@@ -117,7 +120,9 @@ export class App extends EventEmitter {
     this.sidebarWidth = opts.sidebarWidth ?? 30;
     this.mouseOn = (opts.mouse ?? true) && process.env.CHORUS_MOUSE !== '0';
     this.factory = opts.ptyFactory ?? nodePtyFactory;
-    this.router = new InputRouter(e => this.onInput(e), opts.menuKey);
+    const mk = parseMenuKeys(opts.menuKey ?? process.env.CHORUS_MENU_KEY);
+    this.menuLabel = mk.label;
+    this.router = new InputRouter(e => this.onInput(e), mk.keys);
     this.done = new Promise(r => (this.finish = r));
   }
 
@@ -582,7 +587,7 @@ export class App extends EventEmitter {
       lines: this.pane.lines.slice(this.pane.scroll, this.pane.scroll + L.contentRows - 2),
       hint: this.pane.hint ?? `↑/↓ PgUp/PgDn scroll · g/G top/bottom · esc close  (${Math.min(this.pane.lines.length, this.pane.scroll + 1)}-${Math.min(this.pane.lines.length, this.pane.scroll + L.contentRows - 2)} of ${this.pane.lines.length})`,
     };
-    const card = this.card && { title: this.card.title, lines: [...this.card.lines, 'ctrl+space y  approve    ctrl+space x  deny    (or switch to the thread and answer there)'] };
+    const card = this.card && { title: this.card.title, lines: [...this.card.lines, `${this.menuLabel} y  approve    ${this.menuLabel} x  deny    (or switch to the thread and answer there)`] };
     const home = this.home && this.homeProvider ? { ...this.homeProvider(), selected: this.home.selected } : undefined;
     const meta = act?.meta ?? {};
     const exited = act?.host?.state === 'ended' ? `  (exited ${act.host.exitCode})` : '';
@@ -598,11 +603,12 @@ export class App extends EventEmitter {
       screen: act?.host?.screen,
       statusBar,
       message,
-      statusRight: this.router.menuOpen ? '1-9 switch · n new · h handoff · m memory · ? help · esc' : this.home ? 'esc: back to the thread' : '⌃Space menu',
+      statusRight: this.router.menuOpen ? '1-9 switch · n new · h handoff · m memory · ? help · esc' : this.home ? 'esc: back to the thread' : `${this.menuLabel} menu`,
       overlay,
       pane,
       card,
       home,
+      menuLabel: this.menuLabel,
     });
     let out = '\x1b[?2026h\x1b[?25l' + this.differ.frame(grid) + this.modeSync(pane || home ? undefined : act);
     if (cursor) out += `\x1b[${cursor.y + 1};${cursor.x + 1}H\x1b[?25h`;

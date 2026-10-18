@@ -5,7 +5,7 @@ import { VirtualScreen } from '../../src/app/screen.ts';
 
 function view(over: Partial<Parameters<typeof compose>[0]> = {}) {
   const screen = new VirtualScreen(40, 11);
-  return { cols: 70, rows: 12, sidebarWidth: 24, items: [{ title: 'fix bug', agent: 'claude', state: 'busy' as const, active: true }, { title: 'review', agent: 'codex', state: 'ended' as const, active: false }], screen, statusBar: { title: 'fix bug', agent: 'claude', model: 'sonnet', usage: 62, artifacts: 3 }, statusRight: '⌃Space menu', ...over };
+  return { cols: 70, rows: 12, sidebarWidth: 24, items: [{ title: 'fix bug', agent: 'claude', state: 'busy' as const, active: true }, { title: 'review', agent: 'codex', state: 'ended' as const, active: false }], screen, statusBar: { title: 'fix bug', agent: 'claude', model: 'sonnet', usage: 62, artifacts: 3 }, statusRight: '⌃\\ menu', ...over };
 }
 const flush = (s: VirtualScreen, data: string) => new Promise<void>(r => s.write(data, r));
 

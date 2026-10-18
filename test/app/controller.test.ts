@@ -101,7 +101,7 @@ test('new thread: store row, process, live transcript tailing and state follow t
   }
 });
 
-test('approval: a prompt on a background thread becomes a card; ctrl+space y answers it without switching', async () => {
+test('approval: a prompt on a background thread becomes a card; ctrl+\\ y answers it without switching', async () => {
   const r = rig();
   try {
   const a = r.c.newThread({ agent: 'codex', title: 'worker' });
@@ -290,7 +290,7 @@ test('quota: an agy thread whose screen says the quota is used up gets a status-
     const e = r.c.newThread({ agent: 'agy', title: 'out of quota' });
     await r.until(() => has(r.screen(), /READY agy/), 'ready');
     r.app.entry(e.id)!.host!.write(`show ${path.join(ROOT, 'fixtures/agy/1.4.1/quota/screen.txt')}\r`);
-    await r.until(() => /agy reached its quota \(resets in 147h16m18s\): ctrl\+space h continues in another agent/.test(r.screen()[29]), 'quota warning');
+    await r.until(() => /agy reached its quota \(resets in 147h16m18s\): ⌃\\ h continues in another agent/.test(r.screen()[29]), 'quota warning');
   } finally {
     r.close();
   }

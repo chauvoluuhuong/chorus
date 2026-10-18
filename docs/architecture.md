@@ -282,4 +282,4 @@ user: Ctrl+Space h → pick codex        (or: chorus handoff --to codex)
 | D2 | Per-session MCP config for agy | **Decided:** workspace `.agents/mcp_config.json`, verified with agy 1.4.0 |
 | D3 | Desktop technology | Decide at Phase 5; it only needs `chorus serve` |
 | D4 | Provider terms (agy subscription orchestration, Claude and Codex account use) | Check before selling; see integration docs |
-| D5 | Command name and menu key | `chorus` (package `chorus-cli`); Ctrl+Space, checked against all three CLIs' key bindings in Phase 4 |
+| D5 | Command name and menu key | `chorus` (package `chorus-cli`); menu key **Ctrl+\** and also Ctrl+Space (macOS keeps Ctrl+Space for input-source switching, so the default had to change), configurable with CHORUS_MENU_KEY |

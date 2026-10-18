@@ -133,7 +133,7 @@ await sleep(600);
 app.write('\r');
 shot('claude-starts', 'thread 1 is Claude Code (haiku); the task was typed into its own screen');
 check('the sidebar names the thread after the first message', await until(() => /▎ . Create calc\.js/.test(row(0)), 20000), row(0));
-check('status line shows the menu key', /Space menu/.test(text()[ROWS - 1]), text()[ROWS - 1]);
+check('status line shows the menu key', /\\ menu/.test(text()[ROWS - 1]), text()[ROWS - 1]);
 
 /* 2. Claude asks for approval while it is in front */
 log('2. Claude asks for approval in front');
@@ -148,7 +148,7 @@ menu('n');
 check('the new-thread form opens over the work in progress', await until(/Agent\s+\[claude\]/, 5000));
 app.write('\x1b[C'); // agent: codex
 await sleep(400);
-shot('new-thread-form-codex', 'ctrl+space n again: pick Codex (its model list is Codex\'s own), Enter');
+shot('new-thread-form-codex', 'ctrl+\\ n again: pick Codex (its model list is Codex\'s own), Enter');
 app.write('\r');
 check('Codex opens in thread 2', await until(/Trust and continue|Ask Codex to do anything/i, 40000), text().join('|'));
 if (has(/Trust and continue/i)) {
@@ -203,7 +203,7 @@ await sleep(800);
 menu('h');
 check('handoff dialog names the thread', await until(/hand off "Create calc\.js/, 5000));
 await sleep(400);
-shot('handoff-dialog', 'ctrl+space h on thread 1: choose the agent that continues the work');
+shot('handoff-dialog', 'ctrl+\\ h on thread 1: choose the agent that continues the work');
 app.write('2'); // codex
 check('the handoff thread appears in front, listed under the thread it continues (↳)', await until(() => /▎ . ↳|▎ ↳/.test(rowOf(/↳/).title) || /↳/.test(rowOf(/↳/).title), 20000), rowOf(/↳/).title);
 const child = (() => { const s = store(); return s.listThreads().find(t => t.parent_thread_id === t1.id); })();
@@ -220,12 +220,12 @@ check('the handoff thread settles as waiting', await until(() => /[○◐]/.test
 log('7. views');
 menu('m');
 check('memory view shows what the next agent reads', await until(/memory · /, 5000) && /calc\.js/.test(text().join('\n')), text().join('|').slice(0, 300));
-shot('memory-view', 'ctrl+space m: the digest a handoff carries (first request, files touched, commands, tests, last message)');
+shot('memory-view', 'ctrl+\\ m: the digest a handoff carries (first request, files touched, commands, tests, last message)');
 app.write('\x1b');
 await sleep(500);
 menu('e');
 check('activity view lists the tool calls with their status', await until(/Activity · /, 5000) && /mcp\s+chorus\.get_handoff_context\s+ok/.test(text().join('\n')), text().join('|').slice(0, 300));
-shot('activity-view', 'ctrl+space e on the handoff thread: its timeline shows the chorus.get_handoff_context MCP call that loaded the context');
+shot('activity-view', 'ctrl+\\ e on the handoff thread: its timeline shows the chorus.get_handoff_context MCP call that loaded the context');
 app.write('f');
 check('f filters the timeline by kind', await until(/\[tool\]/, 3000));
 app.write('f');
@@ -244,7 +244,7 @@ check('a mouse click on the first sidebar item opens the Claude thread', await u
 await sleep(800);
 menu('a');
 check('artifacts view lists the artifact with its version', await until(/Artifacts · /, 5000) && /notes\.md\s+v1/.test(text().join('\n')), text().join('|').slice(0, 300));
-shot('artifacts-view', 'ctrl+space a: the artifacts of the thread (name, version, who wrote it) and the files its tools wrote');
+shot('artifacts-view', 'ctrl+\\ a: the artifacts of the thread (name, version, who wrote it) and the files its tools wrote');
 app.write('o');
 check('o starts the live preview and shows its address', await until(/Preview\s+http:\/\/localhost:\d+\/t_\w+\/notes\.md/, 8000), text().join('|').slice(0, 300));
 const previewUrl = text().join('\n').match(/http:\/\/localhost:\d+\/t_\w+\/notes\.md/)?.[0] ?? '';
@@ -258,7 +258,7 @@ app.write('\x1b');
 await sleep(500);
 menu('?');
 await until(/Chorus keeps your agents side by side/, 5000);
-shot('help-view', 'ctrl+space ?: the keys');
+shot('help-view', 'ctrl+\\ ?: the keys');
 app.write('\x1b');
 await sleep(500);
 menu('1');

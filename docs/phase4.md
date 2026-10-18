@@ -121,7 +121,7 @@ reports plan usage in the headless stream, not in the transcript).
 
 ### New thread: agent, model, folder (as in the mockup)
 
-`ctrl+space n` (or `chorus new`, or `chorus` in a project with no threads) opens a three-field form: **Agent**
+`ctrl+\ n` (or `chorus new`, or `chorus` in a project with no threads) opens a three-field form: **Agent**
 (`←/→`), **Model** (the list changes with the agent: Claude aliases, Codex's model cache, `agy models`; `default`
 passes no flag) and **Folder** (text, default = this project, checked to exist). Enter starts the agent in that
 folder with the Chorus MCP server attached; you then talk to the agent in its own screen, and the thread takes the
@@ -135,8 +135,8 @@ name of your first message. `chorus new --agent claude --model sonnet --folder ~
 | P4.2 launchers | `core/launch.ts` `buildInteractive`, `app/controller.ts` `newThread` | Claude: `claude "<prompt>" --session-id <uuid> --mcp-config … --allowedTools mcp__chorus__…` (the prompt goes first because `--allowedTools` is variadic); Codex: `codex -c mcp_servers.chorus… "<prompt>"`, resume `codex … resume <id>`; agy: workspace `.agents/mcp_config.json` + `agy -i "<prompt>"`, resume `--conversation`. No auto-approve flags: the agent asks like it does for a person. The first prompt is typed exactly as given; where artifacts go is told through each agent's instructions (MCP server instructions for Claude and agy, `developer_instructions` for Codex) |
 | P4.3 tailing | `app/tailer.ts`, `core/discover.ts` | One tailer per thread: reads appended bytes (keeps the last half line), re-parses the transcript, upserts the store, scans artifacts. Claude's file is known from `--session-id`; for Codex/agy the tailer claims the first unclaimed transcript born after the spawn (Codex: same cwd). Limits: two threads started in the same second in one cwd are matched by creation order; the handoff prompt makes this unambiguous (not yet used as a marker) |
 | P4.4 state | adapters (`Session.status`), controller `refreshState` | `working` / `waiting` come from the transcripts (Claude `stop_reason: end_turn`, Codex `task_started`/`task_complete`, agy a planner reply without tool calls); `approval` from the screen detector; `ended` from the process; `parked` for threads of earlier runs. No hooks needed |
-| P4.5 handoff | `Controller.handoff`, `checkContext` | `ctrl+space h` → pick the agent → child thread (`parent_thread_id`) started with the fixed first message. If the child's first turn finishes without a `get_handoff_context` MCP call the status line warns and `ctrl+space r` types the prompt again |
-| P4.6 approvals | `app/approval.ts`, [integrations/approvals.md](integrations/approvals.md) | Screen detector + the prompt's own keys; the card appears only for threads you are not looking at; `ctrl+space y` / `x` answers the active thread's prompt or the card's |
+| P4.5 handoff | `Controller.handoff`, `checkContext` | `ctrl+\ h` → pick the agent → child thread (`parent_thread_id`) started with the fixed first message. If the child's first turn finishes without a `get_handoff_context` MCP call the status line warns and `ctrl+\ r` types the prompt again |
+| P4.6 approvals | `app/approval.ts`, [integrations/approvals.md](integrations/approvals.md) | Screen detector + the prompt's own keys; the card appears only for threads you are not looking at; `ctrl+\ y` / `x` answers the active thread's prompt or the card's |
 | P4.7 views and commands | `Controller.memoryLines/toolLines/fileLines`, `cli/commands.ts` | Panes for memory (`m`, the exact digest a handoff carries), tool calls (`t`), files and artifacts (`f`), help (`?`); limit warning at ≥ 90 % plan use; raw PTY capture per thread (`threads/<id>/raw/pty.log`, 2 MB cap); commands `new`, `run`, `handoff`, `threads`, `show`, `memory`, `artifacts`, `activity`, `trace`, `doctor` |
 
 ### P4.8 packaging spike: results

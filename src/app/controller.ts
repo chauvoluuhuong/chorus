@@ -193,7 +193,7 @@ export class Controller {
     const t = this.store.getThread(id);
     if (u?.limitUtilization == null || !t) return;
     if (u.limitUtilization >= 0.9) {
-      this.app.notice = `⚠ ${t.title} used ${Math.round(u.limitUtilization * 100)}% of its plan limit: ctrl+space h hands off to another agent`;
+      this.app.notice = `⚠ ${t.title} used ${Math.round(u.limitUtilization * 100)}% of its plan limit: ${this.app.menuLabel} h hands off to another agent`;
     }
     if (u.limitUtilization >= 0.99) void this.limitDialog(id, `${t.agent} reached its plan limit`, undefined);
   }
@@ -225,7 +225,7 @@ export class Controller {
     if (loaded) {
       if (this.app.notice.startsWith('⚠ context')) this.app.notice = '';
     } else if (s.status === 'waiting' && s.turns.some(x => x.role === 'assistant')) {
-      this.app.notice = `⚠ context not loaded in "${t.title}": ctrl+space r asks it again`;
+      this.app.notice = `⚠ context not loaded in "${t.title}": ${this.app.menuLabel} r asks it again`;
     }
   }
 
@@ -257,7 +257,7 @@ export class Controller {
       if (!e.host || e.host.state !== 'running') continue;
       const hit = detectLimit(e.agent as AgentId, e.host.screen.logicalLines());
       const known = this.limited.get(e.id);
-      const text = (resets?: string) => `⚠ ${e.title}: ${e.agent} reached its quota${resets ? ` (resets in ${resets})` : ''}: ctrl+space h continues in another agent`;
+      const text = (resets?: string) => `⚠ ${e.title}: ${e.agent} reached its quota${resets ? ` (resets in ${resets})` : ''}: ${this.app.menuLabel} h continues in another agent`;
       if (hit && (known === undefined || (!known && hit.resets))) {
         // the message may still be drawing: refresh the warning once the reset time shows up
         this.limited.set(e.id, hit.resets ?? '');
@@ -330,7 +330,7 @@ export class Controller {
         this.retryContext();
         break;
       case 'help':
-        this.app.showPane('help', HELP);
+        this.app.showPane('help', helpLines(this.app.menuLabel));
         break;
     }
   }
@@ -651,20 +651,21 @@ export class Controller {
   }
 }
 
-const HELP = [
-  'Chorus keeps your agents side by side. Everything goes through the menu key, ctrl+space:',
+const helpLines = (k: string) => [
+  `Chorus keeps your agents side by side. Everything goes through the menu key, ${k} (Ctrl+\\ or Ctrl+Space; CHORUS_MENU_KEY changes it):`,
   '',
-  '  ctrl+space  1-9     switch to thread N',
-  '  ctrl+space  n       new thread (pick claude, codex or agy)',
-  '  ctrl+space  h       hand off the current thread to another agent',
-  '  ctrl+space  m       memory: what the next agent will read',
-  '  ctrl+space  f       files and artifacts',
-  '  ctrl+space  t       tool calls of this thread',
-  '  ctrl+space  y / x   approve / deny the request a background thread is waiting on',
-  '  ctrl+space  r       ask a handoff thread to load its context again',
-  '  ctrl+space  b       hide or show the sidebar',
-  '  ctrl+space  q       quit (twice while threads run)',
-  '  ctrl+space  ctrl+space   send ctrl+space to the agent',
+  `  ${k}  1-9     switch to thread N (or click it in the sidebar)`,
+  `  ${k}  n       new thread: agent, model, folder`,
+  `  ${k}  h       hand off the current thread to another agent`,
+  `  ${k}  m       memory: what the next agent will read`,
+  `  ${k}  a       artifacts (o opens one in the browser with live reload)`,
+  `  ${k}  e       activity (f filters, r raw trace)`,
+  `  ${k}  y / x   approve / deny the request a background thread is waiting on`,
+  `  ${k}  r       ask a handoff thread to load its context again`,
+  `  ${k}  0       home`,
+  `  ${k}  b       hide or show the sidebar`,
+  `  ${k}  q       quit (twice while threads run)`,
+  `  ${k}  ${k}   send the menu key itself to the agent`,
   '',
-  'Sidebar dots: ● working   ○ waiting for you   ! needs approval   … starting   ◌ parked (select to resume)   ✕ ended',
+  'Sidebar dots: ● working   ◐ waiting for you   ○ idle   ! needs approval   … starting   ◌ parked (select to resume)   ■ limit reached',
 ];

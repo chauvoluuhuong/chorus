@@ -29,7 +29,9 @@ chorus doctor | threads | show <id> | memory <id> | activity | trace <id>
 chorus artifacts --serve --open                                 # artifacts in the browser, live reload
 ```
 
-Keys inside the app: `Ctrl+Space` then `n` new thread · `h` hand off · `1-9` switch (or click the sidebar) ·
+Keys inside the app: the menu key, then one letter. The menu key is `Ctrl+\` (on a Mac `Ctrl+Space` is usually taken by macOS for
+switching input sources; it also works if you turned that shortcut off; `CHORUS_MENU_KEY=ctrl+b` picks another).
+`Ctrl+\` then `n` new thread · `h` hand off · `1-9` switch (or click the sidebar) ·
 `m` memory · `a` artifacts · `e` activity · `y`/`x` approve/deny a waiting request · `0` home · `?` help · `q` quit.
 Hold Shift while dragging to select text (the app uses the mouse for the sidebar; `CHORUS_MOUSE=0` turns that off).
 

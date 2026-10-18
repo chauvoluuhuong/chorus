@@ -39,3 +39,31 @@ test('bracketed paste is never scanned, even when split into chunks', () => {
   assert.equal(pass(ev), '\x1b[200~line1\x00line2\x1b[201~x');
   assert.ok(!ev.some(e => e.type === 'menu-open'));
 });
+
+test('menu keys: Ctrl+\\ works (macOS keeps Ctrl+Space for itself) and so does Ctrl+Space', () => {
+  const ev = new Array<InputEvent>();
+  const r = new InputRouter(e => ev.push(e));
+  r.feed('a\x1cn');
+  r.feed('\x00h');
+  assert.deepEqual(ev.map(e => (e.type === 'menu-key' ? `key:${e.key}` : e.type === 'pass' ? `pass:${e.data}` : e.type)), ['pass:a', 'menu-open', 'key:n', 'menu-open', 'key:h']);
+});
+
+test('menu key twice sends that same key to the agent, for either key', () => {
+  for (const k of ['\x1c', '\x00']) {
+    const ev = new Array<InputEvent>();
+    new InputRouter(e => ev.push(e)).feed(k + k);
+    assert.deepEqual(ev.filter(e => e.type === 'pass'), [{ type: 'pass', data: k }]);
+  }
+});
+
+test('CHORUS_MENU_KEY chooses the key and the label shown on screen', async () => {
+  const { parseMenuKeys } = await import('../../src/app/input.ts');
+  assert.deepEqual(parseMenuKeys(undefined), { keys: ['\x1c', '\x00'], label: '⌃\\' });
+  assert.deepEqual(parseMenuKeys('ctrl+b'), { keys: ['\x02'], label: '⌃B' });
+  assert.deepEqual(parseMenuKeys('Ctrl+Space'), { keys: ['\x00'], label: '⌃Space' });
+  assert.deepEqual(parseMenuKeys('^]'), { keys: ['\x1d'], label: '⌃]' });
+  assert.deepEqual(parseMenuKeys('nonsense'), { keys: ['\x1c', '\x00'], label: '⌃\\' });
+  const ev = new Array<InputEvent>();
+  new InputRouter(e => ev.push(e), parseMenuKeys('ctrl+b').keys).feed('\x1c\x02q');
+  assert.deepEqual(ev.map(e => e.type), ['pass', 'menu-open', 'menu-key']); // Ctrl+\ is now an ordinary key for the agent
+});

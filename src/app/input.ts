@@ -1,7 +1,26 @@
 // Splits keyboard input into "bytes for the agent" and Chorus menu commands (docs/phase4.md §2).
 //
-// The menu key (default Ctrl+Space = NUL byte) opens the Chorus menu; the next key picks a command.
-// Pressing the menu key twice sends it to the agent. Bracketed pastes are never scanned.
+// The menu key opens the Chorus menu; the next key picks a command. Pressing the menu key twice sends it to the agent.
+// Bracketed pastes are never scanned.
+//
+// Default menu keys: Ctrl+\ (byte 0x1c) and Ctrl+Space (NUL). macOS grabs Ctrl+Space for "switch input source" in many
+// setups, so the terminal never sees it; Ctrl+\ always arrives. CHORUS_MENU_KEY=ctrl+b (or ctrl+space, ctrl+\) replaces both.
+
+export interface MenuKeys {
+  keys: string[];
+  /** how the hint on screen names the key */
+  label: string;
+}
+
+export function parseMenuKeys(spec = process.env.CHORUS_MENU_KEY): MenuKeys {
+  if (!spec) return { keys: ['\x1c', '\x00'], label: '⌃\\' };
+  const m = spec.trim().toLowerCase().match(/^(?:ctrl|\^|c-)\+?(.+)$/);
+  const name = m?.[1] ?? '';
+  if (name === 'space' || name === '@') return { keys: ['\x00'], label: '⌃Space' };
+  if (name === 'backslash' || name === '\\') return { keys: ['\x1c'], label: '⌃\\' };
+  if (name.length === 1 && /[a-z\]^_]/.test(name)) return { keys: [String.fromCharCode(name.charCodeAt(0) & 0x1f)], label: `⌃${name.toUpperCase()}` };
+  return { keys: ['\x1c', '\x00'], label: '⌃\\' }; // not understood: keep the defaults
+}
 
 export type InputEvent =
   | { type: 'pass'; data: string }
@@ -23,11 +42,11 @@ export class InputRouter {
   private pending = '';
 
   private emit: (e: InputEvent) => void;
-  private menuKey: string;
+  private menuKeys: string[];
 
-  constructor(emit: (e: InputEvent) => void, menuKey = '\x00') {
+  constructor(emit: (e: InputEvent) => void, menuKeys: string | string[] = parseMenuKeys().keys) {
     this.emit = emit;
-    this.menuKey = menuKey;
+    this.menuKeys = typeof menuKeys === 'string' ? [menuKeys] : menuKeys;
   }
 
   feed(chunk: string) {
@@ -81,10 +100,10 @@ export class InputRouter {
           continue;
         }
         const ch = s[i++];
-        if (ch === this.menuKey) {
+        if (this.menuKeys.includes(ch)) {
           this.menuOpen = false;
           this.emit({ type: 'menu-close' });
-          this.emit({ type: 'pass', data: this.menuKey }); // double press = literal key
+          this.emit({ type: 'pass', data: ch }); // double press = literal key
         } else if (ch === '\r' || ch === '\n') {
           this.menuOpen = false; // a command ends the menu
           this.emit({ type: 'menu-enter' });
@@ -104,7 +123,7 @@ export class InputRouter {
         this.pending = s.slice(i); // maybe the start of a paste marker
         break;
       }
-      if (s[i] === this.menuKey) {
+      if (this.menuKeys.includes(s[i])) {
         flush();
         this.menuOpen = true;
         this.emit({ type: 'menu-open' });
