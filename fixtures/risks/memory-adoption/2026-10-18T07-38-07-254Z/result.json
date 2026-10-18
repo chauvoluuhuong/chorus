@@ -15,7 +15,7 @@
             "remember"
           ],
           "callsInB": [],
-          "answer": "```\nFix typo in README\n\nCo-Authored-By: Claude Haiku 5.5 <noreply@anthropic.com>\n```\n\nI didn't look at the diff, so this is generic. If you tell me the misspelled word and its correction, I can make t"
+          "answer": "```\nFix typo in README\n\nCo-Authored-By: Claude Haiku 5.5 <<email>>\n```\n\nI didn't look at the diff, so this is generic. If you tell me the misspelled word and its correction, I can make t"
         },
         {
           "pair": 2,

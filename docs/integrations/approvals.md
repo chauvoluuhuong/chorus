@@ -42,6 +42,23 @@ agent wants to do (Claude: lines framed by the rule above the question, e.g. `Cr
 the `$ …` lines; agy: lines above the question). Fixtures of the three real prompts are L1 tests
 (`test/app/approval.test.ts`).
 
+## C. Skipping the prompts altogether (New chat → "Skip permission prompts")
+
+| | |
+|---|---|
+| **Status** | ✅ verified in the interactive screen 2026-10-18: claude 2.1.302, codex 0.163.0, agy 1.4.2 |
+| **Probe** | `node tools/probe/approval-probe.mjs <cli> allow --skip --wait 45` (starts the TUI with the flag, asks for a shell command, no hook) · fixtures `fixtures/<cli>/<version>/approval-allow-skip/` · screen-only check `npm run risk -- skip-flags` |
+
+| CLI | flag | what the screen shows | result |
+|---|---|---|---|
+| Claude Code | `--dangerously-skip-permissions` | footer `⏵⏵ bypass permissions on (shift+tab to cycle)`; no extra confirmation dialog | command ran, file created, no prompt ✅ |
+| Codex | `--dangerously-bypass-approvals-and-sandbox` | nothing special on screen | command ran, file created, no prompt ✅ |
+| agy | `--dangerously-skip-permissions` | nothing special on screen | command ran, file created, no prompt ✅ |
+
+Only the folder-trust dialog of a new folder still appears (first start in a folder); it is separate from permission prompts. Chorus sets the flag per chat
+(`buildInteractive({skipPermissions})`), remembers it on the chat (`threads.skip_permissions`, so a resumed chat keeps it) and shows `skip` in amber in the
+status line. Nothing from such a chat reaches the approvals inbox. There is no global "always skip" (rule 4).
+
 ## Gotchas
 
 0. **Claude Code 2.1.302 starts in "auto mode"** (footer `⏵⏵ auto mode on`): a classifier approves tool calls for the user, so it rarely shows the prompts above. Earlier versions started in manual mode. A folder's `.claude/settings.local.json` with `{"permissions":{"defaultMode":"default"}}` (or `--permission-mode default`) gives manual mode (`⏸ manual mode on`); the e2e proof does this so there is something to approve. Chorus does not change the user's mode.

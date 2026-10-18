@@ -27,14 +27,14 @@ function rig() {
   const io: AppIO = { stdin, stdout, size: () => ({ cols: 120, rows: 30 }), onResize: () => () => {} };
   const app = new App(io);
   const store = new Store(project);
-  const launches: { agent: AgentId; prompt?: string; resumeId?: string; model?: string; cwd?: string }[] = [];
+  const launches: { agent: AgentId; prompt?: string; resumeId?: string; model?: string; cwd?: string; skipPermissions?: boolean; project?: string }[] = [];
   const c = new Controller({
     project,
     store,
     app,
     tailPollMs: 100,
     launcher: (agent, o) => {
-      launches.push({ agent, prompt: o.prompt, resumeId: o.resumeId, model: o.model, cwd: o.cwd });
+      launches.push({ agent, prompt: o.prompt, resumeId: o.resumeId, model: o.model, cwd: o.cwd, skipPermissions: o.skipPermissions, project: o.project });
       return { bin: process.execPath, args: [FAKE, `${agent}`], cwd: o.cwd };
     },
   });
@@ -82,18 +82,18 @@ test('new thread: store row, process, live transcript tailing and state follow t
   const e = r.c.newThread({ agent: 'codex', title: 'fix it' });
   await r.until(() => has(r.screen(), /READY codex/), 'agent screen');
   assert.equal(r.store.getThread(e.id)?.agent, 'codex');
-  assert.match(r.screen()[1], /▎ . fix it/);
+  assert.match(r.screen()[3], /▎.*fix it/);
 
   // mid-turn transcript appears: the thread is working and the store has the user turn
   const w = writeRollout(r.home, r.project, { done: false });
   await r.until(() => r.store.getTurns(e.id).length > 0, 'turns tailed into the store');
   assert.equal(r.store.getThread(e.id)?.native_session_id, w.id);
-  await r.until(() => /●/.test(r.screen()[1]), 'working dot');
+  await r.until(() => /●/.test(r.screen()[3]), 'working dot');
 
   // the rest arrives while the TUI keeps running
   fs.appendFileSync(w.file, w.rest.join('\n') + '\n');
   await r.until(() => r.store.getToolCalls(e.id).some(t => t.target.includes('chorus-probe')), 'tool call tailed');
-  await r.until(() => /○/.test(r.screen()[1]), 'waiting dot after task_complete');
+  await r.until(() => /○/.test(r.screen()[3]), 'waiting dot after task_complete');
   assert.equal(r.store.getThread(e.id)?.state, 'waiting');
   assert.ok((r.store.getUsage(e.id)?.outputTokens ?? 0) > 0);
   } finally {
@@ -112,7 +112,8 @@ test('approval: a prompt on a background thread becomes a card; ctrl+\\ y answer
   r.app.entry(a.id)!.host!.write(`show ${prompt}\r`);
   await r.until(() => has(r.screen(), /asks for approval/), 'approval card');
   assert.match(r.screen().join('').replace(/[┃│┏┗┓┛━\s]/g, ''), /touch\/private.*approval-probe-file\.txt/); // the command, wrapped inside the card
-  assert.match(r.screen()[1], /!/);
+  assert.ok(r.screen().some(l => /!\s+worker/.test(l)), 'the sidebar row of the waiting chat shows !');
+  assert.match(r.screen()[0], /! 1 waiting/, 'the top bar badge counts it');
 
   r.type('\x00y');
   await r.until(() => !has(r.screen(), /asks for approval/), 'card gone after approving');
@@ -171,7 +172,7 @@ test('handoff: the new thread is a child with the fixed first message, and a mis
   }
 });
 
-test('views: memory, tools and files panes; limit warning; new-thread dialog', async () => {
+test('views: memory, activity and files panes; limit warning', async () => {
   const r = rig();
   try {
   const e = r.c.newThread({ agent: 'codex', title: 'viewer' });
@@ -181,9 +182,15 @@ test('views: memory, tools and files panes; limit warning; new-thread dialog', a
   await r.until(() => r.store.getToolCalls(e.id).length > 0, 'tailed');
 
   r.type('\x00m');
-  await r.until(() => has(r.screen(), /memory · viewer/), 'memory pane');
+  await r.until(() => has(r.screen(), /Memory\s+·\s+all projects/), 'memory screen');
+  assert.match(r.screen().join('\n'), /▸ viewer\s+\S+\s+codex\s+\d+ turns/);
+  assert.match(r.screen().join('\n'), /asked\s+Use your shell/);
+  r.type('d');
+  await r.until(() => has(r.screen(), /What an agent reads · viewer/), 'digest');
   assert.match(r.screen().join('\n'), /get_handoff_context returns for "viewer"/);
   assert.match(r.screen().join('\n'), /echo chorus-probe/);
+  r.type('\x1b'); // back to the list, then to the chat
+  await r.until(() => has(r.screen(), /Memory\s+·\s+all projects/), 'memory list again');
   r.type('\x1b');
   await r.until(() => has(r.screen(), /READY codex/), 'back to the agent');
 
@@ -198,38 +205,53 @@ test('views: memory, tools and files panes; limit warning; new-thread dialog', a
   r.store.db.prepare('UPDATE usage SET limit_utilization = 0.93 WHERE thread_id = ?').run(e.id);
   r.c['checkLimit'](e.id);
   await r.until(() => /93% of its plan limit/.test(r.screen()[29]), 'limit warning in the status line');
-
-  // the new-thread form: agent, model, folder (default: this project)
-  r.type('\x00n');
-  await r.until(() => has(r.screen(), /Agent\s+\[claude\]/), 'form');
-  assert.match(r.screen().join('\n'), /Model\s+\[default\]/);
-  assert.match(r.screen().join('\n'), new RegExp('Folder\\s+' + r.project.replace(/[/.]/g, '\\$&')));
-  r.type('\x1b[C'); // agent: codex
-  r.type('\r');
-  await r.until(() => r.app.entries.length === 2 && r.launches.at(-1)?.agent === 'codex', 'new codex thread');
-  assert.equal(r.launches.at(-1)!.cwd, r.project);
-  assert.equal(r.launches.at(-1)!.model, undefined, 'default model passes no flag');
   } finally {
     r.close();
   }
 });
 
-test('new-thread form: model list follows the agent, folder is validated and becomes the thread folder', async () => {
+test('New chat screen: Enter alone starts with the defaults; esc and Back return without starting', async () => {
+  const r = rig();
+  try {
+    r.type('\x00n');
+    await r.until(() => has(r.screen(), /New chat/) && has(r.screen(), /Agent\s+claude\s+codex\s+agy/), 'screen');
+    const t = r.screen().join('\n');
+    assert.match(t, /Model\s+default\s+sonnet\s+opus\s+haiku/);
+    assert.match(t, new RegExp('Project\\s+' + r.project.replace(/[/.]/g, '\\$&')));
+    assert.match(t, /\[ \] Skip permission prompts\s+--dangerously-skip-permissions/);
+    assert.match(t, /off: the agent asks, and Chorus shows it in the approvals inbox/);
+    assert.match(r.screen()[0], /‹ Back\s+chorus › New chat/);
+    r.type('\x1b');
+    await r.until(() => !has(r.screen(), /Agent\s+claude\s+codex/), 'esc cancels');
+    assert.equal(r.app.entries.length, 0);
+    r.type('\x00n');
+    await r.until(() => has(r.screen(), /Agent\s+claude\s+codex/), 'again');
+    r.app.click('back');
+    await r.until(() => !has(r.screen(), /Agent\s+claude\s+codex/), 'Back cancels');
+    r.type('\x00n');
+    await r.until(() => has(r.screen(), /Agent\s+claude\s+codex/), 'third time');
+    r.type('\r');
+    await r.until(() => r.app.entries.length === 1 && r.launches.length === 1, 'chat started');
+    assert.deepEqual({ agent: r.launches[0].agent, model: r.launches[0].model, cwd: r.launches[0].cwd, skip: r.launches[0].skipPermissions }, { agent: 'claude', model: undefined, cwd: r.project, skip: false });
+    await r.until(() => has(r.screen(), /READY claude/), 'agent screen');
+  } finally {
+    r.close();
+  }
+});
+
+test('New chat screen: click the agent and model, tick skip permissions, type a folder; the folder is validated and becomes the chat project', async () => {
   const r = rig();
   try {
     const other = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-other-')));
     r.type('\x00n');
-    await r.until(() => has(r.screen(), /Agent\s+\[claude\]/), 'form');
-    r.type('\t'); // → model
-    r.type('\x1b[C'); // sonnet
-    await r.until(() => has(r.screen(), /Model\s+default\s+\[sonnet\]/), 'model changed');
-    r.type('\x1b[Z'); // back to agent
-    r.type('\x1b[C'); // codex: the model list is the codex one again, starting at default
-    await r.until(() => has(r.screen(), /Agent\s+claude\s+\[codex\]/) && has(r.screen(), /Model\s+\[default\]/), 'model reset for codex');
-    r.type('\x1b[D'); // claude again
-    r.type('\t');
-    r.type('\x1b[C');
-    r.type('\t'); // folder: clear it and type a wrong one
+    await r.until(() => has(r.screen(), /Agent\s+claude\s+codex/), 'screen');
+    r.app.click('agent:1'); // codex: the model list is the codex one, starting at default
+    await r.until(() => has(r.screen(), /--dangerously-bypass-approvals-and-sandbox/) === false && has(r.screen(), /Skip permission prompts/), 'redrawn');
+    r.app.click('agent:0');
+    r.app.click('model:2'); // opus
+    r.app.click('skip');
+    await r.until(() => has(r.screen(), /\[x\] Skip permission prompts/) && has(r.screen(), /Nothing reaches the approvals inbox for this chat\./), 'skip ticked with its warning');
+    r.app.click('folder');
     r.type('\x15');
     for (const ch of '/no/such/dir') r.type(ch);
     r.type('\r');
@@ -237,17 +259,17 @@ test('new-thread form: model list follows the agent, folder is validated and bec
     assert.equal(r.app.entries.length, 0, 'nothing started');
     r.type('\x15');
     for (const ch of other) r.type(ch);
-    r.type('\r');
-    await r.until(() => r.app.entries.length === 1, 'thread started');
-    assert.deepEqual({ agent: r.launches[0].agent, model: r.launches[0].model, cwd: r.launches[0].cwd }, { agent: 'claude', model: 'sonnet', cwd: other });
+    r.app.click('start');
+    await r.until(() => r.app.entries.length === 1, 'chat started');
+    assert.deepEqual({ agent: r.launches[0].agent, model: r.launches[0].model, cwd: r.launches[0].cwd, project: r.launches[0].project, skip: r.launches[0].skipPermissions }, { agent: 'claude', model: 'opus', cwd: other, project: other, skip: true });
     const row = r.store.listThreads()[0];
     assert.equal(row.cwd, other);
-    assert.equal(row.model, 'sonnet');
-    r.type('\x00n');
-    await r.until(() => has(r.screen(), /Agent\s+\[claude\]/), 'form again');
-    r.type('\x1b');
-    await r.until(() => !has(r.screen(), /Agent\s+\[claude\]/), 'esc cancels');
-    assert.equal(r.app.entries.length, 1);
+    assert.equal(row.project, other, 'the chat belongs to the folder it works in');
+    assert.equal(row.model, 'opus');
+    assert.equal(row.skip_permissions, 1);
+    assert.equal(r.app.entries[0].meta?.skip, true, 'the status line shows skip');
+    assert.ok(r.store.threadDir(row.id).startsWith(other), 'artifacts live in the chat folder');
+    await r.until(() => /opus skip/.test(r.screen()[29]), 'amber skip in the status line');
   } finally {
     r.close();
   }
@@ -335,5 +357,152 @@ test('artifacts view: select, open the live preview, versions; activity view: fi
   } finally {
     r.close();
     delete process.env.CHORUS_NO_OPEN;
+  }
+});
+
+test('approvals inbox: every waiting chat in one list with a risk tag; y / x / click answer it, Decided keeps the history', async () => {
+  const r = rig();
+  try {
+    const a = r.c.newThread({ agent: 'codex', title: 'Stripe webhook' });
+    r.c.newThread({ agent: 'claude', title: 'front' });
+    await r.until(() => has(r.screen(), /READY claude/), 'front');
+    const prompt = path.join(ROOT, 'fixtures/codex/0.163.0/approval-ask-nohook-enter/prompt-screen.txt');
+    r.app.entry(a.id)!.host!.write(`show ${prompt}\r`);
+    await r.until(() => has(r.screen(), /! 1 waiting/), 'badge in the top bar');
+
+    r.app.click('approvals'); // the badge
+    await r.until(() => has(r.screen(), /Approvals\s+·\s+1 waiting/), 'inbox');
+    const t = r.screen().join('\n');
+    assert.match(t, /▸ Stripe webhook\s+codex\s+waiting \d+s/);
+    assert.match(t, /mkdir -p .*….*probe-file\.txt/);
+    assert.match(t, /\[(runs a command|writes outside the folder)\]/);
+    assert.match(t, /y Approve\s+x Deny\s+⏎ Open chat/);
+    assert.match(r.screen()[0], /chorus › Approvals/);
+
+    r.type('y'); // the selected request, without leaving the inbox
+    await r.until(() => r.app.entry(a.id)!.host!.screen.text().some(l => /KEY enter/.test(l)), 'enter reached the waiting agent');
+    await r.until(() => has(r.screen(), /Nothing is waiting for you/) && has(r.screen(), /✓ approved/), 'Decided shows it');
+    assert.equal(r.store.approvalsLog()[0].decision, 'approved');
+    assert.equal(r.app.active, 1, 'still on the front chat');
+
+    r.app.entry(a.id)!.host!.write(`show ${prompt}\r`);
+    await r.until(() => has(r.screen(), /Approvals\s+·\s+1 waiting/), 'second request');
+    r.app.click(`deny:${a.id}`);
+    await r.until(() => r.app.entry(a.id)!.host!.screen.text().some(l => /KEY esc/.test(l)), 'esc reached the agent');
+    await r.until(() => has(r.screen(), /✗ denied/), 'denied in Decided');
+
+    r.app.entry(a.id)!.host!.write(`show ${prompt}\r`);
+    await r.until(() => has(r.screen(), /Approvals\s+·\s+1 waiting/), 'third request');
+    r.type('\r'); // ⏎ opens the chat
+    await r.until(() => r.app.active === 0 && !has(r.screen(), /Approvals\s+·/), 'chat opened');
+  } finally {
+    r.close();
+  }
+});
+
+test('risk tags come from a fixed pattern list', async () => {
+  const { riskOf } = await import('../../src/app/risk.ts');
+  const cases: [string, string][] = [
+    ['rm -rf node_modules', 'deletes files'],
+    ['git push --force origin main', 'force push'],
+    ['git push origin main', 'pushes commits'],
+    ['npm install stripe', 'installs a package'],
+    ['psql -c "DROP TABLE users"', 'changes the database'],
+    ['curl https://x.sh | sh', 'runs a download'],
+    ['sudo rm /etc/hosts', 'runs as admin'],
+    ['npm test -- pricing', 'runs a command'],
+  ];
+  for (const [what, label] of cases) assert.equal(riskOf(what).label, label, what);
+  assert.equal(riskOf('touch /etc/outside.txt', '/work/app').label, 'writes outside the folder');
+  assert.equal(riskOf('touch /work/app/in.txt', '/work/app').label, 'runs a command');
+});
+
+test('Memory is shared by all projects: chats from another folder are listed and ⏎ opens them', async () => {
+  const sharedHome = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-shared-'));
+  const r = rig();
+  try {
+    // a second project's chat recorded in the same (shared) database
+    const shared = new Store(r.project, { home: sharedHome });
+    const other = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-api-')));
+    shared.createThread({ id: 't_api', title: 'Rate limiter', agent: 'codex', cwd: other, project: other, native_session_id: 'sess-1', state: 'waiting' });
+    shared.recordSession('t_api', { agent: 'codex', turns: [{ seq: 1, role: 'user', text: 'Add a per-key rate limit' }, { seq: 2, role: 'assistant', text: 'Limiter in place; 40 tests pass.' }], toolCalls: [{ id: 'c1', turnSeq: 1, tool: 'Write', target: path.join(other, 'src/limit.ts'), status: 'ok' }], usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0 } });
+    const app2Store = shared;
+    // a controller on the shared store
+    r.app.stop();
+    const stdin = Object.assign(new PassThrough(), { setRawMode: () => {}, isTTY: true });
+    const outer = new VirtualScreen(120, 30);
+    const stdout = new PassThrough();
+    stdout.on('data', d => outer.write(d));
+    const app = new App({ stdin, stdout, size: () => ({ cols: 120, rows: 30 }), onResize: () => () => {} });
+    const launches: { resumeId?: string; project?: string }[] = [];
+    const c = new Controller({ project: r.project, store: app2Store, app, tailPollMs: 100, launcher: (agent, o) => (launches.push({ resumeId: o.resumeId, project: o.project }), { bin: process.execPath, args: [FAKE, agent], cwd: o.cwd }) });
+    c.newThread({ agent: 'claude', title: 'Cake order page' });
+    app.start();
+    await sleep(300);
+    app.emit('action', 'memory');
+    await sleep(300);
+    const screen = () => outer.text();
+    assert.match(screen().join('\n'), /Memory\s+·\s+all projects/);
+    assert.match(screen().join('\n'), /Rate limiter\s+\S+\s+codex\s+2 turns/);
+    assert.match(screen().join('\n'), /Cake order page/);
+    assert.match(screen().join('\n'), /all projects\s+\/.*chorus-shar/, 'shows where the shared database lives (the path is cut at the pane edge)');
+    // select the other project's chat and open it: it is added parked, then resumed with its stored session id
+    app.click(`row:t_api`); // the first click selects: the detail below shows what that chat did
+    await sleep(200);
+    assert.match(screen().join('\n'), /asked\s+Add a per-key rate limit/);
+    assert.match(screen().join('\n'), /files\s+src\/limit\.ts/);
+    app.click(`row:t_api`); // a second click on the selected row opens it
+    const t0 = Date.now();
+    while (Date.now() - t0 < 6000 && !launches.some(l => l.resumeId === 'sess-1')) await sleep(80);
+    assert.ok(launches.some(l => l.resumeId === 'sess-1' && l.project === other), 'resumed in its own project');
+    // the sidebar groups chats by project
+    assert.ok(screen().some(l => /▾ .*chorus-api-/.test(l)) || screen().some(l => /chorus-api-/.test(l)), 'second project in the sidebar');
+    app.stop();
+    assert.equal(shared.listThreads().length, 2);
+    assert.match(shared.threadDir('t_api'), new RegExp(other.replace(/[/.]/g, '\\$&')), 'artifacts stay in the chat project');
+    shared.close();
+  } finally {
+    r.close();
+  }
+});
+
+test('Skills screen: on/off by ⏎ or click, import what the agents already have', async () => {
+  const fakeHome = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-uh-')));
+  const oldHome = process.env.HOME;
+  process.env.HOME = fakeHome;
+  const r = rig();
+  try {
+    const lib = path.join(r.project, '.chorus', 'skills', 'pricing');
+    fs.mkdirSync(lib, { recursive: true });
+    fs.writeFileSync(path.join(lib, 'SKILL.md'), '---\nname: pricing\ndescription: Price a cake from size and toppings\n---\nbody');
+    const native = path.join(fakeHome, '.claude', 'skills', 'release-notes');
+    fs.mkdirSync(native, { recursive: true });
+    fs.writeFileSync(path.join(native, 'SKILL.md'), '---\nname: release-notes\ndescription: Draft release notes\n---\nbody');
+    fs.mkdirSync(path.join(fakeHome, '.codex', 'skills', '.system', 'default'), { recursive: true }); // a CLI default: never offered
+    fs.writeFileSync(path.join(fakeHome, '.codex', 'skills', '.system', 'default', 'SKILL.md'), '---\nname: default\n---\n');
+
+    r.type('\x00k');
+    await r.until(() => has(r.screen(), /Skills\s+·\s+one library/), 'screen');
+    let t = r.screen().join('\n');
+    assert.match(t, /▸ \[on\]\s+pricing\s+Price a cake/);
+    assert.match(t, /release-notes\s+~\/\.claude\/skills\s+claude\s+import ›/);
+    assert.ok(!/\bdefault\b/.test(t.split('Found in')[1] ?? ''), 'CLI defaults are not offered');
+
+    r.type('\r');
+    await r.until(() => has(r.screen(), /\[off\]\s+pricing/), 'turned off');
+    assert.ok(!fs.existsSync(path.join(r.project, '.claude', 'skills', 'pricing')), 'not linked while off');
+    r.type('\r');
+    await r.until(() => has(r.screen(), /\[on\]\s+pricing/), 'turned on again');
+    assert.ok(fs.existsSync(path.join(r.project, '.claude', 'skills', 'pricing')), 'linked into the agents folder when on');
+
+    r.app.click(`import:${native}`);
+    await r.until(() => has(r.screen(), /\[on\]\s+release-notes/), 'imported into the library');
+    assert.ok(fs.existsSync(path.join(r.project, '.chorus', 'skills', 'release-notes', 'SKILL.md')));
+    assert.ok(fs.existsSync(native), 'the original stays where it was');
+    t = r.screen().join('\n');
+    assert.match(t, /nothing to import/);
+  } finally {
+    r.close();
+    process.env.HOME = oldHome;
   }
 });

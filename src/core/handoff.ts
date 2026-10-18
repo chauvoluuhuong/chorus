@@ -18,7 +18,9 @@ export function pickSourceThread(store: Store, current: string | undefined, requ
   if (requested) return store.getThread(requested);
   const me = current ? store.getThread(current) : undefined;
   if (me?.parent_thread_id) return store.getThread(me.parent_thread_id);
-  return store.listThreads().find(t => t.id !== current);
+  // no parent and nothing asked for: the latest other chat, preferring this project's own
+  const others = store.listThreads().filter(t => t.id !== current);
+  return others.find(t => me && t.project === me.project) ?? others[0];
 }
 
 export function buildHandoff(store: Store, thread: ThreadRow, opts: { maxTurns?: number; maxChars?: number } = {}): Handoff {

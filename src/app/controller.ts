@@ -2,8 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildHandoff, handoffPrompt } from '../core/handoff.ts';
-import { buildInteractive, type InteractiveOpts, type Launch } from '../core/launch.ts';
-import { syncSkills, sourceDir } from '../core/skills.ts';
+import { buildInteractive, SKIP_FLAG, type InteractiveOpts, type Launch } from '../core/launch.ts';
+import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, syncSkills, sourceDir } from '../core/skills.ts';
 import type { Store, ThreadRow } from '../core/store.ts';
 import type { AgentId, Session } from '../core/types.ts';
 import { App, type Entry } from './app.ts';
@@ -13,7 +13,9 @@ import { modelsFor } from './models.ts';
 import type { ItemState } from './compositor.ts';
 import { Tailer } from './tailer.ts';
 import { spawn } from 'node:child_process';
-import { T, agentStyle, type HomeView, type RichLine, type Seg } from './compositor.ts';
+import { T, agentStyle, type RichLine, type Seg } from './compositor.ts';
+import { riskOf } from './risk.ts';
+import { APPROVALS_HINT, MEMORY_HINT, NEW_CHAT_HINT, SKILLS_HINT, approvalLines, memoryLines as memoryScreenLines, newChatForm, newChatHit, newChatKey, newChatLines, skillLines, type NewChatForm, type NewChatInfo } from './screens.ts';
 import { VERIFIED_VERSION, versionWarning } from '../core/adapters/index.ts';
 import { PreviewServer } from '../core/preview.ts';
 import { traceCmd } from '../cli/commands.ts';
@@ -40,6 +42,8 @@ export class Controller {
   private tailers = new Map<string, Tailer>();
   private claimed = new Set<string>();
   private pending = new Map<string, PendingApproval>();
+  private pendingSince = new Map<string, number>();
+  private modelCache = new Map<AgentId, string[]>();
   private limited = new Map<string, string>();
   private limitShown = new Set<string>();
   preview: PreviewServer | undefined;
@@ -60,7 +64,7 @@ export class Controller {
     this.app.on('select', (e: Entry) => void this.onSelect(e));
     this.app.on('stopped', () => this.stop());
     this.detectTimer = setInterval(() => this.detect(), 400);
-    this.app.homeProvider = () => this.homeData();
+    this.app.waitingProvider = () => this.pending.size;
     void this.probeAgents();
   }
 
@@ -78,20 +82,23 @@ export class Controller {
     // parents first, so a thread that continues another is listed right under it
     const rows = this.store.listThreads().reverse().filter(r => r.native_session_id);
     for (const row of [...rows.filter(r => !r.parent_thread_id), ...rows.filter(r => r.parent_thread_id)]) {
-      this.app.addParked({ id: row.id, title: row.title, agent: row.agent, parentId: row.parent_thread_id ?? undefined });
+      this.app.addParked({ id: row.id, title: row.title, agent: row.agent, cwd: row.cwd, parentId: row.parent_thread_id ?? undefined, meta: row.skip_permissions ? { skip: true } : undefined });
       this.refreshMeta(row.id);
     }
   }
 
-  /** The first prompt is typed exactly as given: where artifacts go is told through the agent's instructions (launch.ts), not the prompt. */
-  newThread(o: { agent: AgentId; title?: string; prompt?: string; parent?: ThreadRow; model?: string; cwd?: string }): Entry {
+  /**
+   * The first prompt is typed exactly as given: where artifacts go is told through the agent's instructions (launch.ts), not the prompt.
+   * A chat belongs to the folder it works in: its artifacts live in <folder>/.chorus (Codex's sandbox only writes inside its folder).
+   */
+  newThread(o: { agent: AgentId; title?: string; prompt?: string; parent?: ThreadRow; model?: string; cwd?: string; skipPermissions?: boolean }): Entry {
     const cwd = o.cwd ?? this.project;
     const model = o.model && o.model !== 'default' ? o.model : this.o.models?.[o.agent];
     if (fs.existsSync(sourceDir(this.project))) syncSkills(this.project, { agents: [o.agent], into: cwd });
     const n = this.store.listThreads().filter(t => t.agent === o.agent).length + 1;
-    const row = this.store.createThread({ title: o.title ?? `${o.agent} ${n}`, agent: o.agent, cwd, model: model ?? null, parent_thread_id: o.parent?.id, state: 'working' });
+    const row = this.store.createThread({ title: o.title ?? `${o.agent} ${n}`, agent: o.agent, cwd, project: cwd, model: model ?? null, parent_thread_id: o.parent?.id, state: 'working', skip_permissions: o.skipPermissions ? 1 : 0 });
     const prompt = o.prompt;
-    const launch = (this.o.launcher ?? buildInteractive)(o.agent, { prompt, cwd, project: this.project, threadId: row.id, model });
+    const launch = (this.o.launcher ?? buildInteractive)(o.agent, { prompt, cwd, project: cwd, home: this.store.shared ? this.store.root : undefined, threadId: row.id, model, skipPermissions: o.skipPermissions });
     if (launch.sessionId) this.store.updateThread(row.id, { native_session_id: launch.sessionId });
     this.sawStart.set(row.id, o.prompt ? Date.now() : 0);
     const host = this.app.addThread({ id: row.id, title: row.title, agent: o.agent, file: launch.bin, args: launch.args, cwd: launch.cwd }, true, o.parent?.id);
@@ -104,7 +111,7 @@ export class Controller {
   private resume(entry: Entry) {
     const row = this.store.getThread(entry.id);
     if (!row?.native_session_id) return;
-    const launch = (this.o.launcher ?? buildInteractive)(row.agent, { cwd: row.cwd, project: this.project, threadId: row.id, resumeId: row.native_session_id, model: this.o.models?.[row.agent] });
+    const launch = (this.o.launcher ?? buildInteractive)(row.agent, { cwd: row.cwd, project: row.project ?? this.project, home: this.store.shared ? this.store.root : undefined, threadId: row.id, resumeId: row.native_session_id, model: this.o.models?.[row.agent], skipPermissions: !!row.skip_permissions });
     const host = this.app.attach(entry, { id: row.id, title: row.title, agent: row.agent, file: launch.bin, args: launch.args, cwd: launch.cwd });
     this.store.updateThread(row.id, { state: 'working' });
     this.watchRaw(row.id, host);
@@ -120,7 +127,7 @@ export class Controller {
     const from = this.store.getThread(fromId);
     if (!from) return undefined;
     this.tailers.get(fromId)?.poll(); // make sure the store has the latest of the source thread
-    const entry = this.newThread({ agent: to, title: `${from.title} → ${to}`, prompt: handoffPrompt(from), parent: from });
+    const entry = this.newThread({ agent: to, title: `${from.title} → ${to}`, prompt: handoffPrompt(from), parent: from, cwd: from.cwd });
     this.app.setFlash(`handoff: ${to} is loading "${from.title}" through the Chorus MCP server`);
     return entry;
   }
@@ -184,6 +191,7 @@ export class Controller {
     if (this.closed) return;
     this.store.updateThread(e.id, { state: 'ended' });
     this.pending.delete(e.id);
+    this.pendingSince.delete(e.id);
     this.refreshState(e.id);
     this.syncCard();
   }
@@ -240,9 +248,11 @@ export class Controller {
       const had = this.pending.get(e.id);
       if (found && !had) {
         this.pending.set(e.id, found);
+        this.pendingSince.set(e.id, Date.now());
         changed = true;
       } else if (!found && had) {
         this.pending.delete(e.id);
+        this.pendingSince.delete(e.id);
         changed = true;
       }
       if (changed) this.refreshState(e.id);
@@ -280,9 +290,10 @@ export class Controller {
     this.app.setCard({ threadId: id, title: `${e.title} (${e.agent}) asks for approval`, lines: [p.what, p.question] });
   }
 
-  answer(approve: boolean): boolean {
+  /** Answers the request of one chat (default: the one you are looking at, else the one on the card, else the first waiting). */
+  answer(approve: boolean, forId?: string): boolean {
     const act = this.app.current;
-    const id = act && this.pending.has(act.id) ? act.id : this.app.currentCard?.threadId ?? [...this.pending.keys()][0];
+    const id = forId ?? (act && this.pending.has(act.id) ? act.id : this.app.currentCard?.threadId ?? [...this.pending.keys()][0]);
     const p = id && this.pending.get(id);
     const host = id ? this.app.entry(id)?.host : undefined;
     if (!p || !host) {
@@ -291,6 +302,8 @@ export class Controller {
     }
     host.write(approve ? p.keys.approve : p.keys.deny);
     this.pending.delete(id!);
+    this.pendingSince.delete(id!);
+    this.store.logApproval(id!, p.what, approve ? 'approved' : 'denied');
     this.refreshState(id!);
     this.syncCard();
     this.app.setFlash(`${approve ? 'approved' : 'denied'}: ${p.what.slice(0, 60)}`);
@@ -303,21 +316,25 @@ export class Controller {
     const cur = this.app.current;
     switch (a) {
       case 'new':
-        await this.newThreadForm();
+        this.newChatScreen();
         break;
       case 'handoff': {
-        if (!cur) return this.app.setFlash('no thread to hand off');
+        if (!cur) return this.app.setFlash('no chat to hand off');
         const i = await this.app.choose(`hand off "${cur.title}" to…`, AGENTS);
         if (i !== undefined) await this.handoff(cur.id, AGENTS[i]);
         break;
       }
       case 'memory':
-        return cur ? this.app.showPane(`memory · ${cur.title}`, this.memoryLines(cur.id)) : undefined;
+        return this.memoryView();
+      case 'skills':
+        return this.skillsView();
+      case 'approvals':
+        return this.approvalsView();
       case 'files':
         return this.artifactsView(cur?.id, cur?.title);
       case 'activity':
       case 'tools':
-        return cur ? this.activityView(cur.id, cur.title) : undefined;
+        return cur ? this.activityView(cur.id, cur.title) : this.app.setFlash('open a chat first');
       case 'doctor':
         return this.app.showPane('Doctor', this.doctorLines());
       case 'approve':
@@ -335,22 +352,276 @@ export class Controller {
     }
   }
 
-  /** Agent, model, folder: nothing else to decide. The thread is named after your first message. */
-  async newThreadForm(preset: { agent?: AgentId; model?: string; folder?: string } = {}): Promise<Entry | undefined> {
-    const v = await this.app.form(
-      'new thread',
-      [
-        { kind: 'select', label: 'Agent', options: AGENTS, index: Math.max(0, AGENTS.indexOf(preset.agent ?? 'claude')) },
-        { kind: 'select', label: 'Model', options: vals => modelsFor((vals.Agent || 'claude') as AgentId) },
-        { kind: 'text', label: 'Folder', value: preset.folder ?? this.project },
-      ],
-      vals => {
-        const dir = path.resolve(vals.Folder.replace(/^~(?=\/|$)/, process.env.HOME ?? '~'));
-        return fs.existsSync(dir) && fs.statSync(dir).isDirectory() ? undefined : `${vals.Folder} is not a folder`;
+  /* ---------- New chat ---------- */
+
+  private modelList(agent: AgentId): string[] {
+    let m = this.modelCache.get(agent);
+    if (!m) {
+      m = modelsFor(agent);
+      this.modelCache.set(agent, m);
+    }
+    return m;
+  }
+
+  /** Plan text under each agent on the New chat screen, from the latest usage reading we stored. */
+  private quotaInfo(): NewChatInfo['quota'] {
+    const out: NewChatInfo['quota'] = {};
+    const rows = this.store.db
+      .prepare('SELECT t.agent AS agent, u.limit_utilization AS u FROM usage u JOIN threads t ON t.id = u.thread_id WHERE u.limit_utilization IS NOT NULL ORDER BY u.updated DESC')
+      .all() as { agent: AgentId; u: number }[];
+    for (const r of rows) {
+      if (out[r.agent]) continue;
+      const pct = Math.round(r.u * 100);
+      out[r.agent] = { text: `5h ${pct}%`, level: pct >= 90 ? 'err' : pct >= 75 ? 'warn' : 'ok' };
+    }
+    return out;
+  }
+
+  private recentFolders(except: string): string[] {
+    const seen: string[] = [];
+    for (const t of this.store.listThreads()) if (t.cwd !== except && !seen.includes(t.cwd) && fs.existsSync(t.cwd)) seen.push(t.cwd);
+    return seen.slice(0, 3);
+  }
+
+  /**
+   * The New chat screen (also the first screen): agent, model, project folder, skip-permissions. Enter alone starts with the
+   * defaults. The chat is named after your first message; you type it in the agent itself.
+   */
+  newChatScreen(preset: { agent?: AgentId; model?: string; folder?: string; skip?: boolean } = {}) {
+    const folder = preset.folder ?? this.app.current?.cwd ?? this.project;
+    const f: NewChatForm = newChatForm({ agent: preset.agent, model: preset.model, folder, models: a => this.modelList(a) });
+    f.skip = !!preset.skip;
+    const info = (): NewChatInfo => ({ models: a => this.modelList(a), quota: this.quotaInfo(), recent: this.recentFolders(f.folder), skipFlag: SKIP_FLAG });
+    const redraw = () => this.app.updatePane(newChatLines(f, info()));
+    const finish = (r: 'start' | 'cancel' | undefined) => {
+      if (r === 'cancel') return this.app.closePane();
+      if (r !== 'start') return redraw();
+      const dir = path.resolve(f.folder.replace(/^~(?=\/|$)/, process.env.HOME ?? '~'));
+      if (!(fs.existsSync(dir) && fs.statSync(dir).isDirectory())) {
+        f.error = `${f.folder} is not a folder`;
+        return redraw();
+      }
+      const agent = AGENTS[f.agent];
+      const model = this.modelList(agent)[f.model];
+      this.app.closePane(false);
+      this.newThread({ agent, model, cwd: dir, skipPermissions: f.skip });
+    };
+    this.app.showPane('New chat', newChatLines(f, info()), {
+      id: 'new',
+      hint: NEW_CHAT_HINT,
+      crumb: ['New chat'],
+      onKey: key => {
+        finish(newChatKey(f, key, info()));
+        return true;
       },
-    );
-    if (!v) return undefined;
-    return this.newThread({ agent: v.Agent as AgentId, model: v.Model, cwd: path.resolve(v.Folder.replace(/^~(?=\/|$)/, process.env.HOME ?? '~')) });
+      onHit: id => finish(newChatHit(f, id, info())),
+    });
+  }
+
+  /* ---------- Approvals inbox ---------- */
+
+  private approvalItems() {
+    return [...this.pending.entries()]
+      .map(([id, p]) => {
+        const e = this.app.entry(id);
+        return e && { id, title: e.title, agent: e.agent, waiting: (Date.now() - (this.pendingSince.get(id) ?? Date.now())) / 1000, what: p.what, risk: riskOf(p.what, e.cwd) };
+      })
+      .filter((x): x is NonNullable<typeof x> => !!x);
+  }
+
+  private decidedItems() {
+    return this.store.approvalsLog(6).map(r => ({ decision: r.decision, what: r.what, agent: this.store.getThread(r.thread_id)?.agent ?? '', time: new Date(r.ts).toTimeString().slice(0, 5) }));
+  }
+
+  /** One list of everything waiting on you, from every chat: y / x answer without switching, ⏎ opens the chat. */
+  approvalsView() {
+    const st = { sel: 0 };
+    const draw = () => {
+      const items = this.approvalItems();
+      st.sel = Math.min(st.sel, Math.max(0, items.length - 1));
+      this.app.updatePane(approvalLines(items, st.sel, this.decidedItems()));
+      return items;
+    };
+    const open = (id?: string) => {
+      const at = id ? this.app.entries.findIndex(e => e.id === id) : -1;
+      if (at >= 0) this.app.select(at);
+    };
+    const act = (kind: 'approve' | 'deny' | 'open', id?: string) => {
+      const items = this.approvalItems();
+      const target = id ?? items[st.sel]?.id;
+      if (kind === 'open') return open(target);
+      if (target) this.answer(kind === 'approve', target);
+      draw();
+    };
+    this.app.showPane('Approvals', approvalLines(this.approvalItems(), 0, this.decidedItems()), {
+      id: 'approvals',
+      hint: APPROVALS_HINT,
+      crumb: ['Approvals'],
+      onKey: key => {
+        const n = this.pending.size;
+        if (key === '\x1b[A' || key === 'k') st.sel = Math.max(0, st.sel - 1);
+        else if (key === '\x1b[B' || key === 'j') st.sel = Math.min(Math.max(0, n - 1), st.sel + 1);
+        else if (key === 'y') return void act('approve'), true;
+        else if (key === 'x') return void act('deny'), true;
+        else if (key === '\r' || key === '\n') return void act('open'), true;
+        else return false;
+        draw();
+        return true;
+      },
+      onHit: id => {
+        const [kind, tid] = [id.split(':')[0], id.split(':').slice(1).join(':')];
+        if (kind === 'row') {
+          st.sel = Math.max(0, this.approvalItems().findIndex(i => i.id === tid));
+          draw();
+        } else if (kind === 'approve' || kind === 'deny' || kind === 'open') act(kind, tid || undefined);
+      },
+    });
+    // the inbox follows the live state while it is open
+    const timer = setInterval(() => {
+      if (this.closed || this.app.paneId !== 'approvals') return clearInterval(timer);
+      draw();
+    }, 1000);
+    timer.unref();
+  }
+
+  /* ---------- Memory (shared by all projects) ---------- */
+
+  memoryItems() {
+    const rows = this.store.listThreads();
+    const byId = new Map(rows.map(r => [r.id, r]));
+    // parents first, a continued chat right under its parent
+    const roots = rows.filter(r => !r.parent_thread_id || !byId.has(r.parent_thread_id));
+    const ordered = roots.flatMap(r => [r, ...rows.filter(c => c.parent_thread_id === r.id)]);
+    return ordered.map(r => {
+      const turns = this.store.getTurns(r.id, { limit: 100000 });
+      const asked = turns.find(t => t.role === 'user')?.text ?? (r.parent_thread_id ? `(continued from ${byId.get(r.parent_thread_id)?.title ?? 'another chat'})` : '');
+      const last = [...turns].reverse().find(t => t.role === 'assistant')?.text ?? '';
+      const files = new Set<string>();
+      for (const c of this.store.getToolCalls(r.id)) if (/^(Write|Edit|write_to_file|replace_file_content|apply_patch|file_change)$/.test(c.tool) && c.target) files.add(path.relative(r.cwd, c.target) || c.target);
+      return { id: r.id, title: r.title, child: !!r.parent_thread_id && byId.has(r.parent_thread_id), project: path.basename(r.project ?? r.cwd), agent: r.agent, turns: turns.length, ago: this.ago(r.updated), asked: asked.replace(/\s+/g, ' '), last: last.replace(/\s+/g, ' '), files: [...files].slice(0, 6).join(', ') };
+    });
+  }
+
+  /** Every chat Chorus has recorded, in any project. ⏎ opens it (parked chats resume), h continues it with another agent, d shows what an agent would read. */
+  memoryView() {
+    const st = { sel: 0 };
+    const where = () => (this.store.shared ? this.store.root.replace(process.env.HOME ?? '\0', '~') + '/chorus.db' : '.chorus/chorus.db (this project)');
+    const draw = () => {
+      const items = this.memoryItems();
+      st.sel = Math.min(st.sel, Math.max(0, items.length - 1));
+      this.app.updatePane(memoryScreenLines(items, st.sel, where()));
+      return items;
+    };
+    const open = async (id?: string) => {
+      if (!id) return;
+      const at = this.app.entries.findIndex(e => e.id === id);
+      if (at >= 0) return this.app.select(at);
+      const row = this.store.getThread(id);
+      if (!row) return;
+      // a chat from another project that this run has not listed yet: add it parked and resume it
+      this.app.addParked({ id: row.id, title: row.title, agent: row.agent, cwd: row.cwd, parentId: row.parent_thread_id ?? undefined });
+      this.app.select(this.app.entries.findIndex(e => e.id === id));
+    };
+    const handoffFrom = async (id?: string) => {
+      const row = id && this.store.getThread(id);
+      if (!row) return;
+      const i = await this.app.choose(`continue "${row.title}" with…`, AGENTS.filter(a => a !== row.agent));
+      if (i !== undefined) {
+        this.app.closePane(false);
+        await this.handoff(row.id, AGENTS.filter(a => a !== row.agent)[i]);
+      }
+    };
+    this.app.showPane('Memory', memoryScreenLines(this.memoryItems(), 0, where()), {
+      id: 'memory',
+      hint: MEMORY_HINT,
+      crumb: ['Memory'],
+      onKey: key => {
+        const items = this.memoryItems();
+        const cur = items[st.sel]?.id;
+        if (key === '\x1b[A' || key === 'k') st.sel = Math.max(0, st.sel - 1);
+        else if (key === '\x1b[B' || key === 'j') st.sel = Math.min(Math.max(0, items.length - 1), st.sel + 1);
+        else if (key === '\r' || key === '\n') return void open(cur), true;
+        else if (key === 'h') return void handoffFrom(cur), true;
+        else if (key === 'd' && cur) return void this.app.showPane(`What an agent reads · ${items[st.sel].title}`, this.memoryLines(cur), { id: 'memory-digest', crumb: ['Memory', 'digest'], onClose: () => this.memoryView() }), true;
+        else return false;
+        draw();
+        return true;
+      },
+      onHit: id => {
+        const tid = id.split(':').slice(1).join(':');
+        if (id.startsWith('row:')) {
+          const items = this.memoryItems();
+          const at = items.findIndex(i => i.id === tid);
+          if (at === st.sel) void open(tid);
+          else {
+            st.sel = Math.max(0, at);
+            draw();
+          }
+        } else if (id === 'open') void open(this.memoryItems()[st.sel]?.id);
+        else if (id === 'handoff') void handoffFrom(this.memoryItems()[st.sel]?.id);
+      },
+    });
+  }
+
+  /* ---------- Skills ---------- */
+
+  skillsView() {
+    const st = { sel: 0 };
+    const items = () => listSkills(this.project).map(s => ({ folder: path.basename(s.dir), name: s.name, description: s.description, on: !disabledSkills(this.project).includes(path.basename(s.dir)) }));
+    const found = () => findNativeSkills(this.project).map(f => ({ name: f.name, from: f.from, agent: f.agent, dir: f.dir }));
+    const where = () => '.chorus/skills (this project; one global library is TD-1)';
+    const draw = () => {
+      const n = items().length;
+      st.sel = Math.min(st.sel, Math.max(0, n - 1));
+      this.app.updatePane(skillLines(items(), found(), st.sel, where()));
+    };
+    const toggle = (folder?: string) => {
+      const s = items().find(i => i.folder === folder) ?? items()[st.sel];
+      if (!s) return;
+      setSkillEnabled(this.project, s.folder, !s.on);
+      if (fs.existsSync(sourceDir(this.project))) syncSkills(this.project);
+      this.app.setFlash(`${s.on ? 'Turned off' : 'Turned on'} ${s.name} for claude, codex and agy`);
+      draw();
+    };
+    const doImport = (dir?: string) => {
+      const f = found().find(x => x.dir === dir) ?? found()[0];
+      if (!f) return this.app.setFlash('nothing to import');
+      try {
+        importSkill(this.project, f);
+        syncSkills(this.project);
+        this.app.setFlash(`Imported ${f.name}: now in the library, seen by all three`);
+      } catch (e) {
+        this.app.setFlash(String((e as Error).message));
+      }
+      draw();
+    };
+    this.app.showPane('Skills', skillLines(items(), found(), 0, where()), {
+      id: 'skills',
+      hint: SKILLS_HINT,
+      crumb: ['Skills'],
+      onKey: key => {
+        if (key === '\x1b[A' || key === 'k') st.sel = Math.max(0, st.sel - 1);
+        else if (key === '\x1b[B' || key === 'j') st.sel = Math.min(Math.max(0, items().length - 1), st.sel + 1);
+        else if (key === '\r' || key === '\n') toggle();
+        else if (key === 'i') doImport();
+        else return false;
+        draw();
+        return true;
+      },
+      onHit: id => {
+        if (id.startsWith('row:')) {
+          const folder = id.slice(4);
+          const at = items().findIndex(i => i.folder === folder);
+          if (at === st.sel) toggle(folder);
+          else {
+            st.sel = Math.max(0, at);
+            draw();
+          }
+        } else if (id === 'toggle') toggle();
+        else if (id === 'import') doImport();
+        else if (id.startsWith('import:')) doImport(id.slice(7));
+      },
+    });
   }
 
   private retryContext() {
@@ -381,6 +652,7 @@ export class Controller {
       artifacts: arts.length,
       from: parent?.agent,
       toast: e.meta?.toast,
+      skip: !!t.skip_permissions,
     };
     if (arts.length > before && before >= 0 && arts.length) {
       const last = arts[arts.length - 1];
@@ -439,24 +711,6 @@ export class Controller {
     return `${Math.floor(s / 86400)}d ago`;
   }
 
-  homeData(): Omit<HomeView, 'selected'> {
-    const stateText = (e: import('./app.ts').Entry) => {
-      const st = e.state ?? (!e.host ? 'parked' : e.host.state === 'ended' ? 'ended' : e.host.busy() ? 'busy' : 'idle');
-      return { busy: 'working', idle: 'waiting for you', approval: 'needs approval', ended: 'ended', parked: 'parked', starting: 'starting', limit: 'limit reached' }[st];
-    };
-    return {
-      project: this.project.replace(process.env.HOME ?? '\0', '~'),
-      agents: AGENTS.map(a => {
-        const i = this.agentInfo.get(a);
-        return { name: a, version: i?.version, ok: i ? i.ok : true, note: i ? undefined : 'checking…' };
-      }),
-      threads: this.app.entries.map(e => {
-        const row = this.store.getThread(e.id);
-        return { id: e.id, title: e.title, agent: e.agent, state: stateText(e), age: row ? this.ago(row.updated) : '', artifacts: this.store.listArtifacts(e.id).length, child: !!e.parentId };
-      }),
-    };
-  }
-
   doctorLines(): RichLine[] {
     const out: RichLine[] = [];
     let warnings = 0;
@@ -475,7 +729,7 @@ export class Controller {
     }
     out.push('');
     const n = this.store.listThreads().length;
-    out.push([['store   ', T.dim], [`.chorus/chorus.db · ${n} thread${n === 1 ? '' : 's'}`]] as Seg[]);
+    out.push([['store   ', T.dim], [`${this.store.shared ? this.store.root.replace(process.env.HOME ?? '\0', '~') : '.chorus'}/chorus.db · ${n} chat${n === 1 ? '' : 's'}${this.store.shared ? ' (all projects)' : ' (this project)'}`]] as Seg[]);
     if (process.env.CLAUDE_CODE_SESSION_ID) out.push([['env     ', T.dim], ['CLAUDE_CODE_SESSION_ID is set → removed when starting agents', T.warn]] as Seg[]);
     const notes = AGENTS.map(a => versionWarning(a, this.agentInfo.get(a)?.version)).filter((w): w is string => !!w);
     if (notes.length) out.push('', [[`${notes.length} warning${notes.length === 1 ? '' : 's'}`, T.warn]] as Seg[], ...notes.map(w => [[`  ${w}`]] as Seg[]));
@@ -652,20 +906,24 @@ export class Controller {
 }
 
 const helpLines = (k: string) => [
-  `Chorus keeps your agents side by side. Everything goes through the menu key, ${k} (Ctrl+\\ or Ctrl+Space; CHORUS_MENU_KEY changes it):`,
+  `Chorus keeps your agents side by side: a sidebar of projects and their chats, the agent's own screen on the right.`,
+  `Click anything underlined or filled; the keyboard does everything too. The menu key is ${k} (Ctrl+\\ or Ctrl+Space; CHORUS_MENU_KEY changes it):`,
   '',
-  `  ${k}  1-9     switch to thread N (or click it in the sidebar)`,
-  `  ${k}  n       new thread: agent, model, folder`,
-  `  ${k}  h       hand off the current thread to another agent`,
-  `  ${k}  m       memory: what the next agent will read`,
-  `  ${k}  a       artifacts (o opens one in the browser with live reload)`,
-  `  ${k}  e       activity (f filters, r raw trace)`,
-  `  ${k}  y / x   approve / deny the request a background thread is waiting on`,
-  `  ${k}  r       ask a handoff thread to load its context again`,
-  `  ${k}  0       home`,
-  `  ${k}  b       hide or show the sidebar`,
-  `  ${k}  q       quit (twice while threads run)`,
-  `  ${k}  ${k}   send the menu key itself to the agent`,
+  `  ${k}  ↑↓ ⏎  walk the menu and run a row (or click it, or press its letter)`,
+  `  ${k}  1-9    switch to chat N (or click it in the sidebar)`,
+  `  ${k}  n      New chat: agent, model, project folder, skip permissions`,
+  `  ${k}  h      hand off the current chat to another agent`,
+  `  ${k}  a      artifacts (o opens one in the browser with live reload)`,
+  `  ${k}  i      approvals inbox (y approve, x deny, ⏎ open the chat)`,
+  `  ${k}  k      skills: turn on or off, import the ones your agents already have`,
+  `  ${k}  m      memory: every chat in every project`,
+  `  ${k}  e      activity (f filters, r raw trace)`,
+  `  ${k}  y / x  approve / deny the request a background chat is waiting on`,
+  `  ${k}  r      ask a handoff chat to load its context again`,
+  `  ${k}  b      hide or show the sidebar`,
+  `  ${k}  q      quit (twice while chats run)`,
+  `  ${k}  ${k}  send the menu key itself to the agent`,
   '',
   'Sidebar dots: ● working   ◐ waiting for you   ○ idle   ! needs approval   … starting   ◌ parked (select to resume)   ■ limit reached',
+  'Narrow windows: the sidebar shrinks to names, then icons, then hides (b brings it back); under 50×12 only a notice shows.',
 ];

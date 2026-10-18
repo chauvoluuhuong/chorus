@@ -9,6 +9,7 @@
 // symlinks are unavailable). Anything else in those folders is the user's and is never touched.
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { AgentId } from './types.ts';
 
@@ -104,7 +105,8 @@ export function syncSkills(project: string, opts: { agents?: AgentId[]; mode?: '
   const agents = opts.agents ?? (['claude', 'codex', 'agy'] as AgentId[]);
   fs.mkdirSync(sourceDir(project), { recursive: true });
   const src = fs.realpathSync(sourceDir(project));
-  const skills = listSkills(project);
+  const off = new Set(disabledSkills(project));
+  const skills = listSkills(project).filter(s => !off.has(path.basename(s.dir)));
   const report: SyncReport = { linked: [], updated: [], removed: [], conflicts: [] };
   const dirs = [...new Set(agents.map(a => TARGET_DIRS[a]))];
   const excludes: string[] = [];
@@ -153,4 +155,74 @@ function isLink(p: string): boolean {
   } catch {
     return false;
   }
+}
+
+/* ---------- the Skills screen: turn skills on or off, find skills the agents already have ---------- */
+
+const stateFile = (project: string) => path.join(project, '.chorus', 'skills.json');
+
+/** Folder names of the skills switched off (they stay in the library, but are not linked into the agents' folders). */
+export function disabledSkills(project: string): string[] {
+  try {
+    const d = JSON.parse(fs.readFileSync(stateFile(project), 'utf8'));
+    return Array.isArray(d.disabled) ? d.disabled : [];
+  } catch {
+    return [];
+  }
+}
+
+export function setSkillEnabled(project: string, folder: string, on: boolean) {
+  const off = new Set(disabledSkills(project));
+  if (on) off.delete(folder);
+  else off.add(folder);
+  fs.mkdirSync(path.dirname(stateFile(project)), { recursive: true });
+  fs.writeFileSync(stateFile(project), JSON.stringify({ disabled: [...off].sort() }, null, 2));
+}
+
+export interface FoundSkill extends Skill {
+  /** where it was found, e.g. "~/.claude/skills" */
+  from: string;
+  agent: AgentId | 'shared';
+}
+
+/**
+ * Skills the agents already have in their own folders (project and user level) that are not Chorus's own links or copies and not
+ * a CLI default. Offered for import. `home` is a parameter so tests do not touch the real home folder.
+ */
+export function findNativeSkills(project: string, home = os.homedir()): FoundSkill[] {
+  const places: { dir: string; label: string; agent: FoundSkill['agent'] }[] = [
+    { dir: path.join(project, '.claude/skills'), label: '.claude/skills', agent: 'claude' },
+    { dir: path.join(project, '.agents/skills'), label: '.agents/skills', agent: 'shared' },
+    { dir: path.join(home, '.claude/skills'), label: '~/.claude/skills', agent: 'claude' },
+    { dir: path.join(home, '.agents/skills'), label: '~/.agents/skills', agent: 'shared' },
+    { dir: path.join(home, '.codex/skills'), label: '~/.codex/skills', agent: 'codex' },
+  ];
+  const have = new Set(listSkills(project).map(s => path.basename(s.dir)));
+  const seen = new Set<string>();
+  const out: FoundSkill[] = [];
+  for (const p of places) {
+    if (!fs.existsSync(p.dir)) continue;
+    for (const e of fs.readdirSync(p.dir, { withFileTypes: true })) {
+      if (e.name.startsWith('.') || have.has(e.name) || seen.has(e.name)) continue; // .system holds the CLI defaults
+      const dir = path.join(p.dir, e.name);
+      if (!e.isDirectory() && !e.isSymbolicLink()) continue;
+      if (isLink(dir) && isManaged(dir, fs.existsSync(sourceDir(project)) ? fs.realpathSync(sourceDir(project)) : '\0')) continue;
+      const file = path.join(dir, 'SKILL.md');
+      if (!fs.existsSync(file) || fs.existsSync(path.join(dir, MARKER))) continue;
+      const fm = parseFrontmatter(fs.readFileSync(file, 'utf8'));
+      seen.add(e.name);
+      out.push({ name: fm.name ?? e.name, description: fm.description ?? '', dir, from: p.label, agent: p.agent });
+    }
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Copies a found skill into the library (the original is left where it is). Returns the library folder. */
+export function importSkill(project: string, found: Pick<Skill, 'dir'>): string {
+  const name = path.basename(found.dir);
+  const to = path.join(sourceDir(project), name);
+  if (fs.existsSync(to)) throw new Error(`${name} is already in the library`);
+  fs.mkdirSync(sourceDir(project), { recursive: true });
+  fs.cpSync(found.dir, to, { recursive: true, dereference: true });
+  return to;
 }

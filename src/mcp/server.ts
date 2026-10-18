@@ -9,8 +9,8 @@ import { Store } from '../core/store.ts';
 
 export const TOOL_NAMES = ['get_handoff_context', 'get_thread_turns', 'list_threads', 'list_artifacts', 'list_skills', 'get_skill'] as const;
 
-export function createServer(project: string, threadId?: string): McpServer {
-  const store = new Store(project);
+export function createServer(project: string, threadId?: string, home?: string): McpServer {
+  const store = new Store(project, { home });
   // Every agent starts this server for its thread, so this text reaches all three: it says where the thread's artifacts go.
   const dir = threadId ? store.artifactsDir(threadId) : undefined;
   const instructions = dir
@@ -54,12 +54,12 @@ export function createServer(project: string, threadId?: string): McpServer {
     },
   );
 
-  server.registerTool('list_threads', { description: 'Chorus threads in this project.', inputSchema: {} }, async () =>
+  server.registerTool('list_threads', { description: 'Chorus threads (all projects). Pass an id to get_handoff_context to continue one.', inputSchema: {} }, async () =>
     reply(
       'list_threads',
       store
         .listThreads()
-        .map(t => `${t.id}\t${t.agent}\t${t.state}\t${t.title}${t.id === threadId ? '\t(this thread)' : ''}`)
+        .map(t => `${t.id}\t${t.agent}\t${t.state}\t${t.title}\t${t.project ?? ''}${t.id === threadId ? '\t(this thread)' : ''}`)
         .join('\n') || '(none)',
     ),
   );
@@ -87,7 +87,7 @@ export function createServer(project: string, threadId?: string): McpServer {
   return server;
 }
 
-export async function runMcp(project: string, threadId?: string) {
-  const server = createServer(project, threadId);
+export async function runMcp(project: string, threadId?: string, home?: string) {
+  const server = createServer(project, threadId, home);
   await server.connect(new StdioServerTransport());
 }

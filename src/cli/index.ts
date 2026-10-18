@@ -21,14 +21,26 @@ const project = path.resolve(flag('project') ?? process.cwd());
 const asAgent = (s?: string): AgentId | undefined => (AGENTS.includes(s as AgentId) ? (s as AgentId) : undefined);
 const models = (): Partial<Record<AgentId, string>> => ({ claude: process.env.CHORUS_MODEL_CLAUDE, codex: process.env.CHORUS_MODEL_CODEX, agy: process.env.CHORUS_MODEL_AGY });
 
-async function app(start: (c: Controller) => Promise<void> | void) {
-  const store = new Store(project);
+/**
+ * One database for every project (~/.chorus/chorus.db) unless CHORUS_STORE=project keeps it in <project>/.chorus. The folder is
+ * passed to the agents' MCP servers explicitly, so they open the same file.
+ */
+function openStore() {
+  const home = process.env.CHORUS_HOME ?? (process.env.CHORUS_STORE === 'project' ? undefined : path.join(process.env.HOME ?? '.', '.chorus'));
+  const store = new Store(project, { home });
+  store.importLocal(project); // chats recorded before the store was shared
+  return store;
+}
+
+async function app(start: (c: Controller) => Promise<void> | void, opts: { newChat?: boolean } = {}) {
+  const store = openStore();
   const ui = new App();
   const c = new Controller({ project, store, app: ui, models: models() });
   c.restore();
   await start(c);
+  // `chorus` alone opens New chat (the first screen); new/run/handoff go straight to a chat
+  if (opts.newChat && !ui.current?.host) c.newChatScreen();
   ui.start();
-  if (!ui.current?.host) ui.showHome(); // `chorus` alone opens the home screen; new/run/handoff go straight to a thread
   await ui.done;
   store.close();
   process.exit(0);
@@ -38,15 +50,16 @@ const cmd = argv[0];
 switch (cmd) {
   case undefined:
   case 'app':
-    await app(() => {});
+    await app(() => {}, { newChat: true });
     break;
   case 'new': {
     // no --agent: the form opens (agent, model, folder), preset from the other flags
     const agent = asAgent(flag('agent'));
     const folder = flag('folder') ? path.resolve(flag('folder')!.replace(/^~(?=\/|$)/, process.env.HOME ?? '~')) : undefined;
+    const skip = argv.includes('--skip-permissions');
     await app(c => {
-      if (agent) c.newThread({ agent, title: positional[0], prompt: flag('task'), model: flag('model'), cwd: folder });
-      else void c.newThreadForm({ folder });
+      if (agent) c.newThread({ agent, title: positional[0], prompt: flag('task'), model: flag('model'), cwd: folder, skipPermissions: skip });
+      else c.newChatScreen({ folder, model: flag('model'), skip });
     });
     break;
   }
@@ -81,16 +94,16 @@ switch (cmd) {
     break;
   }
   case 'threads':
-    console.log(threadsCmd(new Store(project)));
+    console.log(threadsCmd(openStore()));
     break;
   case 'show':
-    console.log(showCmd(new Store(project), positional[0] ?? ''));
+    console.log(showCmd(openStore(), positional[0] ?? ''));
     break;
   case 'memory':
-    console.log(memoryCmd(new Store(project), positional[0] ?? ''));
+    console.log(memoryCmd(openStore(), positional[0] ?? ''));
     break;
   case 'artifacts': {
-    const store = new Store(project);
+    const store = openStore();
     console.log(artifactsCmd(store, flag('thread')));
     if (argv.includes('--serve')) {
       // a local page per artifact that reloads while the agent edits it
@@ -104,16 +117,16 @@ switch (cmd) {
     break;
   }
   case 'activity':
-    console.log(activityCmd(new Store(project), flag('thread')));
+    console.log(activityCmd(openStore(), flag('thread')));
     break;
   case 'trace':
-    console.log(traceCmd(new Store(project), positional[0] ?? ''));
+    console.log(traceCmd(openStore(), positional[0] ?? ''));
     break;
   case 'doctor':
     console.log(doctorCmd(project));
     break;
   case 'mcp':
-    await runMcp(project, flag('thread'));
+    await runMcp(project, flag('thread'), flag('home'));
     break;
   case 'skills':
     if (argv[1] === 'sync') console.log(JSON.stringify(syncSkills(project), null, 2));

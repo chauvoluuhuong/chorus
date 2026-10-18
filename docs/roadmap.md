@@ -49,7 +49,15 @@ Plan and results: [phase4.md](phase4.md). D1 decided: TypeScript. E2E proof with
 - [x] P4.9 remaining parts: mouse clicks, artifact preview server with live reload, `o/p/v`, `r/f`
 - [ ] Plan meter for Claude interactive threads (Claude reports plan usage only in the headless stream)
 - [x] **Proof:** `npm run proof` drives the real app with real Claude and Codex: two threads, switch, approval from a card, handoff, artifacts; screenshots in `docs/proof/phase4/`
-- [ ] P4.10 UI pass 2 (simpler, like an AI chat app): project-tree sidebar, New chat form with skip-permissions, shared Memory and Skills. Plan: [ui-plan.md](ui-plan.md), mockup `docs/mockups/chorus-cli.html`
+- [x] P4.10 UI pass 2 (simpler, like an AI chat app), built 2026-10-18; plan [ui-plan.md](ui-plan.md), mockup `docs/mockups/chorus-cli.html`:
+  - [x] Click-region registry (`Hit`, `hitAt`) and the look rules: button = filled chip, link = underlined, row = lights up under the mouse (mode 1003 hover)
+  - [x] Top bar (`‹ Back`, path links, `! N waiting`, `☰ Menu`) and window-size steps (full / narrow / icons / hidden / too small)
+  - [x] Sidebar = project tree (`+ New chat`, projects fold, chats under them, ↳ continued, Skills, Memory); Home and project picker removed
+  - [x] New chat screen (agent, model, project folder, skip permissions) is the first screen; flags verified interactively (TD-10 resolved)
+  - [x] Approvals inbox with risk tags, Decided history (`approvals_log`), y / x / ⏎; menu = the mockup's ten rows (↑↓ ⏎, click, letter)
+  - [x] One shared database `~/.chorus/chorus.db` with a `project` column (`CHORUS_STORE=project` keeps the old per-project file); Memory screen across projects; `get_handoff_context` works for any project
+  - [x] Skills screen: on/off, import what the agents already have. The global library and the opt-in links outside Chorus stay TD-1
+  - [ ] Real-CLI proof of the new screens (`npm run proof`): to rewrite for the new layout and run
 
 ## Risk harness (before Phase 4.5 / 5)
 
@@ -108,9 +116,10 @@ Probed ([risks/memory-adoption](risks/memory-adoption.md)): agents save a memory
 - [ ] agy: launch with a per-thread `--log-file` and read the session id from it (verify with interactive `-i`); fallback: serialize agy launches.
 - [ ] Never guess when ambiguous: leave unlinked and retry.
 
-### TD-5 · Mouse, focus and kitty keyboard are not forwarded to threads
+### TD-5 · Focus events and kitty keyboard are not forwarded to threads (mouse is)
 ([risks/terminal-protocols](risks/terminal-protocols.md)) Codex asks for mouse (1000–1006) and kitty keys; agy for kitty keys; Claude for focus events.
-- [ ] Track the child's modes from the virtual screen; forward clicks inside the thread region (offset by sidebar and top bar) as SGR when enabled; answer the kitty query honestly and re-encode Shift/Ctrl+Enter; forward focus to the focused thread only.
+- [x] Mouse: clicks inside the chat area are forwarded as SGR when the agent asked for the mouse, shifted by the sidebar and top bar (P4.10 tests). Wheel and motion are not forwarded yet.
+- [ ] Answer the kitty keyboard query honestly and re-encode Shift/Ctrl+Enter; forward focus events to the focused chat only; forward wheel/motion for agents in mouse mode 1002/1003.
 
 ### TD-6 · Windows is unverified
 ([risks/windows](risks/windows.md)) node-pty/ConPTY, CLI home paths, Claude slug rule, skills copy-mode, Ctrl+\ in conhost.
@@ -128,6 +137,6 @@ Probed ([risks/memory-adoption](risks/memory-adoption.md)): agents save a memory
 ([risks/approval-drift](risks/approval-drift.md)) Resolved for claude 2.1.302, codex 0.163.0, agy 1.4.2.
 - [ ] Run `npm run risk -- approval-drift` before `npm run proof`; refresh fixtures with `approval-probe.mjs` on every CLI update.
 
-### TD-10 · "Skip permissions" flags are documented, not verified in the interactive screen
+### TD-10 · "Skip permissions" flags: ✅ resolved 2026-10-18 (verified in the interactive screen, see [approvals.md §C](integrations/approvals.md))
 Claude `--dangerously-skip-permissions`, Codex `--dangerously-bypass-approvals-and-sandbox`, agy `--dangerously-skip-permissions` (ui-plan item 4).
-- [ ] Check each flag in the interactive TUI with a probe before the New chat checkbox ships; status line shows `skip` in amber.
+- [x] Checked each flag in the interactive TUI with a probe; the status line shows `skip` in amber.

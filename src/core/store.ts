@@ -18,8 +18,20 @@ export interface ThreadRow {
   state: ThreadState;
   cli_version: string | null;
   transcript_path: string | null;
+  /** the project folder whose .chorus/ holds this thread's artifacts (the store itself may be shared, see Store) */
+  project: string | null;
+  /** 1 when the chat runs with permission prompts off */
+  skip_permissions: number;
   created: string;
   updated: string;
+}
+
+export interface ApprovalLogRow {
+  id: number;
+  thread_id: string;
+  what: string;
+  decision: 'approved' | 'denied';
+  ts: string;
 }
 
 export interface ArtifactRow {
@@ -33,7 +45,8 @@ const SCHEMA = `
 CREATE TABLE IF NOT EXISTS threads (
   id TEXT PRIMARY KEY, title TEXT NOT NULL, agent TEXT NOT NULL, model TEXT, cwd TEXT NOT NULL,
   native_session_id TEXT, parent_thread_id TEXT, state TEXT NOT NULL DEFAULT 'waiting',
-  cli_version TEXT, transcript_path TEXT, created TEXT NOT NULL, updated TEXT NOT NULL
+  cli_version TEXT, transcript_path TEXT, project TEXT, skip_permissions INTEGER NOT NULL DEFAULT 0,
+  created TEXT NOT NULL, updated TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS turns (
   thread_id TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL, ts TEXT,
@@ -52,6 +65,9 @@ CREATE TABLE IF NOT EXISTS artifacts (
   thread_id TEXT NOT NULL, path TEXT NOT NULL, version TEXT NOT NULL, ts TEXT NOT NULL,
   PRIMARY KEY (thread_id, path, version)
 );
+CREATE TABLE IF NOT EXISTS approvals_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, thread_id TEXT NOT NULL, what TEXT NOT NULL, decision TEXT NOT NULL, ts TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS mcp_calls (
   id INTEGER PRIMARY KEY AUTOINCREMENT, thread_id TEXT, tool TEXT NOT NULL, ts TEXT NOT NULL
 );
@@ -59,24 +75,98 @@ CREATE TABLE IF NOT EXISTS mcp_calls (
 
 const now = () => new Date().toISOString();
 
+export interface StoreOpts {
+  /**
+   * Keep the database in this folder (default: env CHORUS_HOME, else the project's own .chorus/). With a home folder every
+   * project shares one database, so chats, memory and handoff work across projects; artifacts stay in each project's folder.
+   */
+  home?: string;
+}
+
 export class Store {
   readonly db: DatabaseSync;
+  /** where chorus.db lives */
   readonly root: string;
+  /** true when the database is shared by every project */
+  readonly shared: boolean;
+  /** the project this process works in (the default for new threads) */
+  readonly project: string;
 
-  constructor(project: string) {
-    this.root = path.join(project, '.chorus');
+  constructor(project: string, opts: StoreOpts = {}) {
+    this.project = project;
+    const home = opts.home ?? process.env.CHORUS_HOME;
+    this.shared = !!home;
+    this.root = home ? path.resolve(home) : path.join(project, '.chorus');
     fs.mkdirSync(this.root, { recursive: true });
     this.db = new DatabaseSync(path.join(this.root, 'chorus.db'));
     this.db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
     this.db.exec(SCHEMA);
+    this.migrate();
+  }
+
+  /** Databases made before the shared store lack these columns. */
+  private migrate() {
+    const cols = (this.db.prepare('PRAGMA table_info(threads)').all() as { name: string }[]).map(c => c.name);
+    if (!cols.includes('project')) this.db.exec('ALTER TABLE threads ADD COLUMN project TEXT');
+    if (!cols.includes('skip_permissions')) this.db.exec('ALTER TABLE threads ADD COLUMN skip_permissions INTEGER NOT NULL DEFAULT 0');
+  }
+
+  /**
+   * Copies the threads of a project's own .chorus/chorus.db into this (shared) database, once. Rows whose id exists are skipped.
+   * Returns how many threads came over.
+   */
+  importLocal(project: string): number {
+    const file = path.join(project, '.chorus', 'chorus.db');
+    if (!this.shared || !fs.existsSync(file) || path.resolve(file) === path.join(this.root, 'chorus.db')) return 0;
+    const src = new DatabaseSync(file, { readOnly: true });
+    try {
+      const ids = new Set((this.db.prepare('SELECT id FROM threads').all() as { id: string }[]).map(r => r.id));
+      const threads = src.prepare('SELECT * FROM threads').all() as any[];
+      let n = 0;
+      this.db.exec('BEGIN');
+      for (const t of threads) {
+        if (ids.has(t.id)) continue;
+        this.db.prepare(
+          `INSERT INTO threads (id,title,agent,model,cwd,native_session_id,parent_thread_id,state,cli_version,transcript_path,project,skip_permissions,created,updated)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        ).run(t.id, t.title, t.agent, t.model, t.cwd, t.native_session_id, t.parent_thread_id, t.state, t.cli_version, t.transcript_path, t.project ?? project, t.skip_permissions ?? 0, t.created, t.updated);
+        for (const [table, cols] of [
+          ['turns', 'thread_id,seq,role,text,ts'],
+          ['tool_calls', 'thread_id,call_id,turn_seq,tool,target,status,result,duration_ms'],
+          ['usage', 'thread_id,input_tokens,output_tokens,cache_read_tokens,cost_usd,limit_utilization,limit_resets_at,limit_status,updated'],
+          ['artifacts', 'thread_id,path,version,ts'],
+        ] as const) {
+          const marks = cols.split(',').map(() => '?').join(',');
+          const ins = this.db.prepare(`INSERT OR IGNORE INTO ${table} (${cols}) VALUES (${marks})`);
+          for (const r of src.prepare(`SELECT ${cols} FROM ${table} WHERE thread_id = ?`).all(t.id) as any[]) ins.run(...cols.split(',').map(c => r[c] ?? null));
+        }
+        n++;
+      }
+      this.db.exec('COMMIT');
+      return n;
+    } catch (e) {
+      try {
+        this.db.exec('ROLLBACK');
+      } catch {
+        /* nothing open */
+      }
+      throw e;
+    } finally {
+      src.close();
+    }
   }
 
   close() {
     this.db.close();
   }
 
+  /** The project folder a thread belongs to: its artifacts live in <project>/.chorus/threads/<id>/. */
+  projectOf(id: string): string {
+    const r = this.db.prepare('SELECT project FROM threads WHERE id = ?').get(id) as { project: string | null } | undefined;
+    return r?.project ?? this.project;
+  }
   threadDir(id: string) {
-    return path.join(this.root, 'threads', id);
+    return path.join(this.projectOf(id), '.chorus', 'threads', id);
   }
   artifactsDir(id: string) {
     return path.join(this.threadDir(id), 'artifacts');
@@ -94,15 +184,17 @@ export class Store {
       state: t.state ?? 'waiting',
       cli_version: t.cli_version ?? null,
       transcript_path: t.transcript_path ?? null,
+      project: t.project ?? this.project,
+      skip_permissions: t.skip_permissions ?? 0,
       created: now(),
       updated: now(),
     };
     this.db
       .prepare(
-        `INSERT INTO threads (id,title,agent,model,cwd,native_session_id,parent_thread_id,state,cli_version,transcript_path,created,updated)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO threads (id,title,agent,model,cwd,native_session_id,parent_thread_id,state,cli_version,transcript_path,project,skip_permissions,created,updated)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
-      .run(row.id, row.title, row.agent, row.model, row.cwd, row.native_session_id, row.parent_thread_id, row.state, row.cli_version, row.transcript_path, row.created, row.updated);
+      .run(row.id, row.title, row.agent, row.model, row.cwd, row.native_session_id, row.parent_thread_id, row.state, row.cli_version, row.transcript_path, row.project, row.skip_permissions, row.created, row.updated);
     fs.mkdirSync(this.artifactsDir(row.id), { recursive: true });
     return row;
   }
@@ -208,6 +300,15 @@ export class Store {
 
   logMcpCall(threadId: string | undefined, tool: string) {
     this.db.prepare('INSERT INTO mcp_calls (thread_id,tool,ts) VALUES (?,?,?)').run(threadId ?? null, tool, now());
+  }
+
+  /** Every approve/deny answered from Chorus is kept, so "what did I approve?" has an answer. */
+  logApproval(threadId: string, what: string, decision: 'approved' | 'denied') {
+    this.db.prepare('INSERT INTO approvals_log (thread_id,what,decision,ts) VALUES (?,?,?,?)').run(threadId, what, decision, now());
+  }
+
+  approvalsLog(limit = 20): ApprovalLogRow[] {
+    return this.db.prepare('SELECT * FROM approvals_log ORDER BY id DESC LIMIT ?').all(limit) as unknown as ApprovalLogRow[];
   }
 
   mcpCalls(threadId: string): { tool: string; ts: string }[] {

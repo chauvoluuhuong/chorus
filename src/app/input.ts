@@ -135,6 +135,14 @@ export class InputRouter {
     flush();
   }
 
+  /** Opens the menu from a click on the top bar's button (the same as pressing the menu key). */
+  open() {
+    if (!this.menuOpen && !this.capture) {
+      this.menuOpen = true;
+      this.emit({ type: 'menu-open' });
+    }
+  }
+
   close() {
     if (this.menuOpen) {
       this.menuOpen = false;

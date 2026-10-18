@@ -1,5 +1,9 @@
-// Draws the app frame: sidebar | active thread's screen | status bar | overlay. Pure functions over cells,
-// so the layout can be tested without a terminal. The look follows docs/mockups/chorus-cli.html.
+// Draws the app frame: top bar | sidebar (projects and chats) | active thread's screen or a pane | status bar | overlay.
+// Pure functions over cells, so the layout can be tested without a terminal. The look follows docs/mockups/chorus-cli.html.
+//
+// Anything clickable is registered as a hit region (`Hit`): compose() returns them with the grid and the app looks a click
+// up there instead of redoing the layout arithmetic. Three looks, used the same everywhere (docs/ui-plan.md):
+// a button is a filled chip (BTN), a link is underlined accent text (LINK), a list row lights up under the mouse (hover).
 import type { Cell, VirtualScreen } from './screen.ts';
 
 export type Grid = Cell[][];
@@ -25,29 +29,52 @@ export const T = {
   bgBrand: '48;2;79;193;182',
   fgBrand: '38;2;11;26;25',
   bgBox: '48;2;24;29;37',
+  bgErr: '48;2;74;31;31',
+  bgOk: '48;2;31;58;38',
 };
 export const agentStyle = (agent: string) => (agent === 'claude' ? T.claude : agent === 'codex' ? T.codex : agent === 'agy' ? T.agy : T.fg);
 const join = (...p: (string | undefined | false)[]) => p.filter(Boolean).join(';');
 
-export interface SidebarItem {
-  title: string;
-  agent: string;
-  state: ItemState;
-  active: boolean;
-  /** continued from another thread: drawn under it */
-  child?: boolean;
+/** A button is a filled chip, a link is underlined accent text. */
+export const BTN = join('1', T.chorus, T.bgSel);
+export const LINK = join('4', T.chorus);
+export const BTN_OK = join('1', T.ok, T.bgOk);
+export const BTN_BAD = join('1', T.err, T.bgErr);
+
+/** A clickable rectangle: x0..x1 and y0..y1 are half-open, in screen cells (0-based). */
+export interface Hit {
+  id: string;
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
 }
 
-/** One styled piece of text: [text, style]. */
-export type Seg = [string, string?];
+/** One styled piece of text: [text, style, hit id]. A hit id makes the piece clickable. */
+export type Seg = [string, string?, string?];
 export type RichLine = string | Seg[];
+/** A pane line that is a whole clickable row (lists): the selected row gets a background. */
+export interface PaneRow {
+  line: RichLine;
+  hit?: string;
+  sel?: boolean;
+}
+export type PaneLine = RichLine | PaneRow;
+const isRow = (l: PaneLine): l is PaneRow => typeof l === 'object' && !Array.isArray(l);
+
+export type SideRow =
+  | { kind: 'new' }
+  | { kind: 'project'; cwd: string; name: string; open: boolean; count: number; alert: boolean; active: boolean }
+  | { kind: 'chat'; index: number; title: string; agent: string; state: ItemState; active: boolean; child?: boolean }
+  | { kind: 'skills'; active: boolean }
+  | { kind: 'memory'; active: boolean };
 
 export interface Overlay {
   title: string;
   /** free lines (forms): the selected one is highlighted */
   lines?: string[];
-  /** key + label rows (menus): the selected one is highlighted */
-  rows?: [string, string, boolean?][];
+  /** key + label rows (menus): the selected one is highlighted; the 4th element is the hit id */
+  rows?: [string, string, boolean?, string?][];
   selected?: number;
   foot?: string;
   alert?: boolean;
@@ -60,37 +87,43 @@ export interface StatusBar {
   from?: string;
   /** plan usage 0..100 */
   usage?: number;
+  /** context window use 0..100 */
+  ctx?: number;
   artifacts: number;
   toast?: string;
   warn?: boolean;
+  /** the chat runs with permission prompts off */
+  skip?: boolean;
 }
 
-export interface HomeView {
-  project: string;
-  agents: { name: string; version?: string; ok: boolean; note?: string }[];
-  threads: { id: string; title: string; agent: string; state: string; age: string; artifacts: number; child?: boolean }[];
-  selected: number;
+export interface TopBar {
+  back: boolean;
+  /** path parts; the last one is plain text, the others are links */
+  crumb: string[];
+  waiting: number;
 }
 
 export interface View {
   cols: number;
   rows: number;
-  sidebarWidth: number; // 0 = hidden
-  items: SidebarItem[];
+  /** the user's choice (menu "b"); the width still decides whether it fits */
+  sidebarOn: boolean;
+  side: SideRow[];
+  top?: TopBar;
   screen?: VirtualScreen;
   /** segmented bar for the current thread; `message` replaces it (flash, warnings, no thread yet) */
   statusBar?: StatusBar;
   message?: string;
   statusRight: string;
   overlay?: Overlay;
-  /** replaces the thread area (memory, files, activity, help …) */
-  pane?: { title: string; lines: RichLine[]; hint: string };
+  /** replaces the thread area (new chat, approvals, memory, skills, files, activity, help …) */
+  pane?: { title: string; lines: PaneLine[]; hint: RichLine };
   /** approval card, drawn over the bottom of the thread area */
   card?: { title: string; lines: string[] };
-  /** the home screen: no sidebar, no thread */
-  home?: HomeView;
   /** how the menu key is named in the hints */
   menuLabel?: string;
+  /** hit id under the mouse: its region lights up */
+  hover?: string;
 }
 
 const GLYPH: Record<ItemState, { ch: string; s: string; label: string }> = {
@@ -116,175 +149,259 @@ function put(grid: Grid, y: number, x: number, text: string, s = '', maxX = grid
   }
 }
 
-function putRich(grid: Grid, y: number, x: number, line: RichLine, base = '', maxX = grid[0].length) {
+/** Draws segments and registers a hit for every piece that has an id. Returns the x after the last cell. */
+function putRich(grid: Grid, y: number, x: number, line: RichLine, base = '', maxX = grid[0].length, hits?: Hit[]): number {
   const segs: Seg[] = typeof line === 'string' ? [[line]] : line;
   let cx = x;
-  for (const [text, st] of segs) {
+  for (const [text, st, id] of segs) {
     put(grid, y, cx, text, join(base, st), maxX);
-    cx += [...text].length;
+    const w = [...text].length;
+    if (id && hits) hits.push({ id, x0: cx, x1: Math.min(maxX, cx + w), y0: y, y1: y + 1 });
+    cx += w;
   }
+  return cx;
 }
 
 function fill(grid: Grid, y: number, x0: number, x1: number, s: string) {
   for (let x = x0; x < x1; x++) if (grid[y]?.[x]) grid[y][x] = { t: ' ', s };
 }
 
-export function layout(cols: number, rows: number, sidebarWanted: number) {
-  const sw = sidebarWanted > 0 && cols >= 60 ? sidebarWanted : 0;
-  return { sidebar: sw, contentX: sw ? sw + 1 : 0, contentCols: cols - (sw ? sw + 1 : 0), contentRows: Math.max(1, rows - 1) };
+const width = (line: RichLine) => (typeof line === 'string' ? [...line].length : line.reduce((n, [t]) => n + [...t].length, 0));
+
+/* ---------- layout ---------- */
+
+export const MIN_COLS = 50;
+export const MIN_ROWS = 12;
+export type SideMode = 'full' | 'narrow' | 'icons' | 'hidden';
+
+/**
+ * The window is split into a top bar (row 0), the middle (sidebar | content) and the status line (last row).
+ * Chorus's own parts shrink first (docs/mockups/chorus-cli.html, "Window size"): 110+ columns full sidebar, 90-109 narrow,
+ * 70-89 icons, 50-69 hidden, below 50x12 a "too small" screen.
+ */
+export function layout(cols: number, rows: number, sidebarOn = true) {
+  const tooSmall = cols < MIN_COLS || rows < MIN_ROWS;
+  const mode: SideMode = !sidebarOn || tooSmall ? 'hidden' : cols >= 110 ? 'full' : cols >= 90 ? 'narrow' : cols >= 70 ? 'icons' : 'hidden';
+  const sidebar = { full: 28, narrow: 20, icons: 5, hidden: 0 }[mode];
+  const contentX = sidebar ? sidebar + 1 : 0;
+  return { tooSmall, mode, sidebar, contentX, contentY: 1, contentCols: Math.max(1, cols - contentX), contentRows: Math.max(1, rows - 2) };
 }
 
-export function compose(v: View): { grid: Grid; cursor: { x: number; y: number } | null } {
-  const L = layout(v.cols, v.rows, v.home ? 0 : v.sidebarWidth);
+/* ---------- compose ---------- */
+
+export function compose(v: View): { grid: Grid; cursor: { x: number; y: number } | null; hits: Hit[] } {
+  const L = layout(v.cols, v.rows, v.sidebarOn);
   const grid = blank(v.cols, v.rows);
+  const hits: Hit[] = [];
+  if (L.tooSmall) {
+    const msg = `window too small: ${v.cols}×${v.rows}, chorus needs ${MIN_COLS}×${MIN_ROWS}`;
+    put(grid, Math.floor(v.rows / 2), Math.max(0, Math.floor((v.cols - msg.length) / 2)), msg, T.warn);
+    put(grid, v.rows - 1, 0, 'your chats keep running', T.dim);
+    return { grid, cursor: null, hits };
+  }
+  const right = L.contentX + L.contentCols;
+  const Y = L.contentY;
 
-  if (v.home) drawHome(grid, v.home, L.contentCols, L.contentRows);
-
-  if (L.sidebar) drawSidebar(grid, v.items, L.sidebar, L.contentRows, v.menuLabel ?? '⌃\\');
+  drawTop(grid, v, hits);
+  if (L.sidebar) drawSidebar(grid, v.side, L.mode, L.sidebar, Y, L.contentRows, hits);
 
   if (v.pane) {
-    fill(grid, 0, L.contentX, L.contentX + L.contentCols, T.bgStatus);
-    put(grid, 0, L.contentX + 1, v.pane.title, join('1', T.chorus, T.bgStatus), L.contentX + L.contentCols);
-    v.pane.lines.slice(0, L.contentRows - 2).forEach((line, i) => putRich(grid, i + 1, L.contentX + 2, line, '', L.contentX + L.contentCols));
-    put(grid, L.contentRows - 1, L.contentX + 1, v.pane.hint, T.dim, L.contentX + L.contentCols);
-  } else if (v.screen && !v.home) {
+    fill(grid, Y, L.contentX, right, T.bgStatus);
+    put(grid, Y, L.contentX + 1, v.pane.title, join('1', T.chorus, T.bgStatus), right);
+    v.pane.lines.slice(0, L.contentRows - 2).forEach((line, i) => {
+      const y = Y + 1 + i;
+      if (isRow(line)) {
+        if (line.sel) fill(grid, y, L.contentX, right, T.bgSel);
+        if (line.hit) hits.push({ id: line.hit, x0: L.contentX, x1: right, y0: y, y1: y + 1 });
+        putRich(grid, y, L.contentX + 2, line.line, line.sel ? T.bgSel : '', right, hits);
+      } else putRich(grid, y, L.contentX + 2, line, '', right, hits);
+    });
+    putRich(grid, Y + L.contentRows - 1, L.contentX + 1, v.pane.hint, T.dim, right, hits);
+  } else if (v.screen) {
     for (let y = 0; y < L.contentRows; y++) {
       const row = v.screen.row(y, L.contentCols);
-      for (let x = 0; x < row.length; x++) grid[y][L.contentX + x] = row[x];
+      for (let x = 0; x < row.length; x++) grid[Y + y][L.contentX + x] = row[x];
     }
   }
 
   drawStatus(grid, v);
 
   let cursor: { x: number; y: number } | null = null;
-  if (v.screen && !v.overlay && !v.pane && !v.home) {
+  if (v.screen && !v.overlay && !v.pane) {
     const c = v.screen.cursor();
-    if (!c.hidden && c.y < L.contentRows && c.x < L.contentCols) cursor = { x: L.contentX + c.x, y: c.y };
+    if (!c.hidden && c.y < L.contentRows && c.x < L.contentCols) cursor = { x: L.contentX + c.x, y: Y + c.y };
   }
 
-  if (v.card) drawCard(grid, v.card, L.contentX, L.contentCols, L.contentRows);
-  if (v.overlay) drawOverlay(grid, v.overlay, L.contentX, L.contentCols, L.contentRows);
-  return { grid, cursor };
+  if (v.card) drawCard(grid, v.card, L.contentX, L.contentCols, Y, L.contentRows);
+  if (v.overlay) drawOverlay(grid, v.overlay, L.contentX, L.contentCols, Y, L.contentRows, hits);
+
+  if (v.hover) lightUp(grid, hits, v.hover);
+  return { grid, cursor, hits };
 }
 
-function stateOf(it: SidebarItem): { ch: string; s: string; label: string; labelStyle: string } {
-  if (it.state === 'idle' && !it.active) return { ch: '◐', s: T.warn, label: 'waiting for you', labelStyle: T.warn };
-  const g = GLYPH[it.state];
-  return { ...g, labelStyle: it.state === 'approval' || it.state === 'limit' ? T.err : T.dim };
-}
-
-function drawSidebar(grid: Grid, items: SidebarItem[], width: number, height: number, key: string) {
-  for (let y = 0; y < height; y++) {
-    fill(grid, y, 0, width, T.bgSide);
-    put(grid, y, width, '│', T.line);
+/** Hover: the region under the mouse gets the selection background. */
+function lightUp(grid: Grid, hits: Hit[], id: string) {
+  for (const h of hits) {
+    if (h.id !== id) continue;
+    for (let y = h.y0; y < h.y1; y++)
+      for (let x = h.x0; x < h.x1; x++) {
+        const c = grid[y]?.[x];
+        if (c) grid[y][x] = { t: c.t, s: join(c.s.replace(/48;2;\d+;\d+;\d+/, ''), T.bgSel) };
+      }
   }
-  put(grid, 0, 1, 'THREADS', join(T.dim, T.bgSide), width);
-  const active = Math.max(0, items.findIndex(i => i.active));
-  put(grid, 0, 10, '·', join(T.dim, T.bgSide), width);
-  put(grid, 0, 12, String(items.length ? active + 1 : 0), join(T.chorus, T.bgSide), width);
-  put(grid, 0, 12 + String(active + 1).length, `/${items.length}`, join(T.dim, T.bgSide), width);
+}
 
-  const room = Math.floor((height - 4) / 2);
-  items.slice(0, Math.max(0, room)).forEach((it, i) => {
-    const y = 1 + i * 2;
-    const g = stateOf(it);
-    const bg = it.active ? T.bgSel : T.bgSide;
-    fill(grid, y, 0, width, bg);
-    fill(grid, y + 1, 0, width, bg);
-    if (it.active) {
-      put(grid, y, 0, '▎', join(T.chorus, bg), width);
-      put(grid, y + 1, 0, '▎', join(T.chorus, bg), width);
-    }
-    let x = 2;
-    if (it.child) {
-      put(grid, y, x, '↳', join(T.dim, bg), width);
-      x += 2;
-    }
-    put(grid, y, x, g.ch, join(g.s, bg), width);
-    const title = it.title.length > width - x - 3 ? it.title.slice(0, width - x - 4) + '…' : it.title;
-    put(grid, y, x + 2, title, join(it.active ? '1' : '', T.fg, bg), width - 1);
-    const x2 = it.child ? 6 : 4;
-    put(grid, y + 1, x2, it.agent, join(agentStyle(it.agent), bg), width - 1);
-    put(grid, y + 1, x2 + it.agent.length, ` · ${g.label}`, join(g.labelStyle, bg), width - 1);
+/* ---------- top bar ---------- */
+
+function drawTop(grid: Grid, v: View, hits: Hit[]) {
+  const cols = v.cols;
+  fill(grid, 0, 0, cols, T.bgStatus);
+  const top = v.top;
+  if (!top) return;
+  let x = 1;
+  if (top.back) {
+    x = putRich(grid, 0, x, [[' ‹ Back ', BTN, 'back']], T.bgStatus, cols, hits) + 2;
+  }
+  top.crumb.forEach((part, i) => {
+    const last = i === top.crumb.length - 1;
+    if (i) x = putRich(grid, 0, x, [[' › ', T.dim]], T.bgStatus, cols) ;
+    x = putRich(grid, 0, x, [[part, last ? join('1', T.fg) : LINK, last ? undefined : `crumb:${i}`]], T.bgStatus, cols, hits);
   });
-
-  const f1: Seg[] = [[`${key} ↑↓`, join(T.chorus, T.bgSide)], [' move  ', join(T.dim, T.bgSide)], ['⏎', join(T.chorus, T.bgSide)], [' open', join(T.dim, T.bgSide)]];
-  const f2: Seg[] = [[`${key} n`, join(T.chorus, T.bgSide)], [' new  ', join(T.dim, T.bgSide)], ['b', join(T.chorus, T.bgSide)], [' hide', join(T.dim, T.bgSide)]];
-  for (let x = 0; x < width; x++) grid[height - 3][x] = { t: '─', s: join(T.line, T.bgSide) };
-  putRich(grid, height - 2, 1, f1, '', width);
-  putRich(grid, height - 1, 1, f2, '', width);
+  // right side: waiting badge and menu button
+  const menu = ` ☰ Menu `;
+  const waiting = top.waiting ? ` ! ${top.waiting} waiting ` : '';
+  let rx = cols - menu.length - 1;
+  putRich(grid, 0, rx, [[menu, BTN, 'menu']], T.bgStatus, cols, hits);
+  if (waiting) {
+    rx -= waiting.length + 2;
+    putRich(grid, 0, rx, [[waiting, join('1', T.err, T.bgErr), 'approvals']], T.bgStatus, cols, hits);
+  }
 }
+
+/* ---------- sidebar ---------- */
+
+function stateOf(state: ItemState, active: boolean): { ch: string; s: string; label: string } {
+  if (state === 'idle' && !active) return { ch: '◐', s: T.warn, label: 'waiting for you' };
+  return GLYPH[state];
+}
+
+function drawSidebar(grid: Grid, rows: SideRow[], mode: SideMode, w: number, y0: number, height: number, hits: Hit[]) {
+  for (let y = 0; y < height; y++) {
+    fill(grid, y0 + y, 0, w, T.bgSide);
+    put(grid, y0 + y, w, '│', T.line);
+  }
+  const top = rows.filter(r => r.kind !== 'skills' && r.kind !== 'memory');
+  const foot = rows.filter(r => r.kind === 'skills' || r.kind === 'memory');
+  const footH = foot.length ? foot.length + 1 : 0;
+  const listH = Math.max(1, height - footH);
+  // keep the selected row visible
+  const sel = Math.max(0, top.findIndex(r => (r.kind === 'chat' || r.kind === 'project') && r.active));
+  const offset = Math.max(0, Math.min(top.length - listH, sel - listH + 2));
+  top.slice(offset, offset + listH).forEach((r, i) => drawSideRow(grid, r, mode, w, y0 + i, hits));
+  if (footH) {
+    for (let x = 0; x < w; x++) grid[y0 + listH][x] = { t: '─', s: join(T.line, T.bgSide) };
+    foot.forEach((r, i) => drawSideRow(grid, r, mode, w, y0 + listH + 1 + i, hits));
+  }
+}
+
+function drawSideRow(grid: Grid, r: SideRow, mode: SideMode, w: number, y: number, hits: Hit[]) {
+  const icons = mode === 'icons';
+  const bg = (on: boolean) => (on ? T.bgSel : T.bgSide);
+  const rowHit = (id: string) => hits.push({ id, x0: 0, x1: w, y0: y, y1: y + 1 });
+  const clip = (s: string, n: number) => (s.length > n ? s.slice(0, Math.max(0, n - 1)) + '…' : s);
+  if (r.kind === 'new') {
+    rowHit('new');
+    put(grid, y, 1, icons ? ' +' : ' + New chat ', BTN, w);
+    return;
+  }
+  if (r.kind === 'skills' || r.kind === 'memory') {
+    const b = bg(r.active);
+    fill(grid, y, 0, w, b);
+    rowHit(r.kind);
+    const glyph = r.kind === 'skills' ? '✦' : '◫';
+    put(grid, y, 1, glyph, join(T.chorus, b), w);
+    if (!icons) put(grid, y, 3, r.kind === 'skills' ? 'Skills' : 'Memory', join(T.fg, b), w);
+    return;
+  }
+  if (r.kind === 'project') {
+    const b = bg(false);
+    rowHit(`project:${r.cwd}`);
+    put(grid, y, 1, r.open ? '▾' : '▸', join(T.dim, b), w);
+    put(grid, y, 3, clip(r.name, w - 7), join('1', T.fg, b), w);
+    if (r.alert) put(grid, y, w - 2, '!', join('1', T.err, b), w);
+    else put(grid, y, w - 3, String(r.count), join(T.dim, b), w);
+    return;
+  }
+  const b = bg(r.active);
+  const g = stateOf(r.state, r.active);
+  fill(grid, y, 0, w, b);
+  rowHit(`chat:${r.index}`);
+  if (r.active) put(grid, y, 0, '▎', join(T.chorus, b), w);
+  if (icons) {
+    put(grid, y, 1, g.ch, join(g.s, b), w);
+    put(grid, y, 3, r.agent[0], join(agentStyle(r.agent), b), w);
+    return;
+  }
+  let x = r.child ? 5 : 3;
+  if (r.child) put(grid, y, 3, '↳', join(T.dim, b), w);
+  put(grid, y, x, g.ch, join(g.s, b), w);
+  x += 2;
+  const agentRoom = mode === 'full' ? r.agent.length + 1 : 0;
+  put(grid, y, x, clip(r.title, w - x - 1 - agentRoom), join(r.active ? '1' : '', T.fg, b), w - 1);
+  if (agentRoom) put(grid, y, w - r.agent.length - 1, r.agent, join(agentStyle(r.agent), b), w);
+}
+
+/* ---------- status line ---------- */
 
 function meter(pct: number): { text: string; s: string } {
   const filled = Math.max(0, Math.min(10, Math.round(pct / 10)));
   return { text: '▮'.repeat(filled) + '▱'.repeat(10 - filled), s: pct >= 90 ? T.err : pct >= 75 ? T.warn : T.ok };
 }
 
-function drawStatus(grid: Grid, v: View) {
-  const y = v.rows - 1;
-  const warn = v.statusBar?.warn;
-  const bg = warn ? T.bgWarn : T.bgStatus;
-  fill(grid, y, 0, v.cols, bg);
+/** Parts drop in this order when the window gets narrow: model, ctx, artifacts text, meter (docs/ui-plan.md item 6). */
+function statusSegs(v: View, bg: string, level: number): Seg[] {
   const segs: Seg[] = [[' chorus ', join('1', T.fgBrand, T.bgBrand)]];
   const sep: Seg = ['│', join(T.line, bg)];
   const sb = v.statusBar;
-  if (v.message || !sb) {
-    segs.push([` ${v.message ?? 'no threads'} `, join(T.fg, bg)]);
-  } else {
-    segs.push([` ${sb.title} `, join(T.fg, bg)], sep);
-    segs.push([` ${sb.agent}${sb.model ? ' · ' + sb.model : ''}`, join(agentStyle(sb.agent), bg)]);
-    if (sb.from) segs.push([' from ', join(T.dim, bg)], [sb.from, join(agentStyle(sb.from), bg)]);
+  if (v.message || !sb) return [...segs, [` ${v.message ?? 'no chats'} `, join(T.fg, bg)]];
+  segs.push([` ${sb.title} `, join(T.fg, bg)], sep);
+  segs.push([` ${sb.agent}${sb.model && level < 1 ? ' · ' + sb.model : ''}`, join(agentStyle(sb.agent), bg)]);
+  if (sb.skip) segs.push([' skip', join('1', T.warn, bg)]);
+  if (sb.from) segs.push([' from ', join(T.dim, bg)], [sb.from, join(agentStyle(sb.from), bg)]);
+  segs.push([' ', bg], sep);
+  if (sb.usage !== undefined) {
+    const m = meter(sb.usage);
+    segs.push([' 5h ', join(T.fg, bg)]);
+    if (level < 3) segs.push([m.text, join(m.s, bg)], [' ', bg]);
+    segs.push([`${Math.round(sb.usage)}%`, join(T.fg, bg)]);
+    if (sb.warn) segs.push([' limit', join(T.err, bg)]);
     segs.push([' ', bg], sep);
-    if (sb.usage !== undefined) {
-      const m = meter(sb.usage);
-      segs.push([' 5h ', join(T.fg, bg)], [m.text, join(m.s, bg)], [` ${Math.round(sb.usage)}%`, join(T.fg, bg)]);
-      if (warn) segs.push([' limit', join(T.err, bg)]);
-      segs.push([' ', bg], sep);
-    }
-    segs.push([` ${sb.artifacts} artifact${sb.artifacts === 1 ? '' : 's'}`, join(T.fg, bg)]);
-    if (sb.toast) segs.push([` ${sb.toast}`, join(T.ok, bg)]);
-    segs.push([' ', bg]);
   }
-  // measure, then right-align the hint
-  const used = segs.reduce((n, [t]) => n + [...t].length, 0);
+  if (sb.ctx !== undefined && level < 2) segs.push([` ctx ${Math.round(sb.ctx)}%`, join(sb.ctx >= 85 ? T.warn : T.fg, bg)], [' ', bg], sep);
+  segs.push([level < 2 ? ` ${sb.artifacts} artifact${sb.artifacts === 1 ? '' : 's'}` : ` ${sb.artifacts}◆`, join(T.fg, bg)]);
+  if (sb.toast) segs.push([` ${sb.toast}`, join(T.ok, bg)]);
+  segs.push([' ', bg]);
+  return segs;
+}
+
+function drawStatus(grid: Grid, v: View) {
+  const y = v.rows - 1;
+  const bg = v.statusBar?.warn ? T.bgWarn : T.bgStatus;
+  fill(grid, y, 0, v.cols, bg);
   const right = ` ${v.statusRight} `;
-  putRich(grid, y, 0, segs, '', v.cols);
+  let segs = statusSegs(v, bg, 0);
+  for (let level = 0; level <= 3; level++) {
+    segs = statusSegs(v, bg, level);
+    if (width(segs) + right.length + 1 <= v.cols) break;
+  }
+  const used = putRich(grid, y, 0, segs, '', v.cols);
   if (used + right.length < v.cols) put(grid, y, v.cols - right.length, right, join(T.dim, bg));
 }
 
-function drawHome(grid: Grid, h: HomeView, width: number, height: number) {
-  put(grid, 0, 2, 'chorus', join('1', T.chorus), width);
-  put(grid, 0, 9, `0.1  ·  ${h.project}`, T.dim, width);
-  put(grid, 2, 2, 'Agents', T.dim, width);
-  let x = 11;
-  for (const a of h.agents) {
-    put(grid, 2, x, a.name, agentStyle(a.name), width);
-    const info = ` ${a.version ?? a.note ?? 'not installed'} `;
-    put(grid, 2, x + a.name.length, info, a.version ? T.fg : T.warn, width);
-    put(grid, 2, x + a.name.length + info.length, a.ok ? '✓' : '✗', a.ok ? T.ok : T.err, width);
-    x += a.name.length + info.length + 6;
-  }
-  put(grid, 4, 2, 'Threads', T.dim, width);
-  if (!h.threads.length) put(grid, 6, 2, 'No threads yet. Press n to start one.', T.dim, width);
-  h.threads.slice(0, height - 9).forEach((t, i) => {
-    const y = 5 + i;
-    const sel = i === h.selected;
-    const bg = sel ? T.bgSel : '';
-    fill(grid, y, 0, width, bg);
-    put(grid, y, 2, sel ? '▸' : ' ', join(T.chorus, bg), width);
-    const title = (t.child ? '↳ ' : '') + t.title;
-    put(grid, y, 4, title.length > 26 ? title.slice(0, 25) + '…' : title, join(t.child ? T.dim : T.fg, bg), width);
-    put(grid, y, 32, t.agent, join(agentStyle(t.agent), bg), width);
-    put(grid, y, 41, t.state, join(t.state === 'waiting for you' ? T.warn : T.dim, bg), width);
-    put(grid, y, 58, t.age, join(T.dim, bg), width);
-    put(grid, y, 71, t.artifacts ? `${t.artifacts} artifact${t.artifacts === 1 ? '' : 's'}` : '—', join(T.dim, bg), width);
-  });
-  const keys: Seg[] = [['n', T.chorus], [' new thread   '], ['⏎', T.chorus], [' open   '], ['a', T.chorus], [' artifacts   '], ['d', T.chorus], [' doctor   '], ['q', T.chorus], [' quit']];
-  putRich(grid, height - 2, 2, keys.map(([t, st]) => [t, st ?? T.dim] as Seg), '', width);
-}
+/* ---------- card and overlay ---------- */
 
-function drawCard(grid: Grid, c: { title: string; lines: string[] }, x0: number, width: number, height: number) {
-  const inner = width - 4;
+function drawCard(grid: Grid, c: { title: string; lines: string[] }, x0: number, w: number, y0: number, height: number) {
+  const inner = w - 4;
   const wrap = (l: string) => {
     const out: string[] = [];
     for (let rest = l; rest.length; rest = rest.slice(inner - 2)) out.push(rest.slice(0, inner - 2));
@@ -292,7 +409,7 @@ function drawCard(grid: Grid, c: { title: string; lines: string[] }, x0: number,
   };
   const lines = c.lines.flatMap(wrap).slice(0, 8);
   const boxH = lines.length + 2;
-  const y = Math.max(0, height - boxH);
+  const y = y0 + Math.max(0, height - boxH);
   const x = x0 + 1;
   const border = join('1', T.err, T.bgBox);
   put(grid, y, x, '┌' + '─'.repeat(inner) + '┐', border);
@@ -305,14 +422,14 @@ function drawCard(grid: Grid, c: { title: string; lines: string[] }, x0: number,
   put(grid, y + boxH - 1, x, '└' + '─'.repeat(inner) + '┘', border);
 }
 
-function drawOverlay(grid: Grid, o: Overlay, x0: number, width: number, height: number) {
+function drawOverlay(grid: Grid, o: Overlay, x0: number, w: number, y0: number, height: number, hits: Hit[]) {
   const free = o.lines ?? [];
   const rows = o.rows ?? [];
   const body = free.length + rows.length + (free.length && rows.length ? 1 : 0);
-  const inner = Math.min(width - 4, Math.max(o.title.length + 4, o.foot?.length ?? 0, ...free.map(l => l.length + 2), ...rows.map(r => r[1].length + 8), 34));
+  const inner = Math.min(w - 4, Math.max(o.title.length + 4, o.foot?.length ?? 0, ...free.map(l => l.length + 2), ...rows.map(r => r[1].length + 8), 34));
   const boxH = body + 2 + 2 + (o.foot ? 2 : 0); // borders, title + rule, foot rule + foot
-  const x = x0 + Math.max(1, Math.floor((width - inner - 2) / 2));
-  const y = Math.max(0, Math.floor((height - boxH) * 0.46));
+  const x = x0 + Math.max(1, Math.floor((w - inner - 2) / 2));
+  const y = y0 + Math.max(0, Math.floor((height - boxH) * 0.46));
   const accent = o.alert ? T.warn : T.chorus;
   const border = join(accent, T.bgBox);
   const blankRow = (yy: number) => {
@@ -333,12 +450,13 @@ function drawOverlay(grid: Grid, o: Overlay, x0: number, width: number, height: 
     yy++;
   });
   if (free.length && rows.length) blankRow(yy++);
-  rows.forEach(([k, label, sel]) => {
+  rows.forEach(([k, label, sel, hit]) => {
     const bg = sel ? T.bgSel : T.bgBox;
     blankRow(yy);
     fill(grid, yy, x + 1, x + inner + 1, bg);
     put(grid, yy, x + 2, k, join('1', accent, bg));
     put(grid, yy, x + 8, label, join(T.fg, bg));
+    if (hit) hits.push({ id: hit, x0: x + 1, x1: x + inner + 1, y0: yy, y1: yy + 1 });
     yy++;
   });
   if (o.foot) {
@@ -350,11 +468,13 @@ function drawOverlay(grid: Grid, o: Overlay, x0: number, width: number, height: 
   put(grid, yy, x, '└' + '─'.repeat(inner) + '┘', border);
 }
 
+/* ---------- output ---------- */
+
 export function rowToAnsi(row: Cell[]): string {
   let out = '';
   let last = '';
   for (const c of row) {
-    if (c.t === '' ) continue;
+    if (c.t === '') continue;
     if (c.s !== last) {
       out += `\x1b[0${c.s ? ';' + c.s : ''}m`;
       last = c.s;
@@ -388,4 +508,13 @@ export class Differ {
     this.prev.length = grid.length;
     return out;
   }
+}
+
+/** Which hit is at this 0-based cell? The last registered wins (overlays are drawn after the content). */
+export function hitAt(hits: Hit[], x: number, y: number): string | undefined {
+  for (let i = hits.length - 1; i >= 0; i--) {
+    const h = hits[i];
+    if (x >= h.x0 && x < h.x1 && y >= h.y0 && y < h.y1) return h.id;
+  }
+  return undefined;
 }

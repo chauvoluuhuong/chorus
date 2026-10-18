@@ -20,6 +20,8 @@ export interface LaunchOpts {
   threadId: string;
   resumeId?: string;
   model?: string;
+  /** shared store folder, passed to the MCP server so it opens the same database */
+  home?: string;
 }
 
 export interface Launch {
@@ -35,16 +37,16 @@ export function artifactNote(project: string, threadId: string): string {
   return `This chat is Chorus thread ${threadId}. Files meant for the user (notes, plans, reports, mockups, anything that is not source code of the project) go in ${path.join(project, '.chorus', 'threads', threadId, 'artifacts')} (create it if missing). Chorus shows them in its Artifacts view.`;
 }
 
-export function mcpCommand(project: string, threadId: string) {
+export function mcpCommand(project: string, threadId: string, home?: string) {
   // a single-executable build is its own entry point
   const entry = isSea() ? [] : [CLI_ENTRY];
-  return { command: process.execPath, args: [...entry, 'mcp', '--project', project, '--thread', threadId] };
+  return { command: process.execPath, args: [...entry, 'mcp', '--project', project, '--thread', threadId, ...(home ? ['--home', home] : [])] };
 }
 
 const q = (s: string) => JSON.stringify(s);
 
 export function buildHeadless(agent: AgentId, o: LaunchOpts): Launch {
-  const mcp = mcpCommand(o.project, o.threadId);
+  const mcp = mcpCommand(o.project, o.threadId, o.home);
   if (agent === 'claude') {
     const sessionId = o.resumeId ? undefined : randomUUID();
     return {
@@ -147,14 +149,26 @@ export interface InteractiveOpts {
   /** native session id to continue (parked threads) */
   resumeId?: string;
   model?: string;
+  /** shared store folder, passed to the MCP server so it opens the same database */
+  home?: string;
+  /** run without permission prompts (per chat, off by default; flags in docs/integrations/approvals.md) */
+  skipPermissions?: boolean;
 }
+
+/** The flag that turns permission prompts off, per CLI. */
+export const SKIP_FLAG: Record<AgentId, string> = {
+  claude: '--dangerously-skip-permissions',
+  codex: '--dangerously-bypass-approvals-and-sandbox',
+  agy: '--dangerously-skip-permissions',
+};
 
 /**
  * Command line that opens the agent's own screen with the Chorus MCP server attached for this thread.
  * Unlike headless runs there is no auto-approve flag: the agent asks and the user (or a Chorus card) answers.
  */
 export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
-  const mcp = mcpCommand(o.project, o.threadId);
+  const mcp = mcpCommand(o.project, o.threadId, o.home);
+  const skip = o.skipPermissions ? [SKIP_FLAG[agent]] : [];
   if (agent === 'claude') {
     const sessionId = o.resumeId ? undefined : randomUUID();
     return {
@@ -165,6 +179,7 @@ export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
         ...(o.prompt ? [o.prompt] : []),
         ...(o.resumeId ? ['--resume', o.resumeId] : ['--session-id', sessionId!]),
         ...(o.model ? ['--model', o.model] : []),
+        ...skip,
         '--mcp-config', JSON.stringify({ mcpServers: { chorus: mcp } }),
         // Chorus's own tools are read-only: don't ask the user about them
         '--allowedTools', TOOL_NAMES.map(t => `mcp__chorus__${t}`).join(','),
@@ -178,6 +193,7 @@ export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
       '-c', 'mcp_servers.chorus.default_tools_approval_mode="approve"',
       '-c', `developer_instructions=${q(artifactNote(o.project, o.threadId))}`,
       ...(o.model ? ['-m', o.model] : []),
+      ...skip,
     ];
     return { bin: 'codex', cwd: o.cwd, args: o.resumeId ? [...cfg, 'resume', o.resumeId] : [...cfg, ...(o.prompt ? [o.prompt] : [])] };
   }
@@ -185,6 +201,6 @@ export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
   return {
     bin: 'agy',
     cwd: o.cwd,
-    args: [...(o.resumeId ? ['--conversation', o.resumeId] : []), ...(o.model ? ['--model', o.model] : []), ...(o.prompt ? ['-i', o.prompt] : [])],
+    args: [...(o.resumeId ? ['--conversation', o.resumeId] : []), ...(o.model ? ['--model', o.model] : []), ...skip, ...(o.prompt ? ['-i', o.prompt] : [])],
   };
 }

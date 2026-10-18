@@ -24,6 +24,8 @@
 
 Claude may ask for more once past its first screen (the probe never sent input).
 
+**Update after P4.10:** the app already forwards press/release clicks to an agent that enabled mouse reporting, shifted by the sidebar and top bar (tested with the fake TUI); wheel and motion are not forwarded. Kitty keyboard and focus events are still open (roadmap TD-5).
+
 **What this means (inferred, not yet observed).** Codex expects mouse clicks and wheel inside its own region; Chorus uses mouse
 for its sidebar, so a click on Codex's area is either dropped or misread. Codex and agy expect modified keys (Shift+Enter,
 Ctrl+Enter) as kitty/`CSI u` sequences; a host that does not forward them leaves those keys acting like plain Enter or nothing.

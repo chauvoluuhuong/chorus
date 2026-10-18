@@ -69,9 +69,10 @@ for (const [i, a] of agents.entries()) {
   if (shown) for (const k of TRUST[a].keys) { p.write(k); await sleep(400); }
   await sleep(1500);
 }
-const sidebar = text().slice(0, ROWS - 1).map(l => l.slice(0, 26)).join('\n');
-check('sidebar lists every thread', agents.every((a, i) => new RegExp(`${i + 1} ${COMMAND[a].split(' ')[0]}`).test(sidebar)), sidebar);
-check('status line is the last row', /ctrl\+space: menu/.test(text()[ROWS - 1]), text()[ROWS - 1]);
+const sidebar = text().slice(0, ROWS - 1).map(l => l.slice(0, 28)).join('\n');
+check('top bar, New chat and the project tree are drawn', /☰ Menu/.test(text()[0]) && /\+ New chat/.test(sidebar) && /▾ /.test(sidebar), text()[0]);
+check('sidebar lists every chat under its project', agents.every(a => new RegExp(`${COMMAND[a].split(' ')[0]}`).test(sidebar)), sidebar);
+check('status line is the last row', /⌃\\ menu/.test(text()[ROWS - 1]), text()[ROWS - 1]);
 
 // 2. a prompt typed into each thread reaches only that agent and its answer shows in that thread
 for (const [i, a] of agents.entries()) {
@@ -94,7 +95,7 @@ menu('1'); await sleep(800);
 check('thread 1 still shows its earlier answer after switching around', screenHas(new RegExp(`${agents[0]}-42`)));
 p.resize(120, 32); outer.resize(120, 32);
 await sleep(2500);
-check('after resize the status line is on the new last row', /ctrl\+space: menu/.test(text()[31]), text()[31]);
+check('after resize the status line is on the new last row', /⌃\\ menu/.test(text()[31]), text()[31]);
 check('after resize the frame has no leftovers below the status line', text().slice(32).every(l => !l.trim()));
 
 // 4. leave: menu + q twice, terminal restored

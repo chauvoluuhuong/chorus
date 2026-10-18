@@ -54,8 +54,12 @@ const hookCmd = `${process.execPath} ${hook}`;
 const env = { ...process.env, TERM: 'xterm-256color' };
 for (const k of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_PID']) delete env[k];
 const PROMPT = `Use your shell tool to run exactly: mkdir -p ${path.dirname(target)} && touch ${target} . Then reply with only: finished`;
+const SKIP = { claude: '--dangerously-skip-permissions', codex: '--dangerously-bypass-approvals-and-sandbox', agy: '--dangerously-skip-permissions' };
 let argv;
-if (cli === 'claude') {
+if (args.includes('--skip')) {
+  // skip-permissions run: the flag instead of any hook; no prompt should appear and the file should be created
+  argv = cli === 'claude' ? [SKIP.claude, '--model', 'haiku', PROMPT] : cli === 'agy' ? [SKIP.agy, '-i', PROMPT] : [SKIP.codex, PROMPT];
+} else if (cli === 'claude') {
   // 2.1.302+ starts in auto mode and rarely asks: --manual pins manual mode for THIS workspace only (never the user's global config)
   if (args.includes('--manual')) {
     fs.mkdirSync(path.join(ws, '.claude'), { recursive: true });
@@ -100,6 +104,7 @@ while (Date.now() - t0 < waitSec * 1000) {
     keysSent = true; await sleep(5000); sawPrompt = screen(); break;
   }
   const log2 = fs.existsSync(log) ? fs.readFileSync(log, 'utf8') : '';
+  if (args.includes('--skip') && Date.now() - t0 > 30000) { sawPrompt = screen(); break; }
   if (/answered/.test(log2) && Date.now() - t0 > 12000) {
     // after the hook answered, give the agent time to react; record any prompt it shows
     await sleep(6000);

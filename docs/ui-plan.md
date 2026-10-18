@@ -1,6 +1,6 @@
 # UI enhancement plan (mockup first, then code)
 
-Mockup: `docs/mockups/chorus-cli.html` (scenes 1-14, clickable). No app code is changed yet.
+Mockup: `docs/mockups/chorus-cli.html` (scenes 1-14, clickable). **Built 2026-10-18** (items 1-9 below; status in [roadmap.md](roadmap.md) P4.10). Differences from the plan: the project is the chat's folder (artifacts live there, Codex's sandbox writes only there), the Skills screen works on the project library until TD-1 moves it to `~/.chorus/skills`, and "+" in `+ New chat` is the plain ASCII plus (a full-width one breaks the cell grid).
 
 **Guiding rule: keep it as simple as an AI chat app.** A sidebar of projects and their chats, a New chat
 button, the real agent screen on the right. Anything the agent CLIs already do well (diffs, plan mode,
