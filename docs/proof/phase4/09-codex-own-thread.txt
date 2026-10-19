@@ -1,11 +1,11 @@
-  ‹ Back   chorus-proof-JmNGLQ / codex 2                                                                                                   ☰ Menu ⌃\
+  ‹ Back   chorus-proof-jPucm9 / codex 2                                                                                                   ☰ Menu ⌃\
                             │
   + New chat             n  │  >_ OpenAI Codex (v0.163.0)
-                            │     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-JmNGLQ
+                            │     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-jPucm9
   PROJECTS                  │  permissions: YOLO mode
-  ▾ chorus-proof-api-hH6… 1 │
+  ▾ chorus-proof-api-ekG… 1 │
   ◌ Rate limiter      codex │
-  ▾ chorus-proof-JmNGLQ 2   │
+  ▾ chorus-proof-jPucm9 2   │
   ◐ Create calc.js … claude │
 ▎ ● codex 2           codex │
                             │
@@ -36,9 +36,9 @@
                             │
                             │
                             │
-                            │
-                            │› Reply with only the text codex-ready-42
 ────────────────────────────│
-  ✦ Skills                  │  GPT-6-Luna low · /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-JmNGLQ
+                            │› Reply with only the text codex-ready-42
+  ✦ Skills                  │
+                            │  GPT-6-Luna low · /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-jPucm9
   ◫ Memory                  │                                                                                                ⚠ 1 warning · f2 to view
  chorus  codex 2 │ codex · low skip │ 0 artifacts                                                                                             ☰ menu

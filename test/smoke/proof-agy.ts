@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Phase 4 proof, antigravity part: the real chorus app with real agy and Claude Code.
-// An agy thread works while another thread is in front (approval answered from a card), handoff agy → Claude,
+// An agy thread works while another thread is in front (approval answered with ⌃\ y), handoff agy → Claude,
 // then Claude → agy. Every step saves a PNG to docs/proof/phase4-agy/.
 //
 //   node test/smoke/proof-agy.ts [--out docs/proof/phase4-agy]
@@ -151,20 +151,20 @@ menu('n');
 check('the new-thread form opens', await until(/Agent\s+\[claude\]/, 5000));
 shot('new-thread-form-claude', 'ctrl+\\ n: Claude (default model) in this folder, Enter');
 app.write('\r');
-check('Claude opens in thread 2 (trust dialog answered)', await untilTrusting(/Claude Code v\d/, 60000), text().join('|').slice(0, 300)); // the card may cover its footer
+check('Claude opens in thread 2 (trust dialog answered)', await untilTrusting(/Claude Code v\d/, 60000), text().join('|').slice(0, 300)); 
 await sleep(1500);
 check('thread 2 is in front and agy (thread 1) is still pending', /▎/.test(dot(1)) && /!/.test(dot(0)), `${row(0)} | ${row(1)}`);
-check('an approval card for the background agy thread appears over Claude', await until(/asks for approval/, 20000), area().slice(-500));
-shot('card-for-agy', 'Claude is in front; agy (background) is waiting, and Chorus shows its request as a card');
+check('the background agy thread waits: the top bar badge counts it', await until(() => /! \d+ waiting/.test(text()[0]), 20000), text()[0]);
+shot('agy-waits', 'Claude is in front; agy (background) is waiting: the top bar badge and the sidebar ! say so');
 
-/* 4. approve agy's requests from the card */
-log('4. approve from the card without switching');
+/* 4. approve agy's requests with ⌃\\ y */
+log('4. approve with the menu key without switching');
 let approvals = 0;
 let cardShot = false;
 const t0 = Date.now();
 while (Date.now() - t0 < 240000) {
-  if (has(/asks for approval/)) {
-    if (!cardShot) { shot('card-detail', 'the card shows what agy wants to run and the keys to answer'); cardShot = true; }
+  if (/! \d+ waiting/.test(text()[0])) {
+    if (!cardShot) { shot('flash-detail', 'the status line flash names what agy wants to run and the keys to answer'); cardShot = true; }
     menu('y');
     approvals++;
     await sleep(3000);
@@ -175,9 +175,9 @@ while (Date.now() - t0 < 240000) {
   if (done) break;
   await sleep(1500);
 }
-check('at least one agy request was approved from a card', approvals > 0, String(approvals));
+check('at least one agy request was approved with ⌃\\ y', approvals > 0, String(approvals));
 check('agy created calc.js', fs.existsSync(path.join(project, 'calc.js')));
-shot('after-approvals', `approved ${approvals} agy request(s) from the card; thread 2 (Claude) stayed in front`);
+shot('after-approvals', `approved ${approvals} agy request(s) with ⌃\\ y; thread 2 (Claude) stayed in front`);
 menu('1');
 await sleep(1200);
 shot('agy-result', 'switching to thread 1: what agy did (its own screen, state kept in the background)');
@@ -213,7 +213,7 @@ app.write('3'); // agy
 check('the agy handoff thread appears in front, listed under the Claude thread it continues (↳)', await until(() => /▎/.test(dot(2)) && /↳/.test(text()[5] ?? ''), 20000), `${text()[5]}`);
 const a2 = store().listThreads().find(t => t.parent_thread_id === c1?.id);
 check('it is a child of the Claude thread (agy)', !!a2 && a2!.agent === 'agy', JSON.stringify(a2));
-// agy may ask before calling the MCP tool: answer from the card/prompt like a person would
+// agy may ask before calling the MCP tool: answer with ⌃\ y or in its prompt like a person would
 let mcpApprovals = 0;
 const t1 = Date.now();
 while (Date.now() - t1 < 180000) {

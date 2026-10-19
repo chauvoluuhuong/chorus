@@ -1,23 +1,22 @@
-  ‹ Back   chorus-proof-api-hH6KjV / New chat                                                                                              ☰ Menu ⌃\
-                            │  New chat
-  + New chat             n  │
-                            │  Agent         claude    codex    agy
-  PROJECTS                  │
-  ▾ chorus-proof-api-hH6… 1 │
-  ◌ Rate limiter      codex │  Model         default   sonnet   opus   haiku
+  ‹ Back   chorus-proof-jPucm9 / New chat                                                                                                  ☰ Menu ⌃\
                             │
-                            │  Effort        default   low   medium   high   xhigh   max    how hard the model thinks
+  + New chat             n  │    New chat
                             │
-                            │  Project      /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-JmNGLQ  ▾
-                            │               recent: /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-api-hH6KjV  · or type any fo
+  PROJECTS                  │    Agent       claude      codex      agy
+  ▾ chorus-proof-api-ekG… 1 │               quota ok    quota ok   quota ok
+  ◌ Rate limiter      codex │
+                            │    Model       default   sonnet   opus   haiku
                             │
-                            │  Permissions  [ ] Skip permission prompts  --dangerously-skip-permissions
+                            │    Effort      default   low   medium   high   xhigh   max    how hard the model thinks
+                            │
+                            │    Project    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-jPucm9 ▾
+                            │               recent: /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-api-ekG7pi  · or type any fo
+                            │
+                            │    Permissions [ ] Skip permission prompts  --dangerously-skip-permissions
                             │               off: the agent asks, and Chorus shows it in the approvals inbox
                             │
-                            │                ⏎ Start chat
                             │
-                            │
-                            │
+                            │     ⏎ Start chat
                             │
                             │
                             │
@@ -39,6 +38,7 @@
                             │
                             │
 ────────────────────────────│
+                            │
   ✦ Skills                  │
-  ◫ Memory                  │  ⏎  start    tab  next field    ←/→  change    space  tick    esc  back
- chorus  New chat                                                                                                                             ☰ menu
+                            │
+  ◫ Memory                  │     ⏎ start    tab next field    ←/→ change    space tick

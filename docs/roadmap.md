@@ -41,14 +41,14 @@ Plan and results: [phase4.md](phase4.md). D1 decided: TypeScript. E2E proof with
 - [x] P4.3 Live transcript tailing into the store (`src/app/tailer.ts`)
 - [x] P4.4 Thread state (`working` / `waiting` / `needs approval` / `ended` / `parked`)
 - [x] P4.5 Handoff action with "context not loaded" warning and retry key
-- [x] P4.6 Approval cards: research ([integrations/approvals.md](integrations/approvals.md)) and implementation (screen detector + the prompt's own keys)
+- [x] P4.6 Approvals: research ([integrations/approvals.md](integrations/approvals.md)) and implementation (screen detector + the prompt's own keys). The card drawn over the chat in front was removed (2026-10-19): it hid that chat's input or its first lines, and the mockup has none; a waiting chat shows the top bar badge, the sidebar `!`, a status-line flash with the keys, and the inbox
 - [x] P4.7 Memory, tool-call and files views, limit warning, `new/run/handoff/threads/show/memory/artifacts/activity/trace/doctor`
 - [x] P4.8 Packaging spike: Node single executable works (147 MB), Bun does not (node-pty); npm package is the main route
 - [x] New-thread form: agent, model, folder (mockup scene "New thread")
 - [x] P4.9 Mockup look and screens (first pass): home, sidebar, status bar, menu, limit box, Artifacts, Activity, Doctor (`docs/phase4.md`)
 - [x] P4.9 remaining parts: mouse clicks, artifact preview server with live reload, `o/p/v`, `r/f`
 - [ ] Plan meter for Claude interactive threads (Claude reports plan usage only in the headless stream)
-- [x] **Proof:** `npm run proof` drives the real app with real Claude and Codex: two threads, switch, approval from a card, handoff, artifacts; screenshots in `docs/proof/phase4/`
+- [x] **Proof:** `npm run proof` drives the real app with real Claude and Codex: two threads, switch, approval from the inbox, handoff, artifacts; screenshots in `docs/proof/phase4/`
 - [x] P4.10 UI pass 2 (simpler, like an AI chat app), built 2026-10-18; plan [ui-plan.md](ui-plan.md), mockup `docs/mockups/chorus-cli.html`:
   - [x] Click-region registry (`Hit`, `hitAt`) and the look rules: button = filled chip, link = underlined, row = lights up under the mouse (mode 1003 hover)
   - [x] Top bar (`‹ Back`, path links, `! N waiting`, `☰ Menu`) and window-size steps (full / narrow / icons / hidden / too small)

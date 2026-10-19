@@ -1,15 +1,15 @@
-  ‹ Back   chorus-proof-JmNGLQ / Create calc.js in the curre… → codex                                                                      ☰ Menu ⌃\
+  ‹ Back   chorus-proof-jPucm9 / Create calc.js in the curre… → codex                                                                      ☰ Menu ⌃\
                             │
   + New chat             n  │  >_ OpenAI Codex (v0.163.0)
-                            │     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-JmNGLQ
+                            │     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-jPucm9
   PROJECTS                  │
-  ▾ chorus-proof-api-hH6… 1 │
+  ▾ chorus-proof-api-ekG… 1 │
   ◌ Rate limiter      codex │› This chat continues the Chorus thread "Create calc.js in the curre…", worked on by claude. Call the chorus MCP tool
-  ▾ chorus-proof-JmNGLQ 3   │  get_handoff_context first (no arguments: it knows which chat this one continues). Then reply with at most 5 bullets:
+  ▾ chorus-proof-jPucm9 3   │  get_handoff_context first (no arguments: it knows which chat this one continues). Then reply with at most 5 bullets:
   ◐ Create calc.js … claude │  what was done, decisions, open work, and your next step. Wait for my OK before changing anything.
 ▎   ○ ↳ Create calc.… codex │
   ◐ Reply with only … codex │
-                            │• I’ll retrieve the handoff context first, then summarize the state and wait for your OK before making any changes.
+                            │• I’ll retrieve the prior thread’s handoff context first, then summarize it in up to five bullets and wait for your OK.
                             │                                   ┌─────────────────────────────────────────────────┐
                             │• Called chorus.get_handoff_context│ chorus · Create calc.js in the curre… → codex   │
                             │  └ done.                          ├─────────────────────────────────────────────────┤
@@ -17,13 +17,13 @@
                             │    Older turns: call get_thread_tu│ n     New chat                                  │
                             │    + Show details                 │ a     Artifacts                                 │
                             │                                   │ i     Approvals                                 │
-                            │• • calc.js was created to export a│ k     Skills                                    │
-                            │  • The requested Node command was │ m     Memory                                    │t doesn’t include the output.
-                            │  • A short notes.md was created in│ e     Activity                                  │).
-                            │  • No open work is recorded; the p│ b     Show / hide sidebar                       │
-                            │  • I’ll wait for your OK before ch│ ?     Help                                      │
+                            │• • The prior thread created calc.j│ k     Skills                                    │
+                            │  • The requested Node command was │ m     Memory                                    │.
+                            │  • A short notes.md was written to│ e     Activity                                  │cda4).
+                            │  • No open work was recorded; the │ b     Show / hide sidebar                       │
+                            │  • My next step is to wait for you│ ?     Help                                      │
                             │                                   │ q     Quit                                      │
-                            │  Worked for 7s • 11:16 AM         ├─────────────────────────────────────────────────┤
+                            │  Worked for 14s • 1:00 PM         ├─────────────────────────────────────────────────┤
                             │                                   │ ↑↓ move   ⏎ run   esc  back to codex            │
                             │                                   └─────────────────────────────────────────────────┘
                             │
@@ -36,9 +36,9 @@
                             │
                             │
                             │
-                            │
-                            │› Ask Codex to do anything
 ────────────────────────────│
-  ✦ Skills                  │  GPT-6-Luna default · /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-JmNGLQ
+                            │› Ask Codex to do anything
+  ✦ Skills                  │
+                            │  GPT-6-Luna default · /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-jPucm9
   ◫ Memory                  │  ? for shortcuts                                                                               ⚠ 1 warning · f2 to view
  chorus  Imported release-notes: now in the library, seen by all three                                                       ↑↓ ⏎ or the letter · esc

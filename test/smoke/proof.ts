@@ -35,7 +35,7 @@ const outer = new VirtualScreen(COLS, ROWS);
 const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-proof-')));
 spawnSync('git', ['init', '-q'], { cwd: project });
 // Claude Code 2.1.302 starts in "auto mode" (a classifier approves for you) and would never ask. Pin this folder to manual
-// mode so there is an approval to answer from a card.
+// mode so there is an approval to answer from the inbox.
 fs.mkdirSync(path.join(project, '.claude'));
 fs.writeFileSync(path.join(project, '.claude', 'settings.local.json'), JSON.stringify({ permissions: { defaultMode: 'default' } }));
 
@@ -182,9 +182,9 @@ shot('new-chat-skip', '+ New chat: Codex with effort low and "Skip permission pr
 app.write('\r');
 check('Codex opens in chat 2 and its own banner says what skip means (permissions: YOLO mode)', await untilTrusting(/Ask Codex to do anything|permissions: YOLO mode/i, 40000) && await until(/permissions: YOLO mode/, 10000), text().join('|'));
 check('chat 2 is in front, shows the amber skip marker, and Claude (chat 1) is still pending', /claude.*|codex/.test(text()[ROWS - 1]) && /skip/.test(text()[ROWS - 1]) && /!/.test(side(/Create calc/).slice(0, 8)), `${text()[ROWS - 1]} | ${side(/Create calc/)}`);
-const card = await until(/asks for approval/, 15000);
-check('an approval card for the background chat appears over Codex, and the top bar badge stays', card && has(/! 1 waiting/), area().slice(-500));
-shot('card-for-background-thread', 'Codex (skip) is in front; Claude (background) is waiting: the top bar badge, the sidebar ! and a card with its request');
+const waiting = await until(() => /! 1 waiting/.test(text()[0]) && /!/.test(side(/Create calc/).slice(0, 8)), 15000);
+check('Claude (background) waits: the top bar badge and the sidebar ! say so, and nothing covers Codex in front', waiting && !has(/asks for approval/), text().slice(0, 3).join('|'));
+shot('background-chat-waits', 'Codex (skip) is in front; Claude (background) is waiting: the top bar badge and the sidebar ! say so, like the mockup; nothing covers the chat in front');
 
 /* 4. approvals inbox: answer from the list until Claude is done */
 log('4. approvals inbox: approve without switching');
@@ -235,7 +235,7 @@ log('6. hand off the Claude chat to Codex');
 await clickSide(/Create calc/); // a click in the sidebar opens it
 check('a click on a chat in the sidebar opens it', await until(() => /▎/.test(side(/Create calc/)), 5000), side(/Create calc/));
 menu('h');
-check('handoff dialog names the chat and lists the other agents first with their plan', await until(/Continue "Create calc\.js[^"]*" in a new chat/, 5000) && has(/1\s+codex\s+/) && has(/3\s+claude\s+fresh session/), text().join('|').slice(0, 400));
+check('handoff dialog names the chat and lists the other agents first with their plan', await until(/Continue "Create calc\.js[^"]*" in a new chat/, 5000) && has(/▸\s+codex\s+/) && has(/\s+claude\s+fresh session/), text().join('|').slice(0, 400));
 await sleep(400);
 shot('handoff-dialog', 'ctrl+\\ h (or ☰ Menu → Hand off): choose the agent that continues the work');
 app.write('1'); // codex is the first of the other agents
@@ -268,7 +268,7 @@ shot('memory', 'Memory: one list for all projects and agents (the shared databas
 app.write('\x1b');
 await sleep(600);
 await click(/✦ Skills/);
-check('Skills shows the library with on/off and what the agents already have', await until(/Skills\s+·\s+one library/, 5000) && has(/\[on\]\s+cake-pricing/) && has(/release-notes\s+~\/\.claude\/skills\s+claude\s+import ›/) && has(/pdf-tools\s+~\/\.agents\/skills\s+codex agy\s+import ›/), text().join('|').slice(0, 600));
+check('Skills shows the library with on/off and what the agents already have', await until(/Skills\s+·\s+one library/, 5000) && has(/\[on\]\s+cake-pricing/) && has(/release-notes\s+~\/\.claude\/skills\s+claude only\s+import ›/) && has(/pdf-tools\s+~\/\.agents\/skills\s+codex agy only\s+import ›/), text().join('|').slice(0, 600));
 shot('skills', 'Skills: the library with on/off for all three agents; skills the agents already keep in their own folders are offered for import');
 app.write('\r'); // turn cake-pricing off
 check('⏎ turns a skill off and unlinks it from the agents\' folders', await until(/\[off\]\s+cake-pricing/, 4000) && !fs.existsSync(path.join(project, '.claude', 'skills', 'cake-pricing')), text().join('|').slice(0, 400));
@@ -285,14 +285,15 @@ await click(/☰ Menu/);
 check('☰ Menu opens the ten rows of the menu', await until(/Hand off to another agent/, 4000) && ['New chat', 'Artifacts', 'Approvals', 'Skills', 'Memory', 'Activity', 'Show / hide sidebar', 'Help', 'Quit'].every(r => has(new RegExp(r))), text().join('|').slice(0, 500));
 shot('menu', '☰ Menu (or ctrl+\\): hand off, new chat, artifacts, approvals, skills, memory, activity, sidebar, help, quit. ↑↓ and ⏎, a click, or the letter');
 app.write('e'); // Activity
-check('activity view has the filter bar with counts and lists the tool and MCP calls', await until(/Activity\s+·\s+/, 5000) && /\[all \d+\]\s+tool \d+\s+mcp \d+\s+approval \d+\s+file \d+\s+usage \d+\s+error 0/.test(text().join('\n')) && /mcp\s+chorus\.get_handoff_context\s+ok/.test(text().join('\n')), text().join('|').slice(0, 400));
+check('activity view has the filter bar with counts and lists the tool and MCP calls', await until(/Activity\s+·\s+/, 5000) && / all \d+ \s+tool \d+\s+mcp \d+\s+approval \d+\s+file \d+\s+usage \d+\s+error 0/.test(text().join('\n')) && /mcp\s+chorus\.get_handoff_context\s+ok/.test(text().join('\n')), text().join('|').slice(0, 400));
 shot('activity-view', 'Activity on the handoff chat: its timeline shows the chorus.get_handoff_context MCP call that loaded the context');
 app.write('f');
-check('f filters the timeline by kind', await until(/\[tool \d+\]/, 3000));
+const row = (kind: string) => new RegExp(`\\d\\d:\\d\\d:\\d\\d\\s+\\w+\\s+${kind}\\s`).test(text().join('\n'));
+check('f filters the timeline by kind', await until(() => row('tool') && !row('mcp'), 3000));
 app.write('f');
-check('the mcp filter keeps the MCP call', await until(/\[mcp \d+\]/, 3000) && /get_handoff_context/.test(text().join('\n')));
+check('the mcp filter keeps the MCP call', await until(() => row('mcp') && !row('tool'), 3000) && /get_handoff_context/.test(text().join('\n')));
 app.write('r');
-check('r shows the raw trace next to what was parsed', await until(/Raw trace · /, 3000) && /transcript lines:/.test(text().join('\n')), text().join('|').slice(0, 300));
+check('r shows the raw trace next to what was parsed', await until(/Raw trace\s+·\s+/, 3000) && /transcript lines:/.test(text().join('\n')), text().join('|').slice(0, 300));
 shot('raw-trace', 'r: the raw transcript lines and how Chorus parsed them (for debugging an adapter)');
 app.write('\x1b');
 await sleep(400);
@@ -301,7 +302,7 @@ await sleep(500);
 await clickSide(/Create calc.*claude/); // the artifact belongs to the Claude chat
 await sleep(800);
 menu('a');
-check('artifacts view lists the artifact with its version', await until(/Artifacts · /, 5000) && /notes\.md\s+v1/.test(text().join('\n')), text().join('|').slice(0, 300));
+check('artifacts view lists the artifact with its version', await until(/Artifacts\s+·\s+/, 5000) && /notes\.md\s+v1/.test(text().join('\n')), text().join('|').slice(0, 300));
 shot('artifacts-view', 'Artifacts: name, version, who wrote it, and the files its tools wrote. ⏎ or a click opens the file with the default app (here through the served link that reloads while the agent edits)');
 app.write('\r');
 check('⏎ opens the artifact (served with live reload) and shows its address', await until(/Link\s+http:\/\/localhost:\d+\/t_\w+\/notes\.md/, 8000), text().join('|').slice(0, 300));

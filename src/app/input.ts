@@ -50,7 +50,13 @@ export class InputRouter {
   }
 
   feed(chunk: string) {
-    if (this.capture) {
+    if (this.capture && !this.menuOpen) {
+      // the menu key works on every screen (panes, dialogs): it opens the menu over them
+      if (this.menuKeys.includes(chunk)) {
+        this.menuOpen = true;
+        this.emit({ type: 'menu-open' });
+        return;
+      }
       const re = /^(?:\x1b\[[0-9;]*[~A-Za-z]|\x1bO[A-Za-z]|\x1b|[\s\S])/;
       for (let rest = chunk; rest; ) {
         const m = rest.match(re)![0];
@@ -137,7 +143,7 @@ export class InputRouter {
 
   /** Opens the menu from a click on the top bar's button (the same as pressing the menu key). */
   open() {
-    if (!this.menuOpen && !this.capture) {
+    if (!this.menuOpen) {
       this.menuOpen = true;
       this.emit({ type: 'menu-open' });
     }

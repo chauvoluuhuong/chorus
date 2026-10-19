@@ -20,7 +20,7 @@ Each screenshot is the terminal as the user sees it at that step.
 | ✅ | ticking skip shows the warning and the Codex flag |
 | ✅ | Codex opens in chat 2 and its own banner says what skip means (permissions: YOLO mode) |
 | ✅ | chat 2 is in front, shows the amber skip marker, and Claude (chat 1) is still pending |
-| ✅ | an approval card for the background chat appears over Codex, and the top bar badge stays |
+| ✅ | Claude (background) waits: the top bar badge and the sidebar ! say so, and nothing covers Codex in front |
 | ✅ | clicking the badge opens the approvals inbox |
 | ✅ | the inbox has the this project / all projects switch and lists the request with its risk tag |
 | ✅ | at least one request was approved from the inbox |
@@ -87,10 +87,10 @@ Claude is in front and asks permission; the top bar says "! 1 waiting" and the s
 
 ![+ New chat: Codex with effort low and "Skip permission prompts" ticked. The screen says what that means and which flag is used (per chat, never global)](05-new-chat-skip.png)
 
-### 06-card-for-background-thread
-Codex (skip) is in front; Claude (background) is waiting: the top bar badge, the sidebar ! and a card with its request
+### 06-background-chat-waits
+Codex (skip) is in front; Claude (background) is waiting: the top bar badge and the sidebar ! say so, like the mockup; nothing covers the chat in front
 
-![Codex (skip) is in front; Claude (background) is waiting: the top bar badge, the sidebar ! and a card with its request](06-card-for-background-thread.png)
+![Codex (skip) is in front; Claude (background) is waiting: the top bar badge and the sidebar ! say so, like the mockup; nothing covers the chat in front](06-background-chat-waits.png)
 
 ### 07-approvals-inbox
 the approvals inbox: every chat waiting on you in one list, with the request and a risk tag. y approves, x denies, ⏎ opens the chat; the agent gets the same key you would have typed
@@ -182,41 +182,41 @@ final state: two projects, three chats (Claude, Codex, and the Codex handoff cha
 ```
 $ chorus threads
 id          agent   state    parent      title
-t_69ce12cc  codex   waiting  t_f9e90479  Create calc.js in the curre… → codex
-t_3330a34c  codex   waiting  -           Reply with only the text co…
-t_f9e90479  claude  waiting  -           Create calc.js in the curre…
+t_c96b4d8b  codex   waiting  t_b49bcda4  Create calc.js in the curre… → codex
+t_4659ba37  codex   waiting  -           Reply with only the text co…
+t_b49bcda4  claude  waiting  -           Create calc.js in the curre…
 t_seed      codex   waiting  -           Rate limiter
 ```
 
 ```
 $ chorus activity
 thread      agent   turns  tools  mcp   tokens in/out     cost     limit
-t_69ce12cc  codex   3      1      1     60043/197         -        6%
-t_3330a34c  codex   2      0      0     18382/9           -        6%
-t_f9e90479  claude  2      3      0     38345/923         -        -
+t_c96b4d8b  codex   3      1      1     60348/223         -        7%
+t_4659ba37  codex   2      0      0     18380/9           -        7%
+t_b49bcda4  claude  2      3      0     38234/903         -        -
 t_seed      codex   2      1      0     100/50            -        -
 ```
 
 ```
 $ chorus artifacts
-t_f9e90479	79758babd748	/private$TMPDIR/chorus-proof-JmNGLQ/.chorus/threads/t_f9e90479/artifacts/notes.md
+t_b49bcda4	6f6e7ef87ba3	/private$TMPDIR/chorus-proof-jPucm9/.chorus/threads/t_b49bcda4/artifacts/notes.md
 ```
 
 ```
 $ chorus trace <claude chat>
-thread t_f9e90479 (claude 2.1.303)
-raw terminal capture: $PROJECT/.chorus/threads/t_f9e90479/raw/pty.log (33561 bytes)
-transcript: ~/.claude/projects/-private-var-folders-hj-b9dgqj-s11738sh6-z2w79bm0000gn-T-chorus-proof-JmNGLQ/1d119580-ae9c-4945-9aae-b70d408f83b0.jsonl
-transcript lines: 54  → parsed turns: 2, tool calls: 3, status: waiting
+thread t_b49bcda4 (claude 2.1.303)
+raw terminal capture: $PROJECT/.chorus/threads/t_b49bcda4/raw/pty.log (34312 bytes)
+transcript: ~/.claude/projects/-private-var-folders-hj-b9dgqj-s11738sh6-z2w79bm0000gn-T-chorus-proof-jPucm9/5e2cdb88-fe2b-49f5-a2c6-55fc9e695af8.jsonl
+transcript lines: 55  → parsed turns: 2, tool calls: 3, status: waiting
 
 last raw lines (cut) → what we made of the session:
-  raw  {"parentUuid":"d1cf6502-4aa6-448a-8bb5-d13dfb5b2bcd","isSidechain":false,"message":{"model":"claude-haiku-5-5","id":"msg_011CgAwxfJoQYxMK4ofDGhXZ","type":"messa
-  raw  {"parentUuid":"eb372233-3a76-4706-9622-5af5810c4565","isSidechain":false,"type":"system","subtype":"turn_duration","durationMs":8961,"messageCount":27,"timestam
-  raw  {"type":"cost-state","sessionId":"1d119580-ae9c-4945-9aae-b70d408f83b0","totalCostUSD":0.010261010000000003,"totalAPIDuration":11093,"totalAPIDurationWithoutRet
+  raw  {"parentUuid":"354ccc39-69c7-4df3-87df-d0ac9d19cc60","isSidechain":false,"message":{"model":"claude-haiku-5-5","id":"msg_011CgB5wP1vBR1xPqeKq1PbG","type":"messa
+  raw  {"parentUuid":"d038ca41-4e6b-451b-913a-583749b43bf7","isSidechain":false,"type":"system","subtype":"turn_duration","durationMs":11529,"messageCount":27,"timesta
+  raw  {"type":"cost-state","sessionId":"5e2cdb88-fe2b-49f5-a2c6-55fc9e695af8","totalCostUSD":0.01089266,"totalAPIDuration":12852,"totalAPIDurationWithoutRetries":1282
   raw  {"type":"last-prompt","lastPrompt":"Create calc.js in the current directory that exports a function add(a, b). Run it once with your shell tool as: node -e \"co
-  raw  {"type":"cost-state","sessionId":"1d119580-ae9c-4945-9aae-b70d408f83b0","totalCostUSD":0.010261010000000003,"totalAPIDuration":11093,"totalAPIDurationWithoutRet
-  tool ok Bash printf "module.exports = {\n add(a, b) {\n return a + b;\n },\n};\n" > calc.js &
-  tool ok Bash mkdir -p /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-J
+  raw  {"type":"cost-state","sessionId":"5e2cdb88-fe2b-49f5-a2c6-55fc9e695af8","totalCostUSD":0.01089266,"totalAPIDuration":12852,"totalAPIDurationWithoutRetries":1282
+  tool ok Bash cd "$PROJECT
+  tool ok Bash mkdir -p "/private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-
   tool ok Write $PROJECT/.ch
   turn user: Create calc.js in the current directory that exports a function add(a, b). Run it once with your she
   turn assistant: done.

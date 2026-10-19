@@ -168,7 +168,7 @@ test('a chat that exits is marked ended; quitting needs a second press and resto
   const finished = h.app.done.then(() => 'done');
   h.type('\x00q');
   assert.equal(await Promise.race([finished, sleep(3000).then(() => 'timeout')]), 'done');
-  assert.match(h.raw(), /\x1b\[\?25h\x1b\[0m\x1b\[\?1049l$/);
+  assert.match(h.raw(), /\x1b\[\?25h\x1b\[0m\x1b\[\?1049l\x1b\[23;0t$/, 'the screen and the saved window title come back');
 });
 
 test('alternate-screen programs are shown in the chat area, not on the whole terminal', async () => {

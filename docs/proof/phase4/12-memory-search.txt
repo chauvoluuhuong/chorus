@@ -1,13 +1,13 @@
   ‹ Back   Memory                                                                                                                          ☰ Menu ⌃\
-                            │  Memory  ·  all projects      / limiter▌
-  + New chat             n  │
-                            │  ▸ Rate limiter             chorus-proof…  codex   2 turns   just now
-  PROJECTS                  │
-  ▾ chorus-proof-api-hH6… 1 │    Rate limiter
-  ◌ Rate limiter      codex │      asked  Add a per-key rate limit to the public API
-  ▾ chorus-proof-JmNGLQ 3   │      last   Limiter in place; 40 tests pass.
-  ◐ Create calc.js … claude │      files  src/limit.ts
-    ◐ ↳ Create calc.… codex │
+                            │
+  + New chat             n  │    Memory  ·  all projects      / limiter▌
+                            │
+  PROJECTS                  │  ▸ Rate limiter           chorus-pr… codex   2 turns   just now
+  ▾ chorus-proof-api-ekG… 1 │
+  ◌ Rate limiter      codex │    Rate limiter
+  ▾ chorus-proof-jPucm9 3   │      asked   Add a per-key rate limit to the public API
+  ◐ Create calc.js … claude │      last    Limiter in place; 40 tests pass.
+    ◐ ↳ Create calc.… codex │      files   src/limit.ts
   ◐ Reply with only … codex │
                             │
                             │
@@ -37,8 +37,8 @@
                             │
                             │
                             │
-                            │
 ────────────────────────────│
+                            │
   ✦ Skills                  │
-  ◫ Memory                  │  ⏎  open chat    h  continue with another agent    /  search    esc  back
- chorus  Memory                                                                                                                               ☰ menu
+                            │
+  ◫ Memory                  │     ⏎ open chat    h continue with another agent    / search    esc back

@@ -65,6 +65,16 @@ export function detectApproval(agent: AgentId, lines: string[]): PendingApproval
       framed = frame.filter(l => keep(l) && !/^[╌─━┄\-]+$/.test(l)).slice(0, 3).join(' · ');
     }
   }
+  // agy names a command as "Requesting permission for:" followed by the command (same line or wrapped below it)
+  let agyCommand = '';
+  if (agent === 'agy') {
+    const req = findLastIndex(lines.slice(0, qi), l => /Requesting permission for:/.test(l));
+    if (req >= 0 && req >= qi - 8) // only right above the question: an earlier request in the scrollback is not this one
+      agyCommand = [lines[req].replace(/^.*Requesting permission for:/, ''), ...lines.slice(req + 1, qi)]
+        .map(l => l.trim())
+        .filter(Boolean)
+        .join(' ');
+  }
   // agy frames a file change as "Create file" / rule / "<path>  +5" / the code: say what it is, not the code
   let fileChange = '';
   if (agent === 'agy') {
@@ -74,7 +84,7 @@ export function detectApproval(agent: AgentId, lines: string[]): PendingApproval
       if (target) fileChange = `${lines[head].trim()} · ${target.replace(/\s+[+-]\d+(\s+[+-]\d+)?$/, '')}`;
     }
   }
-  const what = fromBelow || framed || fileChange || lines
+  const what = fromBelow || framed || agyCommand || fileChange || lines
     .slice(Math.max(0, qi - 8), qi)
     .map(l => l.replace(/^[\s│┃|]+/, '').replace(/\s+$/, ''))
     .filter(l => l && !/^[─━═┄\-]+$/.test(l) && !/^(Run shell command|Reason:|Environment:|Hook |settings\.json)/.test(l))

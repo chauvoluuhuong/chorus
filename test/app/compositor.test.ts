@@ -55,12 +55,14 @@ test('top bar, project tree, child screen and status bar land in the right cells
   assert.match(t[2], /^  \+ New chat\s+n  │red 漢字 end/); // a full-width button with its key
   assert.match(t[4], /^  PROJECTS\s+│/);
   assert.match(t[5], /^  ▾ cake-shop 2\s+│/); // the count right after the name
-  assert.match(t[6], /^▎ ● fix bug\s+claude │/);
-  assert.match(t[7], /^    ○ ↳ review\s+codex │/); // a chat continued from another, two cells in
+  assert.match(t[6], /^▎   ● fix bug\s+claude │/);
+  assert.match(t[7], /^      ○ ↳ review\s+codex │/); // chats sit under the project's name, a continued one two cells further
   assert.match(t[8], /^  ▸ api !1\s+│/); // a project with a chat waiting for approval shows how many
-  assert.match(t[20], /^─+│/); // rule above the footer
-  assert.match(t[21], /^  ✦ Skills\s+│/); // the two shared things, one button row each
-  assert.match(t[22], /^  ◫ Memory\s+│/);
+  assert.match(t[17], /^─+│/); // rule above the footer
+  assert.match(t[19], /^  ✦ Skills\s+│/); // the two shared things, one button row each, a blank row above each
+  assert.doesNotMatch(t[20].slice(0, 28), /\S/);
+  assert.match(t[21], /^  ◫ Memory\s+│/);
+  assert.doesNotMatch(t[22].slice(0, 28), /\S/); // a blank row between Memory and the status line
   assert.match(t[23], /^ chorus  fix bug │ claude · sonnet │ 5h ▮▮▮▮▮▮▱▱▱▱ 62% │ ctx 34% │ 3 artifacts\s+☰ menu\s*$/);
   assert.deepEqual(cursor, { x: 29 + 12, y: 2 }); // 4 + two wide chars (4) + 4
 });
@@ -71,8 +73,8 @@ test('the brand chip, the agent colour, the state colour and the selection follo
   assert.ok(status[1].s.includes(T.bgBrand) && status[1].s.includes(T.fgBrand), 'chorus chip');
   const x = gridText(grid)[6].indexOf('claude');
   assert.ok(grid[6][x].s.includes(T.claude), 'agent name in its colour');
-  assert.ok(grid[6][2].s.includes(T.ok), 'working dot is green');
-  assert.ok(grid[6][2].s.includes(T.bgSel), 'active chat has the selection background');
+  assert.ok(grid[6][4].s.includes(T.ok), 'working dot is green');
+  assert.ok(grid[6][4].s.includes(T.bgSel), 'active chat has the selection background');
   assert.ok(grid[2][1].s.includes(T.bgBtn) && grid[2][26].s.includes(T.bgBtn), 'New chat is a button across the sidebar');
   const menu = gridText(grid)[0].indexOf('☰ Menu');
   assert.ok(grid[0][menu].s.includes(T.bgSel) && grid[0][menu].s.includes('1'), 'the Menu button is a filled chip');
@@ -203,24 +205,27 @@ test('pane: title, whole-row hits with a selected background, segment hits, hint
     }),
   );
   const t = gridText(grid);
-  assert.match(t[1], /Approvals/);
-  assert.match(t[2], /Stripe webhook/);
-  assert.ok(grid[2][40].s.includes(T.bgSel), 'selected row has the selection background across the row');
+  assert.doesNotMatch(t[1].slice(29), /\S/, 'a blank row under the top bar');
+  assert.match(t[2], /^.{29}    Approvals$/, 'the title is a heading line 4 cells in, not a filled bar');
+  assert.match(t[4], /^.{29}  Stripe webhook/, 'a list row starts 2 cells in (its ▸ sits in the gap)');
+  assert.ok(grid[4][40].s.includes(T.bgSel), 'selected row has the selection background across the row');
   assert.ok(hits.some(h => h.id === 'row:a' && h.x1 > 100));
   const ap = hits.find(h => h.id === 'approve:a')!;
   assert.equal(hitAt(hits, ap.x0 + 1, ap.y0), 'approve:a');
-  assert.ok(hits.some(h => h.id === 'back' && h.y0 === 22), 'hint buttons are hits too');
+  assert.ok(hits.some(h => h.id === 'back' && h.y0 === 23), 'hint buttons are hits too, on the bottom row');
+  assert.doesNotMatch(t[23], /chorus|menu/, 'a full-area screen has no status line');
+  assert.match(t[22], /^\s+✦ Skills|^─|^\s+◫ Memory|^\s+│/, 'the sidebar runs down to the hint row');
 });
 
-test('a bare pane has no title row: its own heading is the first line and it gets one more row', () => {
+test('a bare pane has no title row: its own heading is the first line and it gets more rows', () => {
   const lines = Array.from({ length: 40 }, (_, i) => `line ${i}`);
   const titled = gridText(compose(view({ pane: { title: 'Doctor', lines, hint: 'esc' } })).grid);
   const bare = gridText(compose(view({ pane: { title: 'Memory', bare: true, lines, hint: 'esc' } })).grid);
-  assert.match(titled[1], /Doctor/);
-  assert.match(titled[2], /line 0/);
-  assert.match(bare[1], /line 0/, 'no title row above the first line');
-  assert.ok(bare.join('\n').includes('line 20') && !titled.join('\n').includes('line 21'), 'one more line fits');
-  assert.ok(!bare[1].includes('Memory'));
+  assert.match(titled[2], /Doctor/);
+  assert.match(titled[4], /line 0/);
+  assert.match(bare[2], /line 0/, 'no title row above the first line');
+  assert.ok(bare.join('\n').includes('line 20') && !titled.join('\n').includes('line 19'), 'two more lines fit');
+  assert.ok(!bare[2].includes('Memory'));
 });
 
 test('hover lights up the region under the mouse', () => {

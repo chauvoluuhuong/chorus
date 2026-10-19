@@ -1,17 +1,16 @@
   ‹ Back   Memory                                                                                                                          ☰ Menu ⌃\
-                            │  Memory  ·  all projects      /var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-home-G5m6N9/chorus.db   / se
-  + New chat             n  │
-                            │    Reply with only the tex… chorus-proof…  codex   2 turns   just now
-  PROJECTS                  │    Create calc.js in the c… chorus-proof…  claude  2 turns   just now
-  ▾ chorus-proof-api-hH6… 1 │    ↳ Create calc.js in the… chorus-proof…  codex   3 turns   just now
-  ◌ Rate limiter      codex │  ▸ Rate limiter             chorus-proof…  codex   2 turns   just now
-  ▾ chorus-proof-JmNGLQ 3   │
-  ◐ Create calc.js … claude │    Rate limiter
-    ◐ ↳ Create calc.… codex │      asked  Add a per-key rate limit to the public API
-  ◐ Reply with only … codex │      last   Limiter in place; 40 tests pass.
-                            │      files  src/limit.ts
                             │
+  + New chat             n  │    Memory  ·  all projects      /var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-home-DMFlkD/chorus.db   /
                             │
+  PROJECTS                  │    Reply with only the t… chorus-pr… codex   2 turns   just now
+  ▾ chorus-proof-api-ekG… 1 │    Create calc.js in the… chorus-pr… claude  2 turns   just now
+  ◌ Rate limiter      codex │    ↳ Create calc.js in t… chorus-pr… codex   3 turns   just now
+  ▾ chorus-proof-jPucm9 3   │  ▸ Rate limiter           chorus-pr… codex   2 turns   just now
+  ◐ Create calc.js … claude │
+    ◐ ↳ Create calc.… codex │    Rate limiter
+  ◐ Reply with only … codex │      asked   Add a per-key rate limit to the public API
+                            │      last    Limiter in place; 40 tests pass.
+                            │      files   src/limit.ts
                             │
                             │
                             │
@@ -39,6 +38,7 @@
                             │
                             │
 ────────────────────────────│
+                            │
   ✦ Skills                  │
-  ◫ Memory                  │  ⏎  open chat    h  continue with another agent    /  search    esc  back
- chorus  Memory                                                                                                                               ☰ menu
+                            │
+  ◫ Memory                  │     ⏎ open chat    h continue with another agent    / search    esc back

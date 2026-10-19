@@ -67,3 +67,13 @@ test('CHORUS_MENU_KEY chooses the key and the label shown on screen', async () =
   new InputRouter(e => ev.push(e), parseMenuKeys('ctrl+b').keys).feed('\x1c\x02q');
   assert.deepEqual(ev.map(e => e.type), ['pass', 'menu-open', 'menu-key']); // Ctrl+\ is now an ordinary key for the agent
 });
+
+test('the menu key opens the menu in capture mode too (panes, dialogs)', () => {
+  const ev: string[] = [];
+  const r = new InputRouter(e => ev.push(e.type), '\x1c');
+  r.capture = true;
+  r.feed('\x1c');
+  assert.deepEqual(ev, ['menu-open']);
+  r.feed('n');
+  assert.deepEqual(ev, ['menu-open', 'menu-key']);
+});

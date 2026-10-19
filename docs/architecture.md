@@ -109,17 +109,19 @@ Plan, spike results and the D1 decision: [phase4.md](phase4.md).
 
 The terminal app from the [mockup](mockups/chorus-cli.html): thread sidebar, the real agent screen
 in the middle, status line, handoff, memory view, and display of tool calls, artifacts and
-**approval cards**.
+**approvals** (badge, sidebar `!`, inbox).
 
-**Approval cards (research inside this phase):** the agent's own screen already shows its
+**Approvals (research inside this phase):** the agent's own screen already shows its
 approval prompts when the thread is in front. Chorus adds value when a thread is in the
-background: the sidebar shows "needs approval", and a card lets you answer without switching.
+background: the sidebar shows `!`, the top bar counts the waiting chats (`! 2 waiting`, a click opens the
+approvals inbox), a status-line flash names the request, and `ctrl+\ y` / `x` answers it without switching.
+(A card over the chat in front was tried and removed: it hid that chat's input or its first lines.)
 Mechanisms to verify: Claude `PreToolUse` hook (can return allow / deny / ask) or
 `--permission-prompt-tool` (an MCP tool decides); Codex approval policy and hooks; agy permission
 modes.
 
 **Proof (e2e):** a test drives the CLI app in a PTY: open a Claude and a Codex thread, switch
-between them, hand off, answer an approval from a card, see an artifact listed.
+between them, hand off, answer an approval from the inbox, see an artifact listed.
 
 ### Phase 5 · Desktop app
 

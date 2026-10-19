@@ -107,7 +107,7 @@ test('new thread: store row, process, live transcript tailing and state follow t
   }
 });
 
-test('approval: a prompt on a background thread becomes a card; ctrl+\\ y answers it without switching', async () => {
+test('approval: a prompt on a background thread shows as the badge, a sidebar ! and a flash (no card over the chat); ctrl+\\ y answers it without switching', async () => {
   const r = rig();
   try {
   const a = r.c.newThread({ agent: 'codex', title: 'worker' });
@@ -116,13 +116,13 @@ test('approval: a prompt on a background thread becomes a card; ctrl+\\ y answer
   // thread 1 (background) shows the real Codex prompt from the fixture
   const prompt = path.join(ROOT, 'fixtures/codex/0.163.0/approval-ask-nohook-enter/prompt-screen.txt');
   r.app.entry(a.id)!.host!.write(`show ${prompt}\r`);
-  await r.until(() => has(r.screen(), /asks for approval/), 'approval card');
-  assert.match(r.screen().join('').replace(/[┃│┏┗┓┛━\s]/g, ''), /touch\/private.*approval-probe-file\.txt/); // the command, wrapped inside the card
+  await r.until(() => /! 1 waiting/.test(r.screen()[0]), 'the top bar badge counts it');
   assert.ok(r.screen().some(l => /!\s+worker/.test(l)), 'the sidebar row of the waiting chat shows !');
-  assert.match(r.screen()[0], /! 1 waiting/, 'the top bar badge counts it');
+  assert.match(r.screen()[29], /! worker \(codex\) asks · ⌃\\ y approve\s+⌃\\ x deny · mkdir -p/, 'the flash names the chat, the keys and the request');
+  assert.ok(has(r.screen(), /READY claude/) && !has(r.screen(), /asks for approval/), 'nothing covers the chat in front');
 
   r.type('\x00y');
-  await r.until(() => !has(r.screen(), /asks for approval/), 'card gone after approving');
+  await r.until(() => !/waiting/.test(r.screen()[0]), 'badge gone after approving');
   // the key went to the background agent's terminal: it printed KEY enter on ITS screen
   await r.until(() => r.app.entry(a.id)!.host!.screen.text().some(l => /KEY enter/.test(l)), 'enter reached the background agent');
   assert.equal(r.app.active, 1, 'still on the front thread');
@@ -141,7 +141,7 @@ test('deny sends Esc; nothing pending says so', async () => {
   await r.until(() => has(r.screen(), /nothing is waiting for approval/), 'no pending message');
   const prompt = path.join(ROOT, 'fixtures/codex/0.163.0/approval-ask-nohook-enter/prompt-screen.txt');
   r.app.entry(a.id)!.host!.write(`show ${prompt}\r`);
-  await r.until(() => has(r.screen(), /asks for approval/), 'card');
+  await r.until(() => /! 1 waiting/.test(r.screen()[0]), 'badge');
   r.type('\x00x');
   await r.until(() => r.app.entry(a.id)!.host!.screen.text().some(l => /KEY esc/.test(l)), 'esc reached the agent');
   } finally {
@@ -192,7 +192,7 @@ test('views: memory, activity and files panes; limit warning', async () => {
   assert.match(r.screen().join('\n'), /▸ viewer\s+\S+\s+codex\s+\d+ turns/);
   assert.match(r.screen().join('\n'), /asked\s+Use your shell/);
   r.type('d');
-  await r.until(() => has(r.screen(), /What an agent reads · viewer/), 'digest');
+  await r.until(() => has(r.screen(), /What an agent reads\s+·\s+viewer/), 'digest');
   assert.match(r.screen().join('\n'), /get_handoff_context returns for "viewer"/);
   assert.match(r.screen().join('\n'), /echo chorus-probe/);
   r.type('\x1b'); // back to the list, then to the chat
@@ -205,7 +205,7 @@ test('views: memory, activity and files panes; limit warning', async () => {
   assert.match(r.screen().join('\n'), /shell echo chorus-probe\S*.*ok/);
   r.type('q');
   r.type('\x00f');
-  await r.until(() => has(r.screen(), /Artifacts · viewer/), 'artifacts pane');
+  await r.until(() => has(r.screen(), /Artifacts\s+·\s+viewer/), 'artifacts pane');
   r.type('q');
 
   r.store.db.prepare('UPDATE usage SET limit_utilization = 0.93 WHERE thread_id = ?').run(e.id);
@@ -362,7 +362,7 @@ test('artifacts view: select, open the live preview, versions; activity view: fi
     r.store.scanArtifacts(e.id);
 
     r.type('\x00a');
-    await r.until(() => has(r.screen(), /Artifacts · viewer/) && has(r.screen(), /plan\.md\s+v2/), 'artifacts table with two versions');
+    await r.until(() => has(r.screen(), /Artifacts\s+·\s+viewer/) && has(r.screen(), /plan\.md\s+v2/), 'artifacts table with two versions');
     assert.match(r.screen().join('\n'), /press ⏎ to open it in the browser/);
     r.type('v');
     await r.until(() => has(r.screen(), /Versions of plan\.md/) && has(r.screen(), /v1 /) && has(r.screen(), /v2 /), 'versions list');
@@ -378,11 +378,11 @@ test('artifacts view: select, open the live preview, versions; activity view: fi
     r.type('\x00e');
     await r.until(() => has(r.screen(), /Activity\s+·\s+viewer/) && has(r.screen(), /tool\s+shell/), 'activity');
     r.type('f');
-    await r.until(() => has(r.screen(), /\[tool \d+\]/) && !has(r.screen(), /file\s+plan\.md/), 'filter: tool');
+    await r.until(() => has(r.screen(), / tool \d+ /) && !has(r.screen(), /file\s+plan\.md/), 'filter: tool');
     r.type('f');
-    await r.until(() => has(r.screen(), /\[mcp \d+\]/) && !has(r.screen(), /tool\s+shell/), 'filter: mcp');
+    await r.until(() => has(r.screen(), / mcp \d+ /) && !has(r.screen(), /tool\s+shell/), 'filter: mcp');
     r.type('r');
-    await r.until(() => has(r.screen(), /Raw trace · viewer/) && has(r.screen(), /transcript lines:/), 'raw trace');
+    await r.until(() => has(r.screen(), /Raw trace\s+·\s+viewer/) && has(r.screen(), /transcript lines:/), 'raw trace');
   } finally {
     r.close();
     delete process.env.CHORUS_NO_OPEN;
@@ -438,14 +438,14 @@ test('a request on a chat you are not looking at rings the bell and flashes its 
     const prompt = path.join(ROOT, 'fixtures/codex/0.163.0/approval-ask-nohook-enter/prompt-screen.txt');
     const before = r.raw().length;
     r.app.entry(a.id)!.host!.write(`show ${prompt}\r`);
-    await r.until(() => has(r.screen(), /Stripe webhook needs approval/), 'flash in the status line');
+    await r.until(() => has(r.screen(), /! Stripe webhook \(codex\) asks/), 'flash in the status line');
     assert.ok(r.raw().slice(before).includes('\x07'), 'bell');
     r.type('\x00x');
-    await r.until(() => !has(r.screen(), /asks for approval/), 'denied');
+    await r.until(() => !/waiting/.test(r.screen()[0]), 'denied');
     process.env.CHORUS_BELL = '0';
     const mid = r.raw().length;
     r.app.entry(a.id)!.host!.write(`show ${prompt}\r`);
-    await r.until(() => has(r.screen(), /asks for approval/), 'second request');
+    await r.until(() => /! 1 waiting/.test(r.screen()[0]), 'second request');
     assert.ok(!r.raw().slice(mid).includes('\x07'), 'muted');
   } finally {
     delete process.env.CHORUS_BELL;
@@ -591,7 +591,7 @@ test('Memory is shared by all projects: chats from another folder are listed and
     assert.match(screen().join('\n'), /Memory\s+·\s+all projects/);
     assert.match(screen().join('\n'), /Rate limiter\s+\S+\s+codex\s+2 turns/);
     assert.match(screen().join('\n'), /Cake order page/);
-    assert.match(screen().join('\n'), /all projects\s+\/.*chorus-shar/, 'shows where the shared database lives (the path is cut at the pane edge)');
+    assert.match(screen().join('\n'), /all projects\s+\/var\/folders\//, 'shows where the shared database lives (the path is cut at the pane edge)');
     // select the other project's chat and open it: it is added parked, then resumed with its stored session id
     app.click(`row:t_api`); // the first click selects: the detail below shows what that chat did
     await sleep(200);
@@ -602,7 +602,9 @@ test('Memory is shared by all projects: chats from another folder are listed and
     while (Date.now() - t0 < 6000 && !launches.some(l => l.resumeId === 'sess-1')) await sleep(80);
     assert.ok(launches.some(l => l.resumeId === 'sess-1' && l.project === other), 'resumed in its own project');
     // the sidebar groups chats by project
-    assert.ok(screen().some(l => /▾ .*chorus-api-/.test(l)) || screen().some(l => /chorus-api-/.test(l)), 'second project in the sidebar');
+    const t1 = Date.now();
+    while (Date.now() - t1 < 3000 && !screen().some(l => /▾ chorus-api-/.test(l.slice(0, 28)))) await sleep(80);
+    assert.ok(screen().some(l => /▾ chorus-api-/.test(l.slice(0, 28))), `second project in the sidebar:\n${screen().join('\n')}`);
     app.stop();
     assert.equal(shared.listThreads().length, 2);
     assert.match(shared.threadDir('t_api'), new RegExp(other.replace(/[/.]/g, '\\$&')), 'artifacts stay in the chat project');
@@ -631,7 +633,7 @@ test('Skills screen: on/off by ⏎ or click, import what the agents already have
     await r.until(() => has(r.screen(), /Skills\s+·\s+one library/), 'screen');
     let t = r.screen().join('\n');
     assert.match(t, /▸ \[on\]\s+pricing\s+Price a cake/);
-    assert.match(t, /release-notes\s+~\/\.claude\/skills\s+claude\s+import ›/);
+    assert.match(t, /release-notes\s+~\/\.claude\/skills\s+claude only\s+import ›/);
     assert.ok(!/\bdefault\b/.test(t.split('Found in')[1] ?? ''), 'CLI defaults are not offered');
 
     r.type('\r');
@@ -663,7 +665,7 @@ test('artifacts: ⏎ or a click opens the selected file, f shows the folder, the
     fs.writeFileSync(path.join(r.store.artifactsDir(e.id), 'order.html'), '<h1>order</h1>');
     r.store.scanArtifacts(e.id);
     r.type('\x00a');
-    await r.until(() => has(r.screen(), /Artifacts · viewer/) && has(r.screen(), /order\.html/) && has(r.screen(), /plan\.md/), 'two artifacts');
+    await r.until(() => has(r.screen(), /Artifacts\s+·\s+viewer/) && has(r.screen(), /order\.html/) && has(r.screen(), /plan\.md/), 'two artifacts');
     r.type('\r'); // opens the selected row
     await r.until(() => opened.length === 1, 'opened');
     assert.equal(opened[0].mode, 'default');
@@ -678,7 +680,7 @@ test('artifacts: ⏎ or a click opens the selected file, f shows the folder, the
     await r.until(() => opened.length === 3, 'folder');
     assert.equal(opened[2].mode, 'folder');
     r.app.click('copy'); // the hint chips are buttons
-    assert.match(r.screen().join('\n'), /⏎\s+open\s+f\s+show in folder\s+p\s+copy path\s+v\s+versions/);
+    assert.match(r.screen().join('\n'), /⏎ \/ click\s+open\s+f\s+show in folder\s+p\s+copy path\s+v\s+versions/);
   } finally {
     r.close();
   }
@@ -828,19 +830,19 @@ test('Activity: counts per kind in the filter bar, approvals and usage rows, dur
     const child = r.store.createThread({ title: 'viewer → claude', agent: 'claude', cwd: r.project, parent_thread_id: e.id });
     r.store.logMcpCall(child.id, 'get_handoff_context');
     r.type('\x00e');
-    await r.until(() => has(r.screen(), /Activity\s+·\s+viewer/) && has(r.screen(), /\[all \d+\]/), 'activity');
+    await r.until(() => has(r.screen(), /Activity\s+·\s+viewer/) && has(r.screen(), / all \d+ /), 'activity');
     const t = r.screen().join('\n');
-    assert.match(t, /\[all \d+\]\s+tool 1\s+mcp 2\s+approval 1\s+file 1\s+usage 1\s+error 0\s+f cycles/);
-    assert.match(t, /in \d+\s+out \d+ tokens/);
+    assert.match(t, / all \d+ \s+tool 1\s+mcp 2\s+approval 1\s+file 1\s+usage 1\s+error 0\s+f cycles/);
+    assert.match(t, /in [\d.]+k?\s+out [\d.]+k? tokens/);
     assert.match(t, /approve\s+npm test\s+approved/);
     assert.match(t, /usage\s+5h 62%/);
     assert.match(t, /file\s+plan\.md v1/);
     assert.match(t, /──── chat "viewer → claude" started with claude/);
     assert.match(t, /claude\s+mcp\s+chorus\.get_handoff_context/, 'the continued chat is on the same timeline');
     r.app.click('kind:approval');
-    await r.until(() => has(r.screen(), /\[approval 1\]/) && !has(r.screen(), /file\s+plan\.md/), 'filtered by click');
+    await r.until(() => has(r.screen(), / approval 1 /) && !has(r.screen(), /file\s+plan\.md/), 'filtered by click');
     r.type('f'); // approval → file
-    await r.until(() => has(r.screen(), /\[file 1\]/) && has(r.screen(), /file\s+plan\.md/), 'f cycles');
+    await r.until(() => has(r.screen(), / file 1 /) && has(r.screen(), /file\s+plan\.md/) && !has(r.screen(), /approve\s/), 'f cycles');
   } finally {
     r.close();
   }
@@ -857,7 +859,7 @@ test('Doctor shows the mouse and the open way, like the mockup', async () => {
   }
 });
 
-test('hand off: the dialog names the chat and lists the other agents first with what is left of their plans', async () => {
+test('hand off: the New chat form for the continued chat, the other agent preselected, with model, effort and skip permissions', async () => {
   const r = rig();
   try {
     r.c.newThread({ agent: 'claude', title: 'Cake order page' });
@@ -865,10 +867,10 @@ test('hand off: the dialog names the chat and lists the other agents first with 
     r.type('\x00h');
     await r.until(() => has(r.screen(), /Continue "Cake order page" in a new chat/), 'dialog');
     const t = r.screen().join('\n');
-    assert.match(t, /1\s+codex\s+quota ok/);
-    assert.match(t, /2\s+agy\s+quota ok/);
-    assert.match(t, /3\s+claude\s+fresh session/);
-    r.type('1');
+    assert.match(t, /Agent\s+claude\s+codex\s+agy/);
+    assert.match(t, /Effort/);
+    assert.match(t, /Skip permission prompts/);
+    r.type('\r');
     await r.until(() => r.launches.at(-1)?.agent === 'codex', 'a Codex chat continues it');
   } finally {
     r.close();

@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "chorus": {
+      "command": "/opt/homebrew/Cellar/node/26.10.0_1/bin/node",
+      "args": [
+        "/Users/huong/chorus/src/cli/index.ts",
+        "mcp",
+        "--project",
+        "/Users/huong/chorus",
+        "--thread",
+        "t_d6d9da59",
+        "--home",
+        "/Users/huong/.chorus"
+      ]
+    }
+  }
+}

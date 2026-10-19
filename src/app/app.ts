@@ -2,7 +2,8 @@
 // panes, dialogs, cards. Clicks are looked up in the hit regions of the last frame (compositor.ts), never recomputed.
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
-import { compose, Differ, hitAt, layout, paneRoom, type Hit, type ItemState, type PaneLine, type RichLine, type SideRow, type StatusBar } from './compositor.ts';
+import { compose, Differ, T, hitAt, layout, paneRoom, type Hit, type ItemState, type PaneLine, type RichLine, type SideRow, type StatusBar } from './compositor.ts';
+import { chip, hints } from './screens.ts';
 import { InputRouter, parseMenuKeys, type InputEvent } from './input.ts';
 import { nodePtyFactory, type PtyFactory } from './pty.ts';
 import { ThreadHost, type HostOpts } from './thread-host.ts';
@@ -52,12 +53,6 @@ export interface AppOpts {
   ptyFactory?: PtyFactory;
   /** repaint the whole frame this often even when nothing changed, so a glitch in the terminal heals itself (ms, default 3000) */
   repaintMs?: number;
-}
-
-export interface Card {
-  threadId: string;
-  title: string;
-  lines: string[];
 }
 
 export interface PaneOpts {
@@ -120,7 +115,7 @@ export class App extends EventEmitter {
   private alertState: { title: string; lines: string[]; options: { key: string; label: string }[]; sel: number; resolve: (k: string | undefined) => void } | undefined;
   private dialog: { title: string; options: string[]; sel: number; resolve: (i: number | undefined) => void } | undefined;
   private promptState: { title: string; lines: string[]; value: string; resolve: (v: string | undefined) => void } | undefined;
-  private card: Card | undefined;
+  private winTitle = '';
   private mouseOn: boolean;
   private repaintMs: number;
   private lastFull = 0;
@@ -248,7 +243,8 @@ export class App extends EventEmitter {
     process.on('SIGTERM', this.onExitSignal);
     process.on('SIGHUP', this.onExitSignal);
     // autowrap off: a row that comes out one cell too long (a glyph the terminal draws wider) is cut, never wrapped, so a frame can never scroll the screen
-    this.io.stdout.write('\x1b[?1049h\x1b[?7l\x1b[2J' + (this.mouseOn ? MOUSE_ON : ''));
+    // \x1b[22;0t saves the window title, \x1b[23;0t on exit gives it back
+    this.io.stdout.write('\x1b[22;0t\x1b[?1049h\x1b[?7l\x1b[2J' + (this.mouseOn ? MOUSE_ON : ''));
     this.tick = setInterval(() => this.schedule(), 700);
     this.render();
   }
@@ -266,7 +262,7 @@ export class App extends EventEmitter {
     process.off('SIGTERM', this.onExitSignal);
     process.off('SIGHUP', this.onExitSignal);
     if (killThreads) for (const e of this.entries) e.host?.kill();
-    this.io.stdout.write(MODE_RESET);
+    this.io.stdout.write(MODE_RESET + '\x1b[23;0t');
     this.emit('stopped');
     this.finish();
   }
@@ -280,7 +276,14 @@ export class App extends EventEmitter {
     this.schedule();
   }
 
-  /* ---------- panes, dialogs, cards, flashes ---------- */
+  /* ---------- panes, dialogs, flashes ---------- */
+
+  /** The path of the screen in front changes (New chat follows its project folder). */
+  setCrumb(crumb: string[]) {
+    if (!this.pane || JSON.stringify(this.pane.crumb) === JSON.stringify(crumb)) return;
+    this.pane.crumb = crumb;
+    this.schedule();
+  }
 
   /** A full-area view (new chat, approvals, memory, skills …). */
   showPane(title: string, lines: PaneLine[], opts: PaneOpts = {}) {
@@ -334,16 +337,6 @@ export class App extends EventEmitter {
       this.router.capture = true;
       this.schedule();
     });
-  }
-
-  setCard(card: Card | undefined) {
-    if (JSON.stringify(card) === JSON.stringify(this.card)) return;
-    this.card = card;
-    this.schedule();
-  }
-
-  get currentCard() {
-    return this.card;
   }
 
   /** Terminal bell: a request needs you while you look at another chat (CHORUS_BELL=0 mutes it). */
@@ -550,6 +543,12 @@ export class App extends EventEmitter {
 
   /** Runs the region with this id. Returns false when nothing used it. */
   click(id: string): boolean {
+    if (this.router.menuOpen) {
+      const m = id.startsWith('menu:') ? this.menuRows().find(r => r.key === id.slice(5)) : undefined;
+      if (m) this.runAction(m.action);
+      else this.router.close();
+      return true;
+    }
     if (this.alertState) {
       const i = id.startsWith('alert:') ? Number(id.slice(6)) : -1;
       if (i >= 0) this.alertKey(this.alertState.options[i].key);
@@ -560,15 +559,10 @@ export class App extends EventEmitter {
       if (i >= 0) this.onCaptured(String(i + 1));
       return true;
     }
-    if (this.router.menuOpen) {
-      const m = id.startsWith('menu:') ? this.menuRows().find(r => r.key === id.slice(5)) : undefined;
-      if (m) this.runAction(m.action);
-      else this.router.close();
-      return true;
-    }
     if (id === 'back') return void this.back(), true;
     if (id === 'menu') return void this.openMenu(), true;
     if (id === 'approvals') return void this.emit('action', 'approvals'), true;
+    if (id === 'artifacts') return void this.emit('action', 'files'), true;
     if (id === 'new') return void this.emit('action', 'new'), true;
     if (id === 'skills') return void this.emit('action', 'skills'), true;
     if (id === 'memory') return void this.emit('action', 'memory'), true;
@@ -639,7 +633,7 @@ export class App extends EventEmitter {
       : alert
       ? { title: alert.title, lines: alert.lines, rows: alert.options.map((o, i) => [o.key === '\r' ? '⏎' : o.key, o.label, i === alert.sel, `alert:${i}`] as [string, string, boolean, string]), alert: true }
       : dialog
-        ? { title: dialog.title, rows: dialog.options.map((o, i) => [String(i + 1), o, i === dialog.sel, `choice:${i}`] as [string, string, boolean, string]), foot: '⏎ choose   esc cancel' }
+        ? { title: dialog.title, rows: dialog.options.map((o, i) => [i === dialog.sel ? '▸' : ' ', o, i === dialog.sel, `choice:${i}`] as [string, string, boolean, string]), foot: '↑↓ move   ⏎ start   esc cancel' }
         : this.router.menuOpen
           ? { title: `chorus · ${actName}`, rows: menuRows.map((r, i) => [r.key, r.label, i === this.menuSel, `menu:${r.key}`] as [string, string, boolean, string]), foot: `↑↓ move   ⏎ run   esc  back to ${act?.agent ?? 'the chat'}` }
           : undefined;
@@ -650,18 +644,21 @@ export class App extends EventEmitter {
       lines: this.pane.lines.slice(this.pane.scroll, this.pane.scroll + room),
       hint:
         this.pane.hint ??
-        `↑/↓ PgUp/PgDn scroll · g/G top/bottom · esc back  (${Math.min(this.pane.lines.length, this.pane.scroll + 1)}-${Math.min(this.pane.lines.length, this.pane.scroll + room)} of ${this.pane.lines.length})`,
+        ([
+          ...hints(chip('↑↓', 'scroll'), chip('PgUp/PgDn', 'page'), chip('g/G', 'top / bottom'), chip('esc', 'back', 'back')),
+          [`    ${Math.min(this.pane.lines.length, this.pane.scroll + 1)}-${Math.min(this.pane.lines.length, this.pane.scroll + room)} of ${this.pane.lines.length}`, T.dim],
+        ] as RichLine),
     };
-    const card = this.card && { title: this.card.title, lines: [...this.card.lines, `${this.menuLabel} y  approve    ${this.menuLabel} x  deny    (or switch to the chat and answer there)`] };
     const meta = act?.meta ?? {};
     const exited = act?.host?.state === 'ended' ? `  (exited ${act.host.exitCode})` : '';
     const statusBar: StatusBar | undefined = act
       ? { title: act.title + exited, agent: act.agent, model: meta.model, effort: meta.effort, from: meta.from, usage: meta.usage, ctx: meta.ctx, artifacts: meta.artifacts ?? 0, toast: meta.toast, warn: (meta.usage ?? 0) >= 90, skip: meta.skip }
       : undefined;
-    const message = this.flash || this.notice || (!act || this.pane ? (this.pane ? this.pane.title : 'no chats yet') : undefined);
+    // a full-area screen shows only a real flash (on its hint row); the status line says "no chats yet" when there is none
+    const message = this.flash || this.notice || (this.pane ? undefined : !act ? 'no chats yet' : undefined);
     // where you are, nothing else: the chat title, or the screen (after the chat it belongs to, for its Artifacts or Activity)
     // the path is <project> / <chat> [/ Artifacts]; Approvals, Memory and Skills belong to no project
-    const inProject = !this.pane || ['new', 'artifacts', 'activity'].includes(this.pane.id ?? '');
+    const inProject = !this.pane || ['artifacts', 'activity'].includes(this.pane.id ?? ''); // New chat names its own project
     const path = this.pane ? (this.pane.crumb ?? [this.pane.title]) : act ? [act.title] : [];
     const crumb = inProject && act && path.length ? [projectName(act.cwd), ...path] : path;
     const { grid, cursor, hits } = compose({
@@ -676,7 +673,6 @@ export class App extends EventEmitter {
       statusRight: this.router.menuOpen ? '↑↓ ⏎ or the letter · esc' : '',
       overlay,
       pane,
-      card: this.pane ? undefined : card,
       menuLabel: this.menuLabel,
       hover: this.hover,
     });
@@ -687,7 +683,11 @@ export class App extends EventEmitter {
       this.differ.reset();
       this.lastFull = Date.now();
     }
-    let out = '\x1b[?2026h\x1b[?25l' + this.differ.frame(grid) + this.modeSync(pane ? undefined : act);
+    // the window title names the project, like the mockup's window bar: "~/projects/cake-shop — chorus"
+    const winTitle = `${(act?.cwd ?? process.cwd()).replace(process.env.HOME ?? '\0', '~')} — chorus`;
+    const titleSeq = winTitle !== this.winTitle ? `\x1b]0;${winTitle}\x07` : '';
+    this.winTitle = winTitle;
+    let out = titleSeq + '\x1b[?2026h\x1b[?25l' + this.differ.frame(grid) + this.modeSync(pane ? undefined : act);
     if (cursor) out += `\x1b[${cursor.y + 1};${cursor.x + 1}H\x1b[?25h`;
     out += '\x1b[?2026l';
     this.io.stdout.write(out);

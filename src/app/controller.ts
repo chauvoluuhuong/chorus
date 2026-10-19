@@ -15,13 +15,15 @@ import { Tailer } from './tailer.ts';
 import { spawn } from 'node:child_process';
 import { BTN, LINK, T, agentStyle, type PaneLine, type RichLine, type Seg } from './compositor.ts';
 import { riskOf } from './risk.ts';
-import { ARTIFACTS_HINT, APPROVALS_HINT, MEMORY_HINT, NEW_CHAT_HINT, SKILLS_HINT, approvalLines, memoryLines as memoryScreenLines, type ApprovalScope, newChatForm, newChatHit, newChatKey, newChatLines, skillLines, type NewChatForm, type NewChatInfo } from './screens.ts';
+import { ARTIFACTS_HINT, APPROVALS_HINT, chip, hints, MEMORY_HINT, NEW_CHAT_HINT, SKILLS_HINT, approvalLines, memoryLines as memoryScreenLines, type ApprovalScope, newChatForm, newChatHit, newChatKey, newChatLines, skillLines, type NewChatForm, type NewChatInfo } from './screens.ts';
 import { VERIFIED_VERSION, versionWarning } from '../core/adapters/index.ts';
 import { PreviewServer } from '../core/preview.ts';
 import { defaultOpener, readOpenConfig, writeOpenConfig, type OpenConfig, type Opener } from '../core/opener.ts';
 import { traceCmd } from '../cli/commands.ts';
 
 export const AGENTS: AgentId[] = ['claude', 'codex', 'agy'];
+/** 41234 → 41.2k, like the mockup's token counts */
+const kTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 const ACTIVITY_KINDS = ['all', 'tool', 'mcp', 'approval', 'file', 'usage', 'error'] as const;
 const join2 = (...p: string[]) => p.filter(Boolean).join(';');
 const RAW_CAP = 2 * 1024 * 1024;
@@ -126,14 +128,13 @@ export class Controller {
 
   private async onSelect(e: Entry) {
     if (!e.host && e.state === 'parked') this.resume(e);
-    this.syncCard();
   }
 
-  async handoff(fromId: string, to: AgentId): Promise<Entry | undefined> {
+  async handoff(fromId: string, to: AgentId, opts: { model?: string; effort?: string; skipPermissions?: boolean } = {}): Promise<Entry | undefined> {
     const from = this.store.getThread(fromId);
     if (!from) return undefined;
     this.tailers.get(fromId)?.poll(); // make sure the store has the latest of the source thread
-    const entry = this.newThread({ agent: to, title: `${from.title} → ${to}`, prompt: handoffPrompt(from), parent: from, cwd: from.cwd });
+    const entry = this.newThread({ agent: to, title: `${from.title} → ${to}`, prompt: handoffPrompt(from), parent: from, cwd: from.cwd, ...opts });
     this.app.setFlash(`handoff: ${to} is loading "${from.title}" through the Chorus MCP server`);
     return entry;
   }
@@ -200,7 +201,6 @@ export class Controller {
     this.pending.delete(e.id);
     this.pendingSince.delete(e.id);
     this.refreshState(e.id);
-    this.syncCard();
   }
 
   private checkLimit(id: string) {
@@ -260,7 +260,8 @@ export class Controller {
         this.pendingSince.set(e.id, Date.now());
         // a request on a chat you are not looking at: one-line flash and the bell, on top of the badge and the sidebar !
         if (e.id !== this.app.current?.id || this.app.paneId) {
-          this.app.setFlash(`${e.title} needs approval`);
+          // the keys first: a long command is cut at the edge of the status line, the way to answer must not be
+          this.app.setFlash(`! ${e.title} (${e.agent}) asks · ${this.app.menuLabel} y approve  ${this.app.menuLabel} x deny · ${found.what.split(' · ').slice(-1)[0]}`);
           this.app.bell();
         }
         changed = true;
@@ -272,7 +273,6 @@ export class Controller {
       if (changed) this.refreshState(e.id);
     }
     this.checkQuota();
-    this.syncCard(); // also after a switch: the card is only for threads you are not looking at
   }
 
   /** An agent that ran out of quota says so on its screen: warn and point at the handoff. */
@@ -294,20 +294,10 @@ export class Controller {
     }
   }
 
-  private syncCard() {
-    // the card is for threads you are NOT looking at; the active thread shows its own prompt
-    const act = this.app.current;
-    const other = [...this.pending.entries()].find(([id]) => id !== act?.id);
-    if (!other) return this.app.setCard(undefined);
-    const [id, p] = other;
-    const e = this.app.entry(id)!;
-    this.app.setCard({ threadId: id, title: `${e.title} (${e.agent}) asks for approval`, lines: [p.what, p.question] });
-  }
-
-  /** Answers the request of one chat (default: the one you are looking at, else the one on the card, else the first waiting). */
+  /** Answers the request of one chat (default: the one you are looking at, else the one that asked first). */
   answer(approve: boolean, forId?: string): boolean {
     const act = this.app.current;
-    const id = forId ?? (act && this.pending.has(act.id) ? act.id : this.app.currentCard?.threadId ?? [...this.pending.keys()][0]);
+    const id = forId ?? (act && this.pending.has(act.id) ? act.id : [...this.pending.keys()][0]);
     const p = id && this.pending.get(id);
     const host = id ? this.app.entry(id)?.host : undefined;
     if (!p || !host) {
@@ -319,7 +309,6 @@ export class Controller {
     this.pendingSince.delete(id!);
     this.store.logApproval(id!, p.what, approve ? 'approved' : 'denied');
     this.refreshState(id!);
-    this.syncCard();
     this.app.setFlash(`${approve ? 'approved' : 'denied'}: ${p.what.slice(0, 60)}`);
     return true;
   }
@@ -332,16 +321,9 @@ export class Controller {
       case 'new':
         this.newChatScreen();
         break;
-      case 'handoff': {
+      case 'handoff':
         if (!cur) return this.app.setFlash('no chat to hand off');
-        // the other agents first, then the same one for a fresh session; each with what is left of its plan
-        const order = [...AGENTS.filter(a => a !== cur.agent), cur.agent as AgentId];
-        const q = this.quotaInfo();
-        const label = (a: AgentId) => `${a.padEnd(8)} ${a === cur.agent ? 'fresh session' : q[a] ? (q[a]!.text.startsWith('5h') ? `${q[a]!.text} used` : q[a]!.text) : 'quota ok'}`;
-        const i = await this.app.choose(`Continue "${cur.title}" in a new chat`, order.map(label));
-        if (i !== undefined) await this.handoff(cur.id, order[i]);
-        break;
-      }
+        return this.newChatScreen({ from: cur.id });
       case 'memory':
         return this.memoryView();
       case 'skills':
@@ -365,7 +347,7 @@ export class Controller {
         this.retryContext();
         break;
       case 'help':
-        this.app.showPane('help', helpLines(this.app.menuLabel));
+        this.app.showPane('Help', helpLines(this.app.menuLabel));
         break;
     }
   }
@@ -415,16 +397,28 @@ export class Controller {
    * The New chat screen (also the first screen): agent, model, project folder, skip-permissions. Enter alone starts with the
    * defaults. The chat is named after your first message; you type it in the agent itself.
    */
-  newChatScreen(preset: { agent?: AgentId; model?: string; effort?: string; folder?: string; skip?: boolean } = {}) {
+  newChatScreen(preset: { agent?: AgentId; model?: string; effort?: string; folder?: string; skip?: boolean; from?: string } = {}) {
+    // a handoff: the same form, for the chat that continues another one (the other agents come first; the folder is the source's)
+    const src = preset.from ? this.store.getThread(preset.from) : undefined;
+    if (src) {
+      preset = { agent: AGENTS.find(a => a !== src.agent), folder: src.cwd, skip: !!src.skip_permissions, from: src.id };
+    }
     // the project you are in: the folder of the chat in front, else the folder chorus was started in (a parked chat does not count)
     const cur = this.app.current;
     const folder = preset.folder ?? (cur?.host ? cur.cwd : this.project);
     const f: NewChatForm = newChatForm({ agent: preset.agent, model: preset.model, effort: preset.effort, folder, models: a => this.modelList(a), efforts: (a, m) => effortsFor(a, m) });
     f.skip = !!preset.skip;
+    if (src) {
+      f.from = { title: src.title };
+      f.focus = 0;
+    }
     const info = (): NewChatInfo => ({ models: a => this.modelList(a), efforts: (a, m) => effortsFor(a, m), quota: this.quotaInfo(), recent: this.recentFolders(f.folder), skipFlag: SKIP_FLAG });
-    const redraw = () => this.app.updatePane(newChatLines(f, info()));
+    const redraw = () => {
+      this.app.updatePane(newChatLines(f, info()));
+      this.app.setCrumb([projectName(f.folder.replace(/\/+$/, '') || '/'), src ? 'Hand off' : 'New chat']);
+    };
     this.onModelsLoaded = () => {
-      if (this.app.paneId === 'new') redraw();
+      if (this.app.paneId === 'new' || this.app.paneId === 'handoff') redraw();
     };
     const finish = (r: 'start' | 'cancel' | undefined) => {
       if (r === 'cancel') return this.app.closePane();
@@ -438,14 +432,15 @@ export class Controller {
       const model = this.modelList(agent)[f.model];
       const effort = effortsFor(agent, model)[f.effort];
       this.app.closePane(false);
+      if (src) return void this.handoff(src.id, agent, { model, effort, skipPermissions: f.skip });
       this.newThread({ agent, model, effort, cwd: dir, skipPermissions: f.skip });
     };
-    this.app.showPane('New chat', newChatLines(f, info()), {
-      id: 'new',
+    this.app.showPane(src ? 'Hand off' : 'New chat', newChatLines(f, info()), {
+      id: src ? 'handoff' : 'new',
       bare: true,
       hint: NEW_CHAT_HINT,
-      // <project> / New chat; with a chat in front the app puts that chat's project first
-      crumb: cur ? ['New chat'] : [projectName(folder), 'New chat'],
+      // <the form's project> / New chat (the app adds no project of its own to this one)
+      crumb: [projectName(folder), src ? 'Hand off' : 'New chat'],
       onKey: key => {
         finish(newChatKey(f, key, info()));
         return true;
@@ -571,13 +566,7 @@ export class Controller {
       this.app.select(this.app.entries.findIndex(e => e.id === id));
     };
     const handoffFrom = async (id?: string) => {
-      const row = id && this.store.getThread(id);
-      if (!row) return;
-      const i = await this.app.choose(`continue "${row.title}" with…`, AGENTS.filter(a => a !== row.agent));
-      if (i !== undefined) {
-        this.app.closePane(false);
-        await this.handoff(row.id, AGENTS.filter(a => a !== row.agent)[i]);
-      }
+      if (id && this.store.getThread(id)) this.newChatScreen({ from: id });
     };
     this.app.showPane('Memory', memoryScreenLines(this.memoryItems(), 0, where()), {
       id: 'memory',
@@ -845,14 +834,22 @@ export class Controller {
     const rows = () => this.store.listArtifacts(threadId);
     const draw = () => {
       st.sel = Math.min(st.sel, Math.max(0, rows().length - 1));
-      this.app.updatePane(this.artifactLines(threadId, st.sel, st.versions));
+      this.app.updatePane(body());
     };
+    // "Artifacts  ·  Cake order page        .chorus/threads/t_7k2/artifacts/" like the mockup, then the list
+    const where = threadId ? path.relative(this.store.projectOf(threadId), this.store.artifactsDir(threadId)) + '/' : '';
+    const body = (): PaneLine[] => [
+      [['Artifacts', join2('1', T.chorus)], ...(title ? ([[`  ·  ${title}`]] as Seg[]) : []), [`        ${where}`, T.dim]],
+      '',
+      ...this.artifactLines(threadId, st.sel, st.versions),
+    ];
     const open = (mode?: OpenConfig['mode']) => {
       const a = rows()[st.sel];
       if (a) void this.openArtifact(a.thread_id, a.path, mode).then(() => draw());
     };
-    this.app.showPane(title ? `Artifacts · ${title}` : 'Artifacts', this.artifactLines(threadId, 0, false), {
+    this.app.showPane(title ? `Artifacts · ${title}` : 'Artifacts', body(), {
       id: 'artifacts',
+      bare: true,
       hint: ARTIFACTS_HINT,
       crumb: title ? [title, 'Artifacts'] : ['Artifacts'],
       onKey: key => {
@@ -958,8 +955,8 @@ export class Controller {
       });
       const cur = rows[Math.min(sel, rows.length - 1)];
       out.push('');
-      out.push([['Link     ', T.dim], this.preview?.url ? [this.preview.urlFor(cur.thread_id, cur.path), LINK, 'link'] : ['press ⏎ to open it in the browser: it reloads while the agent keeps editing', T.dim], ...(this.preview?.url ? ([['   ● live reload', T.ok]] as Seg[]) : [])] as Seg[]);
-      out.push([['File     ', T.dim], [cur.abs]] as Seg[]);
+      out.push([['Link   ', T.dim], this.preview?.url ? [this.preview.urlFor(cur.thread_id, cur.path), LINK, 'link'] : ['press ⏎ to open it in the browser: it reloads while the agent keeps editing', T.dim], ...(this.preview?.url ? ([['   ● live reload', T.ok]] as Seg[]) : [])] as Seg[]);
+      out.push([['File   ', T.dim], [cur.abs.replace(process.env.HOME ?? '\0', '~')]] as Seg[]);
       if (showVersions) {
         out.push('', [[`Versions of ${cur.path}`, T.dim]] as Seg[]);
         versionsOf(cur.thread_id, cur.path).forEach((v, i) => out.push([[`  v${i + 1}  `, T.chorus], [v.version + '  '], [this.ago(v.ts), T.dim]] as Seg[]));
@@ -975,7 +972,7 @@ export class Controller {
   activityView(id: string, title: string) {
     let k = 0;
     const lines = () => this.activityLines(id, ACTIVITY_KINDS[k]);
-    const hint = (): RichLine => [[' f ', BTN, 'filter'], [' filter  '], [' r ', BTN, 'raw'], [' raw trace  '], [' ↑↓ ', BTN], [' scroll  '], [' esc ', BTN, 'back'], [' back']];
+    const hint = (): RichLine => hints(chip('r', 'raw trace', 'raw'), chip('f', 'filter', 'filter'), chip('↑↓', 'scroll'), chip('esc', 'back', 'back'));
     const next = () => {
       k = (k + 1) % ACTIVITY_KINDS.length;
       this.app.updatePane(lines());
@@ -1039,11 +1036,11 @@ export class Controller {
     const count = (kind: string) => rows.filter(r => (kind === 'all' ? true : r.kind === kind)).length;
     const bar: Seg[] = ACTIVITY_KINDS.flatMap((kind): Seg[] => {
       const label = `${kind} ${kind === 'error' ? 0 : count(kind)}`;
-      return [[kind === ACTIVITY_KINDS[ACTIVITY_KINDS.indexOf(filter)] ? `[${label}]` : ` ${label} `, kind === filter ? join2('1', T.fg, T.bgSel) : kind === 'error' ? T.err : T.fg, `kind:${kind}`], [' ']];
+      return [[` ${label} `, kind === filter ? join2('1', T.fg, T.bgSel) : kind === 'error' ? T.err : T.fg, `kind:${kind}`], [' ']];
     });
     const out: PaneLine[] = [
-      [['Activity', join2('1', T.chorus)], [`  ·  ${root.title}`], [`          in ${tokensIn}  out ${tokensOut} tokens${cost ? ` · $${cost.toFixed(2)}` : ''}`, T.dim]],
-      [...bar, ['  f cycles', T.dim]],
+      [['Activity', join2('1', T.chorus)], [`  ·  ${root.title}`], [`          in ${kTokens(tokensIn)}  out ${kTokens(tokensOut)} tokens${cost ? ` · $${cost.toFixed(2)}` : ''}`, T.dim]],
+      [...bar, ['   f cycles', T.dim]],
       '',
     ];
     const shown = rows.filter(r => filter === 'all' || r.kind === filter);

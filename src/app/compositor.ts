@@ -122,8 +122,6 @@ export interface View {
   overlay?: Overlay;
   /** replaces the thread area (new chat, approvals, memory, skills, files, activity, help …) */
   pane?: { title: string; lines: PaneLine[]; hint: RichLine; /** the lines carry their own heading: no title row */ bare?: boolean };
-  /** approval card, drawn over the bottom of the thread area */
-  card?: { title: string; lines: string[] };
   /** how the menu key is named in the hints */
   menuLabel?: string;
   /** hit id under the mouse: its region lights up */
@@ -207,23 +205,34 @@ export function compose(v: View): { grid: Grid; cursor: { x: number; y: number }
   const Y = L.contentY;
 
   drawTop(grid, v, hits);
-  if (L.sidebar) drawSidebar(grid, v.side, L.mode, L.sidebar, Y, L.contentRows, hits);
+  // a full-area screen (New chat, Approvals, Memory …) has no status line, like the mockup: its key hints are the bottom row
+  const rowsHere = v.pane ? L.contentRows + 1 : L.contentRows;
+  if (L.sidebar) drawSidebar(grid, v.side, L.mode, L.sidebar, Y, rowsHere, hits);
 
   if (v.pane) {
     const titled = !v.pane.bare;
+    // a blank row under the top bar; plain lines start 4 cells in, list rows 2 (their ▸ sits in the gap)
+    let y = Y + 1;
     if (titled) {
-      fill(grid, Y, L.contentX, right, T.bgStatus);
-      put(grid, Y, L.contentX + 1, v.pane.title, join('1', T.chorus, T.bgStatus), right);
+      const [head, ...rest] = v.pane.title.split(' · ');
+      putRich(grid, y, L.contentX + 4, [[head, join('1', T.chorus)], ...(rest.length ? ([[`  ·  ${rest.join(' · ')}`, T.fg]] as Seg[]) : [])], '', right);
+      y += 2;
     }
     v.pane.lines.slice(0, paneRoom(L.contentRows, titled)).forEach((line, i) => {
-      const y = Y + (titled ? 1 : 0) + i;
+      const yy = y + i;
       if (isRow(line)) {
-        if (line.sel) fill(grid, y, L.contentX, right, T.bgSel);
-        if (line.hit) hits.push({ id: line.hit, x0: L.contentX, x1: right, y0: y, y1: y + 1 });
-        putRich(grid, y, L.contentX + 2, line.line, line.sel ? T.bgSel : '', right, hits);
-      } else putRich(grid, y, L.contentX + 2, line, '', right, hits);
+        if (line.sel) fill(grid, yy, L.contentX, right, T.bgSel);
+        if (line.hit) hits.push({ id: line.hit, x0: L.contentX, x1: right, y0: yy, y1: yy + 1 });
+        putRich(grid, yy, L.contentX + 2, line.line, line.sel ? T.bgSel : '', right, hits);
+      } else putRich(grid, yy, L.contentX + 4, line, '', right, hits);
     });
-    putRich(grid, Y + L.contentRows - 1, L.contentX + 1, v.pane.hint, T.dim, right, hits);
+    const hy = Y + rowsHere - 1;
+    const end = putRich(grid, hy, L.contentX + 4, v.pane.hint, '', right, hits);
+    // a flash (approved …, path copied …) has no status line to go to: it shows at the right of the hint row
+    if (v.message) {
+      const m = v.message.length > right - end - 6 ? v.message.slice(0, Math.max(0, right - end - 7)) + '…' : v.message;
+      if (m.length > 1) put(grid, hy, right - m.length - 2, m, T.ok, right);
+    }
   } else if (v.screen) {
     for (let y = 0; y < L.contentRows; y++) {
       const row = v.screen.row(y, L.contentCols);
@@ -231,7 +240,7 @@ export function compose(v: View): { grid: Grid; cursor: { x: number; y: number }
     }
   }
 
-  drawStatus(grid, v, hits);
+  if (!v.pane) drawStatus(grid, v, hits);
 
   let cursor: { x: number; y: number } | null = null;
   if (v.screen && !v.overlay && !v.pane) {
@@ -239,7 +248,6 @@ export function compose(v: View): { grid: Grid; cursor: { x: number; y: number }
     if (!c.hidden && c.y < L.contentRows && c.x < L.contentCols) cursor = { x: L.contentX + c.x, y: Y + c.y };
   }
 
-  if (v.card) drawCard(grid, v.card, L.contentX, L.contentCols, Y, L.contentRows);
   if (v.overlay) drawOverlay(grid, v.overlay, L.contentX, L.contentCols, Y, L.contentRows, hits);
 
   if (v.hover) lightUp(grid, hits, v.hover);
@@ -247,7 +255,7 @@ export function compose(v: View): { grid: Grid; cursor: { x: number; y: number }
 }
 
 /** Lines a pane can show: the content area minus its title row (unless bare) and the hint row. */
-export const paneRoom = (contentRows: number, titled: boolean) => contentRows - (titled ? 2 : 1);
+export const paneRoom = (contentRows: number, titled: boolean) => contentRows - 1 - (titled ? 2 : 0); // + the status row, − the top gap and the hints, − title and its gap
 
 /** Hover: the region under the mouse gets the selection background. */
 function lightUp(grid: Grid, hits: Hit[], id: string) {
@@ -313,7 +321,9 @@ function drawSidebar(grid: Grid, rows: SideRow[], mode: SideMode, w: number, y0:
   }
   const top = rows.filter(r => r.kind !== 'skills' && r.kind !== 'memory');
   const foot = rows.filter(r => r.kind === 'skills' || r.kind === 'memory');
-  const footH = foot.length ? foot.length + 1 : 0; // Skills and Memory: one full-width row each, under a rule
+  // Skills and Memory: one button row each under a rule, with a blank row above each (the mockup's gaps); tight windows drop the gaps
+  const spaced = height >= 16;
+  const footH = foot.length ? foot.length * (spaced ? 2 : 1) + 1 + (spaced ? 1 : 0) : 0; // spaced: a blank row under Memory, above the status bar
   const listH = Math.max(1, height - footH);
   // the list as drawn: a blank row, New chat, a blank row, the PROJECTS heading, then projects and chats
   const lines: (SideRow | 'heading' | 'gap')[] = ['gap'];
@@ -332,7 +342,7 @@ function drawSidebar(grid: Grid, rows: SideRow[], mode: SideMode, w: number, y0:
   });
   if (footH) {
     for (let x = 0; x < w; x++) grid[y0 + listH][x] = { t: '─', s: join(T.line, T.bgSide) };
-    foot.forEach((r, i) => drawSideRow(grid, r, mode, w, y0 + listH + 1 + i, hits));
+    foot.forEach((r, i) => drawSideRow(grid, r, mode, w, y0 + listH + 1 + (spaced ? 2 * i + 1 : i), hits));
   }
 }
 
@@ -355,8 +365,8 @@ function drawSideRow(grid: Grid, r: SideRow, mode: SideMode, w: number, y: numbe
     fill(grid, y, 1, w - 1, b);
     rowHit(r.kind);
     const glyph = r.kind === 'skills' ? '✦' : '◫';
-    put(grid, y, icons ? Math.max(1, (w - 1) >> 1) : 2, glyph, join(T.chorus, b), w - 1);
-    if (!icons) put(grid, y, 4, r.kind === 'skills' ? 'Skills' : 'Memory', join(T.fg, b), w - 1);
+    put(grid, y, icons ? Math.max(1, (w - 1) >> 1) : 2, glyph, join(r.active ? T.chorus : T.dim, b), w - 1);
+    if (!icons) put(grid, y, 4, r.kind === 'skills' ? 'Skills' : 'Memory', join(r.active ? T.fg : T.dim, b), w - 1); // dim like the mockup's footer
     return;
   }
   if (r.kind === 'project') {
@@ -385,7 +395,7 @@ function drawSideRow(grid: Grid, r: SideRow, mode: SideMode, w: number, y: numbe
     return;
   }
   // "● Cake order page  claude" at the project's indent; a chat continued from another: "◐ ↳ Cake order …", two cells in
-  let x = r.child ? 4 : 2;
+  let x = r.child ? 6 : 4; // chats sit under their project's name
   put(grid, y, x, g.ch, join(g.s, b), w);
   x += 2;
   if (r.child) {
@@ -427,7 +437,7 @@ function statusSegs(v: View, bg: string, level: number): Seg[] {
     segs.push([' ', bg], sep);
   }
   if (sb.ctx !== undefined && level < 2) segs.push([` ctx ${Math.round(sb.ctx)}%`, join(sb.ctx >= 85 ? T.warn : T.fg, bg)], [' ', bg], sep);
-  segs.push([level < 2 ? ` ${sb.artifacts} artifact${sb.artifacts === 1 ? '' : 's'}` : ` ${sb.artifacts}◆`, join(T.fg, bg)]);
+  segs.push([level < 2 ? ` ${sb.artifacts} artifact${sb.artifacts === 1 ? '' : 's'}` : ` ${sb.artifacts}◆`, join(T.fg, bg), 'artifacts']);
   if (sb.toast) segs.push([` ${sb.toast}`, join(T.ok, bg)]);
   segs.push([' ', bg]);
   return segs;
@@ -445,36 +455,14 @@ function drawStatus(grid: Grid, v: View, hits: Hit[]) {
     segs = statusSegs(v, bg, level);
     if (width(segs) + right.length + 1 <= v.cols) break;
   }
-  const used = putRich(grid, y, 0, segs, '', v.cols);
+  const used = putRich(grid, y, 0, segs, '', v.cols, hits);
   if (used + right.length < v.cols) {
     if (v.statusRight) put(grid, y, v.cols - right.length, right, join(T.dim, bg));
     else putRich(grid, y, v.cols - right.length - 1, [[right, join('1', T.chorus, T.bgSel), 'menu']], '', v.cols, hits);
   }
 }
 
-/* ---------- card and overlay ---------- */
-
-function drawCard(grid: Grid, c: { title: string; lines: string[] }, x0: number, w: number, y0: number, height: number) {
-  const inner = w - 4;
-  const wrap = (l: string) => {
-    const out: string[] = [];
-    for (let rest = l; rest.length; rest = rest.slice(inner - 2)) out.push(rest.slice(0, inner - 2));
-    return out.length ? out : [''];
-  };
-  const lines = c.lines.flatMap(wrap).slice(0, 8);
-  const boxH = lines.length + 2;
-  const y = y0 + Math.max(0, height - boxH);
-  const x = x0 + 1;
-  const border = join('1', T.err, T.bgBox);
-  put(grid, y, x, '┌' + '─'.repeat(inner) + '┐', border);
-  put(grid, y, x + 2, ` ${c.title} `, border);
-  lines.forEach((l, i) => {
-    put(grid, y + 1 + i, x, '│', border);
-    put(grid, y + 1 + i, x + 1, (' ' + l).padEnd(inner).slice(0, inner), join(T.fg, T.bgBox));
-    put(grid, y + 1 + i, x + inner + 1, '│', border);
-  });
-  put(grid, y + boxH - 1, x, '└' + '─'.repeat(inner) + '┘', border);
-}
+/* ---------- overlay ---------- */
 
 function drawOverlay(grid: Grid, o: Overlay, x0: number, w: number, y0: number, height: number, hits: Hit[]) {
   const free = o.lines ?? [];
@@ -509,7 +497,7 @@ function drawOverlay(grid: Grid, o: Overlay, x0: number, w: number, y0: number, 
     blankRow(yy);
     fill(grid, yy, x + 1, x + inner + 1, bg);
     put(grid, yy, x + 2, k, join('1', accent, bg));
-    put(grid, yy, x + 8, label, join(T.fg, bg));
+    put(grid, yy, x + (k === '▸' || k === ' ' ? 4 : 8), label, join(T.fg, bg)); // a choice list (▸ codex) has no key column
     if (hit) hits.push({ id: hit, x0: x + 1, x1: x + inner + 1, y0: yy, y1: yy + 1 });
     yy++;
   });

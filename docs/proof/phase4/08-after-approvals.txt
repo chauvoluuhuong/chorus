@@ -1,14 +1,13 @@
   ‹ Back   Approvals                                                                                                                       ☰ Menu ⌃\
-                            │  Approvals  ·  0 waiting           this project   all projects
-  + New chat             n  │
-                            │  Nothing is waiting for you.
-  PROJECTS                  │
-  ▾ chorus-proof-api-hH6… 1 │  Decided today
-  ◌ Rate limiter      codex │    ✓ approved  notes.md                                      claude  11:15
-  ▾ chorus-proof-JmNGLQ 2   │    ✓ approved  mkdir -p /private/var/…/t_f9e90479/artifacts  claude  11:15
-  ◐ Create calc.js … claude │    ✓ approved  printf "module.exports…calc.js').add(2, 3))"  claude  11:15
-  ◐ codex 2           codex │
                             │
+  + New chat             n  │    Approvals  ·  0 waiting                     this project    all projects
+                            │
+  PROJECTS                  │    Nothing is waiting for you.
+  ▾ chorus-proof-api-ekG… 1 │
+  ◌ Rate limiter      codex │    Decided today
+  ▾ chorus-proof-jPucm9 2   │      ✓ approved  Write notes.md                    claude   13:00
+  ◐ Create calc.js … claude │      ✓ approved  Bash mkdir -p "/…cts" && echo ok  claude   13:00
+  ◐ codex 2           codex │      ✓ approved  Bash cd "/privat…s').add(2, 3))"  claude   13:00
                             │
                             │
                             │
@@ -39,6 +38,7 @@
                             │
                             │
 ────────────────────────────│
+                            │
   ✦ Skills                  │
-  ◫ Memory                  │  ↑↓  select    y  approve    x  deny    ⏎  open chat    tab  this / all projects    esc  back
- chorus  approved: Create file · notes.md                                                                                                     ☰ menu
+                            │
+  ◫ Memory                  │     ↑↓ select    y approve    x deny    ⏎ open chat    esc back                       approved: Create file · notes.md

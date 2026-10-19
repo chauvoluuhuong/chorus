@@ -1,23 +1,22 @@
-  ‹ Back   chorus-proof-JmNGLQ / New chat                                                                                   ! 1 waiting    ☰ Menu ⌃\
-                            │  New chat
-  + New chat             n  │
-                            │  Agent         claude    codex    agy
-  PROJECTS                  │
-  ▾ chorus-proof-api-hH6… 1 │
-  ◌ Rate limiter      codex │  Model         default   gpt-6-luna   gpt-5.6-terra   gpt-5.6-luna
-  ▾ chorus-proof-JmNGLQ !1  │
-  ! Create calc.js … claude │  Effort        default   low   medium   high   xhigh   max    how hard the model thinks
+  ‹ Back   chorus-proof-jPucm9 / New chat                                                                                   ! 1 waiting    ☰ Menu ⌃\
                             │
-                            │  Project      /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-JmNGLQ  ▾
-                            │               recent: /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-api-hH6KjV  · or type any fo
+  + New chat             n  │    New chat
                             │
-                            │  Permissions  [x] Skip permission prompts  --dangerously-bypass-approvals-and-sandbox
+  PROJECTS                  │    Agent       claude      codex      agy
+  ▾ chorus-proof-api-ekG… 1 │               quota ok    quota ok   quota ok
+  ◌ Rate limiter      codex │
+  ▾ chorus-proof-jPucm9 !1  │    Model       default   gpt-6-luna   gpt-5.6-terra   gpt-5.6-luna
+  ! Create calc.js … claude │
+                            │    Effort      default   low   medium   high   xhigh   max    how hard the model thinks
+                            │
+                            │    Project    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-jPucm9 ▾
+                            │               recent: /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-api-ekG7pi  · or type any fo
+                            │
+                            │    Permissions [x] Skip permission prompts  --dangerously-bypass-approvals-and-sandbox
                             │               The agent runs every command and edit without asking.
                             │               Nothing reaches the approvals inbox for this chat.
                             │
-                            │                ⏎ Start chat
-                            │
-                            │
+                            │     ⏎ Start chat
                             │
                             │
                             │
@@ -39,6 +38,7 @@
                             │
                             │
 ────────────────────────────│
+                            │
   ✦ Skills                  │
-  ◫ Memory                  │  ⏎  start    tab  next field    ←/→  change    space  tick    esc  back
- chorus  New chat                                                                                                                             ☰ menu
+                            │
+  ◫ Memory                  │     ⏎ start    tab next field    ←/→ change    space tick

@@ -5,7 +5,7 @@
 | **Status** | ✅ verified with the real CLIs on the Mac, 2026-10-17 |
 | **Versions** | Claude Code 2.1.284, Codex 0.163.0, agy 1.4.0 |
 | **Probe** | `node tools/probe/approval-probe.mjs <cli> <allow\|deny\|ask> [--answer <json>] [--keys '["\r"]'] [--nohook] [--outside]`; results in `fixtures/<cli>/<version>/approval-*/` |
-| **Used by** | `src/app/approval.ts` (detector), `src/app/controller.ts` (cards, `ctrl+\ y/x`) |
+| **Used by** | `src/app/approval.ts` (detector), `src/app/controller.ts` (top bar badge, sidebar `!`, status-line flash, approvals inbox, `ctrl+\ y/x`) |
 
 Question (docs/phase4.md §4): when an agent in a background thread asks "may I run this?", can Chorus show a
 card and answer it? Two mechanisms were tested: **A. a hook decides**, **B. read the prompt on the virtual

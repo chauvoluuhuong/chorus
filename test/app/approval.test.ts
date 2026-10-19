@@ -63,3 +63,10 @@ test('agy: a file change shows what is being written (file and kind), not the co
   assert.equal(a.question, 'Allow creation of this file?');
   assert.deepEqual(a.keys, { approve: '\r', deny: '\x1b' });
 });
+
+test('agy: a command request is the command after "Requesting permission for:", not the lines around it', () => {
+  const a = detectApproval('agy', screen('agy', '1.4.0', 'approval-ask-nohook-enter'));
+  assert.match(a!.what, /^mkdir -p \S+ && touch \S+approval-probe-file\.txt$/);
+  const one = detectApproval('agy', ['● Ran (ls -la /x/mcp) (ctrl+o to expand)', 'Command', '─'.repeat(20), 'Requesting permission for: ls -la /x/mcp', 'Run this command?', '> 1. Yes, run command', '  4. No, cancel']);
+  assert.equal(one?.what, 'ls -la /x/mcp');
+});

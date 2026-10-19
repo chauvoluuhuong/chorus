@@ -1,17 +1,16 @@
   ‹ Back   Skills                                                                                                                          ☰ Menu ⌃\
-                            │  Skills  ·  one library      .chorus/skills (this project; one global library is TD-1)
-  + New chat             n  │
-                            │        NAME             WHAT IT DOES                          claude codex agy
-  PROJECTS                  │  ▸ [on]  cake-pricing     Price a cake from size, layers and …  ✓      ✓     ✓
-  ▾ chorus-proof-api-hH6… 1 │
-  ◌ Rate limiter      codex │  Found in the agents' own folders
-  ▾ chorus-proof-JmNGLQ 3   │    pdf-tools         ~/.agents/skills    codex agy  import ›
-  ◐ Create calc.js … claude │    release-notes     ~/.claude/skills    claude     import ›
-    ◐ ↳ Create calc.… codex │
-  ◐ Reply with only … codex │  Reach  [x] every project you open in Chorus
-                            │         [ ] also when you run claude, codex or agy without Chorus  (later, TD-1)
                             │
+  + New chat             n  │    Skills  ·  one library             .chorus/skills (this project; one global library is TD-1)
                             │
+  PROJECTS                  │          NAME             WHAT IT DOES                          claude codex agy
+  ▾ chorus-proof-api-ekG… 1 │  ▸ [on]  cake-pricing     Price a cake from size, layers and …  ✓      ✓     ✓
+  ◌ Rate limiter      codex │
+  ▾ chorus-proof-jPucm9 3   │    Found in the agents' own folders
+  ◐ Create calc.js … claude │      pdf-tools        ~/.agents/skills     codex agy only    import ›
+    ◐ ↳ Create calc.… codex │      release-notes    ~/.claude/skills     claude only       import ›
+  ◐ Reply with only … codex │
+                            │    Reach  [x] every project you open in Chorus
+                            │           [ ] also when you run claude, codex or agy without Chorus  (later, TD-1)
                             │
                             │
                             │
@@ -39,6 +38,7 @@
                             │
                             │
 ────────────────────────────│
+                            │
   ✦ Skills                  │
-  ◫ Memory                  │  ⏎  on/off    e  edit    n  new    i  import    esc  back
- chorus  Skills                                                                                                                               ☰ menu
+                            │
+  ◫ Memory                  │     ⏎ on/off    e edit    n new    i import    esc back
