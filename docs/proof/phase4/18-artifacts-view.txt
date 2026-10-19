@@ -1,15 +1,14 @@
-  ‹ Back   Create calc.js in the curre… › Artifacts                                                                                        ☰ Menu ⌃\
-  + New chat                │ Artifacts · Create calc.js in the curre…
- PROJECTS                   │  NAME                              VER   BY       UPDATED
- ▾ chorus-proof-api-k4I… 1  │  ▸ notes.md                        v1    claude   just now
-   ◌ Rate limiter     codex │
- ▾ chorus-proof-7xWBJP   3  │  Link     press ⏎ to open it in the browser: it reloads while the agent keeps editing
-   ◐ Create calc.js… claude │  File     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-7xWBJP/.chorus/threads/t_b9113784/artifa
-   ↳ ◐ Create calc.j… codex │
-   ◐ Reply with only… codex │  Files written by tools
-                            │    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-7xWBJP/calc.js
-                            │    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-7xWBJP/.chorus/threads/t_b9113784/artifacts/not
-                            │
+  ‹ Back   chorus-proof-JmNGLQ / Create calc.js in the curre… / Artifacts                                                                  ☰ Menu ⌃\
+                            │ Artifacts · Create calc.js in the curre…
+  + New chat             n  │  NAME                              VER   BY       UPDATED
+                            │  ▸ notes.md                        v1    claude   just now
+  PROJECTS                  │
+  ▾ chorus-proof-api-hH6… 1 │  Link     press ⏎ to open it in the browser: it reloads while the agent keeps editing
+  ◌ Rate limiter      codex │  File     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-JmNGLQ/.chorus/threads/t_f9e90479/artifa
+  ▾ chorus-proof-JmNGLQ 3   │
+  ◐ Create calc.js … claude │  Files written by tools
+    ◐ ↳ Create calc.… codex │    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-JmNGLQ/.chorus/threads/t_f9e90479/artifacts/not
+  ◐ Reply with only … codex │
                             │
                             │
                             │
@@ -40,5 +39,6 @@
                             │
                             │
 ────────────────────────────│
-  ✦ Skills   ◫ Memory       │  ↑↓  select    ⏎  open    f  show in folder    p  copy path    v  versions    esc  back
+  ✦ Skills                  │
+  ◫ Memory                  │  ↑↓  select    ⏎  open    f  show in folder    p  copy path    v  versions    esc  back
  chorus  Artifacts · Create calc.js in the curre…                                                                                             ☰ menu

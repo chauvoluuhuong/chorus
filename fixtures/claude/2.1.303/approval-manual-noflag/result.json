@@ -1,0 +1,7 @@
+{
+  "cli": "claude",
+  "version": "2.1.303",
+  "how": "chorus app (New chat, skip permissions unticked) launches claude with --permission-mode default; no hook. Without the flag the same folder starts in auto mode and never asks.",
+  "prompt": "Run this shell command with your Bash tool: curl -s -o /dev/null -w \"%{http_code}\" https://example.com ; then create a file hello.txt containing hi. Reply done.",
+  "file": "prompt-screen.txt is the chat area of the app (the agent's own screen) while the prompt is up"
+}

@@ -157,7 +157,7 @@ app.write(TASK); // the folder for notes is not mentioned: the agent is told thr
 await sleep(600);
 app.write('\r');
 shot('claude-starts', 'chat 1 is Claude Code (haiku) under its project; the task was typed into its own screen. The top bar says where you are: the chat title');
-check('the top bar shows the path and the sidebar names the chat after the first message', await until(() => /Create calc\.js/.test(side(/Create calc/)) && /‹ Back\s+Create calc/.test(text()[0]), 20000), `${text()[0]} | ${side(/Create calc/)}`);
+check('the top bar shows the path and the sidebar names the chat after the first message', await until(() => /Create calc\.js/.test(side(/Create calc/)) && /‹ Back\s+chorus-proof-\w+ \/ Create calc/.test(text()[0]), 20000), `${text()[0]} | ${side(/Create calc/)}`);
 check('status line has the menu button', /☰ menu/.test(text()[ROWS - 1]), text()[ROWS - 1]);
 
 /* 2. Claude asks for approval while it is in front */
@@ -318,7 +318,7 @@ await resize(100, 30);
 check('100 columns: narrow sidebar (names only), the chat keeps the rest', has(/\+ New chat/) && !text().slice(0, 9).some(l => /claude\s*│/.test(l)) && /☰ Menu/.test(text()[0]), text().slice(0, 6).join('|'));
 shot('size-narrow', '100 columns: the sidebar shrinks to names (the agent name goes), the agent screen gets the room');
 await resize(78, 30);
-check('78 columns: icon sidebar', /\+/.test(text()[1]) && !has(/Skills/), text().slice(0, 6).join('|'));
+check('78 columns: icon sidebar', /\+/.test(text()[2]) && !has(/Skills/), text().slice(0, 6).join('|'));
 shot('size-icons', '70-89 columns: the sidebar is just icons: state dot and agent letter');
 await resize(56, 24);
 check('56 columns: sidebar hidden, top bar and status line stay (the buttons shrink to ☰)', !has(/\+ New chat/) && /☰/.test(text()[0]) && /☰/.test(text()[ROWS - 1] ?? text()[23]), text().slice(0, 4).join('|'));

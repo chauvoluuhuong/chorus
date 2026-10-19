@@ -51,14 +51,16 @@ test('top bar, project tree, child screen and status bar land in the right cells
   const { grid, cursor } = compose(v);
   const t = gridText(grid);
   assert.match(t[0], /^\s+‹ Back\s+fix bug\s+! 2 waiting\s+☰ Menu ⌃\\\s*$/);
-  assert.match(t[1], /^\s+\+ New chat\s+│hello from the agent/);
-  assert.match(t[2], /^ PROJECTS\s+│red 漢字 end/);
-  assert.match(t[3], /^ ▾ cake-shop\s+2\s*│/);
-  assert.match(t[4], /^▎ ?\s*● fix bug\s+claude\s*│/);
-  assert.match(t[5], /^\s+↳ ○ review\s+codex\s*│/);
-  assert.match(t[6], /^ ▸ api\s+!1\s*│/); // a project with a chat waiting for approval shows how many
-  assert.match(t[21], /^─+/); // rule above the footer
-  assert.match(t[22], /^\s+✦ Skills\s+◫ Memory\s*│/); // the two shared things side by side
+  assert.match(t[1], /^\s+│hello from the agent/); // a blank row above New chat
+  assert.match(t[2], /^  \+ New chat\s+n  │red 漢字 end/); // a full-width button with its key
+  assert.match(t[4], /^  PROJECTS\s+│/);
+  assert.match(t[5], /^  ▾ cake-shop 2\s+│/); // the count right after the name
+  assert.match(t[6], /^▎ ● fix bug\s+claude │/);
+  assert.match(t[7], /^    ○ ↳ review\s+codex │/); // a chat continued from another, two cells in
+  assert.match(t[8], /^  ▸ api !1\s+│/); // a project with a chat waiting for approval shows how many
+  assert.match(t[20], /^─+│/); // rule above the footer
+  assert.match(t[21], /^  ✦ Skills\s+│/); // the two shared things, one button row each
+  assert.match(t[22], /^  ◫ Memory\s+│/);
   assert.match(t[23], /^ chorus  fix bug │ claude · sonnet │ 5h ▮▮▮▮▮▮▱▱▱▱ 62% │ ctx 34% │ 3 artifacts\s+☰ menu\s*$/);
   assert.deepEqual(cursor, { x: 29 + 12, y: 2 }); // 4 + two wide chars (4) + 4
 });
@@ -67,10 +69,11 @@ test('the brand chip, the agent colour, the state colour and the selection follo
   const { grid } = compose(view());
   const status = grid[23];
   assert.ok(status[1].s.includes(T.bgBrand) && status[1].s.includes(T.fgBrand), 'chorus chip');
-  const x = gridText(grid)[4].indexOf('claude');
-  assert.ok(grid[4][x].s.includes(T.claude), 'agent name in its colour');
-  assert.ok(grid[4][3].s.includes(T.ok), 'working dot is green');
-  assert.ok(grid[4][3].s.includes(T.bgSel), 'active chat has the selection background');
+  const x = gridText(grid)[6].indexOf('claude');
+  assert.ok(grid[6][x].s.includes(T.claude), 'agent name in its colour');
+  assert.ok(grid[6][2].s.includes(T.ok), 'working dot is green');
+  assert.ok(grid[6][2].s.includes(T.bgSel), 'active chat has the selection background');
+  assert.ok(grid[2][1].s.includes(T.bgBtn) && grid[2][26].s.includes(T.bgBtn), 'New chat is a button across the sidebar');
   const menu = gridText(grid)[0].indexOf('☰ Menu');
   assert.ok(grid[0][menu].s.includes(T.bgSel) && grid[0][menu].s.includes('1'), 'the Menu button is a filled chip');
   assert.ok(grid[23][gridText(grid)[23].indexOf('☰ menu')].s.includes(T.bgSel), 'so is the menu button of the status line');
@@ -112,10 +115,10 @@ test('wide characters keep the row width', async () => {
 
 test('narrow, icon and hidden sidebars; the agent area grows as they shrink', () => {
   const narrow = gridText(compose(view({ cols: 100 })).grid);
-  assert.match(narrow[4], /● fix bug/);
-  assert.ok(!/claude\s*│/.test(narrow[4]), 'narrow drops the agent name');
+  assert.match(narrow[6], /● fix bug/);
+  assert.ok(!/claude\s*│/.test(narrow[6]), 'narrow drops the agent name');
   const icons = gridText(compose(view({ cols: 80 })).grid);
-  assert.match(icons[3], /^▎\s*●\s*│/, 'icons: just the state dot');
+  assert.match(icons[5], /^▎\s*●\s*│/, 'icons: just the state dot');
   const hidden = compose(view({ cols: 60 }));
   assert.ok(!hidden.hits.some(h => h.id.startsWith('chat:')));
   assert.ok(hidden.hits.some(h => h.id === 'menu'), 'the top bar stays');
@@ -125,9 +128,9 @@ test('narrow window: the path is cut with an ellipsis before the buttons, which 
   const t = gridText(compose(view({ cols: 78, side: SIDE.slice(0, 4), top: { back: true, crumb: ['a-very-long-chat-title-that-comes-first', 'a very long second part that cannot fit'], waiting: 2 } })).grid)[0];
   assert.match(t, /…\s{2,}! 2\s+☰\s*$/, t);
   const icons = gridText(compose(view({ cols: 78 })).grid);
-  assert.ok(!/▾\w/.test(icons[2]), 'icon mode: a project row is just its caret, no clipped name');
-  assert.match(icons[2], /^\s*▾\s*│/);
-  assert.match(icons[5], /^\s*▸\s*!\s*│/, 'a folded project with an approval waiting keeps its !');
+  assert.ok(!/▾\w/.test(icons[4]), 'icon mode: a project row is just its caret, no clipped name');
+  assert.match(icons[4], /^\s*▾\s*│/);
+  assert.match(icons[7], /^\s*▸\s*!\s*│/, 'a folded project with an approval waiting keeps its !');
 });
 
 test('a long chat list scrolls without losing or repeating a row, and keeps the active chat in view', () => {

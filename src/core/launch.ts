@@ -183,7 +183,9 @@ export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
         ...(o.resumeId ? ['--resume', o.resumeId] : ['--session-id', sessionId!]),
         ...(o.model ? ['--model', o.model] : []),
         ...(effort ? ['--effort', effort] : []),
-        ...skip,
+        // Claude Code 2.1.302+ starts in "auto mode" (its classifier approves for you) and would never ask: without skip,
+        // this chat runs in manual mode so its requests reach the approvals inbox (docs/integrations/approvals.md)
+        ...(o.skipPermissions ? skip : ['--permission-mode', 'default']),
         '--mcp-config', JSON.stringify({ mcpServers: { chorus: mcp } }),
         // Chorus's own tools are read-only: don't ask the user about them
         '--allowedTools', TOOL_NAMES.map(t => `mcp__chorus__${t}`).join(','),

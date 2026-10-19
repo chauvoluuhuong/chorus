@@ -45,12 +45,25 @@ export function detectApproval(agent: AgentId, lines: string[]): PendingApproval
   if (agent === 'claude') {
     let start = qi - 1;
     while (start >= 0 && !/^[\s│┃|]*─{10,}/.test(lines[start])) start--;
-    framed = lines
-      .slice(start + 1, qi)
-      .map(l => l.replace(/^[\s│┃|]+/, '').replace(/\s+$/, ''))
-      .filter(l => l && !/^[╌─━┄\-]+$/.test(l) && !/^\d+(\s|$)/.test(l) && !/^(Hook |settings\.json)/.test(l))
-      .slice(0, 3)
-      .join(' · ');
+    const frame = lines.slice(start + 1, qi).map(l => l.replace(/^[\s│┃|]+/, '').replace(/\s+$/, ''));
+    const keep = (l: string) => l && !/^\d+(\s|$)/.test(l) && !/^(Hook |settings\.json|Tip: |This command requires approval|chorus probe)/.test(l);
+    // a Bash request boxes its command between two dashed rules: header · description · the command (last, Activity shows it)
+    const rule = (l: string) => /^[╌┄]{10,}$/.test(l);
+    const box = frame.findIndex(rule);
+    const boxEnd = box < 0 ? -1 : frame.findIndex((l, i) => i > box && rule(l));
+    // a file request names the file in its question; its preview can be so long that the header scrolled off the screen
+    const fileQ = /^Do you want to (create|make this edit to|overwrite|delete) (.+?)\?$/.exec(lines[qi].trim());
+    const kinds: Record<string, string> = { create: 'Create file', 'make this edit to': 'Edit file', overwrite: 'Overwrite file', delete: 'Delete file' };
+    if (fileQ) {
+      framed = `${kinds[fileQ[1]]} · ${fileQ[2]}`;
+    } else if (box >= 0 && boxEnd > box) {
+      const command = frame.slice(box + 1, boxEnd).filter(keep).join(' ');
+      // the header sits under the solid rule; when that scrolled off, what is above the box is the chat, not the header
+      const header = start >= 0 ? frame.slice(0, box).filter(keep).slice(0, 2) : [];
+      framed = [...header, command].filter(Boolean).join(' · ');
+    } else if (start >= 0) {
+      framed = frame.filter(l => keep(l) && !/^[╌─━┄\-]+$/.test(l)).slice(0, 3).join(' · ');
+    }
   }
   // agy frames a file change as "Create file" / rule / "<path>  +5" / the code: say what it is, not the code
   let fileChange = '';

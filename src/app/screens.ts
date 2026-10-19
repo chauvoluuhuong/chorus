@@ -68,7 +68,9 @@ export function newChatLines(f: NewChatForm, info: NewChatInfo): PaneLine[] {
     [label(2, 'Effort'), ...efforts.flatMap((e, i): Seg[] => [chipText(e, i === f.effort, `effort:${i}`), [' ']]), ['  how hard the model thinks', T.dim]],
     '',
     { line: [label(3, 'Project'), [home(f.folder), f.focus === 3 ? T.fg : LINK, 'folder'], f.focus === 3 ? ['▌', T.chorus] : ['  ▾', T.dim]], hit: 'folder' },
-    [['             '], ['recent: ', T.dim], ...info.recent.slice(0, 3).flatMap((r, i): Seg[] => [[home(r), LINK, `recent:${i}`], ['  ']]), ['· or type any folder', T.dim]],
+    info.recent.length
+      ? [['             '], ['recent: ', T.dim], ...info.recent.slice(0, 3).flatMap((r, i): Seg[] => [[home(r), LINK, `recent:${i}`], ['  ']]), ['· or type any folder', T.dim]]
+      : [['             '], ['type any folder', T.dim]],
     '',
     { line: [label(4, 'Permissions'), [f.skip ? '[x]' : '[ ]', f.skip ? T.warn : T.fg, 'skip'], [' Skip permission prompts', T.fg, 'skip'], ['  ' + info.skipFlag[agent], T.dim]], hit: 'skip' },
     f.skip

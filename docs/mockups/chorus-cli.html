@@ -163,6 +163,8 @@ nav.scenes .group:first-child { padding-top: 0; }
    between groups, 2 cols between buttons. */
 .side { width: 30ch; padding: 1.6em 0 0.8em; gap: 0; }
 .side .grp { margin-bottom: 1.6em; }
+.side .grp:first-child { margin-top: 0.8em; }
+.side .hd { margin-bottom: 0.4em; }
 .side .newrow { margin: 0 1ch; padding: 0 1ch; border: 0; background: #22303a; border-radius: 3px; display: flex; justify-content: space-between; line-height: 1.6; }
 .side .kbd { color: var(--t-dim); }
 .side .hd { display: block; padding: 0 2ch; line-height: 1.6; font-size: 11px; }
@@ -175,10 +177,11 @@ nav.scenes .group:first-child { padding-top: 0; }
 .side .ft { margin-top: auto; padding: 0.4em 2ch 0; }
 .side .it { margin-top: 0; }
 .side .pj { cursor: pointer; margin-top: 0.4em; }
-.side .ft { display: flex; gap: 1ch; padding: 0.8em 1ch 0; border-top: 1px solid var(--t-line); }
-.side .ft .kb { padding: 0 1ch; }
+.side .ft { display: flex; flex-direction: column; gap: 0.4em; padding: 0.8em 1ch 0; border-top: 1px solid var(--t-line); }
+.side .ft .kb { display: block; padding: 0 1ch; line-height: 1.6; }
 .side .newrow.on, .side .kb.on { background: var(--t-sel); outline: 1px solid var(--t-chorus); outline-offset: -1px; }
-.side-icons .ft { flex-direction: column; align-items: center; }
+.side-icons .ft { align-items: center; }
+.side-icons .ft .kb { display: inline-block; }
 .side-narrow { width: 22ch; }
 .side-narrow .it { margin-top: 0; }
 .side-icons { width: 7ch; padding-top: 1.6em; }
@@ -418,7 +421,7 @@ const SCENES = [
     chrome: '~/projects/cake-shop — chorus',
     caption: 'Like any AI chat app: pick the agent, the model, the project folder and whether it may skip permission prompts, then Enter. You type your first message in the agent itself. This is also the first screen when you run chorus. Click the agents and the checkbox.',
     side: { active: -1 },
-    top: { back: 'work', crumb: [['chorus'], ['New chat']] },
+    top: { back: 'work', crumb: [['cake-shop', 'new'], ['New chat']] },
     screen: () => {
       const a = NC_AGENTS[nc.agent];
       const agents = NC_AGENTS.map((x, i) => `<span class="clk${i === nc.agent ? ' sel' : ''}" data-nc-agent="${i}"> <span class="${x.cls}">${x.name}</span> </span>`).join('    ');
@@ -687,7 +690,7 @@ ${SKILLS.map((s, i) => pick(i, sel, `${i === sel ? '▸' : ' '} ${s.on ? '<span 
     id: 'artifacts', group: 'Artifacts', title: 'Artifacts', cmd: '⌃\\ a  (or chorus artifacts)',
     chrome: '~/projects/cake-shop — chorus',
     caption: 'Every non-code file the agents produced for this chat. Move with ↑ ↓ and press Enter, or just click a file or its link: it opens with your computer\'s default app (a browser, with live reload while the agent keeps editing). Try it.',
-    top: { back: 'work', crumb: [['chorus', 'new'], ['Cake order page', 'work'], ['Artifacts']] },
+    top: { back: 'work', crumb: [['cake-shop', 'new'], ['Cake order page', 'work'], ['Artifacts']] },
     items: ART.length,
     enter: sel => ({ toast: `Opened ${URLBASE}${ART[sel][0]}  (macOS: open)` }),
     screen: sel => `  <span class="ch b">Artifacts</span>  ·  Cake order page        <span class="d">.chorus/threads/t_7k2/artifacts/</span>
@@ -712,7 +715,7 @@ ${ART.map((r, i) => pick(i, sel, `${i === sel ? '▸' : ' '} ${r[0].padEnd(22)}$
     id: 'openfail', group: 'Artifacts', title: 'Open fails: choose how', cmd: '',
     chrome: '~/projects/cake-shop — chorus',
     caption: 'If the system command is missing or fails (no desktop, an SSH session, a minimal Linux), Chorus does not just show an error. It asks how you want to open the file, and remembers the answer for this project.',
-    top: { back: 'work', crumb: [['chorus', 'new'], ['Cake order page', 'work'], ['Artifacts']] },
+    top: { back: 'work', crumb: [['cake-shop', 'new'], ['Cake order page', 'work'], ['Artifacts']] },
     dim: true,
     interactive: 'overlay',
     screenFrom: 'artifacts',
@@ -738,7 +741,7 @@ ${ART.map((r, i) => pick(i, sel, `${i === sel ? '▸' : ' '} ${r[0].padEnd(22)}$
     id: 'activity', group: 'Debugging', title: 'Activity', cmd: '⌃\\ e  (or chorus activity)',
     chrome: '~/projects/cake-shop — chorus',
     caption: 'One timeline across a chat and the chats continued from it: tool calls, MCP calls, usage, handoffs.',
-    top: { back: 'work', crumb: [['chorus', 'new'], ['Cake order page', 'work'], ['Activity']] },
+    top: { back: 'work', crumb: [['cake-shop', 'new'], ['Cake order page', 'work'], ['Activity']] },
     screen:
 `  <span class="ch b">Activity</span>  ·  Cake order page          <span class="d">in 41.2k  out 3.1k tokens · $0.21</span>
   <span class="sel"> all 9 </span>  tool 3   mcp 1   approval 1   file 2   usage 1   <span class="er">error 0</span>     <span class="d">f cycles</span>
@@ -821,16 +824,16 @@ function topbar(s, mode = 'full') {
   const small = mode === 'icons' || mode === 'hidden';
   const t = s.top || {};
   const back = t.back === undefined ? (s.side ? 'new' : 'work') : t.back;
-  // the path says where you are, nothing else: no product name, no project (the sidebar has the project)
-  const crumb = t.crumb || (s.side ? [[(s.status && s.status.title) || 'Cake order page']] : [[s.title]]);
+  // the path says where you are: <project> / <chat> [/ Artifacts]; shared screens (Skills, Memory, Approvals) have no project
+  const crumb = t.crumb || (s.side ? [['cake-shop', 'new'], [(s.status && s.status.title) || 'Cake order page']] : [[s.title]]);
   const n = THREADS.filter((x, i) => ((s.side && s.side.states && s.side.states[i]) || x.state) === 'approval').length;
   // small windows keep only the last two parts of the path
-  const parts = crumb.filter(c => c[0] && c[0] !== 'chorus' && c[0] !== 'cake-shop');
+  const parts = crumb.filter(c => c[0] && c[0] !== 'chorus');
   const shown = small && parts.length > 2 ? [['…'], ...parts.slice(-2)] : parts;
   const crumbs = shown.map((c, i, a) => {
     const last = i === a.length - 1;
     const cls = last ? 'last' : c[1] ? 'lk' : '';
-    return `<span${c[1] && !last ? ` data-go="${c[1]}"` : ''}${cls ? ` class="${cls}"` : ''}>${esc(c[0])}</span>` + (last ? '' : '<span class="sep">›</span>');
+    return `<span${c[1] && !last ? ` data-go="${c[1]}"` : ''}${cls ? ` class="${cls}"` : ''}>${esc(c[0])}</span>` + (last ? '' : '<span class="sep">/</span>');
   }).join('');
   return `<div class="top">
     <span class="kb back${back ? '' : ' off'}"${back ? ` data-go="${back}"` : ''}>‹ Back</span>

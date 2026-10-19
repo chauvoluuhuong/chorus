@@ -1,13 +1,13 @@
-  ‹ Back   codex 2                                                                                                          ! 1 waiting    ☰ Menu ⌃\
-  + New chat                │
- PROJECTS                   │  >_ OpenAI Codex (v0.163.0)
- ▾ chorus-proof-api-k4I… 1  │     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-7xWBJP
-   ◌ Rate limiter     codex │  permissions: YOLO mode
- ▾ chorus-proof-7xWBJP   !1 │
-   ! Create calc.js… claude │
-▎  ● codex 2          codex │
+  ‹ Back   chorus-proof-JmNGLQ / codex 2                                                                                    ! 1 waiting    ☰ Menu ⌃\
                             │
-                            │
+  + New chat             n  │  >_ OpenAI Codex (v0.163.0)
+                            │     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-JmNGLQ
+  PROJECTS                  │  permissions: YOLO mode
+  ▾ chorus-proof-api-hH6… 1 │
+  ◌ Rate limiter      codex │
+  ▾ chorus-proof-JmNGLQ !1  │
+  ! Create calc.js … claude │
+▎ ● codex 2           codex │
                             │
                             │
                             │
@@ -36,9 +36,9 @@
                             │
                             │
                             │ ┌─ Create calc.js in the curre… (claude) asks for approval ───────────────────────────────────────────────────────────┐
-                            │ │ Bash command · Tip: auto mode handles these prompts for you — choose "switch to auto mode" below · Create Chorus ar │
-                            │›│ tifacts directory if missing                                                                                        │
-                            │ │ Do you want to proceed?                                                                                             │
-────────────────────────────│ │ ⌃\ y  approve    ⌃\ x  deny    (or switch to the chat and answer there)                                             │
-  ✦ Skills   ◫ Memory       │ └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+                            │ │ Bash command · Create calc.js and run it once with node · printf "module.exports = {\n add(a, b) {\n return a + b;\ │
+                            │›│ n },\n};\n" > calc.js && node -e "console.log(require('./calc.js').add(2, 3))"                                      │
+────────────────────────────│ │ Do you want to proceed?                                                                                             │
+  ✦ Skills                  │ │ ⌃\ y  approve    ⌃\ x  deny    (or switch to the chat and answer there)                                             │
+  ◫ Memory                  │ └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
  chorus  codex 2 │ codex · low skip │ 0 artifacts                                                                                             ☰ menu

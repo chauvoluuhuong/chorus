@@ -602,7 +602,7 @@ export class App extends EventEmitter {
 
   /** The sidebar: New chat, then each project with its chats, then Skills and Memory. */
   sideRows(): SideRow[] {
-    const rows: SideRow[] = [{ kind: 'new' }];
+    const rows: SideRow[] = [{ kind: 'new', active: this.pane?.id === 'new' }];
     const order: string[] = [];
     for (const e of this.entries) if (!order.includes(e.cwd)) order.push(e.cwd);
     const act = this.pane ? undefined : this.current;
@@ -660,7 +660,10 @@ export class App extends EventEmitter {
       : undefined;
     const message = this.flash || this.notice || (!act || this.pane ? (this.pane ? this.pane.title : 'no chats yet') : undefined);
     // where you are, nothing else: the chat title, or the screen (after the chat it belongs to, for its Artifacts or Activity)
-    const crumb = this.pane ? (this.pane.crumb ?? [this.pane.title]) : act ? [act.title] : [];
+    // the path is <project> / <chat> [/ Artifacts]; Approvals, Memory and Skills belong to no project
+    const inProject = !this.pane || ['new', 'artifacts', 'activity'].includes(this.pane.id ?? '');
+    const path = this.pane ? (this.pane.crumb ?? [this.pane.title]) : act ? [act.title] : [];
+    const crumb = inProject && act && path.length ? [projectName(act.cwd), ...path] : path;
     const { grid, cursor, hits } = compose({
       cols,
       rows,

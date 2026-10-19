@@ -60,13 +60,14 @@ test('two chats: top bar, project tree, switching keeps each screen, input goes 
   h.app.start();
   await h.until(l => has(l, /READY alpha/), 'alpha screen');
   let s = h.screen();
-  assert.match(s[0], /‹ Back\s+alpha\s+☰ Menu/);
-  assert.ok(!/chorus/.test(s[0]), 'the top bar says where you are, not the product or the project');
-  assert.match(s[1], /\+ New chat/);
-  assert.match(s[2], /PROJECTS/);
-  assert.match(s[3], /▾ .*\s+2\s*│/); // the project, with its two chats
-  assert.match(s[4], /▎.*alpha.*fake/);
-  assert.match(s[5], /beta/);
+  assert.match(s[0], /‹ Back\s+\S+ \/ alpha\s+☰ Menu/, 'the top bar path is <project> / <chat>');
+  assert.doesNotMatch(s[1].slice(0, 28), /\w/, 'a blank row between the top bar and New chat');
+  assert.match(s[2], /\+ New chat/);
+  assert.doesNotMatch(s[3].slice(0, 28), /\w/, 'a blank row between New chat and PROJECTS');
+  assert.match(s[4], /PROJECTS/);
+  assert.match(s[5], /▾ .*\s+2\s*│/); // the project, with its two chats
+  assert.match(s[6], /▎.*alpha.*fake/);
+  assert.match(s[7], /beta/);
   assert.match(s[23], /chorus\s+alpha\s+│\s*fake/);
 
   h.type('one\r');
@@ -75,7 +76,7 @@ test('two chats: top bar, project tree, switching keeps each screen, input goes 
   h.type('\x002'); // menu key, then 2
   await h.until(l => has(l, /READY beta/), 'beta screen');
   assert.ok(!has(h.screen(), /READY alpha/));
-  assert.match(h.screen()[5], /▎.*beta/);
+  assert.match(h.screen()[7], /▎.*beta/);
   h.type('two\r');
   await h.until(l => has(l, /got: "two"/), 'beta echo');
 
@@ -193,7 +194,7 @@ test('mouse: clicks run the region under them; releases and wheel events do noth
   await sleep(150);
   assert.ok(has(h.screen(), /READY alpha/), 'wheel changed nothing');
   const before = h.raw().length;
-  h.type('\x1b[<35;5;5M'); // motion over the second chat
+  h.type('\x1b[<35;5;8M'); // motion over the second chat
   await sleep(200);
   assert.match(h.raw().slice(before), /48;2;38;48;64/, 'the hovered row lights up');
   h.click('chat:1');
@@ -264,7 +265,7 @@ test('sidebar: a project folds and opens by click; a folded project shows a red 
   const project = h.app.hits.find(x => x.id.startsWith('project:'))!.id;
   h.click(project);
   await h.until(l => !has(l, /beta/), 'chats hidden');
-  assert.match(h.screen()[3], /▸ .*2/);
+  assert.match(h.screen()[5], /▸ .*2/);
   h.app.setState('beta', 'approval');
   await h.until(l => has(l, /▸ .*!1/), 'the count of waiting chats on the folded project');
   h.click(project);

@@ -6,7 +6,7 @@ import { buildInteractive, SKIP_FLAG, type InteractiveOpts, type Launch } from '
 import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, syncSkills, sourceDir } from '../core/skills.ts';
 import type { Store, ThreadRow } from '../core/store.ts';
 import type { AgentId, Session } from '../core/types.ts';
-import { App, type Entry } from './app.ts';
+import { App, projectName, type Entry } from './app.ts';
 import { detectApproval, type PendingApproval } from './approval.ts';
 import { detectLimit } from './limits.ts';
 import { effortsFor, loadAgyModels, modelsFor } from './models.ts';
@@ -444,7 +444,8 @@ export class Controller {
       id: 'new',
       bare: true,
       hint: NEW_CHAT_HINT,
-      crumb: ['New chat'],
+      // <project> / New chat; with a chat in front the app puts that chat's project first
+      crumb: cur ? ['New chat'] : [projectName(folder), 'New chat'],
       onKey: key => {
         finish(newChatKey(f, key, info()));
         return true;

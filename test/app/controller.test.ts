@@ -88,18 +88,18 @@ test('new thread: store row, process, live transcript tailing and state follow t
   const e = r.c.newThread({ agent: 'codex', title: 'fix it' });
   await r.until(() => has(r.screen(), /READY codex/), 'agent screen');
   assert.equal(r.store.getThread(e.id)?.agent, 'codex');
-  assert.match(r.screen()[4], /▎.*fix it/);
+  assert.match(r.screen()[6], /▎.*fix it/);
 
   // mid-turn transcript appears: the thread is working and the store has the user turn
   const w = writeRollout(r.home, r.project, { done: false });
   await r.until(() => r.store.getTurns(e.id).length > 0, 'turns tailed into the store');
   assert.equal(r.store.getThread(e.id)?.native_session_id, w.id);
-  await r.until(() => /●/.test(r.screen()[4]), 'working dot');
+  await r.until(() => /●/.test(r.screen()[6]), 'working dot');
 
   // the rest arrives while the TUI keeps running
   fs.appendFileSync(w.file, w.rest.join('\n') + '\n');
   await r.until(() => r.store.getToolCalls(e.id).some(t => t.target.includes('chorus-probe')), 'tool call tailed');
-  await r.until(() => /○/.test(r.screen()[4]), 'waiting dot after task_complete');
+  await r.until(() => /○/.test(r.screen()[6]), 'waiting dot after task_complete');
   assert.equal(r.store.getThread(e.id)?.state, 'waiting');
   assert.ok((r.store.getUsage(e.id)?.outputTokens ?? 0) > 0);
   } finally {
@@ -227,7 +227,7 @@ test('New chat screen: Enter alone starts with the defaults; esc and Back return
     assert.match(t, new RegExp('Project\\s+' + r.project.replace(/[/.]/g, '\\$&')));
     assert.match(t, /\[ \] Skip permission prompts\s+--dangerously-skip-permissions/);
     assert.match(t, /off: the agent asks, and Chorus shows it in the approvals inbox/);
-    assert.match(r.screen()[0], /‹ Back\s+New chat\s+☰ Menu/);
+    assert.match(r.screen()[0], /‹ Back\s+chorus-proj-\w+ \/ New chat\s+☰ Menu/, 'the path is <project> / New chat');
     r.type('\x1b');
     await r.until(() => !has(r.screen(), /Agent\s+claude\s+codex/), 'esc cancels');
     assert.equal(r.app.entries.length, 0);

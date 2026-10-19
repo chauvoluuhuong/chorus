@@ -134,6 +134,12 @@ test('skip permissions: the flag per CLI is added only when asked, and resumed c
   }
   assert.equal(SKIP_FLAG.codex, '--dangerously-bypass-approvals-and-sandbox');
   assert.ok(buildInteractive('claude', { ...base, resumeId: 'abc', skipPermissions: true }).args.includes('--dangerously-skip-permissions'));
+  // Claude Code 2.1.302+ starts in auto mode and would never ask: without skip it runs in manual mode, new or resumed
+  for (const o of [base, { ...base, resumeId: 'abc' }]) {
+    const a = buildInteractive('claude', o).args;
+    assert.equal(a[a.indexOf('--permission-mode') + 1], 'default', 'claude asks, so the approvals inbox gets its requests');
+  }
+  assert.ok(!buildInteractive('claude', { ...base, skipPermissions: true }).args.includes('--permission-mode'));
 });
 
 test('effort: the flag per CLI, only when a level is chosen, kept for resumed chats; Codex gets it as a config override', () => {

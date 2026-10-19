@@ -1,14 +1,13 @@
   ‹ Back   Approvals                                                                                                        ! 1 waiting    ☰ Menu ⌃\
-  + New chat                │  Approvals  ·  1 waiting           this project   all projects
- PROJECTS                   │
- ▾ chorus-proof-api-k4I… 1  │  ▸ Create calc.js in the curre…  claude  waiting 7s
-   ◌ Rate limiter     codex │      Create Chorus artifacts directory if missing   [runs a command]
- ▾ chorus-proof-7xWBJP   !1 │       y Approve   x Deny   ⏎ Open chat
-   ! Create calc.js… claude │
-   ● codex 2          codex │  Decided today
-                            │    nothing yet
-                            │
-                            │
+                            │  Approvals  ·  1 waiting           this project   all projects
+  + New chat             n  │
+                            │  ▸ Create calc.js in the curre…  claude  waiting 7s
+  PROJECTS                  │      printf "module.exports = {…('./calc.js').add(2, 3))"   [edits a file]
+  ▾ chorus-proof-api-hH6… 1 │       y Approve   x Deny   ⏎ Open chat
+  ◌ Rate limiter      codex │
+  ▾ chorus-proof-JmNGLQ !1  │  Decided today
+  ! Create calc.js … claude │    nothing yet
+  ● codex 2           codex │
                             │
                             │
                             │
@@ -40,5 +39,6 @@
                             │
                             │
 ────────────────────────────│
-  ✦ Skills   ◫ Memory       │  ↑↓  select    y  approve    x  deny    ⏎  open chat    tab  this / all projects    esc  back
+  ✦ Skills                  │
+  ◫ Memory                  │  ↑↓  select    y  approve    x  deny    ⏎  open chat    tab  this / all projects    esc  back
  chorus  Approvals                                                                                                                            ☰ menu

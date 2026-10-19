@@ -98,9 +98,9 @@ the approvals inbox: every chat waiting on you in one list, with the request and
 ![the approvals inbox: every chat waiting on you in one list, with the request and a risk tag. y approves, x denies, ⏎ opens the chat; the agent gets the same key you would have typed](07-approvals-inbox.png)
 
 ### 08-after-approvals
-approved 4 request(s) from the inbox; the list is empty and "Decided" keeps what was answered
+approved 3 request(s) from the inbox; the list is empty and "Decided" keeps what was answered
 
-![approved 4 request(s) from the inbox; the list is empty and "Decided" keeps what was answered](08-after-approvals.png)
+![approved 3 request(s) from the inbox; the list is empty and "Decided" keeps what was answered](08-after-approvals.png)
 
 ### 09-codex-own-thread
 chat 2 (Codex) answers independently while chat 1 is parked in the background
@@ -182,43 +182,41 @@ final state: two projects, three chats (Claude, Codex, and the Codex handoff cha
 ```
 $ chorus threads
 id          agent   state    parent      title
-t_9b52d1cd  codex   waiting  t_b9113784  Create calc.js in the curre… → codex
-t_8513c91c  codex   waiting  -           Reply with only the text co…
-t_b9113784  claude  waiting  -           Create calc.js in the curre…
+t_69ce12cc  codex   waiting  t_f9e90479  Create calc.js in the curre… → codex
+t_3330a34c  codex   waiting  -           Reply with only the text co…
+t_f9e90479  claude  waiting  -           Create calc.js in the curre…
 t_seed      codex   waiting  -           Rate limiter
 ```
 
 ```
 $ chorus activity
 thread      agent   turns  tools  mcp   tokens in/out     cost     limit
-t_9b52d1cd  codex   3      1      1     60203/225         -        6%
-t_8513c91c  codex   2      0      0     18307/9           -        5%
-t_b9113784  claude  2      5      0     38936/1140        -        -
+t_69ce12cc  codex   3      1      1     60043/197         -        6%
+t_3330a34c  codex   2      0      0     18382/9           -        6%
+t_f9e90479  claude  2      3      0     38345/923         -        -
 t_seed      codex   2      1      0     100/50            -        -
 ```
 
 ```
 $ chorus artifacts
-t_b9113784	08f9af5bdbc4	/private$TMPDIR/chorus-proof-7xWBJP/.chorus/threads/t_b9113784/artifacts/notes.md
+t_f9e90479	79758babd748	/private$TMPDIR/chorus-proof-JmNGLQ/.chorus/threads/t_f9e90479/artifacts/notes.md
 ```
 
 ```
 $ chorus trace <claude chat>
-thread t_b9113784 (claude 2.1.302)
-raw terminal capture: $PROJECT/.chorus/threads/t_b9113784/raw/pty.log (44590 bytes)
-transcript: ~/.claude/projects/-private-var-folders-hj-b9dgqj-s11738sh6-z2w79bm0000gn-T-chorus-proof-7xWBJP/00fdacce-5950-4d45-8c47-1cd034d3de57.jsonl
-transcript lines: 60  → parsed turns: 2, tool calls: 5, status: waiting
+thread t_f9e90479 (claude 2.1.303)
+raw terminal capture: $PROJECT/.chorus/threads/t_f9e90479/raw/pty.log (33561 bytes)
+transcript: ~/.claude/projects/-private-var-folders-hj-b9dgqj-s11738sh6-z2w79bm0000gn-T-chorus-proof-JmNGLQ/1d119580-ae9c-4945-9aae-b70d408f83b0.jsonl
+transcript lines: 54  → parsed turns: 2, tool calls: 3, status: waiting
 
 last raw lines (cut) → what we made of the session:
-  raw  {"parentUuid":"b51912c9-f099-466f-addb-32016088e021","isSidechain":false,"message":{"model":"claude-haiku-5-5","id":"msg_011Cg9UvZjkEPZzqWWybYKZ1","type":"messa
-  raw  {"parentUuid":"f80ff838-23cd-4a77-95ae-68bf88d34f4d","isSidechain":false,"type":"system","subtype":"turn_duration","durationMs":9702,"messageCount":31,"timestam
-  raw  {"type":"cost-state","sessionId":"00fdacce-5950-4d45-8c47-1cd034d3de57","totalCostUSD":0.010392090000000001,"totalAPIDuration":10210,"totalAPIDurationWithoutRet
+  raw  {"parentUuid":"d1cf6502-4aa6-448a-8bb5-d13dfb5b2bcd","isSidechain":false,"message":{"model":"claude-haiku-5-5","id":"msg_011CgAwxfJoQYxMK4ofDGhXZ","type":"messa
+  raw  {"parentUuid":"eb372233-3a76-4706-9622-5af5810c4565","isSidechain":false,"type":"system","subtype":"turn_duration","durationMs":8961,"messageCount":27,"timestam
+  raw  {"type":"cost-state","sessionId":"1d119580-ae9c-4945-9aae-b70d408f83b0","totalCostUSD":0.010261010000000003,"totalAPIDuration":11093,"totalAPIDurationWithoutRet
   raw  {"type":"last-prompt","lastPrompt":"Create calc.js in the current directory that exports a function add(a, b). Run it once with your shell tool as: node -e \"co
-  raw  {"type":"cost-state","sessionId":"00fdacce-5950-4d45-8c47-1cd034d3de57","totalCostUSD":0.010392090000000001,"totalAPIDuration":10210,"totalAPIDurationWithoutRet
-  tool ok Bash cd "$PROJECT
-  tool ok Bash mkdir -p "/private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-
-  tool ok Write $PROJECT/cal
-  tool ok Bash cd "$PROJECT
+  raw  {"type":"cost-state","sessionId":"1d119580-ae9c-4945-9aae-b70d408f83b0","totalCostUSD":0.010261010000000003,"totalAPIDuration":11093,"totalAPIDurationWithoutRet
+  tool ok Bash printf "module.exports = {\n add(a, b) {\n return a + b;\n },\n};\n" > calc.js &
+  tool ok Bash mkdir -p /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-J
   tool ok Write $PROJECT/.ch
   turn user: Create calc.js in the current directory that exports a function add(a, b). Run it once with your she
   turn assistant: done.
@@ -234,8 +232,8 @@ node v26.10.0
 project: $PROJECT
 store: $PROJECT/.chorus/chorus.db (created on first use)
 
-claude  2.1.302   verified 2.1.301  logged in
-        ⚠ claude 2.1.302 is newer than the last verified 2.1.301; re-run tools/probe and check docs/integrations/claude.md
+claude  2.1.303   verified 2.1.301  logged in
+        ⚠ claude 2.1.303 is newer than the last verified 2.1.301; re-run tools/probe and check docs/integrations/claude.md
         data: ~/.claude
 codex   0.163.0   verified 0.163.0  logged in
         data: ~/.codex

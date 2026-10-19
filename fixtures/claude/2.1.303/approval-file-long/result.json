@@ -1,0 +1,1 @@
+{ "cli": "claude", "version": "2.1.303", "how": "chorus app, skip unticked (--permission-mode default), no hook; a 30-line file preview pushes the Create file header off the screen", "file": "prompt-screen.txt is the chat area while the prompt is up" }

@@ -8,7 +8,8 @@
     "node": ">=22.18"
   },
   "bin": {
-    "chorus": "src/cli/index.ts"
+    "chorus": "src/cli/index.ts",
+    "chorus-cli": "src/cli/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -23,6 +24,7 @@
     "smoke:app": "node test/smoke/app.ts",
     "proof": "node test/smoke/proof.ts --open",
     "proof:agy": "node test/smoke/proof-agy.ts --open",
+    "install:global": "npm install && npm link",
     "start": "node src/cli/index.ts",
     "smoke:artifacts": "node test/smoke/artifacts.ts"
   },

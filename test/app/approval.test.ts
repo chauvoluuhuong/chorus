@@ -33,6 +33,23 @@ test('claude 2.1.302 (manual mode, hook asks): the prompt is recognised', () => 
   assert.equal(a.keys.deny, '\x1b');
 });
 
+test('claude 2.1.303 (no hook, launched in manual mode): the command is kept, the auto-mode tip is not', () => {
+  const a = detectApproval('claude', screen('claude', '2.1.303', 'approval-manual-noflag'));
+  assert.ok(a, 'prompt detected');
+  assert.equal(a.what, 'Bash command · Fetch example.com and print the HTTP status code · curl -s -o /dev/null -w "%{http_code}" https://example.com');
+  assert.equal(a.question, 'Do you want to proceed?');
+});
+
+test('claude 2.1.303: a file request says the kind and the file, not the boxed preview', () => {
+  const a = detectApproval('claude', screen('claude', '2.1.303', 'approval-file-create'));
+  assert.ok(a, 'prompt detected');
+  assert.equal(a.what, 'Create file · cake.html');
+  assert.equal(a.question, 'Do you want to create cake.html?');
+  // a preview longer than the screen pushes the "Create file" header off it: the question still names the file
+  const long = detectApproval('claude', screen('claude', '2.1.303', 'approval-file-long'));
+  assert.equal(long?.what, 'Create file · cake.html');
+});
+
 test('prose that only mentions a prompt is not an approval', () => {
   assert.equal(detectApproval('claude', ['I will ask: Do you want to proceed?', 'and then continue']), undefined);
   assert.equal(detectApproval('codex', ['Would you like to run the tests? sure']), undefined);

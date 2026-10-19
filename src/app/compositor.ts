@@ -24,6 +24,8 @@ export const T = {
   line: '38;2;60;68;82',
   bgSide: '48;2;21;26;33',
   bgSel: '48;2;38;48;64',
+  /** a sidebar button (New chat, Skills, Memory) */
+  bgBtn: '48;2;34;48;58',
   bgStatus: '48;2;29;37;48',
   bgWarn: '48;2;58;44;18',
   bgBrand: '48;2;79;193;182',
@@ -63,7 +65,7 @@ export type PaneLine = RichLine | PaneRow;
 const isRow = (l: PaneLine): l is PaneRow => typeof l === 'object' && !Array.isArray(l);
 
 export type SideRow =
-  | { kind: 'new' }
+  | { kind: 'new'; /** the New chat screen is open */ active?: boolean }
   | { kind: 'project'; cwd: string; name: string; open: boolean; count: number; /** chats in it waiting for an approval */ waiting: number; active: boolean }
   | { kind: 'chat'; index: number; title: string; agent: string; state: ItemState; active: boolean; child?: boolean }
   | { kind: 'skills'; active: boolean }
@@ -289,7 +291,7 @@ function drawTop(grid: Grid, v: View, hits: Hit[]) {
       cut = true;
       return;
     }
-    if (i) x = putRich(grid, 0, x, [[' › ', T.dim]], T.bgStatus, room);
+    if (i) x = putRich(grid, 0, x, [[' / ', T.dim]], T.bgStatus, room);
     const w = [...part].length;
     // a part that does not fit is cut with an ellipsis (the last part, the chat title, goes first)
     const text = x + w > room && room - x > 1 ? [...part].slice(0, Math.max(1, room - x - 1)).join('') + '…' : part;
@@ -311,33 +313,26 @@ function drawSidebar(grid: Grid, rows: SideRow[], mode: SideMode, w: number, y0:
   }
   const top = rows.filter(r => r.kind !== 'skills' && r.kind !== 'memory');
   const foot = rows.filter(r => r.kind === 'skills' || r.kind === 'memory');
-  const stacked = mode === 'icons'; // narrow sidebars keep the two shared things side by side, icons stack them
-  const footH = foot.length ? (stacked ? foot.length : 1) + 1 : 0;
+  const footH = foot.length ? foot.length + 1 : 0; // Skills and Memory: one full-width row each, under a rule
   const listH = Math.max(1, height - footH);
-  // the list as drawn: New chat, the PROJECTS heading, then projects and chats
-  const lines: (SideRow | 'heading')[] = [];
+  // the list as drawn: a blank row, New chat, a blank row, the PROJECTS heading, then projects and chats
+  const lines: (SideRow | 'heading' | 'gap')[] = ['gap'];
   for (const r of top) {
     lines.push(r);
-    if (r.kind === 'new' && mode !== 'icons') lines.push('heading');
+    if (r.kind === 'new' && mode !== 'icons') lines.push('gap', 'heading');
+    else if (r.kind === 'new') lines.push('gap');
   }
   // keep the selected row visible (indexes are of `lines`, the rows really drawn)
-  const sel = Math.max(0, lines.findIndex(r => r !== 'heading' && (r.kind === 'chat' || r.kind === 'project') && r.active));
+  const sel = Math.max(0, lines.findIndex(r => typeof r !== 'string' && (r.kind === 'chat' || r.kind === 'project') && r.active));
   const offset = Math.max(0, Math.min(lines.length - listH, sel - listH + 2));
   lines.slice(offset, offset + listH).forEach((r, i) => {
-    if (r === 'heading') put(grid, y0 + i, 1, 'PROJECTS', join(T.dim, T.bgSide), w);
+    if (r === 'gap') return;
+    if (r === 'heading') put(grid, y0 + i, 2, 'PROJECTS', join(T.dim, T.bgSide), w);
     else drawSideRow(grid, r, mode, w, y0 + i, hits);
   });
   if (footH) {
     for (let x = 0; x < w; x++) grid[y0 + listH][x] = { t: '─', s: join(T.line, T.bgSide) };
-    if (stacked) foot.forEach((r, i) => drawSideRow(grid, r, mode, w, y0 + listH + 1 + i, hits));
-    else {
-      let x = 1;
-      for (const r of foot) {
-        const label = r.kind === 'skills' ? '✦ Skills' : '◫ Memory';
-        const on = (r.kind === 'skills' || r.kind === 'memory') && r.active;
-        x = putRich(grid, y0 + listH + 1, x, [[` ${label} `, on ? join('1', T.chorus, T.bgSel) : BTN, r.kind]], T.bgSide, w, hits) + 1;
-      }
-    }
+    foot.forEach((r, i) => drawSideRow(grid, r, mode, w, y0 + listH + 1 + i, hits));
   }
 }
 
@@ -346,32 +341,38 @@ function drawSideRow(grid: Grid, r: SideRow, mode: SideMode, w: number, y: numbe
   const bg = (on: boolean) => (on ? T.bgSel : T.bgSide);
   const rowHit = (id: string) => hits.push({ id, x0: 0, x1: w, y0: y, y1: y + 1 });
   const clip = (s: string, n: number) => (s.length > n ? s.slice(0, Math.max(0, n - 1)) + '…' : s);
+  // New chat, Skills and Memory are buttons: a filled row one cell in from each edge, like the mockup
   if (r.kind === 'new') {
     rowHit('new');
-    put(grid, y, 1, icons ? ' +' : ' + New chat ', BTN, w);
+    const b = r.active ? T.bgSel : T.bgBtn;
+    fill(grid, y, 1, w - 1, b);
+    put(grid, y, icons ? Math.max(1, (w - 1) >> 1) : 2, icons ? '+' : '+ New chat', join('1', T.chorus, b), w - 1);
+    if (mode === 'full') put(grid, y, w - 3, 'n', join(T.dim, b), w - 1);
     return;
   }
   if (r.kind === 'skills' || r.kind === 'memory') {
-    const b = bg(r.active);
-    fill(grid, y, 0, w, b);
+    const b = r.active ? T.bgSel : T.bgBtn;
+    fill(grid, y, 1, w - 1, b);
     rowHit(r.kind);
     const glyph = r.kind === 'skills' ? '✦' : '◫';
-    put(grid, y, 1, glyph, join(T.chorus, b), w);
-    if (!icons) put(grid, y, 3, r.kind === 'skills' ? 'Skills' : 'Memory', join(T.fg, b), w);
+    put(grid, y, icons ? Math.max(1, (w - 1) >> 1) : 2, glyph, join(T.chorus, b), w - 1);
+    if (!icons) put(grid, y, 4, r.kind === 'skills' ? 'Skills' : 'Memory', join(T.fg, b), w - 1);
     return;
   }
   if (r.kind === 'project') {
     const b = bg(false);
     rowHit(`project:${r.cwd}`);
-    put(grid, y, 1, r.open ? '▾' : '▸', join(T.dim, b), w);
+    put(grid, y, icons ? 1 : 2, r.open ? '▾' : '▸', join(T.dim, b), w);
     if (icons) {
       // no room for a name: the caret, and a ! when a chat in it is waiting
       if (r.waiting) put(grid, y, 3, '!', join('1', T.err, b), w);
       return;
     }
-    put(grid, y, 3, clip(r.name, w - 7), join('1', T.fg, b), w);
-    if (r.waiting) put(grid, y, w - 3, `!${r.waiting}`, join('1', T.err, b), w);
-    else put(grid, y, w - 3, String(r.count), join(T.dim, b), w);
+    // "▾ cake-shop !2": the count (or the waiting chats, in red) right after the name; an open project is bold
+    const badge = r.waiting ? `!${r.waiting}` : String(r.count);
+    const name = clip(r.name, w - 6 - badge.length);
+    put(grid, y, 4, name, r.open ? join('1', T.fg, b) : join(T.dim, b), w);
+    put(grid, y, 4 + [...name].length + 1, badge, r.waiting ? join('1', T.err, b) : join(T.dim, b), w);
     return;
   }
   const b = bg(r.active);
@@ -383,16 +384,23 @@ function drawSideRow(grid: Grid, r: SideRow, mode: SideMode, w: number, y: numbe
     put(grid, y, 2, g.ch, join(g.s, b), w); // just the state dot
     return;
   }
-  let x = r.child ? 5 : 3;
-  if (r.child) put(grid, y, 3, '↳', join(T.dim, b), w);
+  // "● Cake order page  claude" at the project's indent; a chat continued from another: "◐ ↳ Cake order …", two cells in
+  let x = r.child ? 4 : 2;
   put(grid, y, x, g.ch, join(g.s, b), w);
   x += 2;
+  if (r.child) {
+    put(grid, y, x, '↳', join(T.dim, b), w);
+    x += 2;
+  }
   const agentRoom = mode === 'full' ? r.agent.length + 1 : 0;
   put(grid, y, x, clip(r.title, w - x - 1 - agentRoom), join(r.active ? '1' : '', T.fg, b), w - 1);
   if (agentRoom) put(grid, y, w - r.agent.length - 1, r.agent, join(agentStyle(r.agent), b), w);
 }
 
 /* ---------- status line ---------- */
+
+/** "claude-opus-5-5" → "opus 5.5": the name you picked, not the API id */
+export const shortModel = (m: string) => m.replace(/^claude-/, '').replace(/-(\d+)-(\d+)(-\d{8})?$/, ' $1.$2');
 
 function meter(pct: number): { text: string; s: string } {
   const filled = Math.max(0, Math.min(10, Math.round(pct / 10)));
@@ -406,7 +414,7 @@ function statusSegs(v: View, bg: string, level: number): Seg[] {
   const sb = v.statusBar;
   if (v.message || !sb) return [...segs, [` ${v.message ?? 'no chats'} `, join(T.fg, bg)]];
   segs.push([` ${sb.title} `, join(T.fg, bg)], sep);
-  segs.push([` ${sb.agent}${sb.model && level < 1 ? ' · ' + sb.model : ''}${sb.effort && level < 1 ? ' · ' + sb.effort : ''}`, join(agentStyle(sb.agent), bg)]);
+  segs.push([` ${sb.agent}${sb.model && level < 1 ? ' · ' + shortModel(sb.model) : ''}${sb.effort && level < 1 ? ' · ' + sb.effort : ''}`, join(agentStyle(sb.agent), bg)]);
   if (sb.skip) segs.push([' skip', join('1', T.warn, bg)]);
   if (sb.from) segs.push([' from ', join(T.dim, bg)], [sb.from, join(agentStyle(sb.from), bg)]);
   segs.push([' ', bg], sep);

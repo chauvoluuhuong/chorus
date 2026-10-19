@@ -32,6 +32,18 @@ function openStore() {
   return store;
 }
 
+/**
+ * Ask the terminal for a comfortable window (CHORUS_SIZE=COLSxROWS, default 130x36) when it is smaller; it never shrinks one.
+ * Terminals that do not allow resizing from a program (many ignore it) just keep their size and the layout steps down.
+ */
+function wantSize() {
+  if (!process.stdout.isTTY || process.env.CHORUS_SIZE === 'off') return;
+  const [wc, wr] = (process.env.CHORUS_SIZE ?? '130x36').split('x').map(Number);
+  const cols = Math.max(process.stdout.columns || 0, wc || 0);
+  const rows = Math.max(process.stdout.rows || 0, wr || 0);
+  if (cols !== process.stdout.columns || rows !== process.stdout.rows) process.stdout.write(`\x1b[8;${rows};${cols}t`);
+}
+
 async function app(start: (c: Controller) => Promise<void> | void, opts: { newChat?: boolean } = {}) {
   const store = openStore();
   const ui = new App();
@@ -40,6 +52,7 @@ async function app(start: (c: Controller) => Promise<void> | void, opts: { newCh
   await start(c);
   // `chorus` alone opens New chat (the first screen); new/run/handoff go straight to a chat
   if (opts.newChat && !ui.current?.host) c.newChatScreen();
+  wantSize();
   ui.start();
   await ui.done;
   store.close();

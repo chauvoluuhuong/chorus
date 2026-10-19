@@ -25,7 +25,7 @@ Legend: ✅ verified by a probe run · 📄 from `claude --help` or docs, not ye
 | Fork on resume | `--fork-session` with `--resume` | 📄 |
 | Add to system prompt | `--append-system-prompt <text>` or `--append-system-prompt-file` | 📄 |
 | Model | `--model <alias or id>` (e.g. `haiku`) | ✅ |
-| Permissions | `--permission-mode <mode>`, `--allowedTools "a,b,c"`, `--dangerously-skip-permissions` | ✅ (`acceptEdits` + allowedTools) |
+| Permissions | `--permission-mode <mode>`, `--allowedTools "a,b,c"`, `--dangerously-skip-permissions` | ✅ (`acceptEdits` + allowedTools; 2.1.303: choices `acceptEdits, auto, bypassPermissions, manual, dontAsk, plan`, `default` still accepted; the app passes `default` so Claude asks, see approvals.md) |
 | Extra settings (hooks etc.) without touching user files | `--settings <file-or-json>` | ✅ |
 | Isolated run (no user hooks/CLAUDE.md/plugins) | `--bare` (requires `ANTHROPIC_API_KEY`; OAuth is not read) | 📄 |
 
