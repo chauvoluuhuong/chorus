@@ -1,0 +1,44 @@
+  ‹ Back   New chat                                                                                                         ! 1 waiting    ☰ Menu ⌃\
+  + New chat                │  New chat
+ PROJECTS                   │
+ ▾ chorus-proof-api-k4I… 1  │  Agent         claude    codex    agy
+   ◌ Rate limiter     codex │
+ ▾ chorus-proof-7xWBJP   !1 │
+   ! Create calc.js… claude │  Model         default   gpt-6-luna   gpt-5.6-terra   gpt-5.6-luna
+                            │
+                            │  Effort        default   low   medium   high   xhigh   max    how hard the model thinks
+                            │
+                            │  Project      /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-7xWBJP  ▾
+                            │               recent: /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-api-k4I7Mu  · or type any fo
+                            │
+                            │  Permissions  [x] Skip permission prompts  --dangerously-bypass-approvals-and-sandbox
+                            │               The agent runs every command and edit without asking.
+                            │               Nothing reaches the approvals inbox for this chat.
+                            │
+                            │                ⏎ Start chat
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+────────────────────────────│
+  ✦ Skills   ◫ Memory       │  ⏎  start    tab  next field    ←/→  change    space  tick    esc  back
+ chorus  New chat                                                                                                                             ☰ menu

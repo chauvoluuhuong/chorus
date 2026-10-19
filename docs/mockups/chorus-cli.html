@@ -1,0 +1,1016 @@
+<title>chorus-cli Mockup</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: scene list on the left, one terminal window per scene on the right, reference sections below. */
+:root {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --fg: #1a1f27;
+  --muted: #5a6474;
+  --line: #dde2e9;
+  --accent: #0f766e;
+  --accent-soft: #e2f3f1;
+
+  /* The terminal keeps one dark look in both themes, like a real terminal. */
+  --t-bg: #12151b;
+  --t-chrome: #1b1f27;
+  --t-fg: #d9dee7;
+  --t-dim: #6f7889;
+  --t-line: #2a303b;
+  --t-chorus: #4fc1b6;
+  --t-claude: #e08a68;
+  --t-codex: #8fb8ff;
+  --t-agy: #9bd38f;
+  --t-ok: #8ccf7e;
+  --t-warn: #f0b85a;
+  --t-err: #f07a7a;
+  --t-sel: #263040;
+
+  --f-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1014; --panel: #151a21; --fg: #e3e8ef; --muted: #98a3b4;
+    --line: #262d38; --accent: #4fc1b6; --accent-soft: #15302e; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1014; --panel: #151a21; --fg: #e3e8ef; --muted: #98a3b4;
+  --line: #262d38; --accent: #4fc1b6; --accent-soft: #15302e; color-scheme: dark;
+}
+
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--f-sans);
+  font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 32px 64px; display: grid; gap: 40px; }
+
+header h1 { font-size: 26px; margin: 0 0 6px; text-wrap: balance; font-weight: 600; letter-spacing: -0.01em; }
+header h1 code { font-family: var(--f-mono); font-weight: 600; color: var(--accent); }
+header p { margin: 0; color: var(--muted); max-width: 68ch; }
+
+.stage { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 28px; align-items: start; }
+nav.scenes { display: grid; gap: 2px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); }
+nav.scenes button {
+  all: unset; cursor: pointer; display: grid; grid-template-columns: 26px 1fr; gap: 6px;
+  padding: 7px 10px; border-radius: 6px; color: var(--muted); font-size: 14px;
+}
+nav.scenes button .n { font-family: var(--f-mono); font-size: 12px; padding-top: 2px; }
+nav.scenes button:hover { background: var(--accent-soft); color: var(--fg); }
+nav.scenes button[aria-current="true"] { background: var(--accent-soft); color: var(--fg); font-weight: 600; }
+nav.scenes button[aria-current="true"] .n { color: var(--accent); }
+nav.scenes button:focus-visible, .ctl button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+nav.scenes .group { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 14px 10px 4px; }
+nav.scenes .group:first-child { padding-top: 0; }
+
+.scene { display: grid; gap: 14px; min-width: 0; }
+.scene-head { display: flex; gap: 16px; align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+.scene-head h2 { margin: 0; font-size: 20px; font-weight: 600; }
+.scene-head .cmd { font-family: var(--f-mono); font-size: 13px; color: var(--muted); }
+.caption { margin: 0; max-width: 72ch; }
+
+.term { background: var(--t-bg); border-radius: 10px; overflow: hidden; border: 1px solid var(--t-line); position: relative; min-width: 0; }
+.term .chrome { display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: var(--t-chrome); border-bottom: 1px solid var(--t-line); }
+.term .chrome i { width: 10px; height: 10px; border-radius: 50%; background: var(--t-line); display: block; }
+.term .chrome span { font-family: var(--f-mono); font-size: 12px; color: var(--t-dim); margin-left: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.term .scroll { overflow-x: auto; }
+.term pre {
+  margin: 0; padding: 14px 16px; font-family: var(--f-mono); font-size: 13px; line-height: 1.6;
+  color: var(--t-fg); min-height: 30em; min-width: 78ch; white-space: pre;
+}
+.term.tall pre { min-height: 40em; }
+.term pre.dimmed, .tbody.dimmed pre { opacity: 0.35; }
+.tbody { display: flex; min-width: calc(78ch + 30ch); }
+.tbody pre { flex: 1; min-width: 0; }
+.side {
+  width: 28ch; flex: none; background: #151a21; border-right: 1px solid var(--t-line);
+  font-family: var(--f-mono); font-size: 13px; color: var(--t-fg); padding: 10px 0; display: flex; flex-direction: column;
+}
+.side .hd { padding: 0 12px 8px; color: var(--t-dim); font-size: 11px; letter-spacing: 0.08em; }
+.side .it { padding: 5px 12px 5px 10px; border-left: 2px solid transparent; display: grid; gap: 1px; }
+.side .it .t { white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.side .it .m { font-size: 11.5px; color: var(--t-dim); white-space: pre; }
+.side .it.active { background: var(--t-sel); border-left-color: var(--t-chorus); }
+.side .it.focus { outline: 1px dashed var(--t-chorus); outline-offset: -3px; }
+.side .ft { margin-top: auto; padding: 10px 12px 2px; border-top: 1px solid var(--t-line); color: var(--t-dim); font-size: 11.5px; white-space: pre; line-height: 1.7; }
+.status {
+  display: flex; font-family: var(--f-mono); font-size: 12.5px; background: #1d2530; color: var(--t-fg);
+  border-top: 1px solid var(--t-line); white-space: nowrap; min-width: 78ch;
+}
+.status > span { padding: 5px 10px; border-right: 1px solid var(--t-line); }
+.status > span:last-child { border-right: 0; margin-left: auto; color: var(--t-dim); }
+.status .brand { background: var(--t-chorus); color: #0b1a19; font-weight: 600; }
+.status.warn { background: #3a2c12; }
+.meter { letter-spacing: -1px; }
+
+/* Top bar: where am I + back + menu + approvals badge. Everything with data-go is clickable in this mockup. */
+.top {
+  display: flex; align-items: stretch; font-family: var(--f-mono); font-size: 12.5px; background: #1d2530;
+  color: var(--t-fg); border-bottom: 1px solid var(--t-line); white-space: nowrap; min-width: 78ch;
+}
+.top > * { padding: 5px 10px; display: flex; align-items: center; gap: 6px; }
+.top .back { color: var(--t-chorus); border-right: 1px solid var(--t-line); font-weight: 600; }
+.top .back.off { color: var(--t-dim); opacity: 0.45; font-weight: 400; }
+.top .crumbs { flex: 1; min-width: 0; overflow: hidden; }
+.top .crumbs .sep, .top .crumbs .last { color: var(--t-dim); }
+.top .crumbs .last { color: var(--t-fg); font-weight: 600; }
+.top .appr { color: var(--t-err); background: #3b1d1d; margin: 3px 4px; border-radius: 3px; padding: 0 8px; font-weight: 600; }
+.top .mbtn { color: var(--t-dim); border-left: 1px solid var(--t-line); }
+.top .mbtn b { color: var(--t-chorus); font-weight: 600; }
+[data-go], [data-sel], [data-toast] { cursor: pointer; }
+.top [data-go]:hover, .side [data-go]:hover { filter: brightness(1.35); }
+.top .crumbs [data-go]:hover { text-decoration: underline; }
+.clk:hover { background: #1f2733; }
+.btn { display: inline-block; padding: 0 8px; border: 1px solid var(--t-line); border-radius: 3px; color: var(--t-fg); }
+.btn.go { background: var(--t-chorus); border-color: var(--t-chorus); color: #0b1a19; font-weight: 600; }
+.btn.no { color: var(--t-err); border-color: #5a2a2a; }
+.btn.ya { color: var(--t-ok); border-color: #2f4f2a; }
+.btn:hover { filter: brightness(1.3); }
+.toast {
+  position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); background: #14301f; color: var(--t-ok);
+  border: 1px solid #2f4f2a; border-radius: 4px; padding: 5px 12px; font-family: var(--f-mono); font-size: 12.5px; white-space: nowrap;
+}
+.side .hd { display: flex; align-items: center; justify-content: space-between; }
+.side .hd .newbtn { background: var(--t-chorus); color: #0b1a19; padding: 0 8px; border-radius: 3px; font-weight: 600; letter-spacing: 0; font-size: 12px; }
+.side .newrow { margin: 8px 10px 0; padding: 4px 8px; border: 1px dashed var(--t-line); border-radius: 3px; color: var(--t-chorus); }
+.side .newrow:hover { background: #1f2733; }
+.side .it[data-go]:hover { background: #1c232d; }
+
+.overlay {
+  position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%);
+  background: #181d25; border: 1px solid var(--t-chorus); border-radius: 6px;
+  font-family: var(--f-mono); font-size: 13px; color: var(--t-fg); padding: 10px 0; min-width: 330px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+.overlay .ttl { padding: 0 16px 8px; color: var(--t-chorus); font-weight: 600; border-bottom: 1px solid var(--t-line); margin-bottom: 6px; }
+.overlay .row { padding: 3px 16px; display: grid; grid-template-columns: 40px 1fr; }
+.overlay .row b { color: var(--t-chorus); font-weight: 600; }
+.overlay .row span { white-space: pre; }
+.overlay .row.sel { background: var(--t-sel); }
+.overlay .row[data-sel]:hover { background: #1f2733; }
+.overlay .row.sel[data-sel]:hover { background: var(--t-sel); }
+.overlay .foot { padding: 8px 16px 0; margin-top: 6px; border-top: 1px solid var(--t-line); color: var(--t-dim); }
+.overlay.alert { border-color: var(--t-warn); }
+.overlay.alert .ttl { color: var(--t-warn); }
+
+/* Spacing in whole cells, as a real terminal can only do: 1 col padding inside every part, 1 blank row
+   between groups, 2 cols between buttons. */
+.side { width: 30ch; padding: 1.6em 0 0.8em; gap: 0; }
+.side .grp { margin-bottom: 1.6em; }
+.side .newrow { margin: 0 1ch; padding: 0 1ch; border: 0; background: #22303a; border-radius: 3px; display: flex; justify-content: space-between; line-height: 1.6; }
+.side .kbd { color: var(--t-dim); }
+.side .hd { display: block; padding: 0 2ch; line-height: 1.6; font-size: 11px; }
+.side .pj { padding: 0 2ch; line-height: 1.6; color: var(--t-dim); white-space: pre; }
+.side .pj.open { color: var(--t-fg); font-weight: 600; }
+.side .pj:hover { background: #1c232d; color: var(--t-fg); }
+.side .it { padding: 0 1ch 0 2ch; line-height: 1.6; gap: 0; margin-top: 0.8em; border-left-width: 2px; }
+.side .it.child { padding-left: 4ch; }
+.side .it .m { font-size: 12px; padding-left: 2ch; }
+.side .ft { margin-top: auto; padding: 0.4em 2ch 0; }
+.side .it { margin-top: 0; }
+.side .pj { cursor: pointer; margin-top: 0.4em; }
+.side .ft { display: flex; gap: 1ch; padding: 0.8em 1ch 0; border-top: 1px solid var(--t-line); }
+.side .ft .kb { padding: 0 1ch; }
+.side .newrow.on, .side .kb.on { background: var(--t-sel); outline: 1px solid var(--t-chorus); outline-offset: -1px; }
+.side-icons .ft { flex-direction: column; align-items: center; }
+.side-narrow { width: 22ch; }
+.side-narrow .it { margin-top: 0; }
+.side-icons { width: 7ch; padding-top: 1.6em; }
+.side-icons .newrow { justify-content: center; padding: 0; }
+.side-icons .it, .side-icons .it.child { padding: 0 1ch; margin-top: 0; }
+.side-icons .ft { text-align: center; padding: 0; cursor: pointer; }
+.tbody pre { padding-left: 2ch; }
+.top > * { padding: 4px 1ch; }
+.top .kb { margin: 3px 0 3px 1ch; padding: 0 1ch; }
+.top .crumbs { padding-left: 2ch; }
+.top .crumbs .sep { padding: 0 1ch; }
+.top .back, .top .mbtn { border: 0; }
+.top .mbtn { margin-right: 1ch; color: var(--t-fg); }
+.status > span { padding: 4px 1ch; }
+.status > span.kb { margin: 3px 1ch 3px auto; padding: 0 1ch; color: var(--t-fg); border: 0; }
+.status .ttl { overflow: hidden; text-overflow: ellipsis; }
+
+/* What is clickable: a filled chip is a button, underlined accent text is a link, a list row lights up
+   on hover. Plain text is never clickable. */
+.kb { background: #263241; border-radius: 3px; padding: 0 1ch; cursor: pointer; display: inline-block; }
+pre .kb { padding: 0 1ch; }
+.btn { background: #263241; border: 0; padding: 0 1ch; }
+.btn.go { background: var(--t-chorus); color: #0b1a19; }
+.btn.ya { background: #1f3a24; } .btn.no { background: #3b1d1d; }
+.clk.ch, .top .lk { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.kb:hover, .btn:hover, .top .appr:hover { filter: none; background: #34455a; }
+.btn.go:hover { background: #6fd6cb; }
+.clk:hover, .side .it[data-go]:hover { background: #222c39; }
+
+/* Window size scene: the terminal is drawn at the chosen width; the rest is "desktop". */
+.ctl.sizes button { font-family: var(--f-mono); font-size: 13px; padding: 5px 10px; }
+.term.sized .scroll { background: repeating-linear-gradient(45deg, #0b0d11 0 8px, #0f1217 8px 16px); }
+.term.sized .frame { width: calc(var(--cols) * 1ch); font-family: var(--f-mono); font-size: 13px; background: var(--t-bg); border-right: 1px solid var(--t-line); }
+.term.sized pre, .term.sized .top, .term.sized .status, .term.sized .tbody { min-width: 0; }
+.term.sized pre { white-space: pre-wrap; overflow: hidden; }
+.term.sized .tbody pre { min-width: 0; }
+
+.legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.legend .q pre { margin: 8px 0 0; background: var(--t-bg); color: var(--t-fg); font-family: var(--f-mono); font-size: 13px; padding: 10px 12px; border-radius: 6px; white-space: pre; overflow-x: auto; }
+
+/* terminal text colors */
+.d { color: var(--t-dim); } .ch { color: var(--t-chorus); } .cl { color: var(--t-claude); }
+.cx { color: var(--t-codex); } .ag { color: var(--t-agy); } .ok { color: var(--t-ok); }
+.wn { color: var(--t-warn); } .er { color: var(--t-err); } .b { font-weight: 600; }
+.sel { background: var(--t-sel); }
+.cur { background: var(--t-fg); color: var(--t-bg); }
+
+.behind { border-left: 3px solid var(--accent); padding: 2px 0 2px 16px; }
+.behind h3 { margin: 0 0 6px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.behind ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.behind code, section code { font-family: var(--f-mono); font-size: 0.88em; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+
+.ctl { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.ctl button {
+  font: inherit; font-size: 14px; padding: 7px 14px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+}
+.ctl button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+.ctl button:disabled { opacity: 0.4; cursor: default; }
+.ctl .hint { color: var(--muted); font-size: 13px; }
+
+section h2 { font-size: 20px; margin: 0 0 12px; font-weight: 600; }
+section > p { margin: 0 0 14px; color: var(--muted); max-width: 72ch; }
+.ref { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.ref table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 14px; }
+.ref th, .ref td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ref tr:last-child td { border-bottom: 0; }
+.ref th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.ref td:first-child { font-family: var(--f-mono); font-size: 13px; white-space: nowrap; }
+.ref td code { background: none; padding: 0; }
+
+.qs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.q { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; min-width: 0; }
+.q h3 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+.q p { margin: 0; color: var(--muted); font-size: 14px; }
+.q p strong { color: var(--fg); font-weight: 600; }
+
+@media (max-width: 860px) {
+  .stage { grid-template-columns: minmax(0, 1fr); }
+  nav.scenes { position: static; display: flex; overflow-x: auto; gap: 4px; padding-bottom: 4px; }
+  nav.scenes .group { display: none; }
+  nav.scenes button { white-space: nowrap; grid-template-columns: auto auto; }
+  .qs { grid-template-columns: minmax(0, 1fr); }
+  .overlay { min-width: 290px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .term pre, .overlay { transition: opacity 0.15s ease; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1><code>chorus</code> terminal app mockup</h1>
+    <p>Kept simple on purpose, like any AI chat app: a sidebar with your projects and their chats, a New chat button, and the real Claude Code, Codex or Antigravity screen on the right. Chorus adds a status line, a menu key, handoff, artifacts, and one shared memory and skill library for all of them. Click through the scenes or use the ← → keys. Inside the terminal, anything with a pointer cursor is clickable and works like the real app (Back, breadcrumb, menu, New chat, approvals badge, list rows); ↑ ↓ and Enter work on the menu and the lists.</p>
+  </header>
+
+  <div class="stage">
+    <nav class="scenes" id="nav" aria-label="Scenes"></nav>
+    <div class="scene" id="scene" aria-live="polite"></div>
+  </div>
+
+  <section>
+    <h2>Where am I, and how do I go back?</h2>
+    <p>The sidebar is the map: projects, and under each one its chats. Click a project to open or fold it, click a chat to go to it. That covers most moves; <b>‹ Back</b> and <code>esc</code> cover the rest.</p>
+    <div class="ref">
+      <table>
+        <thead><tr><th>You are in</th><th>‹ Back / esc goes to</th><th>Other ways out</th></tr></thead>
+        <tbody>
+          <tr><td>A chat (agent screen)</td><td>New chat</td><td>Click any chat in the sidebar · ☰ Menu or <code>⌃\</code></td></tr>
+          <tr><td>New chat form</td><td>The chat you came from</td><td><code>esc</code> cancels without changes</td></tr>
+          <tr><td>Artifacts / Approvals / Activity</td><td>The chat</td><td>Click a chat in the sidebar</td></tr>
+          <tr><td>Skills / Memory (shared)</td><td>The chat</td><td>Click a chat in the sidebar</td></tr>
+          <tr><td>Menu, dialogs</td><td>Closes (esc)</td><td>Click outside the box</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>How you know what is clickable</h2>
+    <p>A terminal has no hover cursor everywhere, so the look itself says it. Three kinds, used the same way on every screen. Plain text is never clickable.</p>
+    <div class="legend">
+      <div class="q"><h3>Button: a filled chip</h3><p>Does something. The key is inside it, so the same chip teaches the shortcut. The bottom row of every screen is a row of these, like Midnight Commander's F-key bar.</p><pre><span class="kb"><span class="ch">y</span> Approve</span>  <span class="kb"><span class="ch">n</span> new chat</span>  <span class="btn go">＋ New chat</span></pre></div>
+      <div class="q"><h3>Link: underlined accent text</h3><p>Goes somewhere: a project, a chat, a file, a URL. Parts of the path in the top bar are links too.</p><pre><span class="clk ch">review them ›</span>   <span class="clk ch">~/projects/cake-shop ▾</span></pre></div>
+      <div class="q"><h3>Row: lights up under the mouse</h3><p>Lists (chats, artifacts, skills, approvals): the whole row is the target. The selected row has a ▸ and a background.</p><pre><span class="clk sel">▸ Cake order page   claude  idle</span>
+<span class="clk">  Stripe webhook    codex   needs approval</span></pre></div>
+    </div>
+    <p style="margin-top:14px">Hover highlight needs the terminal to report mouse motion (xterm mode 1003, which all terminals listed below support). Terminals that support it (e.g. kitty, Ghostty, xterm; to verify with a probe) also get a hand pointer through OSC 22; the others simply keep the arrow, and the look above still tells.</p>
+  </section>
+
+  <section>
+    <h2>Mouse and other terminals</h2>
+    <p>Clicks use the standard xterm mouse protocol, so they work in iTerm2, Terminal.app, Ghostty, WezTerm, kitty, Windows Terminal, GNOME Terminal, the VS Code terminal and over tmux or SSH. The keyboard stays complete: nothing is mouse-only. With the mouse on, drag-select text with Shift held (Option in iTerm2). <code>CHORUS_MOUSE=0</code> turns it off.</p>
+  </section>
+
+  <section>
+    <h2>Commands</h2>
+    <p>Everything the interactive screens do is also a plain command, so it can be scripted and tested.</p>
+    <div class="ref">
+      <table>
+        <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td>chorus</td><td>The app: sidebar of projects and chats, New chat form</td></tr>
+          <tr><td>chorus new [--agent claude] [--model sonnet] [--folder ~/projects/x] [--skip-permissions]</td><td>Start a chat (no flags: the form opens)</td></tr>
+          <tr><td>chorus run &lt;agent&gt; [--thread &lt;id&gt;]</td><td>Open an agent on a chat (latest chat if omitted)</td></tr>
+          <tr><td>chorus handoff --to &lt;agent&gt; [--from &lt;chat&gt;]</td><td>Start a new chat with another agent that loads the previous chat's context</td></tr>
+          <tr><td>chorus threads · chorus show &lt;id&gt;</td><td>List chats; show a chat's turns, tool calls and the chats it continued</td></tr>
+          <tr><td>chorus artifacts [--open | --serve]</td><td>List artifacts; open one, or serve them with live reload</td></tr>
+          <tr><td>chorus skills [on|off|import &lt;name&gt;]</td><td>The shared skill library: list, turn on or off for all three agents, import from an agent's own folder</td></tr>
+          <tr><td>chorus activity [--thread &lt;id&gt;]</td><td>Tool calls, MCP calls, token usage and limits over time</td></tr>
+          <tr><td>chorus trace &lt;run-id&gt;</td><td>Raw CLI output next to the parsed events, for debugging</td></tr>
+          <tr><td>chorus doctor</td><td>Installed CLIs, versions, login state, paths, verified versions</td></tr>
+          <tr><td>chorus mcp --thread &lt;id&gt;</td><td>The MCP server. The AI CLI starts it; you don't run it yourself</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Open questions</h2>
+    <p>Decisions this mockup assumes. Each one changes the build.</p>
+    <div class="qs">
+      <div class="q"><h3>Command name</h3><p>The package is <code>chorus-cli</code>; the command you type is <code>chorus</code>. <strong>Proposal: keep both.</strong></p></div>
+      <div class="q"><h3>Menu key</h3><p>It must not clash with keys Claude Code, Codex or Agy already use (Claude uses Ctrl+O, Ctrl+], and others). <strong>Proposal: Ctrl+Space, configurable</strong>, checked against all three CLIs.</p></div>
+      <div class="q"><h3>Status line under another TUI</h3><p>Keeping our line at the bottom while Claude or Codex draws full screen needs a virtual-terminal layer, the way tmux does it. <strong>Fallback if that proves flaky:</strong> status in the terminal title plus the menu key only.</p></div>
+      <div class="q"><h3>Skills outside Chorus</h3><p>Linking the library into <code>~/.claude/skills</code> and <code>~/.agents/skills</code> makes plain <code>claude</code> / <code>codex</code> / <code>agy</code> see the skills too, but changes the user's own CLI setup. <strong>Proposal: opt-in checkbox, off by default.</strong></p></div>
+      <div class="q"><h3>Skip permissions</h3><p>A checkbox on New chat, off by default, per chat only. <strong>Proposal: no global "always skip"</strong>; the status line shows <code>skip</code> in amber while it is on.</p></div>
+      <div class="q"><h3>Approval alerts</h3><p>Badge, red <code>!</code> in the sidebar and a one-line flash are always on. <strong>Proposal: terminal bell on by default</strong> (muted with <code>CHORUS_BELL=0</code>); desktop notifications only for chats you are not looking at.</p></div>
+      <div class="q"><h3>Artifact preview</h3><p>Opening files in the default app is simple. A small local preview server (<code>chorus artifacts --serve</code>) gives live reload while the agent edits. <strong>Proposal: both, server optional.</strong></p></div>
+    </div>
+  </section>
+</div>
+
+<script>
+const S = (agent, model, extra = {}) => ({ agent, model, ...extra });
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+// a selectable, clickable line inside a <pre>
+const pick = (i, sel, html, toast) => `<span class="clk${i === sel ? ' sel' : ''}" data-sel="${i}"${toast ? ` data-toast="${esc(toast)}"` : ''}>${html}</span>`;
+
+const URLBASE = 'http://localhost:4317/t_7k2/';
+const ART = [
+  ['order-flow.html', 'v2', 'cl', 'claude', '14m ago'],
+  ['pricing-table.md', 'v1', 'cl', 'claude', '20m ago'],
+  ['webhook-plan.md', 'v1', 'cx', 'codex', 'just now'],
+];
+const PROJECTS = [
+  ['~/projects/cake-shop', '4 chats · 2 need approval', 'this project'],
+  ['~/projects/landing', '1 chat · idle', ''],
+  ['~/work/api', '2 chats · 1 working', ''],
+];
+const APPROVALS = [
+  { title: 'Stripe webhook', agent: 'codex', cls: 'cx', age: '2m', ageCls: 'wn', what: 'Run command', cmd: 'npm install stripe', risk: ['installs a package', 'wn'] },
+  { title: 'Landing page copy', agent: 'agy', cls: 'ag', age: 'just now', ageCls: 'd', what: 'Write file', cmd: 'content/hero.md  (+14 −3)', risk: ['edits a file', 'd'] },
+];
+// .chorus/skills is the source; each enabled skill is a symlink in .claude/skills (Claude) and .agents/skills (Codex, agy)
+const SKILLS = [
+  { name: 'brand-style', desc: 'Rose and cream colors, bakery logo', on: true, from: 'made in chorus', files: '2 files' },
+  { name: 'friendly-copy', desc: 'Short, warm sentences for customers', on: true, from: 'made in chorus', files: '1 file' },
+  { name: 'phone-check', desc: 'Screenshot at phone width, fix overlaps', on: true, from: 'imported .claude/skills', files: '3 files · script' },
+  { name: 'db-migrate', desc: 'Safety checks before a database migration', on: true, from: 'written by codex', files: '3 files · script' },
+  { name: 'stripe-payments', desc: 'Card payments with test keys first', on: false, from: 'imported .agents/skills', files: '2 files' },
+];
+// New chat form state (mockup only)
+const nc = { agent: 0, skip: false };
+const NC_AGENTS = [
+  { name: 'claude', cls: 'cl', quota: '5h 62%', qcls: 'wn', models: ['default', 'sonnet', 'opus', 'haiku'], efforts: ['default', 'low', 'medium', 'high', 'xhigh', 'max'], flag: '--dangerously-skip-permissions' },
+  { name: 'codex', cls: 'cx', quota: '5h 8%', qcls: 'ok', models: ['default', '…from codex\'s model list'], efforts: ['default', 'low', 'medium', 'high', 'xhigh', 'max'], flag: '--dangerously-bypass-approvals-and-sandbox' },
+  { name: 'agy', cls: 'ag', quota: 'quota ok', qcls: 'ok', models: ['default', '…from agy models'], efforts: ['default', 'low', 'medium', 'high', 'xhigh', 'max'], flag: '--dangerously-skip-permissions' },
+];
+// The sidebar tree: projects, each with its chats. Indexes 0-3 are THREADS (this project).
+const TREE = [
+  { name: 'cake-shop', path: '~/projects/cake-shop', threads: [0, 1, 2, 3] },
+  { name: 'landing', path: '~/projects/landing', threads: [{ title: 'Hero copy', agent: 'agy', state: 'idle' }] },
+  { name: 'api', path: '~/work/api', threads: [{ title: 'Rate limiter', agent: 'codex', state: 'working' }, { title: 'Auth tests', agent: 'claude', state: 'idle' }] },
+];
+const openProjects = new Set(['cake-shop']);
+// Memory rows: chat, project, agent, agent class, turns, when, first ask, last message, files
+const MEM = [
+  ['Cake order page', 'cake-shop', 'claude', 'cl', '18 turns', '12m ago', 'Build an order page with a live price calculator…', 'The calculator works. Next I\'ll wire the checkout.', 'app/order/pricing.ts, page.tsx, CakeBuilder.tsx'],
+  ['↳ Cake order page (2)', 'cake-shop', 'codex', 'cx', '4 turns', 'just now', '(continued from Cake order page)', 'OK to start with the checkout action?', '—'],
+  ['Rate limiter', 'api', 'codex', 'cx', '31 turns', '1h ago', 'Add a per-key rate limit to the public API', 'Limiter in place; 40 tests pass.', 'src/middleware/limit.ts, test/limit.test.ts'],
+  ['Hero copy', 'landing', 'agy', 'ag', '6 turns', 'yesterday', 'Write the hero text for the spring sale', 'Saved two versions in artifacts.', 'content/hero.md'],
+];
+const THREADS = [
+  { title: 'Cake order page', agent: 'claude', state: 'working', go: 'work' },
+  { title: 'Cake order page (2)', agent: 'codex', state: 'waiting', child: true, go: 'loaded' },
+  { title: 'Stripe webhook', agent: 'codex', state: 'approval', go: 'approvals' },
+  { title: 'Landing page copy', agent: 'agy', state: 'approval', go: 'approvals' },
+];
+
+const trow = (sel, go, title, agent, acls, state, scls, age, art) =>
+  `<span class="clk${sel ? ' sel' : ''}" data-go="${go}">${sel ? '▸' : ' '} ${title.padEnd(25)}<span class="${acls}">${agent.padEnd(9)}</span><span class="${scls}">${state.padEnd(16)}</span>${age.padEnd(13)}${art}${sel ? '  ' : ''}</span>`;
+
+const SCENES = [
+  {
+    id: 'new', group: 'Start', title: 'New chat', cmd: 'chorus  (or ＋ New chat, or n)',
+    chrome: '~/projects/cake-shop — chorus',
+    caption: 'Like any AI chat app: pick the agent, the model, the project folder and whether it may skip permission prompts, then Enter. You type your first message in the agent itself. This is also the first screen when you run chorus. Click the agents and the checkbox.',
+    side: { active: -1 },
+    top: { back: 'work', crumb: [['chorus'], ['New chat']] },
+    screen: () => {
+      const a = NC_AGENTS[nc.agent];
+      const agents = NC_AGENTS.map((x, i) => `<span class="clk${i === nc.agent ? ' sel' : ''}" data-nc-agent="${i}"> <span class="${x.cls}">${x.name}</span> </span>`).join('    ');
+      const quota = NC_AGENTS.map(x => `<span class="${x.qcls}">${x.quota.padEnd(10)}</span>`).join('');
+      const models = a.models.map((m, i) => i === 0 ? `<span class="sel"> ${m} </span>` : m).join('   ');
+      return `  <span class="ch b">New chat</span>
+
+  <span class="d">Agent</span>      ${agents}
+             ${quota}
+
+  <span class="d">Model</span>      ${models}
+
+  <span class="d">Effort</span>     ${a.efforts.map((m, i) => i === 0 ? `<span class="sel"> ${m} </span>` : m).join('   ')}   <span class="d">how hard the model thinks</span>
+
+  <span class="d">Project</span>    <span class="clk ch">~/projects/cake-shop ▾</span>
+             <span class="d">recent: ~/projects/landing  ~/work/api  · or type any folder</span>
+
+  <span class="d">Permissions</span> <span class="clk" data-nc-skip="1">${nc.skip ? '<span class="wn">[x]</span>' : '[ ]'} Skip permission prompts</span>  <span class="d">${a.flag}</span>
+${nc.skip ? `             <span class="wn">The agent runs every command and edit without asking.</span>
+             <span class="wn">Nothing reaches the approvals inbox for this chat.</span>` : `             <span class="d">off: the agent asks, and Chorus shows it in the approvals inbox</span>
+`}
+
+  <span class="btn go clk" data-go="work"> ⏎ Start chat </span>
+
+  <span class="ch">⏎</span> start   <span class="ch">tab</span> next field   <span class="ch">←/→</span> change   <span class="ch">space</span> tick`;
+    },
+    behind: [
+      'Five choices, all with a default (last agent and model, effort of the agent, the project you are in, prompts on), so Enter alone starts a chat. No title: the chat is named after your first message.',
+      'Starts the agent in the project folder with its own screen, e.g. <code>claude --model sonnet --session-id &lt;uuid&gt;</code> plus the per-session MCP config. Plan mode and the like stay inside the agent (Claude: Shift+Tab).',
+      'Effort passes <code>claude --effort &lt;level&gt;</code>, <code>agy --effort &lt;level&gt;</code> and <code>codex -c model_reasoning_effort="&lt;level&gt;"</code> (verified in each interactive screen; the levels are Claude and agy\'s five, and for Codex the list in its own model cache, so it follows the chosen model). "default" passes nothing, and the choice is kept with the chat, so a resumed chat keeps it.',
+      'Skip flags, per CLI: Claude <code>--dangerously-skip-permissions</code>, Codex <code>--dangerously-bypass-approvals-and-sandbox</code>, agy <code>--dangerously-skip-permissions</code>. All three are documented; agy\'s is verified headless only, so each still needs a check in the interactive screen before we ship it.',
+      'The sidebar is the project list: click a project to open or fold its chats, click a chat to go to it. That is the whole navigation.',
+    ],
+  },
+  {
+    id: 'work', group: 'Working', title: 'Working in Claude Code', cmd: 'the real Claude Code interface',
+    chrome: '~/projects/cake-shop — chorus · claude',
+    caption: 'You type into Claude Code exactly as usual. The top bar says where you are and has Back, the approvals badge and the menu button. The sidebar lists your projects with their chats under them, New chat on top, Skills and Memory at the bottom. The bottom line shows this chat\'s plan usage and artifacts.',
+    status: S('claude', 'sonnet', { usage: 62, artifacts: 3, toast: '+ order-flow.html v2' }),
+    side: { active: 0 },
+    screen:
+`<span class="d">&gt;</span> Build an order page with a live price calculator (size, layers,
+  toppings). Use the existing Next.js app.
+
+<span class="cl">●</span> I'll start with the pricing model, then the page.
+
+<span class="cl">●</span> <span class="b">Write</span>(app/order/pricing.ts)
+  <span class="d">⎿  Wrote 48 lines</span>
+<span class="cl">●</span> <span class="b">Bash</span>(mkdir -p .chorus/threads/t_7k2/artifacts &amp;&amp; …)
+  <span class="d">⎿  order-flow.html written</span>
+<span class="cl">●</span> <span class="b">Bash</span>(npm test -- pricing)
+  <span class="d">⎿  12 passed</span>
+
+<span class="cl">●</span> The calculator works. Next I'll wire the checkout button.
+
+<span class="d">&gt;</span> <span class="cur"> </span>`,
+    behind: [
+      'The top bar is Chorus\'s row; Claude gets the rest of the screen (the terminal size it sees is reduced by the bar, the status line and the sidebar).',
+      '<b>‹ Back</b> goes up one level: from Artifacts, Approvals, Activity, Skills or Memory back to the chat; from a chat to New chat. To go to another chat, click it in the sidebar.',
+      '<b>! 2 waiting</b> shows whenever any chat needs approval, in any chat you are looking at. Click it to open the approvals inbox.',
+      'Tool calls, tokens and plan usage come from Claude\'s hooks and transcript, not from the screen. A file watcher spots new artifacts even when Claude wrote them with Bash.',
+      '<b>New:</b> <code>ctx 34%</code> = how full this agent\'s context window is (last turn\'s input tokens / the model\'s window), next to the plan meter. Both decide when to hand off.',
+    ],
+  },
+  {
+    id: 'menu', group: 'Working', title: 'Chorus menu', cmd: '⌃\\  (or click ☰ Menu)',
+    chrome: '~/projects/cake-shop — chorus · claude',
+    caption: 'The menu opens on top of the agent. Move with ↑ ↓ and press Enter, click a row, or press its letter. Try it: use ↑ ↓ here and click the highlighted row.',
+    status: S('claude', 'sonnet', { usage: 62, artifacts: 3 }),
+    side: { active: 0 },
+    dim: true,
+    interactive: 'overlay',
+    overlay: {
+      title: 'chorus · Cake order page',
+      rows: [
+        ['h', 'Hand off to another agent', false, 'handoff'],
+        ['n', 'New chat', false, 'new'],
+        ['a', 'Artifacts (3)', false, 'artifacts'],
+        ['i', 'Approvals (2)', false, 'approvals'],
+        ['k', 'Skills', false, 'skills'],
+        ['m', 'Memory', false, 'memory'],
+        ['e', 'Activity', false, 'activity'],
+        ['b', 'Show / hide sidebar'],
+        ['?', 'Help'],
+        ['q', 'Quit'],
+      ],
+      foot: '↑↓ move   ⏎ run   esc  back to claude',
+    },
+    screenFrom: 'work',
+    behind: [
+      'While the menu is open the agent keeps running; its output is buffered and redrawn on return.',
+      'Ten rows, nothing else. Chats are not in the menu: the sidebar is where you switch. ↑ ↓ and Enter, a click, or the row\'s letter all work.',
+      'Pressing the menu key twice sends the key itself to the agent. Ctrl+Space works too where macOS lets it through.',
+    ],
+  },
+  {
+    id: 'resize', group: 'Working', title: 'Window size', cmd: 'drag the terminal window bigger or smaller',
+    chrome: '~/projects/cake-shop — chorus · claude',
+    caption: 'Pick a width above. Chorus gives the agent as many columns as it can and shrinks its own parts first: the sidebar goes from full to one line per chat, to icons, to hidden; the status line drops the least useful parts; the path keeps its last two parts.',
+    status: S('claude', 'sonnet', { usage: 62, artifacts: 3 }),
+    side: { active: 0 },
+    resize: true,
+    screenFrom: 'work',
+    behind: [
+      'On every resize (<code>SIGWINCH</code>) Chorus redraws its own parts and tells each agent its new size (PTY resize); Claude, Codex and agy then redraw themselves. This already works today; what is new is the sidebar steps and the status line order.',
+      'Breakpoints: 110+ cols full sidebar (agent still gets 80+), 90–109 narrow, 70–89 icons, 50–69 hidden, under 50 or under 12 rows a "window too small" screen. The agent keeps running in all of them.',
+      'Height: under 20 rows each chat takes one line instead of two; under 12 rows, the "too small" screen.',
+      'Your choice wins: <code>b</code> hides or shows the sidebar at any width, and the app remembers it.',
+    ],
+  },
+  {
+    id: 'approvals', group: 'Approvals', title: 'Approvals inbox', cmd: 'click ! 2 waiting  (or ⌃\\ i)',
+    chrome: '~/projects/cake-shop — chorus',
+    caption: 'One place for everything waiting on you, from every chat. Approve or deny right here without switching, or open the chat to see the full context. Use ↑ ↓ and click the buttons.',
+    top: { back: 'work', crumb: [['chorus', 'new'], ['Approvals']] },
+    items: APPROVALS.length,
+    enter: () => ({ go: 'work' }),
+    screen: sel => `  <span class="ch b">Approvals</span>  ·  2 waiting                    <span class="d">this project ▾   all projects</span>
+
+${APPROVALS.map((a, i) => `${pick(i, sel, `${i === sel ? '▸' : ' '} <span class="b">${a.title}</span>  <span class="${a.cls}">${a.agent}</span>  <span class="${a.ageCls}">waiting ${a.age}</span>`)}
+    ${a.what}:  <span class="wn">${a.cmd}</span>   <span class="${a.risk[1]}">[${a.risk[0]}]</span>
+    <span class="btn ya clk" data-toast="Approved: ${esc(a.cmd)} — ${a.agent} continues">y Approve</span> <span class="btn no clk" data-toast="Denied: ${esc(a.cmd)}">x Deny</span> <span class="btn clk" data-go="work">⏎ Open chat</span>`).join('\n\n')}
+
+  <span class="d">Decided today</span>
+    <span class="ok">✓ approved</span>  Bash npm test -- pricing          <span class="cl">claude</span>   14:01
+    <span class="er">✗ denied</span>    Bash rm -rf node_modules           <span class="cx">codex</span>    13:40
+
+  <span class="ch">↑↓</span> select   <span class="ch">y</span> approve   <span class="ch">x</span> deny   <span class="ch">⏎</span> open chat   <span class="ch">esc</span> back`,
+    behind: [
+      'Each entry is a chat that Chorus detected as blocked on a permission prompt (screen detector, verified against the real prompts). <code>y</code> / <code>x</code> send the same keys the agent expects, so the answer is exactly what you would have typed.',
+      '<b>Notifications:</b> when a new approval appears while you are in another chat, the top-bar badge turns on, the sidebar row gets a red <code>!</code>, a one-line flash appears ("Stripe webhook needs approval"), and the terminal bell rings (optional, <code>CHORUS_BELL=0</code> to mute).',
+      'The approval card still shows at the bottom of the chat itself; the inbox is the same data in one list.',
+      '<b>New:</b> a risk tag from a fixed pattern list (<code>rm -rf</code>, <code>git push --force</code>, migrations, package installs, writes outside the folder), so the dangerous one stands out. "waiting 2m" turns amber after 1 minute; the agent is idle while it waits.',
+      'Decided requests are kept in the activity log, so "what did I approve?" has an answer.',
+    ],
+  },
+  {
+    id: 'handoff', group: 'Handoff', title: 'Hand off', cmd: '⌃\\ h  (or chorus handoff --to codex)',
+    chrome: '~/projects/cake-shop — chorus · claude',
+    caption: 'A handoff is just a new chat with another agent, linked to this one. Pick the agent and press Enter. The current chat stays as it is, so you can switch back.',
+    status: S('claude', 'sonnet', { usage: 62, artifacts: 3 }),
+    side: { active: 0 },
+    dim: true,
+    screenFrom: 'work',
+    overlay: {
+      title: 'Continue "Cake order page" in a new chat',
+      rows: [
+        ['', '▸ codex    5h 8% used', true],
+        ['', '  agy      quota ok'],
+        ['', '  claude   fresh session'],
+      ],
+      foot: '↑↓ move   ⏎ start   esc cancel',
+    },
+    behind: [
+      'Creates chat (2) with <code>parent = t_7k2</code> and starts Codex with the Chorus MCP server for the new chat.',
+      'The first message is a short fixed prompt (next scene). Nothing is written by hand and the old agent is not asked to do anything.',
+    ],
+  },
+  {
+    id: 'loaded', group: 'Handoff', title: 'New agent loads the context', cmd: 'the real Codex interface',
+    chrome: '~/projects/cake-shop — chorus · codex',
+    caption: 'Codex is told to fetch the previous chat through MCP and confirm briefly what it learned. You correct it or say go.',
+    status: S('codex', 'default', { usage: 9, artifacts: 3, from: 'claude', title: 'Cake order page (2)' }),
+    side: { active: 1, states: { 0: 'idle', 1: 'waiting' } },
+    screen:
+`<span class="d">user</span>
+This chat continues the Chorus thread "Cake order page", worked on by
+claude. Call chorus get_handoff_context first. Then reply with at most
+5 bullets: what was done, decisions, open work, and your next step.
+Wait for my OK before changing anything.
+
+<span class="cx">codex</span>
+<span class="d">•</span> Called <span class="b">chorus.get_handoff_context</span>  <span class="d">(18 turns, 23 tool calls, 3 artifacts)</span>
+
+Here is what I picked up:
+- Order page with a live price calculator in app/order/ (pricing.ts, page.tsx)
+- Prices are stored in cents; builder state uses Zustand; 12 pricing tests pass
+- Artifacts: order-flow.html (v2), pricing-table.md
+- Open: checkout button is not wired yet
+- Next: add a Stripe checkout server action, then the webhook route
+
+OK to start with the checkout action?
+
+<span class="d">›</span> <span class="cur"> </span>`,
+    behind: [
+      'The context comes from what Chorus stored about chat 1 (chat turns, tool calls, files, artifacts), so it works even when Claude is at its limit.',
+      'If the agent doesn\'t call the tool in its first turn (Chorus sees every MCP call), the status line shows "context not loaded" with a retry key.',
+    ],
+  },
+  {
+    id: 'memory', group: 'Shared', title: 'Memory', cmd: 'click Memory in the sidebar  (or ⌃\\ m)',
+    chrome: '~/projects/cake-shop — chorus',
+    caption: 'One memory for all your projects and agents: every chat Chorus has recorded, wherever it ran. Any agent can read it through the chorus MCP tools, so a chat in one project can pick up work from another.',
+    side: { active: -1, footer: 'memory' },
+    top: { back: 'work', crumb: [['chorus', 'new'], ['Memory']] },
+    items: MEM.length,
+    enter: () => ({ go: 'work' }),
+    screen: sel => `  <span class="ch b">Memory</span>  ·  all projects                    <span class="d">~/.chorus/chorus.db   / search</span>
+
+${MEM.map((m, i) => pick(i, sel, `${i === sel ? '▸' : ' '} ${m[0].padEnd(23)}<span class="d">${m[1].padEnd(11)}</span><span class="${m[3]}">${m[2].padEnd(8)}</span>${m[4].padEnd(10)}<span class="d">${m[5]}</span>`)).join('\n')}
+
+  <span class="b">${MEM[sel][0]}</span>
+    <span class="d">asked </span>  ${MEM[sel][6]}
+    <span class="d">last  </span>  ${MEM[sel][7]}
+    <span class="d">files </span>  ${MEM[sel][8]}
+
+  <span class="ch">⏎</span> open chat   <span class="ch">h</span> continue with another agent   <span class="ch">/</span> search   <span class="ch">esc</span> back`,
+    behind: [
+      '<b>Global, not per project:</b> the store moves from <code>&lt;project&gt;/.chorus/chorus.db</code> to <code>~/.chorus/chorus.db</code>, with the project folder as a column. The sidebar, this screen and <code>list_threads</code> read the same rows.',
+      'Artifacts stay in the project (<code>.chorus/threads/&lt;id&gt;/artifacts/</code>): Codex\'s sandbox only lets the agent write inside its folder.',
+      'What is kept: chat turns, tool calls, files touched, commands and results, artifacts, usage. Not kept: the model\'s thinking, full tool output.',
+      '<code>get_handoff_context(thread_id)</code> works for a chat in any project, so "continue the api work here" is one MCP call.',
+    ],
+  },
+  {
+    id: 'skills', group: 'Shared', title: 'Skills', cmd: 'click Skills in the sidebar  (or chorus skills)',
+    chrome: '~/projects/cake-shop — chorus',
+    caption: 'One skill library for every agent and every project. Write or import a skill once; Claude, Codex and Antigravity all load it. Skills you already have in an agent\'s own folder show up to import. How it works underneath is technical debt TD-1 (docs/roadmap.md), solved later.',
+    side: { active: -1, footer: 'skills' },
+    top: { back: 'work', crumb: [['chorus', 'new'], ['Skills']] },
+    items: SKILLS.length,
+    enter: sel => ({ toast: `${SKILLS[sel].on ? 'Turned off' : 'Turned on'} ${SKILLS[sel].name} for claude, codex and agy` }),
+    screen: sel => `  <span class="ch b">Skills</span>  ·  one library             <span class="d">~/.chorus/skills/</span>
+
+        <span class="d">NAME             WHAT IT DOES                          <span class="cl">claude</span> <span class="cx">codex</span> <span class="ag">agy</span></span>
+${SKILLS.map((s, i) => pick(i, sel, `${i === sel ? '▸' : ' '} ${s.on ? '<span class="ok">[on] </span>' : '<span class="d">[off]</span>'} ${s.name.padEnd(17)}${s.desc.padEnd(38)}${s.on ? '<span class="ok">  ✓      ✓    ✓</span>' : '<span class="d">  —      —    —</span>'}`)).join('\n')}
+
+  <span class="d">Found in the agents' own folders</span>
+    release-notes    <span class="d">~/.claude/skills</span>     <span class="cl">claude</span> only       <span class="clk ch" data-toast="Imported release-notes: now in ~/.chorus/skills, seen by all three">import ›</span>
+    pdf-tools        <span class="d">~/.agents/skills</span>     <span class="cx">codex</span> <span class="ag">agy</span> only    <span class="clk ch" data-toast="Imported pdf-tools: now in ~/.chorus/skills, seen by all three">import ›</span>
+
+  <span class="d">Reach</span>  <span class="ok">[x]</span> every project you open in Chorus
+         <span class="clk" data-toast="Opt-in: links in ~/.claude/skills and ~/.agents/skills, so plain claude / codex / agy see them too">[ ] also when you run claude, codex or agy without Chorus</span>
+
+  <span class="ch">⏎</span> on/off   <span class="ch">e</span> edit   <span class="ch">n</span> new   <span class="ch">i</span> import   <span class="ch">esc</span> back`,
+    behind: [
+      '<b>How it reaches every CLI (verified folders, <code>docs/integrations/skills.md</code>):</b> Claude loads <code>.claude/skills</code>, Codex and agy both load <code>.agents/skills</code>. When a chat starts in a project, Chorus links each enabled skill from <code>~/.chorus/skills</code> into those two folders of that project (git-ignored through <code>.git/info/exclude</code>). This is today\'s proven project sync with one change: the source is global.',
+      '<b>Opt-in, outside Chorus:</b> the same links in the user folders <code>~/.claude/skills</code> and <code>~/.agents/skills</code>. Off by default because it changes the user\'s own CLI setup (rule 4). agy\'s user-level folder is not verified yet: needs a probe first.',
+      '<b>Safety:</b> Chorus only touches links it made. A same-name skill of yours is shown as a conflict and left alone. Turning a skill off removes its links; the skill stays in the library.',
+      '<b>New skills</b> are found by scanning the agents\' folders at start and watching them while chats run (an agent may write one mid-chat).',
+      '<b>A skill written for another CLI</b> (e.g. a Claude skill naming <code>TodoWrite</code>) is handled by one short instruction added at chat start: use your own equivalent tool, ignore fields you don\'t know. No per-skill rewrite, no extra UI.',
+      '<b>Fallback:</b> an agent that cannot load skills natively gets them through the chorus MCP tools <code>list_skills</code> / <code>get_skill</code> (already built).',
+      'All of the above is <b>TD-1</b> in <code>docs/roadmap.md</code>, with the probe that will prove it.',
+    ],
+  },
+  {
+    id: 'limit', group: 'Limits', title: 'Limit warning', cmd: '',
+    chrome: '~/projects/cake-shop — chorus · claude',
+    caption: 'When an agent gets close to its plan limit, the status line turns amber. When the limit is hit, Chorus offers the handoff right away.',
+    status: S('claude', 'sonnet', { usage: 100, artifacts: 4, warn: true }),
+    side: { active: 0, states: { 0: 'limit' } },
+    dim: true,
+    screenFrom: 'work',
+    overlay: {
+      alert: true,
+      title: 'Claude reached its 5-hour limit',
+      lines: ['Resets at 18:00. This chat is saved:', '18 turns · 4 artifacts · 9 files changed'],
+      rows: [['⏎', 'Continue in a new chat with codex  (5h 8%)', true], ['2', 'Continue with agy'], ['w', 'Wait for the reset']],
+    },
+    behind: [
+      'Claude reports usage in a <code>rate_limit_event</code> (5-hour and 7-day utilization, reset time). Chorus warns at 90%.',
+      'Claude doesn\'t need to do anything: the new agent reads this chat\'s stored turns and tool calls through MCP.',
+    ],
+  },
+  {
+    id: 'artifacts', group: 'Artifacts', title: 'Artifacts', cmd: '⌃\\ a  (or chorus artifacts)',
+    chrome: '~/projects/cake-shop — chorus',
+    caption: 'Every non-code file the agents produced for this chat. Move with ↑ ↓ and press Enter, or just click a file or its link: it opens with your computer\'s default app (a browser, with live reload while the agent keeps editing). Try it.',
+    top: { back: 'work', crumb: [['chorus', 'new'], ['Cake order page', 'work'], ['Artifacts']] },
+    items: ART.length,
+    enter: sel => ({ toast: `Opened ${URLBASE}${ART[sel][0]}  (macOS: open)` }),
+    screen: sel => `  <span class="ch b">Artifacts</span>  ·  Cake order page        <span class="d">.chorus/threads/t_7k2/artifacts/</span>
+
+    <span class="d">NAME                  VER   BY       UPDATED</span>
+${ART.map((r, i) => pick(i, sel, `${i === sel ? '▸' : ' '} ${r[0].padEnd(22)}${r[1].padEnd(6)}<span class="${r[2]}">${r[3].padEnd(9)}</span>${r[4].padEnd(10)}`, `Opened ${URLBASE}${r[0]}  (macOS: open)`)).join('\n')}
+
+  <span class="d">Link</span>   <span class="clk ch" data-toast="Opened ${URLBASE}${ART[sel][0]}  (macOS: open)">${URLBASE}${ART[sel][0]}</span>   <span class="ok">● live reload</span>
+  <span class="d">File</span>   ~/projects/cake-shop/.chorus/threads/t_7k2/artifacts/${ART[sel][0]}
+
+  <span class="d">No default app on this computer?</span> <span class="clk ch" data-go="openfail">see what happens ›</span>
+
+
+  <span class="ch">↑↓</span> select   <span class="ch">⏎ / click</span> open   <span class="ch">f</span> show in folder   <span class="ch">p</span> copy path   <span class="ch">esc</span> back`,
+    behind: [
+      'Open uses the system default: <code>open</code> on macOS, <code>xdg-open</code> on Linux, <code>cmd /c start</code> on Windows (<code>wslview</code> under WSL). It opens the preview link, so it reloads while the agent edits.',
+      'Versions are content hashes recorded by the file watcher, with the run that wrote them. Agents can list and read the same artifacts through <code>chorus list_artifacts</code>.',
+      'Before: only <code>o</code> opened a file and the selection could fall below the visible rows. Now the selected row always scrolls into view and rows are mouse targets.',
+    ],
+  },
+  {
+    id: 'openfail', group: 'Artifacts', title: 'Open fails: choose how', cmd: '',
+    chrome: '~/projects/cake-shop — chorus',
+    caption: 'If the system command is missing or fails (no desktop, an SSH session, a minimal Linux), Chorus does not just show an error. It asks how you want to open the file, and remembers the answer for this project.',
+    top: { back: 'work', crumb: [['chorus', 'new'], ['Cake order page', 'work'], ['Artifacts']] },
+    dim: true,
+    interactive: 'overlay',
+    screenFrom: 'artifacts',
+    overlay: {
+      alert: true,
+      title: 'Couldn\'t open order-flow.html',
+      lines: ['xdg-open: command not found.', 'How do you want to open files?'],
+      rows: [
+        ['⏎', 'Copy the link to the clipboard', true, 'artifacts'],
+        ['2', 'Show the folder in the file manager', false, 'artifacts'],
+        ['3', 'Use another command…   e.g. firefox {url}', false, 'artifacts'],
+        ['4', 'Just show the link, don\'t try again', false, 'artifacts'],
+      ],
+      foot: 'remembered in .chorus/open.json   esc cancel',
+    },
+    behind: [
+      'Chorus runs the system command and waits briefly for it: an error such as "command not found" or a non-zero exit counts as a failure, then this dialog appears.',
+      '<code>{url}</code> and <code>{path}</code> in a custom command are replaced with the preview link or the file path. The choice is stored per project in <code>.chorus/open.json</code>, never in a global config.',
+      'Over SSH, option 1 or 4 is the natural choice: the link is a localhost address, so Chorus also prints the port-forward hint.',
+    ],
+  },
+  {
+    id: 'activity', group: 'Debugging', title: 'Activity', cmd: '⌃\\ e  (or chorus activity)',
+    chrome: '~/projects/cake-shop — chorus',
+    caption: 'One timeline across a chat and the chats continued from it: tool calls, MCP calls, usage, handoffs.',
+    top: { back: 'work', crumb: [['chorus', 'new'], ['Cake order page', 'work'], ['Activity']] },
+    screen:
+`  <span class="ch b">Activity</span>  ·  Cake order page          <span class="d">in 41.2k  out 3.1k tokens · $0.21</span>
+  <span class="sel"> all 9 </span>  tool 3   mcp 1   approval 1   file 2   usage 1   <span class="er">error 0</span>     <span class="d">f cycles</span>
+
+  <span class="d">14:01:12</span>  <span class="cl">claude</span>  tool   Write app/order/pricing.ts              <span class="ok">ok</span>  <span class="d">120ms</span>
+  <span class="d">14:01:30</span>  <span class="cl">claude</span>  tool   Bash  npm test -- pricing               <span class="ok">ok</span>  <span class="d">4.2s</span>
+  <span class="d">14:01:45</span>  <span class="cl">claude</span>  file   order-flow.html v2
+  <span class="d">14:02:03</span>  <span class="cl">claude</span>  usage  5h 62% · resets 18:00
+  <span class="d">14:05:10</span>  <span class="ch">──── chat (2) started with codex, from (1) ────</span>
+  <span class="d">14:05:14</span>  <span class="cx">codex </span>  mcp    chorus.get_handoff_context              <span class="ok">ok</span>
+  <span class="d">14:05:20</span>  <span class="cx">codex </span>  turn   confirmed context (5 bullets)
+  <span class="d">14:05:31</span>  <span class="cx">codex </span>  tool   edit app/order/actions.ts               <span class="ok">ok</span>
+  <span class="d">14:05:52</span>  <span class="cx">codex </span>  file   webhook-plan.md v1
+
+
+  <span class="ch">⏎</span> details   <span class="ch">r</span> raw trace   <span class="ch">f</span> filter   <span class="ch">esc</span> back`,
+    behind: [
+      'Every row links to the raw line it came from (<code>chorus trace &lt;run-id&gt;</code>), so a parsing bug is easy to prove.',
+    ],
+  },
+  {
+    id: 'doctor', group: 'Debugging', title: 'Doctor', cmd: 'chorus doctor  (or ⌃\\ d)',
+    chrome: '~/projects/cake-shop — chorus',
+    caption: 'The first thing to run when something breaks. It also warns when an installed CLI is newer than the version Chorus was verified against.',
+    top: { back: 'new', crumb: [['chorus', 'new'], ['Doctor']] },
+    screen:
+`  <span class="cl">claude</span>  2.1.301   <span class="ok">✓ logged in</span>   ~/.claude/projects             <span class="ok">verified</span>
+  <span class="cx">codex </span>  0.163.0   <span class="ok">✓ logged in</span>   ~/.codex (sqlite)              <span class="ok">verified</span>
+  <span class="ag">agy   </span>  1.3.6     <span class="ok">✓ logged in</span>   ~/.gemini/antigravity-cli      <span class="wn">not verified</span>
+
+  <span class="d">store</span>   .chorus/chorus.db · 3 chats · 7 runs · 42 MB
+  <span class="d">env</span>     <span class="wn">CLAUDE_CODE_SESSION_ID is set</span> → removed when starting agents
+  <span class="d">mouse</span>   <span class="ok">on</span>  <span class="d">(CHORUS_MOUSE=0 turns it off; hold Shift to select text)</span>
+  <span class="d">open</span>    <span class="ok">open</span>  <span class="d">(default for macOS; override in .chorus/open.json)</span>
+
+  <span class="wn">1 warning</span>  agy 1.3.6 has not been verified. Run:
+           node tools/probe/probe.mjs agy`,
+    behind: [
+      'Checks match the integration docs in <code>docs/integrations/</code>.',
+    ],
+  },
+];
+
+const nav = document.getElementById('nav');
+const sceneEl = document.getElementById('scene');
+let current = 0;
+let selIdx = 0;
+let toast = '';
+const idx = id => SCENES.findIndex(s => s.id === id);
+
+function screenOf(s, sel) {
+  const base = s.screen ?? SCENES[idx(s.screenFrom)].screen;
+  return typeof base === 'function' ? base(sel) : base;
+}
+function itemCount(s) {
+  return s.interactive === 'overlay' ? s.overlay.rows.length : s.items || 0;
+}
+
+// Narrower windows drop status parts in this order: model, ctx, artifacts text, meter bar (the % stays).
+function statusBar(st, mode = 'full') {
+  if (!st) return '';
+  const cls = { claude: 'cl', codex: 'cx', agy: 'ag' }[st.agent];
+  const filled = Math.round(st.usage / 10);
+  const meter = '▮'.repeat(filled) + '▱'.repeat(10 - filled);
+  const usageCls = st.usage >= 90 ? 'er' : st.usage >= 75 ? 'wn' : 'ok';
+  const wide = mode === 'full', mid = mode === 'full' || mode === 'narrow';
+  return `<div class="status${st.warn ? ' warn' : ''}">
+    <span class="brand">chorus</span>
+    <span class="ttl">${st.title || 'Cake order page'}</span>
+    <span class="${cls}">${st.agent}${wide && st.model ? ' · ' + st.model : ''}${wide && st.from ? ' <span class="d">from</span> <span class="cl">' + st.from + '</span>' : ''}</span>
+    <span>5h ${mid ? `<span class="meter ${usageCls}">${meter}</span> ` : ''}<span class="${usageCls}">${st.usage}%</span>${st.warn ? ' <span class="er">limit</span>' : ''}</span>
+    ${mid ? `<span>ctx ${st.ctx ?? 34}%</span>` : ''}
+    ${mode !== 'hidden' ? `<span>${st.artifacts}${wide ? ' artifacts' : ' art'}${wide && st.toast ? ' <span class="ok">' + st.toast + '</span>' : ''}</span>` : ''}
+    <span class="kb" data-go="menu">☰${mid ? ' menu' : ''}</span>
+  </div>`;
+}
+
+function topbar(s, mode = 'full') {
+  if (s.top === false) return '';
+  const small = mode === 'icons' || mode === 'hidden';
+  const t = s.top || {};
+  const back = t.back === undefined ? (s.side ? 'new' : 'work') : t.back;
+  // the path says where you are, nothing else: no product name, no project (the sidebar has the project)
+  const crumb = t.crumb || (s.side ? [[(s.status && s.status.title) || 'Cake order page']] : [[s.title]]);
+  const n = THREADS.filter((x, i) => ((s.side && s.side.states && s.side.states[i]) || x.state) === 'approval').length;
+  // small windows keep only the last two parts of the path
+  const parts = crumb.filter(c => c[0] && c[0] !== 'chorus' && c[0] !== 'cake-shop');
+  const shown = small && parts.length > 2 ? [['…'], ...parts.slice(-2)] : parts;
+  const crumbs = shown.map((c, i, a) => {
+    const last = i === a.length - 1;
+    const cls = last ? 'last' : c[1] ? 'lk' : '';
+    return `<span${c[1] && !last ? ` data-go="${c[1]}"` : ''}${cls ? ` class="${cls}"` : ''}>${esc(c[0])}</span>` + (last ? '' : '<span class="sep">›</span>');
+  }).join('');
+  return `<div class="top">
+    <span class="kb back${back ? '' : ' off'}"${back ? ` data-go="${back}"` : ''}>‹ Back</span>
+    <span class="crumbs">${crumbs}</span>
+    ${n ? `<span class="appr" data-go="approvals">! ${n}${small ? '' : ' waiting'}</span>` : ''}
+    <span class="kb mbtn" data-go="menu">☰${small ? '' : ' Menu <span class="d">⌃\\</span>'}</span>
+  </div>`;
+}
+
+const STATE = {
+  working: ['<span class="ok">●</span>', 'working'],
+  waiting: ['<span class="wn">◐</span>', '<span class="wn">waiting for you</span>'],
+  idle: ['<span class="d">○</span>', 'idle'],
+  ended: ['<span class="d">○</span>', 'ended'],
+  approval: ['<span class="er b">!</span>', '<span class="er">needs approval</span>'],
+  limit: ['<span class="er">■</span>', '<span class="er">limit · 18:00</span>'],
+};
+// The sidebar is the project list: click a project to open or fold it, click a chat to go to it.
+// Shared things (Skills, Memory) sit at the bottom: they belong to no project. Sizes: full, narrow, icons, hidden.
+function sidebar(sd, mode = 'full') {
+  if (!sd || mode === 'hidden') return '';
+  const chat = (t, i, active) => {
+    const st = (sd.states && typeof i === 'number' && sd.states[i]) || t.state;
+    const [dot] = STATE[st];
+    const agentCls = { claude: 'cl', codex: 'cx', agy: 'ag' }[t.agent];
+    const cls = 'it' + (t.child ? ' child' : '') + (active ? ' active' : '');
+    if (mode === 'icons') return `<div class="${cls}" data-go="${t.go || 'work'}" title="${esc(t.title)}"><span class="t">${dot}</span></div>`;
+    const w = (mode === 'full' ? 16 : 12) - (t.child ? 2 : 0);
+    const name = (t.child ? '↳ ' : '') + t.title;
+    const shown = name.length > w ? name.slice(0, w - 1) + '…' : name.padEnd(w);
+    return `<div class="${cls}" data-go="${t.go || 'work'}"><span class="t">${dot} ${esc(shown)}${mode === 'full' ? ` <span class="${agentCls}">${t.agent}</span>` : ''}</span></div>`;
+  };
+  const projects = TREE.map(p => {
+    const open = openProjects.has(p.name);
+    const list = p.threads.map(x => typeof x === 'number' ? chat(THREADS[x], x, x === sd.active) : chat(x, null, false));
+    const busy = p.threads.map(x => typeof x === 'number' ? THREADS[x] : x).filter(t => t.state === 'approval').length;
+    if (mode === 'icons') return `<div class="pj" data-tog="${p.name}" title="${p.path}">${open ? '▾' : '▸'}</div>${open ? list.join('') : ''}`;
+    const badge = busy ? ` <span class="er">!${busy}</span>` : ` <span class="d">${p.threads.length}</span>`;
+    return `<div class="pj${open ? ' open' : ''}" data-tog="${p.name}" title="${p.path}">${open ? '▾' : '▸'} ${p.name}${badge}</div>${open ? list.join('') : ''}`;
+  }).join('');
+  const foot = mode === 'icons'
+    ? `<div class="ft"><span class="kb" data-go="skills" title="Skills">✦</span><span class="kb" data-go="memory" title="Memory">◫</span></div>`
+    : `<div class="ft"><span class="kb${sd.footer === 'skills' ? ' on' : ''}" data-go="skills">✦ Skills</span> <span class="kb${sd.footer === 'memory' ? ' on' : ''}" data-go="memory">◫ Memory</span></div>`;
+  return `<div class="side side-${mode}">` +
+    `<div class="grp"><div class="newrow${sd.active === -1 && !sd.footer ? ' on' : ''}" data-go="new"><b>＋${mode === 'icons' ? '' : ' New chat'}</b>${mode === 'full' ? '<span class="kbd">n</span>' : ''}</div></div>` +
+    `<div class="grp">${mode === 'icons' ? '' : '<div class="hd">PROJECTS</div>'}${projects}</div>` + foot + `</div>`;
+}
+
+function overlay(s, sel) {
+  const o = s.overlay;
+  if (!o) return '';
+  const interactive = s.interactive === 'overlay';
+  const lines = (o.lines || []).map(l => `<div class="row" style="grid-template-columns:1fr">${esc(l)}</div>`).join('');
+  const rows = (o.rows || []).map(([k, label, selected, go], i) => {
+    const on = interactive ? i === sel : selected;
+    const attrs = interactive ? ` data-sel="${i}"${go ? ` data-go="${go}"` : ''}` : '';
+    return `<div class="row${on ? ' sel' : ''}"${attrs}><b>${esc(k)}</b><span>${esc(label)}</span></div>`;
+  }).join('');
+  return `<div class="overlay${o.alert ? ' alert' : ''}" role="dialog" aria-label="${esc(o.title)}">
+    <div class="ttl">${esc(o.title)}</div>${lines}${lines && rows ? '<div style="height:8px"></div>' : ''}${rows}
+    ${o.foot ? `<div class="foot">${esc(o.foot)}</div>` : ''}</div>`;
+}
+
+// The key hints on the last line are a row of buttons (like Midnight Commander's F-key bar): click = press the key.
+function hintBar(screen) {
+  const lines = screen.split('\n');
+  const last = lines[lines.length - 1];
+  if (!/^\s+<span class="(ch|clk)/.test(last)) return screen;
+  lines[lines.length - 1] = '  ' + last.trim().split(/ {3,}/).map(p => {
+    if (p.startsWith('<span class="clk"')) return p.replace('class="clk"', 'class="kb"');
+    const key = (p.match(/<span class="ch">([^<]*)<\/span>/) || [])[1] || '';
+    return `<span class="kb" data-toast="Same as pressing ${key}">${p}</span>`;
+  }).join('  ');
+  return lines.join('\n');
+}
+
+// Window size: which layout a width gets. Rows: under 20, sidebar rows drop their second line.
+let winCols = 130;
+const SIZES = [130, 100, 80, 60, 44];
+function modeFor(cols) {
+  return cols >= 110 ? 'full' : cols >= 90 ? 'narrow' : cols >= 70 ? 'icons' : cols >= 50 ? 'hidden' : 'tiny';
+}
+const MODE_NOTE = {
+  full: 'sidebar 28 cols with agent and state · full status line',
+  narrow: 'sidebar 20 cols, one line per chat · status drops the model',
+  icons: 'sidebar 5 cols: project arrows and state dots · path keeps the last two parts',
+  hidden: 'no sidebar (b brings it back over the agent) · status keeps title, agent, 5h % and ☰',
+  tiny: 'below 50×12 the agent cannot work: Chorus asks for a bigger window',
+};
+
+function render() {
+  const s = SCENES[current];
+  const screen = hintBar(screenOf(s, selIdx));
+  const mode = s.resize ? modeFor(winCols) : 'full';
+  const side = s.side || { active: 0 };
+  const body = mode === 'tiny'
+    ? `<pre>\n\n  <span class="wn">Window too small</span>\n\n  ${winCols}×28 now · needs 50×12\n  The agent keeps running.\n  Make the window bigger.</pre>`
+    : `${topbar(s, mode)}<div class="tbody${s.dim ? ' dimmed' : ''}">${sidebar(side, mode)}<pre>${screen}</pre></div>${statusBar(s.status, mode)}`;
+  sceneEl.innerHTML = `
+    <div class="scene-head"><h2>${esc(s.title)}</h2>${s.cmd ? `<span class="cmd">${esc(s.cmd)}</span>` : ''}</div>
+    <p class="caption">${esc(s.caption)}</p>
+    ${s.resize ? `<div class="ctl sizes"><span class="hint">Window width</span>${SIZES.map(c => `<button data-cols="${c}" class="${c === winCols ? 'primary' : ''}">${c} cols</button>`).join('')}<span class="hint"><b>${mode}</b>: ${MODE_NOTE[mode]}</span></div>` : ''}
+    <div class="term${s.overlay && s.overlay.rows.length > 8 ? ' tall' : ''}${s.resize ? ' sized' : ''}">
+      <div class="chrome"><i></i><i></i><i></i><span>${esc(s.chrome)}</span></div>
+      <div class="scroll">${s.resize ? `<div class="frame" style="--cols:${winCols}">${body}</div>` : body}</div>
+      ${overlay(s, selIdx)}
+      ${toast ? `<div class="toast" role="status">✓ ${esc(toast)}</div>` : ''}
+    </div>
+    <div class="behind"><h3>Behind the scenes</h3><ul>${s.behind.map(b => `<li>${b}</li>`).join('')}</ul></div>
+    <div class="ctl">
+      <button id="prev" ${current === 0 ? 'disabled' : ''}>← Previous</button>
+      <button id="next" class="primary" ${current === SCENES.length - 1 ? 'disabled' : ''}>Next →</button>
+      <span class="hint">${current + 1} of ${SCENES.length}${itemCount(s) ? ' · ↑ ↓ and Enter work inside this screen' : ''} · everything in the terminal with a pointer cursor is clickable</span>
+    </div>`;
+  document.getElementById('prev').onclick = () => go(current - 1);
+  document.getElementById('next').onclick = () => go(current + 1);
+  [...nav.querySelectorAll('button')].forEach((b, i) => b.setAttribute('aria-current', i === current ? 'true' : 'false'));
+}
+
+function go(i) {
+  if (i < 0 || i >= SCENES.length) return;
+  current = i;
+  selIdx = 0;
+  toast = '';
+  render();
+  try { history.replaceState(null, '', '#s' + (i + 1)); } catch (e) {}
+}
+
+function apply(r) {
+  if (!r) return;
+  if (r.go) go(idx(r.go));
+  if (r.toast) { toast = r.toast; render(); }
+}
+
+sceneEl.addEventListener('click', e => {
+  const c = e.target.closest('[data-cols]');
+  if (c) { winCols = Number(c.dataset.cols); toast = ''; return render(); }
+  const pj = e.target.closest('[data-tog]');
+  if (pj) { const n = pj.dataset.tog; openProjects.has(n) ? openProjects.delete(n) : openProjects.add(n); return render(); }
+  const ag = e.target.closest('[data-nc-agent]');
+  if (ag) { nc.agent = Number(ag.dataset.ncAgent); return render(); }
+  if (e.target.closest('[data-nc-skip]')) { nc.skip = !nc.skip; return render(); }
+  const t = e.target.closest('[data-go],[data-sel],[data-toast]');
+  if (!t || !sceneEl.contains(t)) return;
+  if (t.dataset.sel !== undefined) selIdx = Number(t.dataset.sel);
+  if (t.dataset.go && idx(t.dataset.go) >= 0) return go(idx(t.dataset.go));
+  toast = t.dataset.toast || '';
+  render();
+});
+
+let lastGroup = '';
+SCENES.forEach((s, i) => {
+  if (s.group !== lastGroup) {
+    const g = document.createElement('div');
+    g.className = 'group';
+    g.textContent = s.group;
+    nav.appendChild(g);
+    lastGroup = s.group;
+  }
+  const b = document.createElement('button');
+  b.innerHTML = `<span class="n">${String(i + 1).padStart(2, '0')}</span><span>${esc(s.title)}</span>`;
+  b.onclick = () => go(i);
+  nav.appendChild(b);
+});
+
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input, textarea')) return;
+  const s = SCENES[current];
+  const n = itemCount(s);
+  if (e.key === 'ArrowRight') go(current + 1);
+  else if (e.key === 'ArrowLeft') go(current - 1);
+  else if (n && e.key === 'ArrowDown') { e.preventDefault(); selIdx = (selIdx + 1) % n; toast = ''; render(); }
+  else if (n && e.key === 'ArrowUp') { e.preventDefault(); selIdx = (selIdx + n - 1) % n; toast = ''; render(); }
+  else if (n && e.key === 'Enter') {
+    if (s.interactive === 'overlay') { const g = s.overlay.rows[selIdx][3]; if (g) go(idx(g)); }
+    else apply(s.enter && s.enter(selIdx));
+  }
+});
+
+const m = location.hash.match(/^#s(\d+)$/);
+current = m ? Math.min(Math.max(Number(m[1]) - 1, 0), SCENES.length - 1) : 0;
+render();
+</script>

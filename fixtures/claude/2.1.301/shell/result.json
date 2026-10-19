@@ -1,0 +1,45 @@
+{
+  "cli": "claude",
+  "version": "2.1.301 (Claude Code)",
+  "scenario": "shell",
+  "date": "2026-10-16T04:12:01.704Z",
+  "platform": "linux 6.18.44-fc-v139 x64",
+  "node": "v22.22.0",
+  "scrubbedEnv": [
+    "CLAUDECODE",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_PID"
+  ],
+  "passed": true,
+  "checks": [
+    {
+      "name": "exit code 0",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "name": "command output visible in stream",
+      "ok": true
+    }
+  ],
+  "runs": [
+    {
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "durationMs": 7402,
+      "sessionId": "3b3d8475-6ede-4108-8067-a4e833bdbfe4",
+      "eventTypes": [
+        "active_goal",
+        "autocompact_state",
+        "system",
+        "stream_event",
+        "assistant",
+        "rate_limit_event",
+        "user",
+        "result"
+      ]
+    }
+  ]
+}

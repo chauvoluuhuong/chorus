@@ -1,0 +1,44 @@
+  ‹ Back   help                                                                                                                            ☰ Menu ⌃\
+  + New chat                │ help
+ PROJECTS                   │  Chorus keeps your agents side by side: a sidebar of projects and their chats, the agent's own screen on the right.
+ ▾ chorus-proof-api-k4I… 1  │  Click anything underlined or filled; the keyboard does everything too. The menu key is ⌃\ (Ctrl+\ or Ctrl+Space; CHORUS
+   ◌ Rate limiter     codex │
+ ▾ chorus-proof-7xWBJP   3  │    ⌃\  ↑↓ ⏎  walk the menu and run a row (or click it, or press its letter)
+   ◐ Create calc.js… claude │    ⌃\  1-9    switch to chat N (or click it in the sidebar)
+   ↳ ◐ Create calc.j… codex │    ⌃\  n      New chat: agent, model, project folder, skip permissions
+   ◐ Reply with only… codex │    ⌃\  h      hand off the current chat to another agent
+                            │    ⌃\  a      artifacts (o opens one in the browser with live reload)
+                            │    ⌃\  i      approvals inbox (y approve, x deny, ⏎ open the chat)
+                            │    ⌃\  k      skills: turn on or off, import the ones your agents already have
+                            │    ⌃\  m      memory: every chat in every project
+                            │    ⌃\  e      activity (f filters, r raw trace)
+                            │    ⌃\  y / x  approve / deny the request a background chat is waiting on
+                            │    ⌃\  r      ask a handoff chat to load its context again
+                            │    ⌃\  b      hide or show the sidebar
+                            │    ⌃\  q      quit (twice while chats run)
+                            │    ⌃\  ⌃\  send the menu key itself to the agent
+                            │
+                            │  Sidebar dots: ● working   ◐ waiting for you   ○ idle   ! needs approval   … starting   ◌ parked (select to resume)   ■
+                            │  Narrow windows: the sidebar shrinks to names, then icons, then hides (b brings it back); under 50×12 only a notice show
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+────────────────────────────│
+  ✦ Skills   ◫ Memory       │ ↑/↓ PgUp/PgDn scroll · g/G top/bottom · esc back  (1-20 of 20)
+ chorus  help                                                                                                                                 ☰ menu

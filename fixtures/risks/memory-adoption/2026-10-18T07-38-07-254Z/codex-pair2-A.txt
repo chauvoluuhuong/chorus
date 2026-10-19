@@ -1,0 +1,7 @@
+{"type":"thread.started","thread_id":"01a14df3-0d6f-7bb2-b092-89cecb74e4c2"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"OK"}}
+{"type":"turn.completed","usage":{"input_tokens":19080,"cached_input_tokens":11904,"cache_write_input_tokens":0,"output_tokens":5,"reasoning_output_tokens":0}}
+
+--stderr--
+Reading additional input from stdin...

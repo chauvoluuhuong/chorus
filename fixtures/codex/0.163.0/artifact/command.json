@@ -1,0 +1,22 @@
+[
+  {
+    "bin": "codex",
+    "args": [
+      "exec",
+      "--json",
+      "--skip-git-repo-check",
+      "-s",
+      "workspace-write",
+      "-c",
+      "mcp_servers.chorus.command=\"node\"",
+      "-c",
+      "mcp_servers.chorus.args=[\"~/chorus/tools/probe/probe-mcp.mjs\",\"--log\",\"~/chorus/fixtures/codex/0.163.0/artifact/mcp-log.jsonl\",\"--thread\",\"t_probe_artifact\"]",
+      "-c",
+      "mcp_servers.chorus.default_tools_approval_mode=\"approve\"",
+      "-c",
+      "approval_policy=\"never\"",
+      "Create the file .chorus/artifacts/probe/hello.md (create folders as needed) containing a level-1 heading \"Probe artifact\" and one short sentence. Then reply with the word: done"
+    ],
+    "cwd": "/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-probe-codex-artifact-64tKXB"
+  }
+]

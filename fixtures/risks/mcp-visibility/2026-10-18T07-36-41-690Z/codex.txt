@@ -1,0 +1,7 @@
+{"type":"thread.started","thread_id":"01a14df1-11b1-7fc2-8cb4-162c06fb8632"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"mcp__chorus__list_memory, mcp__chorus__recall, mcp__chorus__remember"}}
+{"type":"turn.completed","usage":{"input_tokens":37373,"cached_input_tokens":25856,"cache_write_input_tokens":0,"output_tokens":86,"reasoning_output_tokens":13}}
+
+--stderr--
+Reading additional input from stdin...

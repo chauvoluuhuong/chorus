@@ -1,0 +1,105 @@
+{
+  "id": "memory-adoption",
+  "status": "risk",
+  "summary": "claude: saved 2/2, recalled 1/2, used 1/2 | codex: saved 1/2, recalled 1/2, used 0/2 | agy: saved 2/2, recalled 1/2, used 1/2",
+  "facts": {
+    "claude": {
+      "trials": [
+        {
+          "pair": 1,
+          "savedByItself": true,
+          "recalledByItself": false,
+          "usedMemory": false,
+          "answerHasIt": false,
+          "callsInA": [
+            "remember"
+          ],
+          "callsInB": [],
+          "answer": "```\nFix typo in README\n\nCo-Authored-By: Claude Haiku 5.5 <<email>>\n```\n\nI didn't look at the diff, so this is generic. If you tell me the misspelled word and its correction, I can make t"
+        },
+        {
+          "pair": 2,
+          "savedByItself": true,
+          "recalledByItself": true,
+          "usedMemory": true,
+          "answerHasIt": true,
+          "callsInA": [
+            "remember"
+          ],
+          "callsInB": [
+            "recall"
+          ],
+          "answer": "**Fly.io**, based on your saved preference. I can't confirm it against the app itself, though, because this repo is empty.\n\n- The working directory (`chorus-risk-memB-claude-7Viu0t`) has only a `.git`"
+        }
+      ],
+      "saved": "2/2",
+      "recalled": "1/2",
+      "usedMemory": "1/2"
+    },
+    "codex": {
+      "trials": [
+        {
+          "pair": 1,
+          "savedByItself": true,
+          "recalledByItself": false,
+          "usedMemory": false,
+          "answerHasIt": false,
+          "callsInA": [
+            "remember"
+          ],
+          "callsInB": [],
+          "answer": "Fix typo in README"
+        },
+        {
+          "pair": 2,
+          "savedByItself": false,
+          "recalledByItself": true,
+          "usedMemory": false,
+          "answerHasIt": false,
+          "callsInA": [],
+          "callsInB": [
+            "recall"
+          ],
+          "answer": "I don’t see any app files or saved deployment preference in this workspace, so I can’t recommend a platform for this app yet. Share the repo or tell me its stack and requirements, and I can suggest a "
+        }
+      ],
+      "saved": "1/2",
+      "recalled": "1/2",
+      "usedMemory": "0/2"
+    },
+    "agy": {
+      "trials": [
+        {
+          "pair": 1,
+          "savedByItself": true,
+          "recalledByItself": false,
+          "usedMemory": false,
+          "answerHasIt": false,
+          "callsInA": [
+            "remember"
+          ],
+          "callsInB": [],
+          "answer": "Here is a standard conventional commit message:\n\n```text\ndocs: fix typo in README\n```\n\n**Alternative variations depending on your team's convention:**\n- `docs(readme): fix typo`\n- `Fix typo in README`"
+        },
+        {
+          "pair": 2,
+          "savedByItself": true,
+          "recalledByItself": true,
+          "usedMemory": true,
+          "answerHasIt": true,
+          "callsInA": [
+            "remember"
+          ],
+          "callsInB": [
+            "recall"
+          ],
+          "answer": "Based on your saved preferences, this app should be deployed to **[Fly.io](https://fly.io)** (and never Heroku)."
+        }
+      ],
+      "saved": "2/2",
+      "recalled": "1/2",
+      "usedMemory": "1/2"
+    }
+  },
+  "at": "2026-10-18T07-38-07-254Z"
+}

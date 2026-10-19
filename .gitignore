@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+target/
+
+# Chorus local state (threads, artifacts, run captures)
+.chorus/
+
+# OS files
+.DS_Store
+Thumbs.db

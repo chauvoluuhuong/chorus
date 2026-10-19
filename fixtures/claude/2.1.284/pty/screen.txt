@@ -1,0 +1,21 @@
+78
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Accessingworkspace:
+
+/private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-pty-claude-OIrM98
+
+Quicksafetycheck:Isthisaprojectyoucreatedoroneyoutrust?(Likeyourowncode,awell-knownopensource
+project,orworkfromyourteam).Ifnot,takeamomenttoreviewwhat'sinthisfolderfirst.
+
+ClaudeCode'llbeabletoread,edit,andexecutefileshere.
+
+Securityguide
+
+❯No,exit
+Yes,Itrustthisfolder
+
+Entertoconfirm·Esctocancel
+[>0q No, exit❯Yes, I trust this folder
+
+
+[>4m[<u[>0q[>4m[<u ▐▛███▛█Claude Codev2.1.284▝▜██████▀Haiku 4.5 · Claude Pro ▝▝   ▝▝ /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-pty-claude-OIrM98Sonnet5.5ishere,andit'sfasterandexcelsatwell-scopedtasks.Opus5.5isstillyourdefault.Switchwith/model.1 more notice hidden❯ Use your shell tool to run: echo pty-probe-$((6*7)) then reply with only the output.                                  ✽Sautéing… ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────❯ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────⏵⏵ accept edits on (shift+tab to cycle) · ← for agents(running UserPromptSubmit hook · 0s)❯ esc to interrupt · ← for agents[>0q✻ui✶aé✳✢St·ua✢S✳✶✻Use your shell tool to run: echo pty-probe-$((6*7)) then reply with only the output.Infus✽(1s · thinking)thinking⏺Running1shellcommand…2✻↓ 25 tokens · thinking)✶50  ⎿  $ echo pty-probe-$((6*7))running PreToolUsehook · 2s · ↓50 tokens · thinking)echo pty-probe-$((6*7))2s · ↓ 50 tokens) 88✳9✢106 tokens)·Infusing…102running PosToolUse hook · 2s · ↓112 tokens)2s · ↓ 112 okens ·thinking)4thinking⏺Infusing…5✢37thinking✳820✶2 ✻3ought for 1s)✽5Infusing…thinking)thinking✻4thinking⏺ Ran 1 shell command  Interrued · What should Claude do instead?❯ ← for agentsPress Ctrl-C againto exit⏵⏵ accept edits on(shift+tab to cycle) · ← for agents

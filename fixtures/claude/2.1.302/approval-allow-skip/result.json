@@ -1,0 +1,10 @@
+{
+  "cli": "claude",
+  "version": "2.1.302",
+  "decision": "allow",
+  "hookCalled": false,
+  "fileCreated": true,
+  "answeredStartupPrompts": 1,
+  "promptSeenAndKeysSent": false,
+  "hookLog": []
+}

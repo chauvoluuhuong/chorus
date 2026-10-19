@@ -1,0 +1,11 @@
+{
+  "version": "0.163.0",
+  "ws": "/private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-pty-codex-g6dTaV",
+  "answeredStartupPrompts": 1,
+  "transcript": {
+    "file": "~/.codex/sessions/2026/10/17/rollout-2026-10-17T11-42-42-01a1482b-587f-7b91-a8e5-4c0c11003f14.jsonl",
+    "msUntilVisible": 7516
+  },
+  "bytes": 16320,
+  "aliveAtCapture": true
+}

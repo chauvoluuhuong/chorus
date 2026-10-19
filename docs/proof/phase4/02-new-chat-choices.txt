@@ -1,0 +1,44 @@
+  ‹ Back   New chat                                                                                                                        ☰ Menu ⌃\
+  + New chat                │  New chat
+ PROJECTS                   │
+ ▾ chorus-proof-api-k4I… 1  │  Agent         claude    codex    agy
+   ◌ Rate limiter     codex │
+                            │
+                            │  Model         default   sonnet   opus   haiku
+                            │
+                            │  Effort        default   low   medium   high   xhigh   max    how hard the model thinks
+                            │
+                            │  Project      /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-7xWBJP  ▾
+                            │               recent: /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-api-k4I7Mu  · or type any fo
+                            │
+                            │  Permissions  [ ] Skip permission prompts  --dangerously-skip-permissions
+                            │               off: the agent asks, and Chorus shows it in the approvals inbox
+                            │
+                            │                ⏎ Start chat
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+                            │
+────────────────────────────│
+  ✦ Skills   ◫ Memory       │  ⏎  start    tab  next field    ←/→  change    space  tick    esc  back
+ chorus  New chat                                                                                                                             ☰ menu

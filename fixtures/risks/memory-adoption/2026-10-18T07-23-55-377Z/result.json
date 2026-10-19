@@ -1,0 +1,48 @@
+{
+  "id": "memory-adoption",
+  "status": "risk",
+  "summary": "claude: saved=True recalled=False usedMemory=False | codex: saved=False recalled=False usedMemory=False | agy: saved=True recalled=True usedMemory=True",
+  "facts": {
+    "claude": {
+      "savedByItself": true,
+      "recalledByItself": false,
+      "answerMentionsPnpm": true,
+      "finalAnswer": "I can't tell you the right command yet. The project directory is empty apart from `.git`: there are no tracked files, no commits, and no branches. Nothing shows which language or package manager this project uses.\n\nTell me the stack (for example Node/npm, pnpm, Yarn, Python/pip or uv, Go, Rust, Ruby",
+      "callsInA": [
+        "remember"
+      ],
+      "callsInB": [],
+      "msA": 9247,
+      "msB": 10364,
+      "usedMemory": false
+    },
+    "codex": {
+      "savedByItself": false,
+      "recalledByItself": false,
+      "answerMentionsPnpm": false,
+      "finalAnswer": "I couldn\u2019t find a package manifest or lockfile in this workspace, so I can\u2019t tell which dependency command this project uses. If you share the project directory or its manifest, I can identify the right command.",
+      "callsInA": [],
+      "callsInB": [],
+      "msA": 6318,
+      "msB": 8661,
+      "usedMemory": false
+    },
+    "agy": {
+      "savedByItself": true,
+      "recalledByItself": true,
+      "answerMentionsPnpm": true,
+      "finalAnswer": "Based on your preference to use **pnpm** across all projects, use:\n\n```bash\npnpm add <package-name>\n```\n\nFor a development dependency:\n\n```bash\npnpm add -D <package-name>\n```",
+      "callsInA": [
+        "remember"
+      ],
+      "callsInB": [
+        "list_memory",
+        "recall"
+      ],
+      "msA": 16592,
+      "msB": 44707,
+      "usedMemory": true
+    }
+  },
+  "at": "2026-10-18T07-23-55-377Z"
+}

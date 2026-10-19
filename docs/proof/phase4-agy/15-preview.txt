@@ -1,0 +1,44 @@
+ THREADS  · 1/4               │ Artifacts · Create calc.js in the curren
+▎ ○ Create calc.js in the cu… │  NAME                              VER   BY       UPDATED
+▎   agy · idle                │  ▸ notes.md                        v1    agy      just now
+  ↳ ◐ Create calc.js in the … │
+      claude · waiting for yo │  Preview  http://localhost:4317/t_ee6783ab/notes.md   ● live reload
+  ↳ ◐ Create calc.js in the … │  Path     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-nkh0uy/.chorus/threads/t_ee6783ab/arti
+      agy · waiting for you   │
+  ◐ claude 1                  │  Files written by tools
+    claude · waiting for you  │    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-nkh0uy/calc.js
+                              │    /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-nkh0uy/.chorus/threads/t_ee6783ab/artifacts/n
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+                              │
+──────────────────────────────│
+ ⌃Space ↑↓ move  ⏎ open       │
+ ⌃Space n new  b hide         │ ↑↓ select   o open in the browser (live reload)   p copy path   v versions   esc back
+ chorus  preview: http://localhost:4317/t_ee6783ab/notes.md                                                                               ⌃Space menu

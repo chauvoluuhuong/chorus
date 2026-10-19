@@ -1,0 +1,32 @@
+{
+  "id": "skip-flags",
+  "status": "risk",
+  "summary": "claude: exitedEarly=null confirm=true bypassShown=true | codex: exitedEarly=null confirm=false bypassShown=true | agy: exitedEarly=null confirm=true bypassShown=true",
+  "facts": {
+    "claude": {
+      "version": "2.1.302",
+      "flag": "--dangerously-skip-permissions",
+      "exitedEarly": null,
+      "asksToConfirm": true,
+      "showsBypass": true,
+      "head": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n Accessing workspace:\n /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-risk-skip-claude-KgQ7ma\n Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source\n project, or work from your team). If not, take a moment to review what's in this folder first.\n Claude Code'll be able to read, edit, and execute files here.\n Security guide\n ❯ No, exit\n   Yes, I trust this folder\n Enter to confirm · Esc to cancel"
+    },
+    "codex": {
+      "version": "0.163.0",
+      "flag": "--dangerously-bypass-approvals-and-sandbox",
+      "exitedEarly": null,
+      "asksToConfirm": false,
+      "showsBypass": true,
+      "head": "  Folder access\n  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-risk-skip-codex-sElKm6                              \n  Trust this folder? Codex can read, edit, and run files here, subject to your permission settings. Folder settings\n  can run code automatically, even without a model request. Continue only if you trust these files. Your trust\n  decision will be saved.\n› 1. Trust and continue                                                                                                 \n  2. Back to Agent Command Center\n  enter continue · esc back"
+    },
+    "agy": {
+      "version": "1.4.2",
+      "flag": "--dangerously-skip-permissions",
+      "exitedEarly": null,
+      "asksToConfirm": true,
+      "showsBypass": true,
+      "head": "Accessing workspace:\n/private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-risk-skip-agy-rsMS9S\nDo you trust the contents of this project?\nAntigravity CLI requires permission to read, edit, and execute files here.\n> Yes, I trust this folder\n  No, exit\n  ↑/↓ Navigate · enter Confirm\n                                                                                                 Gemini 3.8 Flash · high"
+    }
+  },
+  "at": "2026-10-18T07-51-43-900Z"
+}

@@ -1,0 +1,86 @@
+[
+  {
+    "path": "~/.codex/config.toml",
+    "status": "modified",
+    "size": 4346,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/logs_2.sqlite",
+    "status": "modified",
+    "size": 4931584,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/models_cache.json",
+    "status": "modified",
+    "size": 177716,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/state_5.sqlite-shm",
+    "status": "modified",
+    "size": 32768,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/state_5.sqlite-wal",
+    "status": "modified",
+    "size": 4124152,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/thread_history_1.sqlite-shm",
+    "status": "modified",
+    "size": 32768,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/thread_history_1.sqlite-wal",
+    "status": "modified",
+    "size": 337872,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/sessions/2026/10/17/rollout-2026-10-17T10-31-52-01a147ea-7c6b-7950-b790-ba45c09a6e5c.jsonl",
+    "status": "created",
+    "size": 90143,
+    "copied": true
+  },
+  {
+    "path": "~/.codex/plugins/cache/openai-curated-remote/work-pets/.codex-remote-plugin-install.json",
+    "status": "modified",
+    "size": 104,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/plugins/cache/openai-curated-remote/plugin-management/.codex-remote-plugin-install.json",
+    "status": "modified",
+    "size": 104,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/plugins/cache/openai-curated-remote/plugin-creator/.codex-remote-plugin-install.json",
+    "status": "modified",
+    "size": 104,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/plugins/cache/openai-curated-remote/canva/.codex-remote-plugin-install.json",
+    "status": "modified",
+    "size": 101,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/cache/codex_apps_tools/750f8d17fcd23adb34ddddcc748139d0d99c235c.json",
+    "status": "modified",
+    "size": 420595,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/cache/codex_apps_server_info/750f8d17fcd23adb34ddddcc748139d0d99c235c.json",
+    "status": "modified",
+    "size": 189,
+    "copied": false
+  }
+]

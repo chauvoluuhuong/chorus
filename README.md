@@ -1,41 +1,82 @@
 # 🎵 Chorus
 
-> **The Safe Multi-Engine Desktop App for AI Builders & Vibe Coders.**  
-> *Orchestrate Antigravity (`agy`), Claude Code (`claude`), and OpenAI Codex (`codex`) in one seamless window with shared context, real-time approval, and zero terminal anxiety.*
+> Work across AI coding CLIs (Claude Code, Codex, Antigravity) as easily as in one: hand work
+> from one agent to another without losing context, keep every thread in one place, and see what
+> the agents do and make.
 
----
+**Status:** Phases 1–4 are built and proven with the real CLIs (branch `feat/phase-1`); the desktop app (Phase 5)
+comes after. First product: the **`chorus`** CLI app (package `chorus-cli`).
 
-## 🌟 Overview
+**Goal:** $5 lifetime license, ~5,000 buyers. See [docs/product.md](docs/product.md).
 
-**Chorus** transforms fragmented, terminal-based AI coding tools into an elegant, unified desktop experience. Instead of juggling multiple scary command-line windows, users get:
-- **Browser-Style Tabs**: Hot-swap between `agy`, `claude`, and `codex` instantly.
-- **Smart Context Sync**: Switch tabs mid-task without losing conversation context—agents automatically receive deltas of what peers did via lifecycle hooks.
-- **Human-Readable Approval Dashboard**: Dangerous commands and file mutations are intercepted before execution, translated into plain language, and held for one-click approval.
-- **Direct Agent Collaboration**: Agents can query each other, delegate subtasks, and inspect peer terminal outputs via a local MCP bridge.
-- **Single Source of Truth for Skills**: Unified `.agents/skills/` and `AGENTS.md` shared across all engines.
+## Run it
 
----
+Needs Node 22+ and at least one of `claude`, `codex`, `agy` installed and logged in (`chorus doctor` checks).
+Open a **real terminal** (Terminal.app, iTerm), go to the project you want to work on, and run:
 
-## 📁 Repository Structure
-
-```text
-chorus/
-├── ideas/          # Product vision, target personas, branding, and feature concepts
-├── documents/      # Technical architecture, open-vs-closed boundary, and security docs
-├── plans/          # Implementation roadmaps, milestones, and go-to-market strategies
-└── README.md
+```bash
+cd ~/path/to/your/project
+node /Users/huong/chorus/src/cli/index.ts          # the home screen: agents, threads, n = new thread
 ```
 
-- **[ideas/](ideas/)**
-  - [`product-concept.md`](ideas/product-concept.md): Core vision, target persona (vibe coders & creators), and branding breakdown.
-  - [`features-brainstorm.md`](ideas/features-brainstorm.md): Feature backlog, inter-agent workflows, and UI requirements.
-- **[documents/](documents/)**
-  - [`system-architecture.md`](documents/system-architecture.md): Dual-Plane architecture, PTY management, hook contracts, and MCP bridge specs.
-  - [`ui-mockup-v2.html`](documents/ui-mockup-v2.html): Interactive desktop UI mockup in AI-chat-app style: pick agent and model, tool calls, terminal view, approvals in the bell, usage-limit handoff, skills sync, shared memory, activity. Open in a browser.
-  - [`ui-use-cases.md`](documents/ui-use-cases.md): UI use cases (UC-01 to UC-11), how each is built on the specs, and the spec additions this UI needs.
-  - [`ui-mockup.html`](documents/ui-mockup.html): v1 mockup, superseded by v2 and kept for history.
-  - [`open-vs-closed-core.md`](documents/open-vs-closed-core.md): The Open-Core boundary (open-source bridge vs. proprietary desktop GUI).
-  - [`distribution-and-trust.md`](documents/distribution-and-trust.md): Apple Notarization, Windows Code Signing, and MoR billing guide.
-- **[plans/](plans/)**
-  - [`roadmap.md`](plans/roadmap.md): Phase-by-phase implementation plan from CLI prototype to commercial launch.
-  - [`marketing-launch.md`](plans/marketing-launch.md): Content strategy, 45-second demo video scripts, and launch channels.
+Shorter: run `npm link` once in this repo (it installs a global `chorus` command), then just `chorus` in any project.
+Other ways in:
+
+```bash
+chorus new --agent claude --model sonnet --folder ~/work/api   # skip the form
+chorus handoff --to codex                                       # continue the latest thread in Codex
+chorus doctor | threads | show <id> | memory <id> | activity | trace <id>
+chorus artifacts --serve --open                                 # artifacts in the browser, live reload
+```
+
+Keys inside the app: the menu key, then one letter. The menu key is `Ctrl+\` (on a Mac `Ctrl+Space` is usually taken by macOS for
+switching input sources; it also works if you turned that shortcut off; `CHORUS_MENU_KEY=ctrl+b` picks another).
+`Ctrl+\` then `n` new thread · `h` hand off · `1-9` switch (or click the sidebar) ·
+`m` memory · `a` artifacts · `e` activity · `y`/`x` approve/deny a waiting request · `0` home · `?` help · `q` quit.
+Hold Shift while dragging to select text (the app uses the mouse for the sidebar; `CHORUS_MOUSE=0` turns that off).
+
+## Why
+
+AI CLIs are powerful but siloed. When one hits its plan limit or you want another model's take,
+you copy-paste context by hand, and the plans, mockups and reports each agent produced are
+scattered. Chorus keeps one **thread** of work across agents:
+
+- **Handoff:** open a new thread with another agent. Its first prompt tells it to load the
+  previous thread through the `chorus` MCP tool `get_handoff_context` and confirm in a few
+  bullets what it learned. Works even when the first agent has hit its plan limit.
+- **All threads in one place:** several agents run at once in a sidebar like tabs; switch
+  instantly and see which one is waiting for you.
+- **Artifacts:** non-code files go to `.chorus/threads/<id>/artifacts/` and are easy to open.
+- **Skills:** one set of skills, synced to every CLI and used by each agent.
+- **Transparency:** you work in the real CLI TUI; Chorus shows tool calls, approvals and
+  artifacts, and records everything for debugging.
+
+## Docs
+
+| Doc | What's in it |
+|---|---|
+| [docs/product.md](docs/product.md) | Goal and success, value, pricing, competitors, risks |
+| [docs/architecture.md](docs/architecture.md) | Build plan (5 phases), components, what is stored, MCP tools, handoff |
+| [docs/roadmap.md](docs/roadmap.md) | Progress per phase; each ends with an e2e proof on the real CLIs |
+| [docs/testing.md](docs/testing.md) | Test layers, what runs in the cloud vs on your Mac |
+| [docs/integrations/](docs/integrations/README.md) | Verified facts per CLI: flags, events, paths, token usage, gotchas |
+| [docs/distribution-and-trust.md](docs/distribution-and-trust.md) | Signing, notarization, payments, licensing |
+| [docs/mockups/chorus-cli.html](docs/mockups/chorus-cli.html) | Clickable mockup of the chorus terminal app |
+| [docs/archive/](docs/archive/) | v1 product concept, brainstorm and UI mockup (reference for the desktop app) |
+
+## Repository layout
+
+```
+CLAUDE.md        start here: context, rules and next steps for AI coding sessions
+docs/            architecture, roadmap, testing, per-CLI integration docs
+tools/probe/     capability probe: runs a real CLI through fixed scenarios, records fixtures
+fixtures/        captured real CLI output, per CLI and version (used by contract tests)
+```
+
+## Probe a CLI
+
+```bash
+node tools/probe/probe.mjs claude --model haiku
+node tools/probe/probe.mjs codex
+node tools/probe/probe.mjs agy
+```

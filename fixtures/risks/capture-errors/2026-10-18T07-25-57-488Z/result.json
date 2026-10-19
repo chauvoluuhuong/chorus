@@ -1,0 +1,87 @@
+{
+  "id": "capture-errors",
+  "status": "risk",
+  "summary": "claude: bad-model exit=1 events=[system/notification,system/init,system/commands_changed,assistant,result/success] | codex: bad-model exit=1 events=[thread.started,item.completed/error,turn.started,error,turn.failed]; file-change exit=0 events=[thread.started,turn.started,item.completed/agent_message,item.started/file_change,item.completed/file_change,turn.completed] | agy: bad-model exit=1 events=[undefined]",
+  "facts": {
+    "claude": {
+      "version": "2.1.302",
+      "bad-model": {
+        "exit": 1,
+        "timedOut": false,
+        "ms": 4679,
+        "eventTypes": [
+          "system/notification",
+          "system/init",
+          "system/commands_changed",
+          "assistant",
+          "result/success"
+        ],
+        "stderrHead": "[claude-code:unrecognized_model] {\"model\":\"chorus-no-such-model\",\"query_source\":\"sdk\"}\n",
+        "adapterSees": {
+          "turns": 1,
+          "toolCalls": [],
+          "limit": null
+        }
+      }
+    },
+    "codex": {
+      "version": "0.163.0",
+      "bad-model": {
+        "exit": 1,
+        "timedOut": false,
+        "ms": 3570,
+        "eventTypes": [
+          "thread.started",
+          "item.completed/error",
+          "turn.started",
+          "error",
+          "turn.failed"
+        ],
+        "stderrHead": "Reading additional input from stdin...\n",
+        "adapterSees": {
+          "turns": 0,
+          "toolCalls": [],
+          "limit": null
+        }
+      },
+      "file-change": {
+        "exit": 0,
+        "timedOut": false,
+        "ms": 8015,
+        "eventTypes": [
+          "thread.started",
+          "turn.started",
+          "item.completed/agent_message",
+          "item.started/file_change",
+          "item.completed/file_change",
+          "turn.completed"
+        ],
+        "stderrHead": "Reading additional input from stdin...\n",
+        "adapterSees": {
+          "turns": 2,
+          "toolCalls": [],
+          "limit": null
+        },
+        "fileCreated": true
+      }
+    },
+    "agy": {
+      "version": "1.4.2",
+      "bad-model": {
+        "exit": 1,
+        "timedOut": false,
+        "ms": 6066,
+        "eventTypes": [
+          "undefined"
+        ],
+        "stderrHead": "error: invalid model selection (--model \"chorus-no-such-model\" --effort \"\"): model chorus-no-such-model is not recognized as a known model or custom model in settings\nAvailable models:\n  Gemini 3.8 Flash (High)\n  Gemini 3.8 Flash (Medium)\n  Gemini 3.8 Flash (Low)\n  Claude Sonnet 4.6 (Thinking)\n  Cla",
+        "adapterSees": {
+          "turns": 0,
+          "toolCalls": [],
+          "limit": null
+        }
+      }
+    }
+  },
+  "at": "2026-10-18T07-25-57-488Z"
+}

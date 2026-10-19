@@ -1,0 +1,156 @@
+[>q[>4m[>4;2m[>1u
+▄▀▀▄
+▀▀▀▀▀▀
+▀▀▀▀▀▀▀▀
+  ▄▀▀    ▀▀▄
+ ▄▀▀      ▀▀▄
+
+ Welcome to the Antigravity CLI. You are currently not signed in.
+
+ ⣷  Signing in...Accessing workspace:
+
+/private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-pty-agy-SY9JYW
+
+Do you trust the contents of this project?
+
+Antigravity CLI requires permission to read, edit, and execute files here.
+
+> Yes, I trust this folder
+  No, exit
+
+  ↑/↓ Navigate · enter ConfirmGemini 3.8 Flash · high[>4m[<1u[>4;2m[>1u
+
+▄▀▀▄        Antigravity CLI 1.4.0
+▀▀▀▀▀▀       <email> (Antigravity Starter Quota)
+▀▀▀▀▀▀▀▀      Gemini 3.8 Flash (High)
+   ▄▀▀    ▀▀▄     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-pty-agy-SY9JYW
+  ▄▀▀      ▀▀▄
+
+────────────────────────────────────────────────────────────
+> Use your shell tool to run: echo pty-probe-$((6*7)) then reply with only the output.
+⣷  Generating...
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+>
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+esc to cancelGemini 3.8 Flash · high⣯ 
+
+⣟ 
+
+⡿ 
+
+⢿ 
+
+⣻  G
+
+⣽  Ge
+
+⣾  Gen
+
+⣷  Gener
+
+⣯  Genera
+
+⣟  Generat
+
+⡿  Generati
+
+⢿  Generatin
+
+⣻  Generating.
+
+⣽  Generating..
+
+⣾  Generating...
+
+⣷  Generating
+
+⣯  Generating.
+
+⣟  Generating..
+
+⡿  Generating...
+
+⢿ 
+
+⣻ 
+
+⣽ 
+
+⣾ 
+
+⣷ 
+
+⣯  Ge
+
+⣟  Gen
+
+⡿  Gene
+
+⢿  Genera
+
+⣻  Generat
+
+⣽  Generati
+
+eratin
+
+⣾ 
+
+⣷  Generating.
+
+⣯  Generating..
+
+⣟  Generating...
+
+⡿  Generatin
+
+⢿  Generating.
+
+⣻  Generating..
+
+⣽  Generating...
+
+⣾ 
+
+⣷  ```...
+
+⣯ 
+
+
+○ Thought for 4.7s (The command `echo pty-probe-$((67))` should execute. The `run_command` tool is available. The `...)
+○ Running (echo pty-probe-$((6*7))) (ctrl+o to expand)
+⣟  Running command...
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+>
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+esc to cancelGemini 3.8 Flash · high● Ran 
+
+
+mmand.
+
+⡿ 
+
+mand..
+
+⢿  Running command...
+
+⣻  Running comman
+
+⣽  Running command
+
+⣾  Running command.
+
+⣷  Running command...
+
+⣯ 
+
+⣟ 
+
+
+  ⎿  Interrupted · What should Antigravity CLI do instead?
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+>
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+? for shortcutsGemini 3.8 Flash · high
+
+press ctrl+c again to exit

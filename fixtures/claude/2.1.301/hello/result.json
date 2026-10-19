@@ -1,0 +1,49 @@
+{
+  "cli": "claude",
+  "version": "2.1.301 (Claude Code)",
+  "scenario": "hello",
+  "date": "2026-10-16T04:11:48.015Z",
+  "platform": "linux 6.18.44-fc-v139 x64",
+  "node": "v22.22.0",
+  "scrubbedEnv": [
+    "CLAUDECODE",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_PID"
+  ],
+  "passed": true,
+  "checks": [
+    {
+      "name": "exit code 0",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "name": "session id found in stream",
+      "ok": true,
+      "detail": "b8a29677-e60f-4aee-b2a6-a0ae71790f8d"
+    },
+    {
+      "name": "token usage present in stream",
+      "ok": true
+    }
+  ],
+  "runs": [
+    {
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "durationMs": 4717,
+      "sessionId": "b8a29677-e60f-4aee-b2a6-a0ae71790f8d",
+      "eventTypes": [
+        "active_goal",
+        "autocompact_state",
+        "system",
+        "stream_event",
+        "assistant",
+        "rate_limit_event",
+        "result"
+      ]
+    }
+  ]
+}

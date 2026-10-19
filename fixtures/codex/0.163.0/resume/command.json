@@ -1,0 +1,44 @@
+[
+  {
+    "bin": "codex",
+    "args": [
+      "exec",
+      "--json",
+      "--skip-git-repo-check",
+      "-s",
+      "workspace-write",
+      "-c",
+      "mcp_servers.chorus.command=\"node\"",
+      "-c",
+      "mcp_servers.chorus.args=[\"~/chorus/tools/probe/probe-mcp.mjs\",\"--log\",\"~/chorus/fixtures/codex/0.163.0/resume/mcp-log.jsonl\",\"--thread\",\"t_probe_resume\"]",
+      "-c",
+      "mcp_servers.chorus.default_tools_approval_mode=\"approve\"",
+      "-c",
+      "approval_policy=\"never\"",
+      "Remember this code word for later: mango. Reply with only: ok"
+    ],
+    "cwd": "/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-probe-codex-resume-AUCTxw"
+  },
+  {
+    "bin": "codex",
+    "args": [
+      "exec",
+      "--json",
+      "--skip-git-repo-check",
+      "-s",
+      "workspace-write",
+      "-c",
+      "mcp_servers.chorus.command=\"node\"",
+      "-c",
+      "mcp_servers.chorus.args=[\"~/chorus/tools/probe/probe-mcp.mjs\",\"--log\",\"~/chorus/fixtures/codex/0.163.0/resume/mcp-log.jsonl\",\"--thread\",\"t_probe_resume\"]",
+      "-c",
+      "mcp_servers.chorus.default_tools_approval_mode=\"approve\"",
+      "-c",
+      "approval_policy=\"never\"",
+      "resume",
+      "01a147ea-d93b-7f71-b62c-fed9d17fff5c",
+      "What was the code word I gave you earlier? Reply with one word only."
+    ],
+    "cwd": "/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-probe-codex-resume-AUCTxw"
+  }
+]

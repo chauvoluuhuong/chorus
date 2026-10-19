@@ -1,0 +1,20 @@
+{
+  "id": "agy-thread-id",
+  "status": "pass",
+  "summary": "per-thread --log-file written (28494 bytes), names the new session id: true; thread id found in mcp/chorus/instructions.md; 225 files touched; exit 0",
+  "facts": {
+    "logHasSessionId": true,
+    "logBytes": 28494,
+    "newBrain": [
+      "020b3d95-2789-4a0c-822e-b7846f5efe16"
+    ],
+    "threadId": "t_risk4d0d",
+    "hits": [
+      "mcp/chorus/instructions.md"
+    ],
+    "brainHits": 0,
+    "touched": 225,
+    "exit": 0
+  },
+  "at": "2026-10-18T07-37-36-436Z"
+}

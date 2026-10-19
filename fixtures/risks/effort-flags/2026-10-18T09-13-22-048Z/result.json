@@ -1,0 +1,35 @@
+{
+  "id": "effort-flags",
+  "status": "pass",
+  "summary": "claude: shown (▝▜██████▀  Opus 5.5 with low effort · Claude Pro) | codex: shown (GPT-6-Luna high · /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-risk-eff-codex-5ZG4CA) | agy: shown (▀▀▀▀▀▀▀▀      Gemini 3.8 Flash (Low))",
+  "facts": {
+    "claude": {
+      "version": "2.1.302",
+      "args": [
+        "--effort",
+        "low"
+      ],
+      "shows": true,
+      "line": "▝▜██████▀  Opus 5.5 with low effort · Claude Pro"
+    },
+    "codex": {
+      "version": "0.163.0",
+      "args": [
+        "-c",
+        "model_reasoning_effort=\"high\""
+      ],
+      "shows": true,
+      "line": "GPT-6-Luna high · /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-risk-eff-codex-5ZG4CA"
+    },
+    "agy": {
+      "version": "1.4.2",
+      "args": [
+        "--effort",
+        "low"
+      ],
+      "shows": true,
+      "line": "▀▀▀▀▀▀▀▀      Gemini 3.8 Flash (Low)"
+    }
+  },
+  "at": "2026-10-18T09-13-22-048Z"
+}

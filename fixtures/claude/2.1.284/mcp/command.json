@@ -1,0 +1,24 @@
+[
+  {
+    "bin": "claude",
+    "args": [
+      "-p",
+      "Call the tool named probe_get_context from the MCP server named \"chorus\". Then reply with only the value of secret_word from its result.",
+      "--session-id",
+      "fb813616-a328-4eb4-93ea-80093311cd66",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--permission-mode",
+      "acceptEdits",
+      "--model",
+      "haiku",
+      "--strict-mcp-config",
+      "--mcp-config",
+      "{\"mcpServers\":{\"chorus\":{\"command\":\"node\",\"args\":[\"~/chorus/tools/probe/probe-mcp.mjs\",\"--log\",\"~/chorus/fixtures/claude/2.1.284/mcp/mcp-log.jsonl\",\"--thread\",\"t_probe_mcp\"]}}}",
+      "--allowedTools",
+      "mcp__chorus__probe_get_context,Bash(echo *),Write,Edit"
+    ],
+    "cwd": "/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-probe-claude-mcp-N3wOIl"
+  }
+]

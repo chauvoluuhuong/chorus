@@ -1,0 +1,24 @@
+[
+  {
+    "bin": "claude",
+    "args": [
+      "-p",
+      "Reply with exactly the two words: got it",
+      "--session-id",
+      "b8a29677-e60f-4aee-b2a6-a0ae71790f8d",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--permission-mode",
+      "acceptEdits",
+      "--model",
+      "haiku",
+      "--strict-mcp-config",
+      "--mcp-config",
+      "{\"mcpServers\":{\"chorus\":{\"command\":\"node\",\"args\":[\"/home/user/chorus/tools/probe/probe-mcp.mjs\",\"--log\",\"/home/user/chorus/fixtures/claude/2.1.301_Claude_Code_/hello/mcp-log.jsonl\",\"--thread\",\"t_probe_hello\"]}}}",
+      "--allowedTools",
+      "mcp__chorus__probe_get_context,Bash(echo *),Write,Edit"
+    ],
+    "cwd": "/tmp/chorus-probe-claude-hello-CEYmxJ"
+  }
+]

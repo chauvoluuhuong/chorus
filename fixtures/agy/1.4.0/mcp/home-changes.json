@@ -1,0 +1,1322 @@
+[
+  {
+    "path": "~/.gemini/antigravity-cli/conversation_summaries.db",
+    "status": "modified",
+    "size": 73728,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/jetbox_summaries_proto.pb",
+    "status": "modified",
+    "size": 29217,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/presence/be171e62-f969-48f2-8072-bc689475d746.lock",
+    "status": "created",
+    "size": 0,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/add_knowledge_base_to_agent.json",
+    "status": "modified",
+    "size": 1119,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/check_subscription.json",
+    "status": "modified",
+    "size": 216,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/compose_music.json",
+    "status": "modified",
+    "size": 2837,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/create_agent.json",
+    "status": "modified",
+    "size": 2862,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/create_composition_plan.json",
+    "status": "modified",
+    "size": 1870,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/create_voice_from_preview.json",
+    "status": "modified",
+    "size": 636,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/get_agent.json",
+    "status": "modified",
+    "size": 236,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/get_conversation.json",
+    "status": "modified",
+    "size": 509,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/get_voice.json",
+    "status": "modified",
+    "size": 215,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/isolate_audio.json",
+    "status": "modified",
+    "size": 550,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/list_agents.json",
+    "status": "modified",
+    "size": 160,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/list_conversations.json",
+    "status": "modified",
+    "size": 1398,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/list_models.json",
+    "status": "modified",
+    "size": 142,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/list_phone_numbers.json",
+    "status": "modified",
+    "size": 192,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/make_outbound_call.json",
+    "status": "modified",
+    "size": 951,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/play_audio.json",
+    "status": "modified",
+    "size": 256,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/search_voice_library.json",
+    "status": "modified",
+    "size": 665,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/search_voices.json",
+    "status": "modified",
+    "size": 923,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/simulate_conversation.json",
+    "status": "modified",
+    "size": 2025,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/speech_to_speech.json",
+    "status": "modified",
+    "size": 668,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/speech_to_text.json",
+    "status": "modified",
+    "size": 1854,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/text_to_sound_effects.json",
+    "status": "modified",
+    "size": 2210,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/text_to_speech.json",
+    "status": "modified",
+    "size": 4913,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/text_to_voice.json",
+    "status": "modified",
+    "size": 937,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/upload_music_for_inpainting.json",
+    "status": "modified",
+    "size": 1260,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/video_to_music.json",
+    "status": "modified",
+    "size": 1687,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/elevenlabs/voice_clone.json",
+    "status": "modified",
+    "size": 563,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/demo-notes/add_note.json",
+    "status": "modified",
+    "size": 428,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/click.json",
+    "status": "modified",
+    "size": 615,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/close_page.json",
+    "status": "modified",
+    "size": 361,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/drag.json",
+    "status": "modified",
+    "size": 589,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/emulate.json",
+    "status": "modified",
+    "size": 2471,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/evaluate_script.json",
+    "status": "modified",
+    "size": 2024,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/fill.json",
+    "status": "modified",
+    "size": 728,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/fill_form.json",
+    "status": "modified",
+    "size": 1119,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/get_console_message.json",
+    "status": "modified",
+    "size": 493,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/get_css_styles.json",
+    "status": "modified",
+    "size": 1351,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/get_network_request.json",
+    "status": "modified",
+    "size": 1039,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/handle_dialog.json",
+    "status": "modified",
+    "size": 544,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/hover.json",
+    "status": "modified",
+    "size": 521,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/lighthouse_audit.json",
+    "status": "modified",
+    "size": 900,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/list_console_messages.json",
+    "status": "modified",
+    "size": 1505,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/list_network_requests.json",
+    "status": "modified",
+    "size": 1234,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/list_pages.json",
+    "status": "modified",
+    "size": 211,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/navigate_page.json",
+    "status": "modified",
+    "size": 1166,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/new_page.json",
+    "status": "modified",
+    "size": 984,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/performance_analyze_insight.json",
+    "status": "modified",
+    "size": 760,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/performance_start_trace.json",
+    "status": "modified",
+    "size": 1229,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/performance_stop_trace.json",
+    "status": "modified",
+    "size": 569,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/press_key.json",
+    "status": "modified",
+    "size": 725,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/resize_page.json",
+    "status": "modified",
+    "size": 556,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/screencast_start.json",
+    "status": "modified",
+    "size": 455,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/screencast_stop.json",
+    "status": "modified",
+    "size": 328,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/select_page.json",
+    "status": "modified",
+    "size": 456,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/take_heapsnapshot.json",
+    "status": "modified",
+    "size": 517,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/take_screenshot.json",
+    "status": "modified",
+    "size": 1157,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/take_snapshot.json",
+    "status": "modified",
+    "size": 895,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/type_text.json",
+    "status": "modified",
+    "size": 505,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/upload_file.json",
+    "status": "modified",
+    "size": 789,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chrome-devtools-mcp/wait_for.json",
+    "status": "modified",
+    "size": 661,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chorus/instructions.md",
+    "status": "modified",
+    "size": 31,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/chorus/probe_get_context.json",
+    "status": "modified",
+    "size": 225,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/bridge_status.json",
+    "status": "modified",
+    "size": 495,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/browser_settings.json",
+    "status": "modified",
+    "size": 316,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/delete_workflow.json",
+    "status": "modified",
+    "size": 265,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/get_account.json",
+    "status": "modified",
+    "size": 431,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/get_failure.json",
+    "status": "modified",
+    "size": 441,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/get_history.json",
+    "status": "modified",
+    "size": 337,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/get_run.json",
+    "status": "modified",
+    "size": 356,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/get_run_data.json",
+    "status": "modified",
+    "size": 618,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/get_step.json",
+    "status": "modified",
+    "size": 425,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/get_step_schema.json",
+    "status": "modified",
+    "size": 275,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/get_workflow.json",
+    "status": "modified",
+    "size": 383,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/import_workflow.json",
+    "status": "modified",
+    "size": 404,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/instructions.md",
+    "status": "modified",
+    "size": 5934,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/list_runs.json",
+    "status": "modified",
+    "size": 473,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/list_workflows.json",
+    "status": "modified",
+    "size": 527,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/open_login_page.json",
+    "status": "modified",
+    "size": 482,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/page_click.json",
+    "status": "modified",
+    "size": 663,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/page_evaluate_script.json",
+    "status": "modified",
+    "size": 1432,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/page_fill.json",
+    "status": "modified",
+    "size": 776,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/page_get_network_request.json",
+    "status": "modified",
+    "size": 1087,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/page_list_console_messages.json",
+    "status": "modified",
+    "size": 1553,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/page_list_network_requests.json",
+    "status": "modified",
+    "size": 1282,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/page_list_pages.json",
+    "status": "modified",
+    "size": 259,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/page_navigate_page.json",
+    "status": "modified",
+    "size": 1214,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/page_new_page.json",
+    "status": "modified",
+    "size": 1032,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/page_press_key.json",
+    "status": "modified",
+    "size": 773,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/page_select_page.json",
+    "status": "modified",
+    "size": 504,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/page_take_screenshot.json",
+    "status": "modified",
+    "size": 1205,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/page_take_snapshot.json",
+    "status": "modified",
+    "size": 943,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/page_wait_for.json",
+    "status": "modified",
+    "size": 709,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/propose_change.json",
+    "status": "modified",
+    "size": 1213,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/propose_workflow.json",
+    "status": "modified",
+    "size": 496,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/read_runs.json",
+    "status": "modified",
+    "size": 367,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/read_workflows.json",
+    "status": "modified",
+    "size": 400,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/run_workflow.json",
+    "status": "modified",
+    "size": 827,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/set_language.json",
+    "status": "modified",
+    "size": 577,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/setup.json",
+    "status": "modified",
+    "size": 344,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/show_account.json",
+    "status": "modified",
+    "size": 553,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/show_failure.json",
+    "status": "modified",
+    "size": 494,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/show_history.json",
+    "status": "modified",
+    "size": 469,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/show_run.json",
+    "status": "modified",
+    "size": 454,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/show_run_data.json",
+    "status": "modified",
+    "size": 498,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/show_runs.json",
+    "status": "modified",
+    "size": 241,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/show_step.json",
+    "status": "modified",
+    "size": 468,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/show_workflow.json",
+    "status": "modified",
+    "size": 498,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/show_workflows.json",
+    "status": "modified",
+    "size": 208,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/ui_account_link.json",
+    "status": "modified",
+    "size": 220,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/ui_account_page.json",
+    "status": "modified",
+    "size": 212,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/ui_apply_change.json",
+    "status": "modified",
+    "size": 237,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/ui_check_browser.json",
+    "status": "modified",
+    "size": 294,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/ui_confirm_import.json",
+    "status": "modified",
+    "size": 226,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/ui_discard_change.json",
+    "status": "modified",
+    "size": 229,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/ui_finish_setup.json",
+    "status": "modified",
+    "size": 166,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/ui_get_screenshot.json",
+    "status": "modified",
+    "size": 264,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/ui_restore_version.json",
+    "status": "modified",
+    "size": 253,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/ui_resume_manual.json",
+    "status": "modified",
+    "size": 221,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/ui_save_browser.json",
+    "status": "modified",
+    "size": 315,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/ui_save_draft.json",
+    "status": "modified",
+    "size": 309,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/ui_set_language.json",
+    "status": "modified",
+    "size": 233,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/ui_sign_in.json",
+    "status": "modified",
+    "size": 150,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/ui_stop_run.json",
+    "status": "modified",
+    "size": 200,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/browser-workflow-app/ui_test_draft.json",
+    "status": "modified",
+    "size": 401,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/config_get_app_state.json",
+    "status": "modified",
+    "size": 474,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/config_list_notion_pages.json",
+    "status": "modified",
+    "size": 380,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/config_list_repo_md_files.json",
+    "status": "modified",
+    "size": 332,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/config_list_repos.json",
+    "status": "modified",
+    "size": 373,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/config_preview_notion_page.json",
+    "status": "modified",
+    "size": 371,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/config_preview_repo_md_file.json",
+    "status": "modified",
+    "size": 474,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/config_save_app_config.json",
+    "status": "modified",
+    "size": 1759,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/config_sync_notion_guide_skill.json",
+    "status": "modified",
+    "size": 836,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/config_sync_notion_pages.json",
+    "status": "modified",
+    "size": 868,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/config_sync_repo_md_files.json",
+    "status": "modified",
+    "size": 1001,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/configure_app.json",
+    "status": "modified",
+    "size": 382,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/get_app_config.json",
+    "status": "modified",
+    "size": 403,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/get_skill.json",
+    "status": "modified",
+    "size": 399,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/get_skills.json",
+    "status": "modified",
+    "size": 462,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/github_disconnect.json",
+    "status": "modified",
+    "size": 275,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/github_repo_status.json",
+    "status": "modified",
+    "size": 358,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/init_automate_work.json",
+    "status": "modified",
+    "size": 1043,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/instructions.md",
+    "status": "modified",
+    "size": 5832,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/list_repo_files.json",
+    "status": "modified",
+    "size": 911,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/list_skills.json",
+    "status": "modified",
+    "size": 512,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/manage_skills.json",
+    "status": "modified",
+    "size": 300,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/notion_archive_page.json",
+    "status": "modified",
+    "size": 318,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/notion_check_connection.json",
+    "status": "modified",
+    "size": 372,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/notion_create_comment.json",
+    "status": "modified",
+    "size": 616,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/notion_create_page_record.json",
+    "status": "modified",
+    "size": 1439,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/notion_get_comments.json",
+    "status": "modified",
+    "size": 357,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/notion_get_page.json",
+    "status": "modified",
+    "size": 510,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/notion_get_resource_content.json",
+    "status": "modified",
+    "size": 526,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/notion_list_resource.json",
+    "status": "modified",
+    "size": 493,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/notion_list_resources.json",
+    "status": "modified",
+    "size": 492,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/notion_search.json",
+    "status": "modified",
+    "size": 1094,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/notion_update_page.json",
+    "status": "modified",
+    "size": 1351,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/panel_check_setup.json",
+    "status": "modified",
+    "size": 229,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/panel_create_user.json",
+    "status": "modified",
+    "size": 413,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/panel_get_auth_state.json",
+    "status": "modified",
+    "size": 222,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/panel_list_repos.json",
+    "status": "modified",
+    "size": 195,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/panel_list_users.json",
+    "status": "modified",
+    "size": 206,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/panel_load_config.json",
+    "status": "modified",
+    "size": 226,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/panel_logout.json",
+    "status": "modified",
+    "size": 224,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/panel_remove_connection.json",
+    "status": "modified",
+    "size": 398,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/panel_save_all_credentials.json",
+    "status": "modified",
+    "size": 655,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/panel_save_connection.json",
+    "status": "modified",
+    "size": 671,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/panel_save_pat.json",
+    "status": "modified",
+    "size": 317,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/panel_save_qdrant_config.json",
+    "status": "modified",
+    "size": 681,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/panel_select_repo.json",
+    "status": "modified",
+    "size": 296,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/panel_select_user.json",
+    "status": "modified",
+    "size": 349,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/panel_set_language.json",
+    "status": "modified",
+    "size": 414,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/panel_test_connection.json",
+    "status": "modified",
+    "size": 614,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/read_repo_file.json",
+    "status": "modified",
+    "size": 1091,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/refine_content.json",
+    "status": "modified",
+    "size": 1025,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/repo_overview.json",
+    "status": "modified",
+    "size": 649,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/save_app_config.json",
+    "status": "modified",
+    "size": 1608,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/save_sql_config.json",
+    "status": "modified",
+    "size": 391,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/search_repo_code.json",
+    "status": "modified",
+    "size": 1061,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/search_skills.json",
+    "status": "modified",
+    "size": 498,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/set_active_repo.json",
+    "status": "modified",
+    "size": 469,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/skills_create.json",
+    "status": "modified",
+    "size": 688,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/skills_delete.json",
+    "status": "modified",
+    "size": 276,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/skills_list.json",
+    "status": "modified",
+    "size": 328,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/skills_refine_content.json",
+    "status": "modified",
+    "size": 819,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/skills_search.json",
+    "status": "modified",
+    "size": 420,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/skills_update.json",
+    "status": "modified",
+    "size": 678,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/sql_check_connection.json",
+    "status": "modified",
+    "size": 480,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/sql_disconnect.json",
+    "status": "modified",
+    "size": 208,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/sql_execute_query.json",
+    "status": "modified",
+    "size": 974,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/sql_get_schema.json",
+    "status": "modified",
+    "size": 788,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/workspace_confirm_schema.json",
+    "status": "modified",
+    "size": 282,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/workspace_get_schema.json",
+    "status": "modified",
+    "size": 224,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/workspace_record_create.json",
+    "status": "modified",
+    "size": 662,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/workspace_record_delete.json",
+    "status": "modified",
+    "size": 338,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/workspace_record_query.json",
+    "status": "modified",
+    "size": 543,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/workspace_record_update.json",
+    "status": "modified",
+    "size": 596,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/workspace_setup.json",
+    "status": "modified",
+    "size": 751,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/automate-work/workspace_status.json",
+    "status": "modified",
+    "size": 269,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/apple-automation-mcp/delete_saved_script.json",
+    "status": "modified",
+    "size": 441,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/apple-automation-mcp/get_saved_script.json",
+    "status": "modified",
+    "size": 437,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/apple-automation-mcp/list_saved_scripts.json",
+    "status": "modified",
+    "size": 253,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/apple-automation-mcp/run_applescript.json",
+    "status": "modified",
+    "size": 1066,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/apple-automation-mcp/run_jxa.json",
+    "status": "modified",
+    "size": 1094,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/apple-automation-mcp/run_osascript_file.json",
+    "status": "modified",
+    "size": 1168,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/apple-automation-mcp/run_saved_script.json",
+    "status": "modified",
+    "size": 1075,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/apple-automation-mcp/save_script.json",
+    "status": "modified",
+    "size": 1239,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/mcp/apple-automation-mcp/validate_osascript.json",
+    "status": "modified",
+    "size": 596,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/log/cli-20261017_110114.log",
+    "status": "created",
+    "size": 29458,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/conversations/be171e62-f969-48f2-8072-bc689475d746.db",
+    "status": "created",
+    "size": 458752,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/cache/last_conversations.json",
+    "status": "modified",
+    "size": 2128,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/cache/onboarding.json",
+    "status": "modified",
+    "size": 111,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/brain/be171e62-f969-48f2-8072-bc689475d746/.system_generated/steps/4/output.txt",
+    "status": "created",
+    "size": 83,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/brain/be171e62-f969-48f2-8072-bc689475d746/.system_generated/logs/transcript.jsonl",
+    "status": "created",
+    "size": 2904,
+    "copied": true
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/brain/be171e62-f969-48f2-8072-bc689475d746/.system_generated/logs/transcript_full.jsonl",
+    "status": "created",
+    "size": 2874,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/brain/be171e62-f969-48f2-8072-bc689475d746/.system_generated/logs/chunks/transcript_full/00000000.jsonl",
+    "status": "created",
+    "size": 2874,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/brain/be171e62-f969-48f2-8072-bc689475d746/.system_generated/logs/chunks/transcript/00000000.jsonl",
+    "status": "created",
+    "size": 2904,
+    "copied": false
+  },
+  {
+    "path": "~/.gemini/antigravity-cli/annotations/be171e62-f969-48f2-8072-bc689475d746.pbtxt",
+    "status": "created",
+    "size": 28,
+    "copied": false
+  }
+]

@@ -1,0 +1,44 @@
+  chorus 0.1  ·  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-nkh0uy
+
+  Agents   claude 2.1.302 ✓     codex 0.163.0 ✓     agy 1.4.2 ✓
+
+  Threads
+
+  No threads yet. Press n to start one.
+
+
+
+
+
+
+
+
+ ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+ │ new thread                                                                                                                                       │
+ ├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │ Agent    claude   codex  [agy]                                                                                                                   │
+ │ Model   [default]  gemini-3.8-flash-high   gemini-3.8-flash-medium   gemini-3.8-flash-low   claude-sonnet-4-6   claude-opus-4-6-thinking   gpt-oss-
+ │ Folder  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-proof-nkh0uy                                                             │
+ │                                                                                                                                                  │
+ │ ⏎ start   tab next field   ←/→ change   esc cancel                                                                                               │
+ └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  n new thread   ⏎ open   a artifacts   d doctor   q quit
+
+ chorus  home                                                                                                                 esc: back to the thread

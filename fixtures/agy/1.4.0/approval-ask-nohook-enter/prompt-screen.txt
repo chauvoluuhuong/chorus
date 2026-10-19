@@ -1,0 +1,24 @@
+      ▄▀▀▄        Antigravity CLI 1.4.0
+     ▀▀▀▀▀▀       <email> (Antigravity Starter Quota)
+    ▀▀▀▀▀▀▀▀      Gemini 3.8 Flash (High)
+   ▄▀▀    ▀▀▄     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-agy-aYmJcM
+  ▄▀▀      ▀▀▄
+────────────────────────────────────────────────────────────
+> Use your shell tool to run exactly: mkdir -p
+  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-agy-aYmJcM && touch
+  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-agy-aYmJcM/approval-probe-file.txt . Then reply
+  with only: finished
+○ Thought for 5.2s (Creating a directory and a file within it is the specified action. The working directory is set...)
+● Ran (mkdir -p /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-agy-aYmJcM...) (ctrl+o to expand)
+Command
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Requesting permission for:
+   mkdir -p /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-agy-aYmJcM && touch
+/private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-agy-aYmJcM/approval-probe-file.txt
+Run this command?
+> 1. Yes, run command
+  2. Yes, and always allow in this conversation for commands that start with 'mkdir'
+  3. Yes, and always allow for commands that start with 'mkdir' (Persist to settings.json)
+  4. No, cancel
+  ↑/↓ Navigate · tab Amend · ctrl+g edit/expand command
+esc to cancel                                                                                    Gemini 3.8 Flash · high

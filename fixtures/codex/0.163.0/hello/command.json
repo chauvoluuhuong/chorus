@@ -1,0 +1,22 @@
+[
+  {
+    "bin": "codex",
+    "args": [
+      "exec",
+      "--json",
+      "--skip-git-repo-check",
+      "-s",
+      "workspace-write",
+      "-c",
+      "mcp_servers.chorus.command=\"node\"",
+      "-c",
+      "mcp_servers.chorus.args=[\"~/chorus/tools/probe/probe-mcp.mjs\",\"--log\",\"~/chorus/fixtures/codex/0.163.0/hello/mcp-log.jsonl\",\"--thread\",\"t_probe_hello\"]",
+      "-c",
+      "mcp_servers.chorus.default_tools_approval_mode=\"approve\"",
+      "-c",
+      "approval_policy=\"never\"",
+      "Reply with exactly the two words: got it"
+    ],
+    "cwd": "/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-probe-codex-hello-7KlciQ"
+  }
+]
