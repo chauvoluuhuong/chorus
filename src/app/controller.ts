@@ -15,7 +15,7 @@ import { Tailer } from './tailer.ts';
 import { spawn } from 'node:child_process';
 import { BTN, LINK, T, agentStyle, type PaneLine, type RichLine, type Seg } from './compositor.ts';
 import { riskOf } from './risk.ts';
-import { ARTIFACTS_HINT, APPROVALS_HINT, chip, hints, MEMORY_HINT, NEW_CHAT_HINT, SKILLS_HINT, approvalLines, memoryLines as memoryScreenLines, type ApprovalScope, newChatForm, newChatHit, newChatKey, newChatLines, skillLines, type NewChatForm, type NewChatInfo } from './screens.ts';
+import { ARTIFACTS_HINT, APPROVALS_HINT, FOLDER_HINT, folderLines, chip, hints, MEMORY_HINT, NEW_CHAT_HINT, SKILLS_HINT, approvalLines, memoryLines as memoryScreenLines, type ApprovalScope, newChatForm, newChatHit, newChatKey, newChatLines, skillLines, type NewChatForm, type NewChatInfo } from './screens.ts';
 import { VERIFIED_VERSION, versionWarning } from '../core/adapters/index.ts';
 import { PreviewServer } from '../core/preview.ts';
 import { defaultOpener, readOpenConfig, writeOpenConfig, type OpenConfig, type Opener } from '../core/opener.ts';
@@ -139,6 +139,28 @@ export class Controller {
     return entry;
   }
 
+  /** Asks first, then removes the chat and its record. Files the agents wrote in the project stay. */
+  async deleteThread(id: string) {
+    const row = this.store.getThread(id);
+    if (!row) return;
+    const turns = this.store.getTurns(id, { limit: 100000 }).length;
+    const key = await this.app.alert(
+      'Delete this chat?',
+      [`"${row.title}" · ${row.agent} · ${turns} turns`, 'Its turns, tool calls and approvals are removed from Chorus.', 'Files in the project and the agent\'s own session log stay.'],
+      [{ key: 'y', label: 'Delete the chat' }, { key: 'w', label: 'Keep it' }],
+    );
+    if (key !== 'y') return;
+    this.tailers.get(id)?.stop();
+    this.tailers.delete(id);
+    this.pending.delete(id);
+    this.pendingSince.delete(id);
+    this.sawStart.delete(id);
+    this.app.removeEntry(id);
+    this.store.deleteThread(id);
+    this.app.setFlash(`deleted "${row.title}"`);
+    if (this.app.paneId === 'memory') this.memoryView();
+  }
+
   /* ---------- tailing, state ---------- */
 
   private tail(row: ThreadRow, nativeId?: string) {
@@ -196,7 +218,7 @@ export class Controller {
   }
 
   private onExit(e: Entry) {
-    if (this.closed) return;
+    if (this.closed || !this.store.getThread(e.id)) return; // a deleted chat's process ending
     this.store.updateThread(e.id, { state: 'ended' });
     this.pending.delete(e.id);
     this.pendingSince.delete(e.id);
@@ -321,9 +343,15 @@ export class Controller {
       case 'new':
         this.newChatScreen();
         break;
+      case 'project':
+        // "+ add" next to PROJECTS: choose or create a folder, then start a chat in it
+        this.folderPicker(cur?.cwd ?? this.project, dir => (dir ? this.newChatScreen({ folder: dir }) : undefined));
+        break;
       case 'handoff':
         if (!cur) return this.app.setFlash('no chat to hand off');
         return this.newChatScreen({ from: cur.id });
+      case 'delete':
+        return cur ? this.deleteThread(cur.id) : this.app.setFlash('no chat to delete');
       case 'memory':
         return this.memoryView();
       case 'skills':
@@ -420,8 +448,12 @@ export class Controller {
     this.onModelsLoaded = () => {
       if (this.app.paneId === 'new' || this.app.paneId === 'handoff') redraw();
     };
-    const finish = (r: 'start' | 'cancel' | undefined) => {
+    const finish = (r: 'start' | 'cancel' | 'browse' | undefined) => {
       if (r === 'cancel') return this.app.closePane();
+      if (r === 'browse') {
+        const resume = (dir?: string) => this.newChatScreen({ agent: AGENTS[f.agent], model: this.modelList(AGENTS[f.agent])[f.model], effort: effortsFor(AGENTS[f.agent], this.modelList(AGENTS[f.agent])[f.model])[f.effort], skip: f.skip, folder: dir ?? f.folder });
+        return this.folderPicker(f.folder, resume);
+      }
       if (r !== 'start') return redraw();
       const dir = path.resolve(f.folder.replace(/^~(?=\/|$)/, process.env.HOME ?? '~'));
       if (!(fs.existsSync(dir) && fs.statSync(dir).isDirectory())) {
@@ -447,6 +479,93 @@ export class Controller {
       },
       onHit: id => finish(newChatHit(f, id, info())),
     });
+  }
+
+  /**
+   * A list of folders to choose a project from: ⏎ or a click opens one, ← goes up, s uses the one you are in, n makes a new folder in it.
+   * `done` gets the folder, or undefined when cancelled.
+   */
+  folderPicker(start: string, done: (dir?: string) => void) {
+    let dir = path.resolve(start.replace(/^~(?=\/|$)/, process.env.HOME ?? '~'));
+    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) dir = process.env.HOME ?? '/';
+    const st = { sel: 0, error: '', finished: false };
+    const names = () => {
+      try {
+        return fs.readdirSync(dir, { withFileTypes: true }).filter(d => d.isDirectory() && !d.name.startsWith('.')).map(d => d.name).sort((a, b) => a.localeCompare(b));
+      } catch {
+        return [];
+      }
+    };
+    const draw = () => {
+      const list = names();
+      st.sel = Math.max(0, Math.min(st.sel, list.length - 1));
+      this.app.updatePane(folderLines(dir, list, st.sel, Math.max(3, this.app.paneRows() - 6), st.error));
+      this.app.setCrumb(['New chat', 'Choose folder']);
+    };
+    const go = (to: string) => {
+      try {
+        fs.readdirSync(to);
+        dir = to;
+        st.sel = 0;
+        st.error = '';
+      } catch {
+        st.error = `cannot open ${path.basename(to)}`;
+      }
+      draw();
+    };
+    const finish = (chosen?: string) => {
+      st.finished = true;
+      this.app.closePane(false);
+      done(chosen);
+    };
+    const makeFolder = async () => {
+      const name = await this.app.prompt('New folder', [`inside ${dir.replace(process.env.HOME ?? '\0', '~')}`], '');
+      if (name) {
+        if (/[\\/]/.test(name) || name === '.' || name === '..') st.error = 'a folder name has no slashes';
+        else {
+          try {
+            fs.mkdirSync(path.join(dir, name), { recursive: true });
+            return go(path.join(dir, name));
+          } catch (e) {
+            st.error = `cannot create it: ${(e as Error).message.split(',')[0]}`;
+          }
+        }
+      }
+      draw();
+    };
+    const act = (id: string) => {
+      const list = names();
+      if (id === 'up' || id === 'back') return go(path.dirname(dir));
+      if (id === 'select') return finish(dir);
+      if (id === 'cancel') return finish(undefined);
+      if (id === 'new') return void makeFolder();
+      if (id === 'open' && list[st.sel]) return go(path.join(dir, list[st.sel]));
+      if (id.startsWith('dir:') && list[Number(id.slice(4))]) return go(path.join(dir, list[Number(id.slice(4))]));
+    };
+    this.app.showPane('Choose folder', [], {
+      id: 'folder',
+      bare: true,
+      hint: FOLDER_HINT,
+      crumb: ['New chat', 'Choose folder'],
+      onClose: () => {
+        if (!st.finished) done(undefined);
+      },
+      onKey: key => {
+        const n = names().length;
+        if (key === '\x1b[A' || key === 'k') st.sel = Math.max(0, st.sel - 1);
+        else if (key === '\x1b[B' || key === 'j') st.sel = Math.min(Math.max(0, n - 1), st.sel + 1);
+        else if (key === '\r' || key === '\n' || key === '\x1b[C') act('open');
+        else if (key === '\x1b[D' || key === '\x7f' || key === '\b') act('up');
+        else if (key === 's') return act('select'), true;
+        else if (key === 'n') return act('new'), true;
+        else if (key === '\x1b' || key === 'q') return act('cancel'), true;
+        else return true;
+        draw();
+        return true;
+      },
+      onHit: id => act(id),
+    });
+    draw();
   }
 
   /* ---------- Approvals inbox ---------- */
@@ -615,6 +734,7 @@ export class Controller {
         else if (key === '\x1b[B' || key === 'j') st.sel = Math.min(Math.max(0, items.length - 1), st.sel + 1);
         else if (key === '\r' || key === '\n') return void open(cur), true;
         else if (key === 'h') return void handoffFrom(cur), true;
+        else if (key === 'D' && cur) return void this.deleteThread(cur), true;
         else if (key === 'd' && cur) return void this.app.showPane(`What an agent reads · ${items[st.sel].title}`, this.memoryLines(cur), { id: 'memory-digest', crumb: ['Memory', 'digest'], onClose: () => this.memoryView() }), true;
         else return false;
         draw();
@@ -641,6 +761,7 @@ export class Controller {
           draw();
         } else if (id === 'open') void open(this.memoryItems(st.query)[st.sel]?.id);
         else if (id === 'handoff') void handoffFrom(this.memoryItems(st.query)[st.sel]?.id);
+        else if (id === 'delete') void this.deleteThread(this.memoryItems(st.query)[st.sel]?.id ?? '');
       },
     });
   }

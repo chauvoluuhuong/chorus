@@ -233,7 +233,7 @@ test('top bar: Menu opens the menu, a menu row runs by click, ↑↓ + Enter, an
   await h.until(l => has(l, /READY alpha/), 'ready');
   h.click('menu');
   await h.until(l => has(l, /chorus · alpha/), 'menu open');
-  for (const row of ['Hand off to another agent', 'New chat', 'Artifacts', 'Approvals', 'Skills', 'Memory', 'Activity', 'Show / hide sidebar', 'Help', 'Quit']) assert.ok(has(h.screen(), new RegExp(row)), row);
+  for (const row of ['Hand off to another agent', 'New chat', 'Artifacts', 'Approvals', 'Skills', 'Memory', 'Activity', 'Delete chat', 'Show / hide sidebar', 'Help', 'Quit']) assert.ok(has(h.screen(), new RegExp(row)), row);
   h.click('menu:k', 8);
   await h.until(l => !has(l, /chorus · alpha/), 'menu closed by the click');
   assert.deepEqual(actions, ['skills']);

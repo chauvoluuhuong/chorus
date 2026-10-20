@@ -82,7 +82,7 @@ const MODE_RESET = '\x1b[?7h\x1b[?2004l\x1b[?1l\x1b[?1000l\x1b[?1003l\x1b[?1006l
 const MOUSE_ON = '\x1b[?1003h\x1b[?1006h';
 const MOUSE = /\x1b\[<(\d+);(\d+);(\d+)([Mm])/g;
 /** keys the menu hands to the controller */
-export const ACTION_KEYS: Record<string, string> = { n: 'new', h: 'handoff', m: 'memory', a: 'files', f: 'files', i: 'approvals', k: 'skills', e: 'activity', t: 'activity', y: 'approve', x: 'deny', r: 'retry', d: 'doctor', '?': 'help' };
+export const ACTION_KEYS: Record<string, string> = { D: 'delete', n: 'new', h: 'handoff', m: 'memory', a: 'files', f: 'files', i: 'approvals', k: 'skills', e: 'activity', t: 'activity', y: 'approve', x: 'deny', r: 'retry', d: 'doctor', '?': 'help' };
 
 export class App extends EventEmitter {
   readonly entries: Entry[] = [];
@@ -203,6 +203,28 @@ export class App extends EventEmitter {
     if (entry.state === 'parked') entry.state = undefined;
     this.emit('thread-started', entry, host);
     return host;
+  }
+
+  /** Takes a chat out of the list and stops its process; the chats continued from it lose their link. */
+  removeEntry(id: string) {
+    const at = this.entries.findIndex(e => e.id === id);
+    if (at < 0) return;
+    const [gone] = this.entries.splice(at, 1);
+    gone.host?.kill();
+    for (const e of this.entries) if (e.parentId === id) e.parentId = undefined;
+    const wasActive = at === this.active;
+    if (at < this.active) this.active--;
+    this.active = Math.max(0, Math.min(this.active, this.entries.length - 1));
+    this.sideScroll = undefined;
+    if (!this.entries.length) this.emit('action', 'new');
+    else if (wasActive) this.emit('select', this.entries[this.active]);
+    this.schedule();
+  }
+
+  /** Lines a full-area view can use (for lists a view scrolls itself). */
+  paneRows(): number {
+    const { cols, rows } = this.io.size();
+    return paneRoom(layout(cols, rows, this.sidebarOn).contentRows, false);
   }
 
   get current(): Entry | undefined {
@@ -378,6 +400,7 @@ export class App extends EventEmitter {
       { key: 'k', label: 'Skills', action: 'skills' },
       { key: 'm', label: 'Memory', action: 'memory' },
       { key: 'e', label: 'Activity', action: 'activity' },
+      { key: 'D', label: 'Delete chat', action: 'delete' },
       { key: 'b', label: 'Show / hide sidebar', action: 'sidebar' },
       { key: '?', label: 'Help', action: 'help' },
       { key: 'q', label: 'Quit', action: 'quit' },
@@ -574,6 +597,7 @@ export class App extends EventEmitter {
       if (i >= 0) this.onCaptured(String(i + 1));
       return true;
     }
+    if (id === 'newproject') return void this.emit('action', 'project'), true;
     if (id === 'side:up' || id === 'side:down') return void this.scrollSide(id === 'side:up' ? -5 : 5), true;
     if (id === 'back') return void this.back(), true;
     if (id === 'menu') return void this.openMenu(), true;

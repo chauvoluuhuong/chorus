@@ -72,7 +72,7 @@ export function newChatLines(f: NewChatForm, info: NewChatInfo): PaneLine[] {
     '',
     [label(2, 'Effort'), ...efforts.flatMap((e, i): Seg[] => [chipText(e, i === f.effort, `effort:${i}`), [' ']]), ['  how hard the model thinks', T.dim]],
     '',
-    f.from ? [label(3, 'Project'), [home(f.folder), T.dim], ['  same folder as the chat it continues', T.dim]] : f.focus === 3 ? [label(3, 'Project'), [home(f.folder), T.fg, 'folder'], ['▌', T.chorus]] : [label(3, 'Project'), [home(f.folder) + ' ▾', LINK, 'folder']],
+    f.from ? [label(3, 'Project'), [home(f.folder), T.dim], ['  same folder as the chat it continues', T.dim]] : f.focus === 3 ? [label(3, 'Project'), [home(f.folder), T.fg, 'folder'], ['▌', T.chorus], ['   '], [' Browse… ', BTN, 'browse']] : [label(3, 'Project'), [home(f.folder) + ' ▾', LINK, 'folder'], ['   '], [' Browse… ', BTN, 'browse']],
     f.from ? '' : info.recent.length
       ? [[under], ['recent: ', T.dim], ...info.recent.slice(0, 3).flatMap((r, i): Seg[] => [[home(r), T.dim, `recent:${i}`], ['  ']]), ['· or type any folder', T.dim]]
       : [[under], ['type any folder', T.dim]],
@@ -90,11 +90,12 @@ export function newChatLines(f: NewChatForm, info: NewChatInfo): PaneLine[] {
   return out;
 }
 
-export const NEW_CHAT_HINT: RichLine = hints(chip('⏎', 'start', 'start'), chip('tab', 'next field', 'next'), chip('←/→', 'change'), chip('space', 'tick'));
+export const NEW_CHAT_HINT: RichLine = hints(chip('⏎', 'start', 'start'), chip('tab', 'next field', 'next'), chip('←/→', 'change'), chip('space', 'tick'), chip('⌃O', 'browse folders', 'browse'));
 
 /** Keys of the form. Returns what the caller must do. Printable keys edit the folder only while it has the focus. */
-export function newChatKey(f: NewChatForm, key: string, info: Pick<NewChatInfo, 'models' | 'efforts'>): 'start' | 'cancel' | undefined {
+export function newChatKey(f: NewChatForm, key: string, info: Pick<NewChatInfo, 'models' | 'efforts'>): 'start' | 'cancel' | 'browse' | undefined {
   f.error = '';
+  if (key === '\x0f' && !f.from) return 'browse'; // ⌃O: choose the project folder in a list
   if (key === '\x1b') return 'cancel';
   if (key === '\r' || key === '\n') return 'start';
   if (key === '\t' || key === '\x1b[B') f.focus = (f.focus + 1) % FIELDS;
@@ -120,8 +121,9 @@ export function newChatKey(f: NewChatForm, key: string, info: Pick<NewChatInfo, 
 }
 
 /** A click on one of the form's regions. Returns what the caller must do. */
-export function newChatHit(f: NewChatForm, id: string, info: NewChatInfo): 'start' | 'cancel' | undefined {
+export function newChatHit(f: NewChatForm, id: string, info: NewChatInfo): 'start' | 'cancel' | 'browse' | undefined {
   f.error = '';
+  if (id === 'browse' && !f.from) return 'browse';
   if (id === 'start') return 'start';
   if (id === 'back') return 'cancel';
   if (id === 'next') f.focus = (f.focus + 1) % FIELDS;
@@ -267,7 +269,7 @@ export function memoryLines(items: MemoryItem[], sel: number, where: string, sea
   return out;
 }
 
-export const MEMORY_HINT: RichLine = hints(chip('⏎', 'open chat', 'open'), chip('h', 'continue with another agent', 'handoff'), chip('→', 'tool calls'), chip('/', 'search', 'search'), chip('esc', 'back', 'back'));
+export const MEMORY_HINT: RichLine = hints(chip('⏎', 'open chat', 'open'), chip('h', 'continue with another agent', 'handoff'), chip('D', 'delete', 'delete'), chip('→', 'tool calls'), chip('/', 'search', 'search'), chip('esc', 'back', 'back'));
 
 /* ---------- Skills ---------- */
 
@@ -304,3 +306,20 @@ export const SKILLS_HINT: RichLine = hints(chip('⏎', 'on/off', 'toggle'), chip
 /* ---------- Artifacts ---------- */
 
 export const ARTIFACTS_HINT: RichLine = hints(chip('↑↓', 'select'), chip('⏎ / click', 'open', 'open'), chip('f', 'show in folder', 'folder'), chip('p', 'copy path', 'copy'), chip('v', 'versions', 'versions'), chip('esc', 'back', 'back'));
+
+
+/* ---------- Folder picker ---------- */
+
+export const FOLDER_HINT: RichLine = hints(chip('⏎', 'open', 'open'), chip('←', 'up', 'up'), chip('s', 'use this folder', 'select'), chip('n', 'new folder', 'new'), chip('esc', 'cancel', 'cancel'));
+
+/** A list of the folders inside `dir`: ↑↓ move, ⏎ opens one, s picks the one you are in. `shown` is the window of the list in view. */
+export function folderLines(dir: string, names: string[], sel: number, room: number, error = ''): PaneLine[] {
+  const start = Math.max(0, Math.min(sel - Math.floor(room / 2), names.length - room));
+  const out: PaneLine[] = [[['Choose a project folder', join('1', T.chorus)]], [[home(dir), T.fg]], ''];
+  if (!names.length) out.push([['  no folders in here: s uses this one, n makes a new one', T.dim]]);
+  if (start > 0) out.push([[`  ▲ ${start} more`, T.dim]]);
+  names.slice(start, start + room).forEach((n, i) => out.push({ line: [[start + i === sel ? '▸ ' : '  ', T.chorus], [n + '/', T.fg]], hit: `dir:${start + i}`, sel: start + i === sel }));
+  if (start + room < names.length) out.push([[`  ▼ ${names.length - start - room} more`, T.dim]]);
+  if (error) out.push('', [['  ! ' + error, T.err]]);
+  return out;
+}

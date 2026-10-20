@@ -53,7 +53,7 @@ test('top bar, project tree, child screen and status bar land in the right cells
   assert.match(t[0], /^\s+‹ Back\s+fix bug\s+! 2 waiting\s+☰ Menu ⌃\\\s*$/);
   assert.match(t[1], /^\s+│hello from the agent/); // a blank row above New chat
   assert.match(t[2], /^  \+ New chat\s+n  │red 漢字 end/); // a full-width button with its key
-  assert.match(t[4], /^  PROJECTS\s+│/);
+  assert.match(t[4], /^  PROJECTS\s+\+ add\s+│/); // a "+ add" link: choose or create a project folder
   assert.match(t[5], /^  ▾ cake-shop 2\s+│/); // the count right after the name
   assert.match(t[6], /^▎   ● fix bug\s+claude │/);
   assert.match(t[7], /^      ○ ↳ review\s+codex │/); // chats sit under the project's name, a continued one two cells further

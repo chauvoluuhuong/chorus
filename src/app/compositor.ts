@@ -340,7 +340,13 @@ function drawSidebar(grid: Grid, rows: SideRow[], mode: SideMode, w: number, y0:
   const offset = Math.max(0, Math.min(max, scroll ?? (sel - listH + 3)));
   lines.slice(offset, offset + listH).forEach((r, i) => {
     if (r === 'gap') return;
-    if (r === 'heading') put(grid, y0 + i, 2, 'PROJECTS', join(T.dim, T.bgSide), w);
+    if (r === 'heading') {
+      put(grid, y0 + i, 2, 'PROJECTS', join(T.dim, T.bgSide), w);
+      if (mode === 'full') {
+        put(grid, y0 + i, w - 7, '+ add', join(T.chorus, T.bgSide), w);
+        hits.push({ id: 'newproject', x0: w - 8, x1: w, y0: y0 + i, y1: y0 + i + 1 });
+      }
+    }
     else drawSideRow(grid, r, mode, w, y0 + i, hits);
   });
   const chatsIn = (from: number, to: number) => lines.slice(from, to).filter(r => typeof r !== 'string' && r.kind === 'chat').length;

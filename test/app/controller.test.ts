@@ -931,3 +931,59 @@ test('Memory: the selected chat shows its tools and recent calls; a failed call 
     r.close();
   }
 });
+
+test('delete: the menu asks first; deleting removes the chat and its record, keeps chats continued from it, and the files stay', async () => {
+  const r = rig();
+  try {
+    const a = r.c.newThread({ agent: 'claude', title: 'Cake order page' });
+    await r.until(() => has(r.screen(), /READY claude/), 'front');
+    const child = await r.c.handoff(a.id, 'codex');
+    await r.until(() => has(r.screen(), /READY codex/), 'child');
+    r.store.recordSession(a.id, { agent: 'claude', turns: [{ seq: 1, role: 'user', text: 'hi' }], toolCalls: [{ id: 'c1', turnSeq: 1, tool: 'Bash', target: 'ls', status: 'ok' }], usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0 } });
+    r.app.select(r.app.entries.findIndex(e => e.id === a.id));
+    r.type('\x00D');
+    await r.until(() => has(r.screen(), /Delete this chat\?/), 'confirm box');
+    r.type('w'); // keep it
+    await r.until(() => !has(r.screen(), /Delete this chat\?/), 'closed');
+    assert.ok(r.store.getThread(a.id), 'kept');
+    r.type('\x00D');
+    await r.until(() => has(r.screen(), /Delete this chat\?/), 'confirm again');
+    r.type('y');
+    await r.until(() => !r.store.getThread(a.id), 'deleted from the store');
+    assert.equal(r.store.getTurns(a.id, { limit: 10 }).length, 0);
+    assert.equal(r.store.getToolCalls(a.id).length, 0);
+    assert.ok(!r.app.entries.some(e => e.id === a.id), 'gone from the sidebar');
+    assert.equal(r.store.getThread(child!.id)?.parent_thread_id ?? null, null, 'the continued chat stays, unlinked');
+  } finally {
+    r.close();
+  }
+});
+
+test('folder picker: browse, go up, make a new folder and use it; the New chat form keeps its choices', async () => {
+  const r = rig();
+  try {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'picker-'));
+    fs.mkdirSync(path.join(base, 'alpha'));
+    fs.mkdirSync(path.join(base, 'beta'));
+    r.c.newChatScreen({ agent: 'codex', folder: base });
+    await r.until(() => has(r.screen(), /Browse…/), 'form with a Browse button');
+    r.type('\x0f'); // ⌃O
+    await r.until(() => has(r.screen(), /Choose a project folder/) && has(r.screen(), /alpha\//) && has(r.screen(), /beta\//), 'folder list');
+    r.type('\x1b[B');
+    r.type('\r'); // open beta
+    await r.until(() => has(r.screen(), /no folders in here/), 'inside beta');
+    r.type('n');
+    await r.until(() => has(r.screen(), /New folder/), 'name prompt');
+    for (const ch of 'shop') r.type(ch);
+    r.type('\r');
+    await r.until(() => fs.existsSync(path.join(base, 'beta', 'shop')), 'created');
+    await r.until(() => has(r.screen(), /beta\/shop/), 'inside the new folder');
+    r.type('s');
+    await r.until(() => has(r.screen(), /New chat/) && has(r.screen(), /beta\/shop/) && has(r.screen(), /Agent/), 'back in the form with the folder');
+    r.type('\r');
+    await r.until(() => r.launches.at(-1)?.agent === 'codex' && r.launches.at(-1)?.cwd === path.join(base, 'beta', 'shop'), 'chat started in the new folder with the chosen agent');
+    fs.rmSync(base, { recursive: true, force: true });
+  } finally {
+    r.close();
+  }
+});

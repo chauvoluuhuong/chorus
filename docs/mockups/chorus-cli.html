@@ -436,7 +436,7 @@ const SCENES = [
 
   <span class="d">Effort</span>     ${a.efforts.map((m, i) => i === 0 ? `<span class="sel"> ${m} </span>` : m).join('   ')}   <span class="d">how hard the model thinks</span>
 
-  <span class="d">Project</span>    <span class="clk ch">~/projects/cake-shop ▾</span>
+  <span class="d">Project</span>    <span class="clk ch">~/projects/cake-shop ▾</span>   <span class="kb">Browse…</span>  <span class="d">⌃O: pick a folder from a list, or make a new one</span>
              <span class="d">recent: ~/projects/landing  ~/work/api  · or type any folder</span>
 
   <span class="d">Permissions</span> <span class="clk" data-nc-skip="1">${nc.skip ? '<span class="wn">[x]</span>' : '[ ]'} Skip permission prompts</span>  <span class="d">${a.flag}</span>
@@ -504,6 +504,7 @@ ${nc.skip ? `             <span class="wn">The agent runs every command and edit
         ['k', 'Skills', false, 'skills'],
         ['m', 'Memory', false, 'memory'],
         ['e', 'Activity', false, 'activity'],
+        ['D', 'Delete chat (asks first)'],
         ['b', 'Show / hide sidebar'],
         ['?', 'Help'],
         ['q', 'Quit'],
@@ -884,7 +885,7 @@ function sidebar(sd, mode = 'full') {
     : `<div class="ft"><span class="kb${sd.footer === 'skills' ? ' on' : ''}" data-go="skills">✦ Skills</span> <span class="kb${sd.footer === 'memory' ? ' on' : ''}" data-go="memory">◫ Memory</span></div>`;
   return `<div class="side side-${mode}">` +
     `<div class="grp"><div class="newrow${sd.active === -1 && !sd.footer ? ' on' : ''}" data-go="new"><b>＋${mode === 'icons' ? '' : ' New chat'}</b>${mode === 'full' ? '<span class="kbd">n</span>' : ''}</div></div>` +
-    `<div class="grp">${mode === 'icons' ? '' : '<div class="hd">PROJECTS</div>'}${projects}</div>` + foot + `</div>`;
+    `<div class="grp">${mode === 'icons' ? '' : '<div class="hd">PROJECTS <span class="ch" style="float:right;margin-right:12px">+ add</span></div>'}${projects}</div>` + foot + `</div>`;
 }
 
 function overlay(s, sel) {

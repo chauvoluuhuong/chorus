@@ -207,6 +207,21 @@ export class Store {
     return row;
   }
 
+  /** Removes a chat and everything recorded for it. Chats continued from it stay, without the link. Files in the project stay. */
+  deleteThread(id: string) {
+    const db = this.db;
+    db.exec('BEGIN');
+    try {
+      db.prepare('UPDATE threads SET parent_thread_id = NULL WHERE parent_thread_id = ?').run(id);
+      for (const table of ['turns', 'tool_calls', 'usage', 'artifacts', 'approvals_log', 'mcp_calls']) db.prepare(`DELETE FROM ${table} WHERE thread_id = ?`).run(id);
+      db.prepare('DELETE FROM threads WHERE id = ?').run(id);
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+  }
+
   updateThread(id: string, patch: Partial<Omit<ThreadRow, 'id' | 'created'>>) {
     const keys = Object.keys(patch) as (keyof typeof patch)[];
     if (!keys.length) return;
