@@ -398,12 +398,12 @@ const TREE = [
   { name: 'api', path: '~/work/api', threads: [{ title: 'Rate limiter', agent: 'codex', state: 'working' }, { title: 'Auth tests', agent: 'claude', state: 'idle' }] },
 ];
 const openProjects = new Set(['cake-shop']);
-// Memory rows: chat, project, agent, agent class, turns, when, first ask, last message, files
+// Memory rows: chat, project, agent, agent class, turns, when, first ask, last message, files, tools used (count per tool), last tool calls (ok, tool, target)
 const MEM = [
-  ['Cake order page', 'cake-shop', 'claude', 'cl', '18 turns', '12m ago', 'Build an order page with a live price calculator…', 'The calculator works. Next I\'ll wire the checkout.', 'app/order/pricing.ts, page.tsx, CakeBuilder.tsx'],
-  ['↳ Cake order page (2)', 'cake-shop', 'codex', 'cx', '4 turns', 'just now', '(continued from Cake order page)', 'OK to start with the checkout action?', '—'],
-  ['Rate limiter', 'api', 'codex', 'cx', '31 turns', '1h ago', 'Add a per-key rate limit to the public API', 'Limiter in place; 40 tests pass.', 'src/middleware/limit.ts, test/limit.test.ts'],
-  ['Hero copy', 'landing', 'agy', 'ag', '6 turns', 'yesterday', 'Write the hero text for the spring sale', 'Saved two versions in artifacts.', 'content/hero.md'],
+  ['Cake order page', 'cake-shop', 'claude', 'cl', '18 turns', '12m ago', 'Build an order page with a live price calculator…', 'The calculator works. Next I\'ll wire the checkout.', 'app/order/pricing.ts, page.tsx, CakeBuilder.tsx', 'Bash ×6  Edit ×5  Write ×3  Read ×9  mcp ×1', [[1, 'Bash', 'npm test', '1.2s'], [1, 'Edit', 'app/order/pricing.ts', '+12 −3'], [0, 'Bash', 'npm run build', 'exit 1', ['pricing.ts:41  Type \'string\' is not assignable to type \'number\'', 'CakeBuilder.tsx:88  Property \'size\' does not exist on type \'Props\'.'], 14], [1, 'Bash', 'curl -H "Authorization: ••••" api.shop/prices', '0.4s'], [1, 'Write', 'app/order/CakeBuilder.tsx', '+48']]],
+  ['↳ Cake order page (2)', 'cake-shop', 'codex', 'cx', '4 turns', 'just now', '(continued from Cake order page)', 'OK to start with the checkout action?', '—', 'mcp ×1  Read ×4', [[1, 'mcp', 'chorus.get_handoff_context', '0.1s'], [1, 'Read', 'app/order/pricing.ts', '']]],
+  ['Rate limiter', 'api', 'codex', 'cx', '31 turns', '1h ago', 'Add a per-key rate limit to the public API', 'Limiter in place; 40 tests pass.', 'src/middleware/limit.ts, test/limit.test.ts', 'shell ×12  apply_patch ×4', [[1, 'shell', 'npm test', '3.1s'], [1, 'apply_patch', 'src/middleware/limit.ts', '+20 −2'], [0, 'shell', 'npm test', 'exit 1', ['FAIL test/limit.test.ts › blocks the 101st call']]]],
+  ['Hero copy', 'landing', 'agy', 'ag', '6 turns', 'yesterday', 'Write the hero text for the spring sale', 'Saved two versions in artifacts.', 'content/hero.md', 'write_to_file ×2  view_file ×3', [[1, 'write_to_file', 'content/hero.md', '+34'], [1, 'view_file', 'content/brand.md', '']]],
 ];
 const THREADS = [
   { title: 'Cake order page', agent: 'claude', state: 'working', go: 'work' },
@@ -627,11 +627,16 @@ ${MEM.map((m, i) => pick(i, sel, `${i === sel ? '▸' : ' '} ${m[0].padEnd(23)}<
     <span class="d">asked </span>  ${MEM[sel][6]}
     <span class="d">last  </span>  ${MEM[sel][7]}
     <span class="d">files </span>  ${MEM[sel][8]}
+    <span class="d">tools </span>  ${MEM[sel][9]}
+    <span class="d">recent</span>  ${MEM[sel][10].map(c => `<span class="${c[0] ? 'ok' : 'er'}">${c[0] ? '✓' : '✗'}</span> ${c[1]} <span class="d">${c[2]}</span>${c[3] ? '  <span class="' + (c[0] ? 'd' : 'er') + '">' + c[3] + '</span>' : ''}` + (c[4] ? c[4].map(l => '\n              <span class="er">' + l + '</span>').join('') + (c[5] ? '\n              <span class="d">… +' + c[5] + ' more lines   </span><span class="ch">⏎</span><span class="d"> full output</span>' : '') : '')).join('\n            ')}
 
   <span class="ch">⏎</span> open chat   <span class="ch">h</span> continue with another agent   <span class="ch">/</span> search   <span class="ch">esc</span> back`,
     behind: [
       '<b>Global, not per project:</b> the store moves from <code>&lt;project&gt;/.chorus/chorus.db</code> to <code>~/.chorus/chorus.db</code>, with the project folder as a column. The sidebar, this screen and <code>list_threads</code> read the same rows.',
       'Artifacts stay in the project (<code>.chorus/threads/&lt;id&gt;/artifacts/</code>): Codex\'s sandbox only lets the agent write inside its folder.',
+      'The <b>tools</b> line counts every tool call of the chat, and <b>recent</b> shows the last calls with ✓ / ✗, how long they took, <code>+added −removed</code> lines for edits (never the file content), and the first lines of the output only when a call failed. Secrets in commands are masked (<code>••••</code>) before anything is stored. Not kept: full parameters and full output.',
+      'Long output: a failed call shows at most 2 error lines (the ones that look like errors, else the last ones), cut to the width, then <code>… +14 more lines</code>. <b>⏎</b> on the call opens the full stored output in the Activity view; a result over about 2 KB is stored as its first and last 10 lines with <code>[truncated, 38 KB total]</code>.',
+      'Reading it: so you can see what an agent really did before you continue its work. Search matches tool names too (type <code>Bash</code> to find chats that ran commands).',
       'What is kept: chat turns, tool calls, files touched, commands and results, artifacts, usage. Not kept: the model\'s thinking, full tool output.',
       '<code>get_handoff_context(thread_id)</code> works for a chat in any project, so "continue the api work here" is one MCP call.',
     ],

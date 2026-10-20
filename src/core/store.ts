@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { AgentId, Session, ToolCall, Turn, Usage } from './types.ts';
+import { maskSecrets } from './adapters/util.ts';
 
 export type ThreadState = 'working' | 'waiting' | 'ended';
 
@@ -56,7 +57,7 @@ CREATE TABLE IF NOT EXISTS turns (
 );
 CREATE TABLE IF NOT EXISTS tool_calls (
   thread_id TEXT NOT NULL, call_id TEXT NOT NULL, turn_seq INTEGER NOT NULL, tool TEXT NOT NULL,
-  target TEXT NOT NULL, status TEXT NOT NULL, result TEXT, duration_ms INTEGER,
+  target TEXT NOT NULL, status TEXT NOT NULL, result TEXT, duration_ms INTEGER, note TEXT, detail TEXT,
   PRIMARY KEY (thread_id, call_id)
 );
 CREATE TABLE IF NOT EXISTS usage (
@@ -111,6 +112,9 @@ export class Store {
     const cols = (this.db.prepare('PRAGMA table_info(threads)').all() as { name: string }[]).map(c => c.name);
     if (!cols.includes('project')) this.db.exec('ALTER TABLE threads ADD COLUMN project TEXT');
     if (!cols.includes('skip_permissions')) this.db.exec('ALTER TABLE threads ADD COLUMN skip_permissions INTEGER NOT NULL DEFAULT 0');
+    const tcols = (this.db.prepare('PRAGMA table_info(tool_calls)').all() as { name: string }[]).map(c => c.name);
+    if (!tcols.includes('note')) this.db.exec('ALTER TABLE tool_calls ADD COLUMN note TEXT');
+    if (!tcols.includes('detail')) this.db.exec('ALTER TABLE tool_calls ADD COLUMN detail TEXT');
     if (!cols.includes('effort')) this.db.exec('ALTER TABLE threads ADD COLUMN effort TEXT');
   }
 
@@ -230,9 +234,9 @@ export class Store {
       const ti = db.prepare('INSERT OR REPLACE INTO turns (thread_id,seq,role,text,ts) VALUES (?,?,?,?,?)');
       for (const t of s.turns) ti.run(threadId, t.seq, t.role, t.text, t.ts ?? null);
       const ci = db.prepare(
-        'INSERT OR REPLACE INTO tool_calls (thread_id,call_id,turn_seq,tool,target,status,result,duration_ms) VALUES (?,?,?,?,?,?,?,?)',
+        'INSERT OR REPLACE INTO tool_calls (thread_id,call_id,turn_seq,tool,target,status,result,duration_ms,note,detail) VALUES (?,?,?,?,?,?,?,?,?,?)',
       );
-      for (const c of s.toolCalls) ci.run(threadId, c.id, c.turnSeq, c.tool, c.target, c.status, c.result ?? null, c.durationMs ?? null);
+      for (const c of s.toolCalls) ci.run(threadId, c.id, c.turnSeq, c.tool, maskSecrets(c.target), c.status, c.result ? maskSecrets(c.result) : null, c.durationMs ?? null, c.note ?? null, c.detail ? maskSecrets(c.detail) : null);
       db.prepare(
         `INSERT OR REPLACE INTO usage (thread_id,input_tokens,output_tokens,cache_read_tokens,cost_usd,limit_utilization,limit_resets_at,limit_status,updated)
          VALUES (?,?,?,?,?,?,?,?,?)`,
@@ -260,7 +264,7 @@ export class Store {
 
   getToolCalls(threadId: string): ToolCall[] {
     const rows = this.db.prepare('SELECT * FROM tool_calls WHERE thread_id = ? ORDER BY rowid').all(threadId) as any[];
-    return rows.map(r => ({ id: r.call_id, turnSeq: r.turn_seq, tool: r.tool, target: r.target, status: r.status, result: r.result ?? undefined, durationMs: r.duration_ms ?? undefined }));
+    return rows.map(r => ({ id: r.call_id, turnSeq: r.turn_seq, tool: r.tool, target: r.target, status: r.status, result: r.result ?? undefined, durationMs: r.duration_ms ?? undefined, note: r.note ?? undefined, detail: r.detail ?? undefined }));
   }
 
   getUsage(threadId: string): (Usage & { limitUtilization?: number }) | undefined {

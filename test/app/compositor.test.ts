@@ -256,3 +256,23 @@ test('a frame replayed into a terminal reproduces the grid', async () => {
   assert.deepEqual(outer.text().map(l => l.trimEnd()), gridText(grid));
   assert.equal(rowToAnsi(outer.row(2, 120)).replace(/\s+\x1b\[0m$/, ''), rowToAnsi(grid[2]).replace(/\s+\x1b\[0m$/, ''));
 });
+
+test('sidebar overflow: "▲ N more chats" / "▼ N more chats" hints that scroll, and your own scroll position is kept', () => {
+  const chats: SideRow[] = Array.from({ length: 30 }, (_, i) => ({ kind: 'chat', index: i, title: `chat ${i}`, agent: 'claude', state: 'idle', active: i === 2 }));
+  const side: SideRow[] = [{ kind: 'new' }, { kind: 'project', cwd: '/w/a', name: 'chorus', open: true, count: 30, waiting: 0, active: false }, ...chats, { kind: 'skills', active: false }, { kind: 'memory', active: false }];
+  const at = (sideScroll?: number) => {
+    const r = compose(view({ rows: 24, side, sideScroll, screen: new VirtualScreen(90, 22) }));
+    return { ...r, side: gridText(r.grid).slice(1, 23).map(l => l.slice(0, 28)) };
+  };
+  const top = at();
+  assert.ok(top.side.some(l => /▼ \d+ more chats/.test(l)), 'more below');
+  assert.ok(!top.side.some(l => /▲/.test(l)), 'nothing above yet');
+  assert.ok(top.hits.some(h => h.id === 'side:down'));
+  assert.ok(top.sideMax > 0);
+  const down = at(top.sideMax);
+  assert.ok(down.side.some(l => /▲ \d+ more chats?/.test(l)), 'more above');
+  assert.ok(!down.side.some(l => /▼/.test(l)), 'nothing below at the end');
+  assert.ok(down.hits.some(h => h.id === 'side:up'));
+  assert.ok(down.side.some(l => /chat 29/.test(l)), 'the last chat is reachable by scrolling');
+  assert.equal(down.sideOffset, top.sideMax);
+});

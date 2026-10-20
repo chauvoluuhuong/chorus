@@ -218,9 +218,31 @@ export interface MemoryItem {
   asked: string;
   last: string;
   files: string;
+  /** what the agent ran, by tool: "Bash ×3, Write ×1" */
+  tools: string;
+  /** the last tool calls, newest last */
+  recent: MemoryCall[];
 }
 
-export function memoryLines(items: MemoryItem[], sel: number, where: string, search?: { query: string; typing: boolean }): PaneLine[] {
+export interface MemoryCall {
+  ok: boolean;
+  tool: string;
+  target: string;
+  /** "+12 −3", "exit 1", "1.2s" */
+  note: string;
+  /** failed calls: the stored output (first and last lines) */
+  detail?: string;
+}
+
+/** The lines of an output that matter: the ones that look like errors, else the last ones; and how many are left out. */
+export function errorPreview(detail: string, n = 2): { lines: string[]; hidden: number } {
+  const all = detail.split('\n').filter(l => l.trim() && !/^\[truncated|^… \d+ lines omitted/.test(l.trim()));
+  const hits = all.filter(l => /error|fail|exception|panic|✗|^\s*\S+:\d+/i.test(l));
+  const lines = (hits.length ? hits : all.slice(-n)).slice(0, n).map(l => l.trim());
+  return { lines, hidden: Math.max(0, all.length - lines.length) };
+}
+
+export function memoryLines(items: MemoryItem[], sel: number, where: string, search?: { query: string; typing: boolean }, call = -1): PaneLine[] {
   const right: Seg[] = search?.typing || search?.query ? [['/ ', T.chorus], [`${search.query}${search.typing ? '▌' : ''}`, T.fg]] : [[where, T.dim], ['   '], ['/ search', T.dim, 'search']];
   const out: PaneLine[] = [[['Memory', join('1', T.chorus)], [`  ·  all projects`], ['      '], ...right], ''];
   if (!items.length) out.push([[search?.query ? `Nothing matches "${search.query}".` : 'No chats recorded yet.', T.dim]]);
@@ -231,12 +253,21 @@ export function memoryLines(items: MemoryItem[], sel: number, where: string, sea
   const cur = items[sel];
   if (cur) {
     out.push('', [[cur.title, join('1', T.fg)]]);
-    out.push([['  asked   ', T.dim], [cur.asked.slice(0, 90)]], [['  last    ', T.dim], [cur.last.slice(0, 90)]], [['  files   ', T.dim], [cur.files.slice(0, 90) || '—']]);
+    out.push([['  asked   ', T.dim], [cur.asked.slice(0, 90)]], [['  last    ', T.dim], [cur.last.slice(0, 90)]], [['  files   ', T.dim], [cur.files.slice(0, 90) || '—']], [['  tools   ', T.dim], [cur.tools.slice(0, 90) || '—']]);
+    cur.recent.forEach((c, i) => {
+      const on = i === call;
+      out.push({ line: [[i ? '          ' : '  recent  ', T.dim], [on ? '▸ ' : '  ', T.chorus], c.ok ? ['✓ ', T.ok] : ['✗ ', T.err], [c.tool + ' '], [c.target.slice(0, 50), T.dim], ...(c.note ? ([['  ' + c.note, c.ok ? T.dim : T.err]] as Seg[]) : [])], hit: `call:${i}`, sel: on });
+      if (c.detail) {
+        const p = errorPreview(c.detail);
+        for (const l of p.lines) out.push([['              '], [l.length > 70 ? l.slice(0, 69) + '…' : l, T.err]]);
+        out.push([['              '], [`${p.hidden ? `… +${p.hidden} more lines   ` : ''}`, T.dim], ['⏎', T.chorus], [' full output', T.dim]]);
+      }
+    });
   }
   return out;
 }
 
-export const MEMORY_HINT: RichLine = hints(chip('⏎', 'open chat', 'open'), chip('h', 'continue with another agent', 'handoff'), chip('/', 'search', 'search'), chip('esc', 'back', 'back'));
+export const MEMORY_HINT: RichLine = hints(chip('⏎', 'open chat', 'open'), chip('h', 'continue with another agent', 'handoff'), chip('→', 'tool calls'), chip('/', 'search', 'search'), chip('esc', 'back', 'back'));
 
 /* ---------- Skills ---------- */
 

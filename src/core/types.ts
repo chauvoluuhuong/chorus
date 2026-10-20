@@ -20,6 +20,10 @@ export interface ToolCall {
   /** one-line result */
   result?: string;
   durationMs?: number;
+  /** a short label after the target: "+12 −3" for an edit, "exit 1" for a failed command */
+  note?: string;
+  /** failed calls only: the output, first and last lines, at most ~2 KB */
+  detail?: string;
 }
 
 export interface Usage {

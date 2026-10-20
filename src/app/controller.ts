@@ -537,22 +537,25 @@ export class Controller {
       const asked = turns.find(t => t.role === 'user')?.text ?? (r.parent_thread_id ? `(continued from ${byId.get(r.parent_thread_id)?.title ?? 'another chat'})` : '');
       const last = [...turns].reverse().find(t => t.role === 'assistant')?.text ?? '';
       const files = new Set<string>();
-      for (const c of this.store.getToolCalls(r.id)) if (/^(Write|Edit|write_to_file|replace_file_content|apply_patch|file_change)$/.test(c.tool) && c.target) files.add(path.relative(r.cwd, c.target) || c.target);
-      return { id: r.id, title: r.title, child: !!r.parent_thread_id && byId.has(r.parent_thread_id), project: path.basename(r.project ?? r.cwd), agent: r.agent, turns: turns.length, ago: this.ago(r.updated), asked: asked.replace(/\s+/g, ' '), last: last.replace(/\s+/g, ' '), files: [...files].slice(0, 6).join(', ') };
+      const used = new Map<string, number>();
+      const calls = this.store.getToolCalls(r.id);
+      for (const c of calls) used.set(c.tool, (used.get(c.tool) ?? 0) + 1);
+      for (const c of calls) if (/^(Write|Edit|write_to_file|replace_file_content|apply_patch|file_change)$/.test(c.tool) && c.target) files.add(path.relative(r.cwd, c.target) || c.target);
+      return { id: r.id, title: r.title, child: !!r.parent_thread_id && byId.has(r.parent_thread_id), project: path.basename(r.project ?? r.cwd), agent: r.agent, turns: turns.length, ago: this.ago(r.updated), asked: asked.replace(/\s+/g, ' '), last: last.replace(/\s+/g, ' '), files: [...files].slice(0, 6).join(', '), recent: calls.slice(-4).map(c => ({ ok: c.status !== 'failed', tool: c.tool, target: (c.target ?? '').replace(r.cwd + '/', ''), note: c.note ?? (c.durationMs ? `${(c.durationMs / 1000).toFixed(1)}s` : ''), detail: c.detail })), tools: [...used].sort((a, b) => b[1] - a[1]).map(([t, n]) => `${t} ×${n}`).join('  ') };
     });
     // search: every word must appear somewhere in the row (title, project, agent, what it asked, its last message, its files)
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-    return words.length ? all.filter(m => words.every(w => `${m.title} ${m.project} ${m.agent} ${m.asked} ${m.last} ${m.files}`.toLowerCase().includes(w))) : all;
+    return words.length ? all.filter(m => words.every(w => `${m.title} ${m.project} ${m.agent} ${m.asked} ${m.last} ${m.files} ${m.tools}`.toLowerCase().includes(w))) : all;
   }
 
   /** Every chat Chorus has recorded, in any project. ⏎ opens it (parked chats resume), h continues it with another agent, d shows what an agent would read. */
   memoryView() {
-    const st = { sel: 0, query: '', typing: false };
+    const st = { sel: 0, query: '', typing: false, call: -1 };
     const where = () => (this.store.shared ? this.store.root.replace(process.env.HOME ?? '\0', '~') + '/chorus.db' : '.chorus/chorus.db (this project)');
     const draw = () => {
       const items = this.memoryItems(st.query);
       st.sel = Math.min(st.sel, Math.max(0, items.length - 1));
-      this.app.updatePane(memoryScreenLines(items, st.sel, where(), { query: st.query, typing: st.typing }));
+      this.app.updatePane(memoryScreenLines(items, st.sel, where(), { query: st.query, typing: st.typing }, st.call));
       return items;
     };
     const open = async (id?: string) => {
@@ -597,7 +600,18 @@ export class Controller {
         }
         const items = this.memoryItems(st.query);
         const cur = items[st.sel]?.id;
-        if (key === '\x1b[A' || key === 'k') st.sel = Math.max(0, st.sel - 1);
+        const calls = items[st.sel]?.recent ?? [];
+        if (st.call >= 0) {
+          // in the tool calls of the selected chat: ↑↓ move, ⏎ shows the stored output, ← or esc goes back to the list
+          if (key === '\x1b[A' || key === 'k') st.call = Math.max(0, st.call - 1);
+          else if (key === '\x1b[B' || key === 'j') st.call = Math.min(calls.length - 1, st.call + 1);
+          else if (key === '\x1b[D' || key === '\x1b') st.call = -1;
+          else if (key === '\r' || key === '\n') return void this.callOutput(items[st.sel], st.call), true;
+          draw();
+          return true;
+        }
+        if (key === '\x1b[C' && calls.length) st.call = Math.max(0, calls.map(c => c.ok).lastIndexOf(false));
+        else if (key === '\x1b[A' || key === 'k') st.sel = Math.max(0, st.sel - 1);
         else if (key === '\x1b[B' || key === 'j') st.sel = Math.min(Math.max(0, items.length - 1), st.sel + 1);
         else if (key === '\r' || key === '\n') return void open(cur), true;
         else if (key === 'h') return void handoffFrom(cur), true;
@@ -608,7 +622,13 @@ export class Controller {
       },
       onHit: id => {
         const tid = id.split(':').slice(1).join(':');
-        if (id.startsWith('row:')) {
+        if (id.startsWith('call:')) {
+          const i = Number(tid);
+          if (st.call === i) void this.callOutput(this.memoryItems(st.query)[st.sel], i);
+          else st.call = i;
+          draw();
+        } else if (id.startsWith('row:')) {
+          st.call = -1;
           const items = this.memoryItems(st.query);
           const at = items.findIndex(i => i.id === tid);
           if (at === st.sel) void open(tid);
@@ -623,6 +643,14 @@ export class Controller {
         else if (id === 'handoff') void handoffFrom(this.memoryItems(st.query)[st.sel]?.id);
       },
     });
+  }
+
+  /** The stored output of one tool call, in full (what Chorus kept: first and last lines of a failed call). */
+  private callOutput(item: { title: string; recent: { ok: boolean; tool: string; target: string; note: string; detail?: string }[] } | undefined, i: number) {
+    const c = item?.recent[i];
+    if (!item || !c) return;
+    const body = c.detail ? c.detail.split('\n') : ['Only failed calls keep their output.'];
+    this.app.showPane(`${c.tool} · ${item.title}`, [[[`${c.ok ? '✓' : '✗'} ${c.tool} `, c.ok ? T.ok : T.err], [c.target, T.dim], [c.note ? `  ${c.note}` : '', T.dim]], '', ...body], { id: 'memory-call', crumb: ['Memory', c.tool], onClose: () => this.memoryView() });
   }
 
   /* ---------- Skills ---------- */

@@ -1,5 +1,5 @@
 import type { Adapter } from '../types.ts';
-import { commandTarget, addTool, addTurn, emptySession, findTool, jsonLines, oneLine, stripShellWrapper } from './util.ts';
+import { capOutput, commandTarget, addTool, addTurn, emptySession, findTool, jsonLines, oneLine, stripShellWrapper } from './util.ts';
 
 function mcpResult(r: any): string {
   return oneLine((r?.content ?? []).map((c: any) => c?.text ?? '').join(' '));
@@ -27,6 +27,10 @@ export const codex: Adapter = {
           if (done) {
             call.status = it.exit_code === 0 ? 'ok' : 'failed';
             call.result = oneLine(it.aggregated_output);
+            if (it.exit_code !== 0) {
+              call.detail = capOutput(String(it.aggregated_output ?? ''));
+              call.note = `exit ${it.exit_code ?? '?'}`;
+            }
           }
         } else if (it.type === 'mcp_tool_call') {
           const call = findTool(s, it.id) ?? addTool(s, { id: it.id, tool: `mcp:${it.server}`, target: it.tool, status: 'running' });
@@ -68,6 +72,8 @@ export const codex: Adapter = {
             target: commandTarget(stripShellWrapper(it.command)),
             status: it.exit_code === 0 ? 'ok' : 'failed',
             result: oneLine(it.aggregated_output),
+            detail: it.exit_code === 0 ? undefined : capOutput(String(it.aggregated_output ?? '')),
+            note: it.exit_code === 0 ? undefined : `exit ${it.exit_code ?? '?'}`,
             durationMs: it.duration ? it.duration.secs * 1000 + it.duration.nanos / 1e6 : undefined,
           });
         } else if (it.type === 'McpToolCall') {

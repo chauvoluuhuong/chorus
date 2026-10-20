@@ -1,4 +1,5 @@
 // Controller tests: threads, live tailing, state, approvals, handoff, views, with a fake TUI as the agent.
+import { capOutput } from '../../src/core/adapters/util.ts';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -893,6 +894,39 @@ test('limit box: the chat is saved (turns, artifacts, files) and the ways out fo
     assert.match(t, /Continue in a new chat with claude/);
     assert.match(t, /2\s+Continue in a new chat with agy/);
     assert.match(t, /w\s+Wait for the reset/);
+  } finally {
+    r.close();
+  }
+});
+
+test('Memory: the selected chat shows its tools and recent calls; a failed call shows its error lines and → ⏎ opens the full stored output', async () => {
+  const r = rig();
+  try {
+    r.store.createThread({ id: 't_a', title: 'Cake order page', agent: 'claude', cwd: r.project, native_session_id: 's1', state: 'waiting' });
+    const out = Array.from({ length: 30 }, (_, i) => (i === 3 ? 'pricing.ts:41  error TS2322: Type string' : i === 4 ? 'CakeBuilder.tsx:88  error TS2339: no size' : `build step ${i}`)).join('\n');
+    r.store.recordSession('t_a', {
+      agent: 'claude',
+      turns: [{ seq: 1, role: 'user', text: 'Build it' }],
+      toolCalls: [
+        { id: 'c1', turnSeq: 1, tool: 'Edit', target: 'app/pricing.ts', status: 'ok', note: '+12 −3' },
+        { id: 'c2', turnSeq: 1, tool: 'Bash', target: 'curl -H "Authorization: Bearer abcdefghijklmnop123456" x', status: 'ok' },
+        { id: 'c3', turnSeq: 1, tool: 'Bash', target: 'npm run build', status: 'failed', note: 'exit 1', detail: capOutput(out) },
+      ],
+      usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0 },
+    });
+    r.type('\x00m');
+    await r.until(() => has(r.screen(), /tools\s+Bash ×2\s+Edit ×1/), 'tools line');
+    const t = r.screen().join('\n');
+    assert.match(t, /Edit app\/pricing\.ts\s+\+12 −3/);
+    assert.match(t, /Authorization: Bearer ••••/);
+    assert.doesNotMatch(t, /abcdefghijklmnop123456/);
+    assert.match(t, /✗ Bash npm run build\s+exit 1/);
+    assert.match(t, /pricing\.ts:41\s+error TS2322/);
+    assert.match(t, /… \+\d+ more lines\s+⏎ full output/);
+    r.type('\x1b[C'); // → into the tool calls: the failed one is selected
+    await r.until(() => has(r.screen(), /▸ ✗ Bash/), 'failed call selected');
+    r.type('\r');
+    await r.until(() => has(r.screen(), /build step 0/) && has(r.screen(), /lines omitted/), 'full stored output');
   } finally {
     r.close();
   }

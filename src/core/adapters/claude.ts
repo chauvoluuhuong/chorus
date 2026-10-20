@@ -1,5 +1,5 @@
 import type { Adapter, Session } from '../types.ts';
-import { commandTarget, addTool, addTurn, emptySession, findTool, jsonLines, oneLine } from './util.ts';
+import { commandTarget, addTool, addTurn, capOutput, editNote, emptySession, exitNote, findTool, jsonLines, oneLine } from './util.ts';
 
 function target(name: string, input: any): string {
   if (!input || typeof input !== 'object') return '';
@@ -26,6 +26,13 @@ function resultText(content: unknown): string {
   return '';
 }
 
+/** the whole result, lines kept (resultText squeezes it to one line) */
+function rawResult(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) return content.map((c: any) => (c?.type === 'text' ? c.text : '')).join('\n');
+  return '';
+}
+
 function userText(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) return content.filter((c: any) => c?.type === 'text').map((c: any) => c.text).join('\n');
@@ -40,7 +47,7 @@ function applyAssistant(s: Session, msg: any, ts?: string) {
     else if (block.type === 'tool_use') {
       if (!findTool(s, block.id)) {
         const m = splitMcp(block.name);
-        addTool(s, { id: block.id, tool: m.tool, target: m.target ?? target(block.name, block.input), status: 'running' });
+        addTool(s, { id: block.id, tool: m.tool, target: m.target ?? target(block.name, block.input), status: 'running', note: editNote(block.name, block.input) });
       }
     }
   }
@@ -54,6 +61,11 @@ function applyToolResults(s: Session, content: unknown) {
     if (!call) continue;
     call.status = block.is_error ? 'failed' : 'ok';
     call.result = resultText(block.content);
+    if (block.is_error) {
+      const raw = rawResult(block.content);
+      call.detail = capOutput(raw);
+      call.note = exitNote(raw) ?? call.note;
+    }
   }
 }
 

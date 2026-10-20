@@ -113,6 +113,8 @@ export interface View {
   /** the user's choice (menu "b"); the width still decides whether it fits */
   sidebarOn: boolean;
   side: SideRow[];
+  /** first sidebar line shown when you scrolled it yourself; undefined follows the selected chat */
+  sideScroll?: number;
   top?: TopBar;
   screen?: VirtualScreen;
   /** segmented bar for the current thread; `message` replaces it (flash, warnings, no thread yet) */
@@ -191,7 +193,7 @@ export function layout(cols: number, rows: number, sidebarOn = true) {
 
 /* ---------- compose ---------- */
 
-export function compose(v: View): { grid: Grid; cursor: { x: number; y: number } | null; hits: Hit[] } {
+export function compose(v: View): { grid: Grid; cursor: { x: number; y: number } | null; hits: Hit[]; sideOffset: number; sideMax: number } {
   const L = layout(v.cols, v.rows, v.sidebarOn);
   const grid = blank(v.cols, v.rows);
   const hits: Hit[] = [];
@@ -199,7 +201,7 @@ export function compose(v: View): { grid: Grid; cursor: { x: number; y: number }
     const msg = `window too small: ${v.cols}×${v.rows}, chorus needs ${MIN_COLS}×${MIN_ROWS}`;
     put(grid, Math.floor(v.rows / 2), Math.max(0, Math.floor((v.cols - msg.length) / 2)), msg, T.warn);
     put(grid, v.rows - 1, 0, 'your chats keep running', T.dim);
-    return { grid, cursor: null, hits };
+    return { grid, cursor: null, hits, sideOffset: 0, sideMax: 0 };
   }
   const right = L.contentX + L.contentCols;
   const Y = L.contentY;
@@ -207,7 +209,7 @@ export function compose(v: View): { grid: Grid; cursor: { x: number; y: number }
   drawTop(grid, v, hits);
   // a full-area screen (New chat, Approvals, Memory …) has no status line, like the mockup: its key hints are the bottom row
   const rowsHere = v.pane ? L.contentRows + 1 : L.contentRows;
-  if (L.sidebar) drawSidebar(grid, v.side, L.mode, L.sidebar, Y, rowsHere, hits);
+  const sideInfo = L.sidebar ? drawSidebar(grid, v.side, L.mode, L.sidebar, Y, rowsHere, hits, v.sideScroll) : { offset: 0, max: 0 };
 
   if (v.pane) {
     const titled = !v.pane.bare;
@@ -251,7 +253,7 @@ export function compose(v: View): { grid: Grid; cursor: { x: number; y: number }
   if (v.overlay) drawOverlay(grid, v.overlay, L.contentX, L.contentCols, Y, L.contentRows, hits);
 
   if (v.hover) lightUp(grid, hits, v.hover);
-  return { grid, cursor, hits };
+  return { grid, cursor, hits, sideOffset: sideInfo.offset, sideMax: sideInfo.max };
 }
 
 /** Lines a pane can show: the content area minus its title row (unless bare) and the hint row. */
@@ -314,7 +316,7 @@ function stateOf(state: ItemState, active: boolean): { ch: string; s: string; la
   return GLYPH[state];
 }
 
-function drawSidebar(grid: Grid, rows: SideRow[], mode: SideMode, w: number, y0: number, height: number, hits: Hit[]) {
+function drawSidebar(grid: Grid, rows: SideRow[], mode: SideMode, w: number, y0: number, height: number, hits: Hit[], scroll?: number): { offset: number; max: number } {
   for (let y = 0; y < height; y++) {
     fill(grid, y0 + y, 0, w, T.bgSide);
     put(grid, y0 + y, w, '│', T.line);
@@ -332,18 +334,29 @@ function drawSidebar(grid: Grid, rows: SideRow[], mode: SideMode, w: number, y0:
     if (r.kind === 'new' && mode !== 'icons') lines.push('gap', 'heading');
     else if (r.kind === 'new') lines.push('gap');
   }
-  // keep the selected row visible (indexes are of `lines`, the rows really drawn)
+  // the selected chat stays in view unless you scrolled yourself; with more lines than room, the first and last rows may carry a hint
   const sel = Math.max(0, lines.findIndex(r => typeof r !== 'string' && (r.kind === 'chat' || r.kind === 'project') && r.active));
-  const offset = Math.max(0, Math.min(lines.length - listH, sel - listH + 2));
+  const max = Math.max(0, lines.length - listH);
+  const offset = Math.max(0, Math.min(max, scroll ?? (sel - listH + 3)));
   lines.slice(offset, offset + listH).forEach((r, i) => {
     if (r === 'gap') return;
     if (r === 'heading') put(grid, y0 + i, 2, 'PROJECTS', join(T.dim, T.bgSide), w);
     else drawSideRow(grid, r, mode, w, y0 + i, hits);
   });
+  const chatsIn = (from: number, to: number) => lines.slice(from, to).filter(r => typeof r !== 'string' && r.kind === 'chat').length;
+  const hint = (y: number, glyph: string, n: number, id: string) => {
+    fill(grid, y, 0, w, T.bgSide);
+    const text = mode === 'icons' ? glyph : `${glyph} ${n} more chat${n === 1 ? '' : 's'}`;
+    put(grid, y, mode === 'icons' ? 2 : 2, text, join('1', T.chorus, T.bgSide), w);
+    hits.push({ id, x0: 0, x1: w, y0: y, y1: y + 1 });
+  };
+  if (offset > 0) hint(y0, '▲', chatsIn(0, offset), 'side:up');
+  if (offset + listH < lines.length) hint(y0 + listH - 1, '▼', chatsIn(offset + listH, lines.length), 'side:down');
   if (footH) {
     for (let x = 0; x < w; x++) grid[y0 + listH][x] = { t: '─', s: join(T.line, T.bgSide) };
     foot.forEach((r, i) => drawSideRow(grid, r, mode, w, y0 + listH + 1 + (spaced ? 2 * i + 1 : i), hits));
   }
+  return { offset, max };
 }
 
 function drawSideRow(grid: Grid, r: SideRow, mode: SideMode, w: number, y: number, hits: Hit[]) {

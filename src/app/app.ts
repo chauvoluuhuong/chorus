@@ -112,6 +112,10 @@ export class App extends EventEmitter {
   private pane: PaneState | undefined;
   private folded = new Set<string>();
   private hover: string | undefined;
+  /** sidebar scroll: undefined follows the selected chat; the last drawn offset and its limit let the wheel start from what you see */
+  private sideScroll: number | undefined;
+  private sideOffset = 0;
+  private sideMax = 0;
   private alertState: { title: string; lines: string[]; options: { key: string; label: string }[]; sel: number; resolve: (k: string | undefined) => void } | undefined;
   private dialog: { title: string; options: string[]; sel: number; resolve: (i: number | undefined) => void } | undefined;
   private promptState: { title: string; lines: string[]; value: string; resolve: (v: string | undefined) => void } | undefined;
@@ -221,6 +225,7 @@ export class App extends EventEmitter {
     if (i < 0 || i >= this.entries.length) return;
     this.closePane(false);
     this.active = i;
+    this.sideScroll = undefined; // follow the chat you picked
     this.emit('select', this.entries[i]);
     this.schedule();
   }
@@ -406,6 +411,12 @@ export class App extends EventEmitter {
     this.stop();
   }
 
+  /** Scrolls the sidebar by lines, from what is on screen now. */
+  scrollSide(delta: number) {
+    this.sideScroll = Math.max(0, Math.min(this.sideMax, (this.sideScroll ?? this.sideOffset) + delta));
+    this.schedule();
+  }
+
   /** Back: from a pane to the chat; from a chat to New chat. */
   back() {
     if (this.pane) this.closePane();
@@ -527,6 +538,10 @@ export class App extends EventEmitter {
       }
       return;
     }
+    if (wheel && press && this.sideMax > 0 && x < layout(this.io.size().cols, this.io.size().rows, this.sidebarOn).sidebar) {
+      this.scrollSide((b & 1) ? 3 : -3);
+      return;
+    }
     if (this.pane && wheel && press) {
       this.pane.scroll = Math.max(0, this.pane.scroll + ((b & 1) ? 3 : -3));
       this.schedule();
@@ -559,6 +574,7 @@ export class App extends EventEmitter {
       if (i >= 0) this.onCaptured(String(i + 1));
       return true;
     }
+    if (id === 'side:up' || id === 'side:down') return void this.scrollSide(id === 'side:up' ? -5 : 5), true;
     if (id === 'back') return void this.back(), true;
     if (id === 'menu') return void this.openMenu(), true;
     if (id === 'approvals') return void this.emit('action', 'approvals'), true;
@@ -661,11 +677,12 @@ export class App extends EventEmitter {
     const inProject = !this.pane || ['artifacts', 'activity'].includes(this.pane.id ?? ''); // New chat names its own project
     const path = this.pane ? (this.pane.crumb ?? [this.pane.title]) : act ? [act.title] : [];
     const crumb = inProject && act && path.length ? [projectName(act.cwd), ...path] : path;
-    const { grid, cursor, hits } = compose({
+    const { grid, cursor, hits, sideOffset, sideMax } = compose({
       cols,
       rows,
       sidebarOn: this.sidebarOn,
       side: this.sideRows(),
+      sideScroll: this.sideScroll,
       top: { back: !!this.pane || !!act, crumb, waiting: this.waitingProvider() },
       screen: act?.host?.screen,
       statusBar: this.pane ? undefined : statusBar,
@@ -677,6 +694,8 @@ export class App extends EventEmitter {
       hover: this.hover,
     });
     this.hits = hits;
+    this.sideOffset = sideOffset;
+    this.sideMax = sideMax;
     // the Differ trusts that the terminal still shows what it last sent; every few seconds send everything again, so anything
     // that disturbed the screen (a torn frame, a stray write, a terminal that scrolled) is gone by itself
     if (this.repaintMs > 0 && Date.now() - this.lastFull > this.repaintMs) {
