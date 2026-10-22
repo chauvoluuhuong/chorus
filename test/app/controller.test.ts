@@ -71,9 +71,16 @@ function listFiles(d: string): string[] {
 }
 
 /** A Codex rollout like the real ones (fixtures/codex shell scenario), pointed at this project. `done: false` stops before the command ran. */
-function writeRollout(home: string, project: string, opts: { done: boolean }) {
+/** A real Codex 0.163.0 developer message carrying the Chorus thread marker (TD-4: rollouts are matched to threads by it). */
+const MARKER_LINE = fs
+  .readFileSync(path.join(ROOT, 'fixtures/risks/codex-thread-marker/2026-10-22T01-31-46-678Z/rollout-busy.jsonl'), 'utf8')
+  .split('\n')
+  .find(l => l.includes('"role":"developer"') && l.includes('Chorus thread'))!;
+
+function writeRollout(home: string, project: string, threadId: string, opts: { done: boolean }) {
   const src = listFiles(path.join(ROOT, 'fixtures/codex/0.163.0/shell/home-changes/.codex/sessions'))[0];
   const fixture = fs.readFileSync(src, 'utf8').split('\n').filter(l => l.trim());
+  fixture.splice(1, 0, MARKER_LINE.replaceAll('t_busy9b85', threadId));
   const id = '01a1' + Math.random().toString(16).slice(2, 6) + '-aaaa-7000-8000-000000000000';
   const fix = (l: string) => l.replace(/"cwd":"[^"]*"/g, `"cwd":${JSON.stringify(project)}`).replace(/01a147ea-9e0e-7301-b1ca-816b28d9cee3/g, id);
   const cutAt = fixture.findIndex(l => l.includes('"CommandExecution"'));
@@ -92,7 +99,7 @@ test('new thread: store row, process, live transcript tailing and state follow t
   assert.match(r.screen()[6], /▎.*fix it/);
 
   // mid-turn transcript appears: the thread is working and the store has the user turn
-  const w = writeRollout(r.home, r.project, { done: false });
+  const w = writeRollout(r.home, r.project, e.id, { done: false });
   await r.until(() => r.store.getTurns(e.id).length > 0, 'turns tailed into the store');
   assert.equal(r.store.getThread(e.id)?.native_session_id, w.id);
   await r.until(() => /●/.test(r.screen()[6]), 'working dot');
@@ -163,7 +170,7 @@ test('handoff: the new thread is a child with the fixed first message, and a mis
   assert.equal(r.app.entries[r.app.active].id, child!.id);
 
   // the child finished its first turn but never called the tool: warning + retry key
-  const w = writeRollout(r.home, r.project, { done: true });
+  const w = writeRollout(r.home, r.project, child!.id, { done: true });
   await r.until(() => /context not loaded/.test(r.app.notice), 'context warning');
   void w;
   r.type('\x00r');
@@ -184,7 +191,7 @@ test('views: memory, activity and files panes; limit warning', async () => {
   try {
   const e = r.c.newThread({ agent: 'codex', title: 'viewer' });
   await r.until(() => has(r.screen(), /READY codex/), 'ready');
-  const w = writeRollout(r.home, r.project, { done: true });
+  const w = writeRollout(r.home, r.project, e.id, { done: true });
   void w;
   await r.until(() => r.store.getToolCalls(e.id).length > 0, 'tailed');
 
@@ -310,7 +317,7 @@ test('a thread started from the form is named after the first message', async ()
   try {
     const e = r.c.newThread({ agent: 'codex' });
     assert.equal(r.store.getThread(e.id)!.title, 'codex 1');
-    const w = writeRollout(r.home, r.project, { done: false });
+    const w = writeRollout(r.home, r.project, e.id, { done: false });
     void w;
     await r.until(() => r.store.getThread(e.id)!.title !== 'codex 1', 'title from the first message');
     assert.match(r.store.getThread(e.id)!.title, /^Use your shell/);
@@ -354,7 +361,7 @@ test('artifacts view: select, open the live preview, versions; activity view: fi
   try {
     const e = r.c.newThread({ agent: 'codex', title: 'viewer' });
     await r.until(() => has(r.screen(), /READY codex/), 'ready');
-    const w = writeRollout(r.home, r.project, { done: true });
+    const w = writeRollout(r.home, r.project, e.id, { done: true });
     void w;
     await r.until(() => r.store.getToolCalls(e.id).length > 0, 'tailed');
     fs.writeFileSync(path.join(r.store.artifactsDir(e.id), 'plan.md'), '# the plan\nstep one');
@@ -538,7 +545,7 @@ test('a long first message becomes a title with an ellipsis, not a cut word', as
   const r = rig();
   try {
     const e = r.c.newThread({ agent: 'codex' });
-    writeRollout(r.home, r.project, { done: false });
+    writeRollout(r.home, r.project, e.id, { done: false });
     await r.until(() => r.store.getThread(e.id)!.title !== 'codex 1', 'title');
     const title = r.store.getThread(e.id)!.title;
     assert.ok(title.endsWith('…') && title.length === 28, title);
@@ -821,7 +828,7 @@ test('Activity: counts per kind in the filter bar, approvals and usage rows, dur
   try {
     const e = r.c.newThread({ agent: 'codex', title: 'viewer' });
     await r.until(() => has(r.screen(), /READY codex/), 'ready');
-    writeRollout(r.home, r.project, { done: true });
+    writeRollout(r.home, r.project, e.id, { done: true });
     await r.until(() => r.store.getToolCalls(e.id).length > 0, 'tailed');
     r.store.logMcpCall(e.id, 'get_handoff_context');
     r.store.logApproval(e.id, 'Bash command · npm test', 'approved');
@@ -883,7 +890,7 @@ test('limit box: the chat is saved (turns, artifacts, files) and the ways out fo
   try {
     const e = r.c.newThread({ agent: 'codex', title: 'busy chat' });
     await r.until(() => has(r.screen(), /READY codex/), 'ready');
-    writeRollout(r.home, r.project, { done: true });
+    writeRollout(r.home, r.project, e.id, { done: true });
     await r.until(() => r.store.getToolCalls(e.id).length > 0, 'tailed');
     r.store.db.prepare('UPDATE usage SET limit_utilization = 0.995 WHERE thread_id = ?').run(e.id);
     r.c['checkLimit'](e.id);

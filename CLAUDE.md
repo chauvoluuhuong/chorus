@@ -84,7 +84,7 @@ The risks found before Phase 5 are probed and written down in `docs/risks/`; the
 technical debt TD-2..TD-10 in `docs/roadmap.md` (memory must be injected, not left to agents; errors and file changes are invisible
 to the adapters; transcript matching; kitty keyboard; Windows; plan-limit capture).
 
-1. Technical debt that a buyer would hit first: TD-3 (a failed run looks empty), TD-4 (two Codex/agy chats started together), TD-2
+1. Technical debt that a buyer would hit first: TD-3 (a failed run looks empty), TD-4 for agy (two agy chats started together; Codex is matched by thread marker since 2026-10-22), TD-2
    (memory digest at chat start), TD-1 (one global skill library).
 2. Desktop before selling: signing and notarisation of `Chorus.app`, Windows/Linux builds (TD-6), a guard against the CLI app and
    the desktop resuming the same chat at once (`docs/phase5.md` §7).
