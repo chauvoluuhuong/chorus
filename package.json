@@ -24,7 +24,7 @@
     "smoke:app": "node test/smoke/app.ts",
     "proof": "node test/smoke/proof.ts --open",
     "proof:agy": "node test/smoke/proof-agy.ts --open",
-    "install:global": "npm install && npm link",
+    "install:global": "node scripts/install.mjs",
     "start": "node src/cli/index.ts",
     "smoke:artifacts": "node test/smoke/artifacts.ts",
     "proof:desktop": "node test/smoke/proof-desktop.ts --open",

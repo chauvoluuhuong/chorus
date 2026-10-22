@@ -63,7 +63,8 @@ npm run proof                              # Phase 4 e2e with screenshots → do
 npm run proof:agy                          # the same with agy (docs/proof/phase4-agy/, 30/30); agy has a small plan quota, don't repeat it often
 npm run proof:desktop                      # Phase 5 e2e: the desktop page in Chrome + the native app, real Claude + Codex → docs/proof/phase5/
 node src/cli/index.ts serve --open         # the desktop page in your browser (--fake-agents for UI work without model calls)
-node src/cli/index.ts desktop              # the native window (build it first: cd desktop && npm install && npm run build)
+node src/cli/index.ts desktop              # the native window (installed app, else this checkout's build, else the browser)
+npm run install:global                     # `chorus` on the PATH (npm link) + Chorus.app built and copied to /Applications
 node src/cli/index.ts mux codex agy        # try the app by hand
 npm run risk -- free|cheap|<case>          # risk harness (docs/risks/README.md); `cheap` makes a few real model calls
 node tools/probe/probe.mjs <cli>           # recapture fixtures after a CLI update

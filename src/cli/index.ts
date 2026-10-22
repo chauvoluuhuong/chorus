@@ -202,15 +202,19 @@ switch (cmd) {
     // the native window (desktop/, Tauri). It starts `chorus serve` itself; this checkout's CLI when started from here.
     // No app built yet: the same page in the browser.
     const repo = path.resolve(import.meta.dirname, '../..');
-    const apps = [process.env.CHORUS_DESKTOP_APP, path.join(repo, 'desktop/src-tauri/target/release/bundle/macos/Chorus.app'), '/Applications/Chorus.app'].filter((p): p is string => !!p);
-    const appDir = apps.find(p => fs.existsSync(p));
-    if (process.platform === 'darwin' && appDir) {
+    // an installed app (npm run install:global) opens like any Mac app and starts the global `chorus serve`
+    const installed = [process.env.CHORUS_DESKTOP_APP, '/Applications/Chorus.app', path.join(process.env.HOME ?? '', 'Applications/Chorus.app')].find((p): p is string => !!p && fs.existsSync(p));
+    const appDir = path.join(repo, 'desktop/src-tauri/target/release/bundle/macos/Chorus.app');
+    if (process.platform === 'darwin' && installed) {
+      spawn('open', [installed], { stdio: 'ignore', detached: true }).unref();
+      console.log(`opened ${installed}`);
+    } else if (process.platform === 'darwin' && fs.existsSync(appDir)) {
       const bin = path.join(appDir, 'Contents/MacOS', fs.readdirSync(path.join(appDir, 'Contents/MacOS'))[0]);
       const env = { ...process.env, CHORUS_SERVE_CMD: `${JSON.stringify(process.execPath)} ${JSON.stringify(path.join(repo, 'src/cli/index.ts'))}` };
       spawn(bin, [], { stdio: 'ignore', detached: true, env }).unref();
       console.log(`opened ${appDir}`);
     } else {
-      console.log('no desktop app built (cd desktop && npm install && npm run build): opening the page in the browser');
+      console.log('no desktop app installed (npm run install:global builds and installs it): opening the page in the browser');
       spawn(process.execPath, [path.join(repo, 'src/cli/index.ts'), 'serve', '--open', ...argv.slice(1)], { stdio: 'inherit' }).on('exit', code => process.exit(code ?? 0));
       await new Promise(() => {});
     }

@@ -93,8 +93,9 @@ The address keeps the screen (`#/chat/<id>`), so a reload or a restarted server 
 
 ```bash
 chorus serve [--port N] [--open]     # the local API and the page; prints "chorus serve: <url>"; --fake-agents for UI work
-chorus desktop                       # the native window (built app), or the page in the browser when none is built
-cd desktop && npm install && npm run build   # builds desktop/src-tauri/target/release/bundle/macos/Chorus.app
+npm run install:global               # chorus on the PATH (npm link) + Chorus.app built and copied to /Applications (--no-app: CLI only)
+chorus desktop                       # the installed app, else this checkout's build, else the page in the browser
+cd desktop && npm install && npm run build   # only builds desktop/src-tauri/target/release/bundle/macos/Chorus.app
 npm run proof:desktop                # Phase 5 e2e proof with screenshots (real Claude + Codex, ~10 min)
 ```
 
