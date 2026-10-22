@@ -59,6 +59,7 @@ npm run typecheck
 npm run smoke -- --agents claude,codex,agy --phase 1,2,3   # L3 against the real CLIs (not-logged-in CLIs are SKIPped)
 npm run smoke:app                          # the real app hosting the real agent TUIs in PTYs
 npm run smoke:artifacts                    # each real agent saves a note in the thread's artifacts folder without being told in the prompt
+npm run smoke:ask                          # each real agent asks for approval through a Chorus card (request_approval) and continues after the answer
 npm run proof                              # Phase 4 e2e with screenshots → docs/proof/phase4/report.html, opened in the browser (real Claude + Codex, ~10 min)
 npm run proof:agy                          # the same with agy (docs/proof/phase4-agy/, 30/30); agy has a small plan quota, don't repeat it often
 npm run proof:desktop                      # Phase 5 e2e: the desktop page in Chrome + the native app, real Claude + Codex → docs/proof/phase5/

@@ -121,7 +121,7 @@ function onState(st) {
   showDialogs(st.dialogs);
   renderChrome();
   if (S.view.name === 'chat') renderChatParts();
-  else if (S.view.name === 'approvals') renderView();
+  else if (S.view.name === 'approvals' && !$('#view').contains(document.activeElement?.closest('.note-input'))) renderView();
   else if (S.view.name === 'new' && S.form) renderAgentsOnly();
 }
 
@@ -446,17 +446,21 @@ function approvalsHtml() {
   const cur = st?.chats.find(c => c.id === st.current);
   const all = st?.approvals ?? [];
   const items = S.scope === 'all' || !cur ? all : all.filter(a => a.cwd === cur.cwd);
-  const wait = s => (s < 60 ? `${Math.round(s)}s` : `${Math.round(s / 60)}m`);
+  const wait = since => { const s = Date.now() / 1000 - since; return s < 60 ? `${Math.max(0, Math.round(s))}s` : `${Math.round(s / 60)}m`; };
   const riskBadge = r => (r ? `<span class="badge ${r.level === 'err' ? 'bad' : r.level === 'warn' ? 'warn' : 'plain'}">${esc(r.label)}</span>` : '');
-  return `<div class="page"><h1>Approvals</h1><p class="lead">What your agents are asking for, from every chat. Answering here types the agent's own answer key; you do not have to switch to the chat.</p>
+  return `<div class="page"><h1>Approvals</h1><p class="lead">What your agents are asking for, from every chat: their permission prompts (answering types the agent's own key) and the questions they put to you through Chorus (your choice and note become your next message to that agent). You do not have to switch to the chat.</p>
     <div class="toolbar"><div class="seg"><button class="${S.scope === 'all' ? 'on' : ''}" data-act="scope" data-arg="all">All projects</button><button class="${S.scope === 'this' ? 'on' : ''}" data-act="scope" data-arg="this">This project</button></div><span class="grow"></span><span class="muted">${all.length} waiting</span></div>
     <div class="card list">${
       items.length
         ? items
             .map(
-              a => `<div class="item"><div class="head"><span class="dot approval"></span><span class="t">${esc(a.title)}</span><span class="badge ${esc(a.agent)}">${esc(AGENT[a.agent]?.name ?? a.agent)}</span><span class="faint">${esc(base(a.cwd))} · waiting ${wait(a.waiting)}</span><span style="flex:1"></span>${riskBadge(a.risk)}</div>
-          <div class="what">${esc(a.what)}</div>
-          <div class="acts"><button class="btn good" data-act="approve" data-arg="${esc(a.id)}">✓ Approve</button><button class="btn danger" data-act="deny" data-arg="${esc(a.id)}">✕ Deny</button><span style="flex:1"></span><button class="btn" data-act="chat" data-arg="${esc(a.id)}">Open chat ›</button></div></div>`,
+              a => `<div class="item"><div class="head"><span class="dot approval"></span><span class="t">${esc(a.title)}</span><span class="badge ${esc(a.agent)}">${esc(AGENT[a.agent]?.name ?? a.agent)}</span><span class="faint">${esc(base(a.cwd))} · waiting ${wait(a.since)}</span><span style="flex:1"></span>${riskBadge(a.risk)}</div>
+          ${
+            a.kind === 'ask'
+              ? `${askCard(a)}<div class="acts"><span style="flex:1"></span><button class="btn" data-act="chat" data-arg="${esc(a.id)}">Open chat ›</button></div>`
+              : `<div class="what">${esc(a.what)}</div>
+          <div class="acts"><button class="btn good" data-act="approve" data-arg="${esc(a.id)}">✓ Approve</button><button class="btn danger" data-act="deny" data-arg="${esc(a.id)}">✕ Deny</button><span style="flex:1"></span><button class="btn" data-act="chat" data-arg="${esc(a.id)}">Open chat ›</button></div>`
+          }</div>`,
             )
             .join('')
         : '<div class="empty">Nothing is waiting for you.</div>'
@@ -574,11 +578,17 @@ function renderChatParts() {
     <button class="btn${S.drawer === 'activity' ? ' on' : ''}" data-act="drawer" data-arg="activity">Activity</button>
     <button class="btn${S.drawer === 'record' ? ' on' : ''}" data-act="drawer" data-arg="record">Record</button>
     <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat">🗑</button>`;
-  const ask = S.state.approvals.find(a => a.id === c.id);
   let banners = '';
-  if (ask) banners += `<div class="banner ask"><b>${esc(AGENT[c.agent]?.name ?? c.agent)} asks</b><span class="what" title="${esc(ask.what)}">${esc(ask.what)}</span><button class="btn good" data-act="approve" data-arg="${esc(c.id)}">✓ Approve</button><button class="btn danger" data-act="deny" data-arg="${esc(c.id)}">✕ Deny</button></div>`;
+  for (const ask of S.state.approvals.filter(a => a.id === c.id)) {
+    if (ask.kind === 'ask') banners += `<div class="banner ask card"><b>${esc(AGENT[c.agent]?.name ?? c.agent)} asks you</b><div class="ask-body">${askCard(ask)}</div></div>`;
+    else banners += `<div class="banner ask"><b>${esc(AGENT[c.agent]?.name ?? c.agent)} asks</b><span class="what" title="${esc(ask.what)}">${esc(ask.what)}</span><button class="btn good" data-act="approve" data-arg="${esc(c.id)}">✓ Approve</button><button class="btn danger" data-act="deny" data-arg="${esc(c.id)}">✕ Deny</button></div>`;
+  }
   if (c.parentId && d && !d.contextLoaded && c.state === 'idle' && d.turns.some(t => t.role === 'assistant')) banners += `<div class="banner info"><span>⚠ This chat has not loaded the record of the chat it continues.</span><button class="btn" data-act="retry" data-arg="${esc(c.id)}">Ask again</button></div>`;
-  $('#chat-banners').innerHTML = banners;
+  const bannerEl = $('#chat-banners');
+  if (bannerEl.dataset.html !== banners && !bannerEl.contains(document.activeElement)) {
+    bannerEl.innerHTML = banners;
+    bannerEl.dataset.html = banners;
+  }
   const dr = $('#drawer');
   dr.hidden = !S.drawer;
   if (S.drawer) dr.innerHTML = drawerHtml(c);
@@ -691,6 +701,16 @@ function localPrompt(title, lines, initial = '') {
   });
 }
 
+/* ---------- request_approval cards: the agent's question, its options, a note ---------- */
+
+function optionButtons(a, cls = 'btn') {
+  return a.options.map((o, i) => `<button class="${cls}${i === 0 ? ' primary' : ''}" data-act="pick" data-arg="${esc(a.id)}" data-req="${esc(a.request)}" data-value="${esc(o)}">${esc(o)}</button>`).join('');
+}
+function askCard(a) {
+  return `<div class="ask-q">${esc(a.question)}</div>${a.details ? `<div class="what">${esc(a.details)}</div>` : ''}
+    <div class="acts">${optionButtons(a)}<input type="text" class="note-input" placeholder="Add a note (optional)" aria-label="Note for the agent"></div>`;
+}
+
 /* ---------- toasts ---------- */
 
 function toast(text, opts = {}) {
@@ -704,10 +724,13 @@ function toast(text, opts = {}) {
 }
 const askToasts = new Map();
 function askToast(a) {
-  const el = toast(`${AGENT[a.agent]?.name ?? a.agent} in "${a.title}" asks: ${a.what.split(' · ').slice(-1)[0]}`, {
+  const ask = a.kind === 'ask';
+  const el = toast(`${AGENT[a.agent]?.name ?? a.agent} in "${a.title}" asks${ask ? ' you' : ''}: ${ask ? a.question : a.what.split(' · ').slice(-1)[0]}`, {
     cls: 'ask',
     ms: 10 * 60 * 1000,
-    buttons: `<button class="btn" data-act="approve" data-arg="${esc(a.id)}">Approve</button><button class="btn" data-act="deny" data-arg="${esc(a.id)}">Deny</button><button class="btn" data-act="chat" data-arg="${esc(a.id)}">Open</button>`,
+    buttons: ask
+      ? `${optionButtons({ ...a, options: a.options.slice(0, 3) })}<button class="btn" data-act="chat" data-arg="${esc(a.id)}">Open</button>`
+      : `<button class="btn" data-act="approve" data-arg="${esc(a.id)}">Approve</button><button class="btn" data-act="deny" data-arg="${esc(a.id)}">Deny</button><button class="btn" data-act="chat" data-arg="${esc(a.id)}">Open</button>`,
   });
   el?.addEventListener('click', e => e.target.closest('[data-act]') && setTimeout(() => el.remove(), 0));
   askToasts.set(a.id + '|' + a.what, el);
@@ -752,6 +775,11 @@ document.addEventListener('click', async e => {
     case 'approve':
     case 'deny':
       return answer(arg, act === 'approve');
+    case 'pick': {
+      const note = el.closest('.item, .banner, .toast')?.querySelector('.note-input')?.value ?? '';
+      await api('POST', `/api/chats/${arg}/answer`, { request: el.dataset.req, option: el.dataset.value, note });
+      return loadDecided();
+    }
     case 'retry':
       return api('POST', `/api/chats/${arg}/retry`).catch(err => toast(err.message));
     case 'delete':

@@ -5,7 +5,8 @@ import { isSea } from 'node:sea';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { TOOL_NAMES } from '../mcp/server.ts';
+import { APPROVAL_NOTE, TOOL_NAMES } from '../mcp/server.ts';
+import { exclude } from './skills.ts';
 import type { AgentId } from './types.ts';
 
 const CLI_ENTRY = path.resolve(import.meta.dirname, '../cli/index.ts');
@@ -34,7 +35,7 @@ export interface Launch {
 
 /** Where a thread's artifacts go, said to the agent (architecture §9). Claude and agy also get it through the MCP server's instructions. */
 export function artifactNote(project: string, threadId: string): string {
-  return `This chat is Chorus thread ${threadId}. Files meant for the user (notes, plans, reports, mockups, anything that is not source code of the project) go in ${path.join(project, '.chorus', 'threads', threadId, 'artifacts')} (create it if missing). Chorus shows them in its Artifacts view.`;
+  return `This chat is Chorus thread ${threadId}. Files meant for the user (notes, plans, reports, mockups, anything that is not source code of the project) go in ${path.join(project, '.chorus', 'threads', threadId, 'artifacts')} (create it if missing). Chorus shows them in its Artifacts view. ${APPROVAL_NOTE}`;
 }
 
 export function mcpCommand(project: string, threadId: string, home?: string) {
@@ -79,11 +80,25 @@ export function buildHeadless(agent: AgentId, o: LaunchOpts): Launch {
   }
   // agy: no per-session flag; a workspace .agents/mcp_config.json is read (verified 1.4.0)
   writeAgyMcpConfig(o.cwd, mcp);
+  writeAgyRules(o.cwd, artifactNote(o.project, o.threadId));
   return {
     bin: 'agy',
     cwd: o.cwd,
     args: [...(o.resumeId ? ['--conversation', o.resumeId] : []), '-p', o.prompt, '--output-format', 'stream-json', '--dangerously-skip-permissions', ...(o.model ? ['--model', o.model] : [])],
   };
+}
+
+/**
+ * agy shows MCP servers to its model as files it may read, so the server's instructions (where artifacts go, ask through
+ * request_approval) are not in context by default. Rules of a workspace plugin are: Chorus writes one, `.agents/plugins/chorus`,
+ * with the same note Codex gets as developer instructions (verified with agy 1.4.4, test/smoke/ask.ts).
+ */
+export function writeAgyRules(cwd: string, note: string) {
+  const dir = path.join(cwd, '.agents', 'plugins', 'chorus');
+  fs.mkdirSync(path.join(dir, 'rules'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'plugin.json'), JSON.stringify({ name: 'chorus' }, null, 2) + '\n');
+  fs.writeFileSync(path.join(dir, 'rules', 'AGENTS.md'), `<!-- written by Chorus for this chat; rewritten when a chat starts here -->\n\n# Chorus\n\n${note}\n`);
+  exclude(cwd, ['.agents/plugins/chorus/']);
 }
 
 /** Merge our server into the workspace file without dropping the user's own servers. */
@@ -205,6 +220,7 @@ export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
     return { bin: 'codex', cwd: o.cwd, args: o.resumeId ? [...cfg, 'resume', o.resumeId] : [...cfg, ...(o.prompt ? [o.prompt] : [])] };
   }
   writeAgyMcpConfig(o.cwd, mcp);
+  writeAgyRules(o.cwd, artifactNote(o.project, o.threadId));
   return {
     bin: 'agy',
     cwd: o.cwd,

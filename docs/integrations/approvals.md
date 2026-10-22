@@ -59,6 +59,32 @@ Only the folder-trust dialog of a new folder still appears (first start in a fol
 (`buildInteractive({skipPermissions})`), remembers it on the chat (`threads.skip_permissions`, so a resumed chat keeps it) and shows `skip` in amber in the
 status line. Nothing from such a chat reaches the approvals inbox. There is no global "always skip" (rule 4).
 
+## D. Approvals the agent asks for itself: the chorus `request_approval` tool
+
+| | |
+|---|---|
+| **Status** | ✅ verified with the real CLIs 2026-10-22: Claude Code 2.1.307 (haiku), Codex 0.163.0, agy 1.4.4 (`node test/smoke/ask.ts`, evidence `fixtures/ask/2026-10-22/`) |
+| **Code** | tool: `src/mcp/server.ts` (`request_approval`, `APPROVAL_NOTE`); store table `requests`; `Controller.checkRequests` / `answerRequest`; desktop cards in `src/desktop/app.js`; route `POST /api/chats/:id/answer` |
+
+Not every approval is a permission prompt. Asked for something that needs the user's OK, agy 1.4.4 wrote a plan and said
+"Please review the plan and click **Proceed**" (its own artifact-feedback feature, a button only its desktop app has), and Codex
+0.163.0 wrote `approval-proposal.md` and said "Reply Approve to authorize". Both are plain text in the conversation: no detector
+can tell them from any other reply (seen in two real chats, `~/.chorus/threads/t_1483547d`, `t_c8420dbe`).
+
+So every agent is told at start to call `request_approval(question, details?, options?)` instead of asking in
+its reply, and to end its turn. The channels: MCP server instructions for Claude, `developer_instructions` for Codex, and for
+agy a rule in a Chorus workspace plugin (`.agents/plugins/chorus/rules/AGENTS.md`, git-excluded): agy only shows server
+instructions to its model when it reads them, and with them alone it asked in its reply 2 of 2 times. The tool only writes the request to the shared store and returns at once (no tool timeout to
+meet: Codex's MCP default is 60 s). The app that runs the chat (CLI or desktop) shows it as a card with the agent's options and a
+note field; the answer is typed into the agent as the user's next message, `Chorus approval r_xxxxxxxx: <option> (<note>)`, text
+and Enter apart. A card is answered once (`answerRequest` updates only a pending row), so two windows cannot both answer it.
+In the CLI app the card is in the inbox like a prompt: `y` picks its first option, `x` its last.
+
+agy asks permission before every MCP tool call ("Allow calling this tool?" under the tool name, `1. Yes, allow tool call`,
+`2. Yes, and always allow tool '<server/tool>' in this conversation`). For Chorus's own tools (`chorus/…`: they read the store
+or show a card) Chorus answers `2` itself, once per prompt, so the user never approves twice; prompts for other servers' tools
+reach the inbox as `MCP tool · <server/tool>`. Fixture: `fixtures/agy/1.4.4/approval-mcp-tool/prompt-screen.txt` (email masked).
+
 ## Gotchas
 
 0. **Claude Code 2.1.302 starts in "auto mode"** (footer `⏵⏵ auto mode on`): a classifier approves tool calls for the user, so it rarely shows the prompts above. Earlier versions started in manual mode. A folder's `.claude/settings.local.json` with `{"permissions":{"defaultMode":"default"}}` (or `--permission-mode default`) gives manual mode (`⏸ manual mode on`); the e2e proof does this so there is something to approve. ✅ 2.1.303: a chat started from Chorus with "Skip permission prompts" unticked passes `--permission-mode default` (per session, the user's settings are untouched), so Claude asks and the request reaches the approvals inbox; without it a fresh folder starts in auto mode and nothing is ever captured. 2.1.303 lists `manual` in `--help` and still accepts `default` (older versions only know `default`). Its prompt adds a `Tip: auto mode handles these prompts…` line and a "Yes, and switch to auto mode" option; a file request whose preview is longer than the screen pushes the `Create file` header off it, so Chorus reads the file from the question (`Do you want to create cake.html?`). Fixtures: `fixtures/claude/2.1.303/approval-*`.

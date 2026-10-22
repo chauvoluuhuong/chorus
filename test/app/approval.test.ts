@@ -70,3 +70,12 @@ test('agy: a command request is the command after "Requesting permission for:", 
   const one = detectApproval('agy', ['● Ran (ls -la /x/mcp) (ctrl+o to expand)', 'Command', '─'.repeat(20), 'Requesting permission for: ls -la /x/mcp', 'Run this command?', '> 1. Yes, run command', '  4. No, cancel']);
   assert.equal(one?.what, 'ls -la /x/mcp');
 });
+
+test('agy 1.4.4: an MCP tool prompt names the tool; option 2 allows it for the conversation', () => {
+  const a = detectApproval('agy', screen('agy', '1.4.4', 'approval-mcp-tool'));
+  assert.ok(a, 'prompt detected');
+  assert.equal(a.question, 'Allow calling this tool?');
+  assert.equal(a.tool, 'chorus/get_handoff_context');
+  assert.equal(a.what, 'MCP tool · chorus/get_handoff_context');
+  assert.equal(a.keys.always, '2');
+});

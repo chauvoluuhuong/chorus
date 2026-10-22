@@ -1,5 +1,6 @@
 // `chorus mcp --thread <id> [--project <dir>]`: stdio MCP server each AI CLI starts for its session.
-// Stateless: every call reads the shared store (docs/architecture.md §6). All tools are read-only.
+// Stateless: every call reads the shared store (docs/architecture.md §6). All tools are read-only except request_approval,
+// which only records a question for the app that hosts the chat.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -7,14 +8,22 @@ import { buildHandoff, pickSourceThread } from '../core/handoff.ts';
 import { listSkills, readSkill } from '../core/skills.ts';
 import { Store } from '../core/store.ts';
 
-export const TOOL_NAMES = ['get_handoff_context', 'get_thread_turns', 'list_threads', 'list_artifacts', 'list_skills', 'get_skill'] as const;
+export const TOOL_NAMES = ['get_handoff_context', 'get_thread_turns', 'list_threads', 'list_artifacts', 'list_skills', 'get_skill', 'request_approval'] as const;
+
+/**
+ * Said to every agent at start (MCP server instructions for Claude and agy, developer instructions for Codex): an approval the
+ * agent wants from the user goes through Chorus, where it is a card the user answers from any chat, instead of a line in the
+ * reply (agy's "click Proceed", Codex's "reply Approve") that Chorus cannot see.
+ */
+export const APPROVAL_NOTE =
+  'The user answers you in Chorus. Whenever you would ask the user to approve, confirm or choose something before you go on (a plan, a risky or irreversible change, a choice between options, "click Proceed", "reply Approve"), do not ask in your reply: call the chorus MCP tool request_approval with the question, a short summary and the options, then end your turn. Chorus shows it to the user as an approval card and their answer arrives as their next message. Your own permission prompts for commands and edits stay as they are.';
 
 export function createServer(project: string, threadId?: string, home?: string): McpServer {
   const store = new Store(project, { home });
   // Every agent starts this server for its thread, so this text reaches all three: it says where the thread's artifacts go.
   const dir = threadId ? store.artifactsDir(threadId) : undefined;
   const instructions = dir
-    ? `This chat is Chorus thread ${threadId}. Files meant for the user (notes, plans, reports, mockups, anything that is not source code of the project) go in ${dir} (create it if missing). Chorus shows them in its Artifacts view.`
+    ? `This chat is Chorus thread ${threadId}. Files meant for the user (notes, plans, reports, mockups, anything that is not source code of the project) go in ${dir} (create it if missing). Chorus shows them in its Artifacts view. ${APPROVAL_NOTE}`
     : undefined;
   const server = new McpServer({ name: 'chorus', version: '0.0.1' }, instructions ? { instructions } : undefined);
 
@@ -81,6 +90,24 @@ export function createServer(project: string, threadId?: string, home?: string):
     async ({ name }) => {
       const r = readSkill(project, name);
       return r ? reply('get_skill', r.body) : reply('get_skill', `Unknown skill ${name}`, true);
+    },
+  );
+
+  server.registerTool(
+    'request_approval',
+    {
+      description:
+        "The way to get the user's approval, confirmation or choice in this chat: use it instead of asking in your reply whenever you need the user's OK on a plan, a risky or irreversible change, or a choice between options. Chorus shows it as a card with your options wherever the user is. Returns at once: end your turn after calling it. The user's answer arrives as their next message, starting with \"Chorus approval <id>:\" and the option they chose (and maybe a note).",
+      inputSchema: {
+        question: z.string().min(1).describe('What you ask, in one sentence (e.g. "Apply the migration plan to the production database?")'),
+        details: z.string().optional().describe('A short summary the user needs to decide: the plan, the command, what changes (a few lines; the full plan can be an artifact)'),
+        options: z.array(z.string().min(1)).min(2).max(5).optional().describe('The answers to offer, the one you suggest first. Default: ["Approve", "Decline"]'),
+      },
+    },
+    async ({ question, details, options }) => {
+      if (!threadId) return reply('request_approval', 'This chat is not a Chorus thread: ask the user in your reply.', true);
+      const r = store.createRequest({ threadId, question, details, options });
+      return reply('request_approval', `Shown to the user as approval card ${r.id} with the options: ${r.options.join(' / ')}. End your turn now without asking again in your reply. Their answer arrives as their next message: "Chorus approval ${r.id}: <option>".`);
     },
   );
 

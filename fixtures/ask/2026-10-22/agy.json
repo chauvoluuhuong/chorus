@@ -1,0 +1,22 @@
+{
+  "agent": "agy",
+  "version": "1.4.4",
+  "task": "Create a file hello.txt in the current directory containing the word hi. Get my approval for your plan before you create anything.",
+  "cardArrived": true,
+  "card": {
+    "question": "Do you approve creating hello.txt with the content 'hi'?",
+    "details": "1. Create hello.txt in the current directory\n2. Write 'hi' into hello.txt",
+    "options": [
+      "Approve",
+      "Decline"
+    ]
+  },
+  "permissionPromptsBeforeCard": 5,
+  "screenAtCard": "\n\n      ▄▀▀▄        Antigravity CLI 1.4.4\n     ▀▀▀▀▀▀       <email> (Antigravity Starter Quota)\n    ▀▀▀▀▀▀▀▀      Gemini 3.8 Flash (High)\n   ▄▀▀    ▀▀▄     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-ask-agy-ycpnwt\n  ▄▀▀      ▀▀▄\n\n────────────────────────────────────────────────────────────\n> Create a file hello.txt in the current directory containing the word hi. Get my approval for your plan before you\n  create anything.\n\n○ Thought for 23.8s (The plan artifact was retrieved and analyzed successfully. Proceeding to re-examine the approv...)\n● Ran (ls -la /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-ask-agy-ycpnwt/.agents/plugins/chorus)\n● Explored 1 file (plugin.json) \n… 7 more actions (3 reads, 3 commands, 1 tool) …\n● Edited 1 file (plan.md)\n● Called 2 MCP tools (chorus/list_artifacts, chorus/request_approval) (ctrl+o to expand)\n⣽  Calling MCP tool...\n────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n>\n────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\nesc to cancel                                                                                    Gemini 3.8 Flash · high\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+  "answered": true,
+  "fileCreated": true,
+  "answerSeenByAgent": true,
+  "toolCalled": true,
+  "askedInReplyInstead": false,
+  "ok": true
+}

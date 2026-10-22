@@ -28,7 +28,8 @@
     "start": "node src/cli/index.ts",
     "smoke:artifacts": "node test/smoke/artifacts.ts",
     "proof:desktop": "node test/smoke/proof-desktop.ts --open",
-    "serve": "node src/cli/index.ts serve --open"
+    "serve": "node src/cli/index.ts serve --open",
+    "smoke:ask": "node test/smoke/ask.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

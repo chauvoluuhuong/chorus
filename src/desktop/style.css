@@ -243,6 +243,12 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 .banner.ask { background: var(--bad-soft); }
 .banner.ask .what { font-family: var(--f-mono); font-size: 12.5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .banner.info { background: var(--warn-soft); color: var(--warn); }
+.banner.card { align-items: flex-start; }
+.banner.card .ask-body { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.ask-q { font-weight: 600; }
+.banner.card .what { white-space: pre-wrap; overflow: auto; text-overflow: clip; max-height: 8.5em; flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.acts .note-input { flex: 1; min-width: 140px; padding: 5px 9px; font-size: 13px; }
+.toast .btn.primary { background: #fff; color: var(--bad); border-color: #fff; }
 .banner.info span { flex: 1; }
 .chat-body { flex: 1; min-height: 0; display: flex; gap: 0; }
 .term-wrap { flex: 1; min-width: 0; background: var(--term-bg); padding: 10px 6px 6px 12px; position: relative; }

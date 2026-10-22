@@ -93,7 +93,8 @@ function copyDir(from: string, to: string) {
   fs.writeFileSync(path.join(to, MARKER), 'managed by chorus; edit .chorus/skills instead\n');
 }
 
-function exclude(project: string, rel: string[]) {
+/** Keeps paths Chorus writes into a project out of git, through .git/info/exclude (never the project's .gitignore). */
+export function exclude(project: string, rel: string[]) {
   const file = path.join(project, '.git', 'info', 'exclude');
   if (!fs.existsSync(path.dirname(file))) return;
   const have = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';

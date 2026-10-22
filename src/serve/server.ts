@@ -282,6 +282,12 @@ export class ChorusServer {
         this.pushState();
         return { ok };
       }
+      case 'POST chats/:id/answer': {
+        // a request_approval card: the option (and note) becomes the user's next message to that agent
+        const ok = typeof b.request === 'string' && typeof b.option === 'string' && c.answerRequest(b.request, b.option, typeof b.note === 'string' ? b.note : undefined);
+        this.pushState();
+        return { ok };
+      }
       case 'POST chats/:id/retry':
         this.select(id);
         c.retryContext();
@@ -391,7 +397,9 @@ export class ChorusServer {
       project: c.project,
       current: this.app.current?.id ?? null,
       chats,
-      approvals: c.approvalItems('all'),
+      // when each request appeared (whole seconds), not "seconds waiting": the state must not change every push, or the
+      // window would redraw the inbox under the mouse
+      approvals: c.approvalItems('all').map(({ waiting, ...x }) => ({ ...x, since: Math.round(Date.now() / 1000 - waiting) })),
       notice: this.app.notice,
       dialogs: [...this.dialogs.values()].map(x => x.d),
       agents: Object.fromEntries(AGENTS.map(a => [a, c.agentInfo.get(a) ?? null])),

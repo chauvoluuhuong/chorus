@@ -57,6 +57,9 @@ closed and it works. 🌐 ✅
 | agy writes each server's tool schemas to `~/.gemini/antigravity-cli/mcp/<server>/<tool>.json` and the model reads them with `view_file`, then calls `call_mcp_tool` (`ServerName`, `ToolName`, `Arguments`) | ✅ |
 | Managed with `agy mcp add [flags] <name> <commandOrUrl> [args…]` (flags `-e/--env`, `-H/--header`, `-t/--type`; flags before the name), `remove`, `list`, `enable`, `disable`. Edits the global config, so not used | ✅ help |
 | Headless runs wait for MCP servers to load before the turn; calls with undeclared arguments are rejected (1.1.27+); `_meta["antigravity/alwaysLoad"]` keeps a tool always loaded | 📄 |
+| The server's **instructions** are written next to the tool files (`mcp/<server>/instructions.md`) and reach the model only if it reads them: told through them to ask through `request_approval`, agy 1.4.4 asked in its reply instead (2 of 2 runs, `test/smoke/ask.ts`) | ✅ 1.4.4 |
+| Rules of a **workspace plugin** are always in context: `<cwd>/.agents/plugins/<name>/plugin.json` (`{"name": …}`) + `rules/AGENTS.md`. Chorus writes `.agents/plugins/chorus/` at chat start with the artifacts and approval note (git-excluded); with it agy 1.4.4 wrote its plan as an artifact and asked through the card (`fixtures/ask/2026-10-22/agy.json`). Shipped doc: `~/.gemini/antigravity-cli/builtin/skills/agy-customizations/docs/plugins.md`, `rules.md` | ✅ 1.4.4 |
+| Before every MCP tool call agy asks "Allow calling this tool?" with the tool (`server/tool`) on the line above; `2` = always allow it in this conversation. Chorus answers `2` for its own `chorus/…` tools (`fixtures/agy/1.4.4/approval-mcp-tool/`) | ✅ 1.4.4 |
 
 ## 4. Getting the chat session
 

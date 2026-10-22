@@ -1,0 +1,23 @@
+{
+  "agent": "claude",
+  "version": "2.1.307",
+  "task": "Create a file hello.txt in the current directory containing the word hi. Get my approval for your plan before you create anything.",
+  "cardArrived": true,
+  "card": {
+    "question": "Approve creating hello.txt in the working directory with the single word \"hi\"?",
+    "details": "Plan: create one new file, hello.txt, in /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-ask-claude-mqopSB/ containing the word \"hi\" (no trailing newline unless you want one). I checked: the directory has no hello.txt yet, so nothing gets overwritten. No other files change. Nothing is created until you approve.",
+    "options": [
+      "Approve",
+      "Approve with trailing newline",
+      "Decline"
+    ]
+  },
+  "permissionPromptsBeforeCard": 0,
+  "screenAtCard": "\n ▐▛███▛█   Claude Code v2.1.307\n▝▜██████▀  Haiku 5.5 · Claude Pro\n ▝▝   ▝▝   /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-ask-claude-mqopSB\n\n\n❯ Create a file hello.txt in the current directory containing the word hi. Get my approval for your plan before you     \n  create anything.                                                                                                      \n\n  Listed 1 directory, called chorus \n\n⏺ I haven't created hello.txt yet. I've sent the plan to Chorus for your approval, so you should see an approval card\n  with these options:\n\n  - Approve: create hello.txt containing hi, with no trailing newline.\n  - Approve with trailing newline: same file, with a newline after hi.\n  - Decline: create nothing.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n                                                      You've used 78% of your weekly limit · resets 12am (Asia/Saigon)\n────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n❯ \n────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n  ⏸ manual mode on · esc to interrupt",
+  "answered": true,
+  "fileCreated": true,
+  "answerSeenByAgent": true,
+  "toolCalled": true,
+  "askedInReplyInstead": false,
+  "ok": true
+}

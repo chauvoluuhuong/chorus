@@ -85,6 +85,7 @@ system), with the screens of the CLI app ([mockups/chorus-cli.html](mockups/chor
 | Skills | the library with on/off switches, New skill, Edit (opens SKILL.md), found in the agents' folders with Import | `GET/POST skills…` |
 | Doctor | the doctor lines of the CLI app | `GET doctor` |
 | Dialogs | the Controller's questions (delete?, limit reached, how to open a file) | `state.dialogs`, `POST dialogs/:id` |
+| Approval cards | a question an agent asks through the chorus `request_approval` tool: the question, its summary, the agent's options and a note field, in the inbox, as a banner over the chat and as a toast; the answer is typed into the agent ([integrations/approvals.md §D](integrations/approvals.md)) | `state.approvals` (`kind: 'ask'`), `POST chats/:id/answer` |
 
 Keys: ⌘N new chat, ⌘I approvals, ⌘B sidebar, ⌘1–9 chats, Esc closes a dialog. Everything else goes to the agent in front.
 The address keeps the screen (`#/chat/<id>`), so a reload or a restarted server comes back to it.

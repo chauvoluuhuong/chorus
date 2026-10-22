@@ -188,6 +188,14 @@ test('serve: approvals, handoff, delete (asked through a dialog), activity, memo
     assert.ok(v.msgs.some(m => m.t === 'flash' && /^approved/.test(m.text)), 'the flash reaches the window');
     const act = (await r.api('GET', `/api/chats/${a}/activity`)).json;
     assert.ok(act.rows.some((x: any) => x.kind === 'approval' && x.status === 'approved'));
+    // a request_approval card: listed with its options, answered with a note, typed into the agent
+    const req = r.store.createRequest({ threadId: a, question: 'Use Postgres?', options: ['Postgres', 'SQLite'] });
+    await v.until(() => v.state()?.approvals.some((x: any) => x.kind === 'ask' && x.request === req.id), 'the card in the state');
+    assert.deepEqual(v.state().approvals.find((x: any) => x.request === req.id).options, ['Postgres', 'SQLite']);
+    assert.equal((await r.api('POST', `/api/chats/${a}/answer`, { request: req.id, option: 'SQLite', note: 'for now' })).json.ok, true);
+    await v.until(() => !v.state()?.approvals.some((x: any) => x.kind === 'ask'), 'answered'); // the fake agent keeps its old prompt on screen
+    assert.equal(r.store.getRequest(req.id)!.answer, 'SQLite');
+    assert.equal((await r.api('POST', `/api/chats/${a}/answer`, { request: req.id, option: 'Postgres' })).json.ok, false, 'once');
     // handoff: a child chat with the fixed first message
     const h = await r.api('POST', `/api/chats/${a}/handoff`, { to: 'agy' });
     const child = h.json.id as string;

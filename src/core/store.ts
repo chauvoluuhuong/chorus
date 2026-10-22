@@ -1,5 +1,5 @@
 // Shared store: .chorus/chorus.db (SQLite, WAL), used by the CLI app and every `chorus mcp` process.
-import { randomUUID, createHash } from 'node:crypto';
+import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -35,6 +35,20 @@ export interface ApprovalLogRow {
   what: string;
   decision: 'approved' | 'denied';
   ts: string;
+}
+
+/** A question an agent put to the user through the chorus `request_approval` tool (shown as a card, answered in Chorus). */
+export interface RequestRow {
+  id: string;
+  thread_id: string;
+  question: string;
+  details: string | null;
+  options: string[];
+  status: 'pending' | 'answered' | 'cancelled';
+  answer: string | null;
+  note: string | null;
+  created: string;
+  answered: string | null;
 }
 
 export interface ArtifactRow {
@@ -73,6 +87,10 @@ CREATE TABLE IF NOT EXISTS approvals_log (
 );
 CREATE TABLE IF NOT EXISTS mcp_calls (
   id INTEGER PRIMARY KEY AUTOINCREMENT, thread_id TEXT, tool TEXT NOT NULL, ts TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS requests (
+  id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, question TEXT NOT NULL, details TEXT, options TEXT NOT NULL,
+  status TEXT NOT NULL, answer TEXT, note TEXT, created TEXT NOT NULL, answered TEXT
 );
 `;
 
@@ -213,7 +231,7 @@ export class Store {
     db.exec('BEGIN');
     try {
       db.prepare('UPDATE threads SET parent_thread_id = NULL WHERE parent_thread_id = ?').run(id);
-      for (const table of ['turns', 'tool_calls', 'usage', 'artifacts', 'approvals_log', 'mcp_calls']) db.prepare(`DELETE FROM ${table} WHERE thread_id = ?`).run(id);
+      for (const table of ['turns', 'tool_calls', 'usage', 'artifacts', 'approvals_log', 'mcp_calls', 'requests']) db.prepare(`DELETE FROM ${table} WHERE thread_id = ?`).run(id);
       db.prepare('DELETE FROM threads WHERE id = ?').run(id);
       db.exec('COMMIT');
     } catch (e) {
@@ -332,6 +350,28 @@ export class Store {
 
   approvalsLog(limit = 20): ApprovalLogRow[] {
     return this.db.prepare('SELECT * FROM approvals_log ORDER BY id DESC LIMIT ?').all(limit) as unknown as ApprovalLogRow[];
+  }
+
+  /** An agent asks the user something (the chorus request_approval tool); the app that hosts the chat shows it. */
+  createRequest(r: { threadId: string; question: string; details?: string; options?: string[] }): RequestRow {
+    const id = `r_${randomBytes(4).toString('hex')}`;
+    this.db.prepare("INSERT INTO requests (id,thread_id,question,details,options,status,created) VALUES (?,?,?,?,?,'pending',?)").run(id, r.threadId, r.question, r.details ?? null, JSON.stringify(r.options?.length ? r.options : ['Approve', 'Decline']), now());
+    return this.getRequest(id)!;
+  }
+
+  getRequest(id: string): RequestRow | undefined {
+    const r = this.db.prepare('SELECT * FROM requests WHERE id = ?').get(id) as any;
+    return r ? { ...r, options: JSON.parse(r.options) } : undefined;
+  }
+
+  pendingRequests(threadId?: string): RequestRow[] {
+    const rows = (threadId ? this.db.prepare("SELECT * FROM requests WHERE status = 'pending' AND thread_id = ? ORDER BY created").all(threadId) : this.db.prepare("SELECT * FROM requests WHERE status = 'pending' ORDER BY created").all()) as any[];
+    return rows.map(r => ({ ...r, options: JSON.parse(r.options) }));
+  }
+
+  /** Answers a pending request once; false when it was already answered or cancelled (by another window or app). */
+  answerRequest(id: string, answer: string, note?: string, status: 'answered' | 'cancelled' = 'answered'): boolean {
+    return Number(this.db.prepare("UPDATE requests SET status = ?, answer = ?, note = ?, answered = ? WHERE id = ? AND status = 'pending'").run(status, answer, note ?? null, now(), id).changes) > 0;
   }
 
   mcpCalls(threadId: string): { tool: string; ts: string }[] {

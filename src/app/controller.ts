@@ -4,7 +4,7 @@ import path from 'node:path';
 import { buildHandoff, handoffPrompt } from '../core/handoff.ts';
 import { buildInteractive, SKIP_FLAG, type InteractiveOpts, type Launch } from '../core/launch.ts';
 import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, syncSkills, sourceDir } from '../core/skills.ts';
-import type { Store, ThreadRow } from '../core/store.ts';
+import type { RequestRow, Store, ThreadRow } from '../core/store.ts';
 import type { AgentId, Session } from '../core/types.ts';
 import { App, projectName, type Entry } from './app.ts';
 import { detectApproval, type PendingApproval } from './approval.ts';
@@ -65,6 +65,10 @@ export class Controller {
   private claimed = new Set<string>();
   private pending = new Map<string, PendingApproval>();
   private pendingSince = new Map<string, number>();
+  /** questions the agents of the chats this app hosts asked through the chorus request_approval tool, by request id */
+  private requests = new Map<string, RequestRow>();
+  /** agy prompts for Chorus's own MCP tools that were answered for the user (the prompt and when) */
+  private autoAllowed = new Map<string, number>();
   private modelCache = new Map<AgentId, string[]>();
   private limited = new Map<string, string>();
   private limitShown = new Set<string>();
@@ -86,7 +90,7 @@ export class Controller {
     this.app.on('select', (e: Entry) => void this.onSelect(e));
     this.app.on('stopped', () => this.stop());
     this.detectTimer = setInterval(() => this.detect(), 400);
-    this.app.waitingProvider = () => this.pending.size;
+    this.app.waitingProvider = () => this.pending.size + this.requests.size;
     void this.probeAgents();
   }
 
@@ -223,7 +227,7 @@ export class Controller {
     if (!e) return;
     let st: ItemState | undefined;
     if (e.host?.state === 'ended') st = 'ended';
-    else if (this.pending.has(id)) st = 'approval';
+    else if (this.pending.has(id) || this.requestOf(id)) st = 'approval';
     else {
       const s = this.sessions.get(id);
       if (s?.status) st = s.status === 'working' ? 'busy' : 'idle';
@@ -290,7 +294,17 @@ export class Controller {
     let changed = false;
     for (const e of this.app.entries) {
       if (!e.host || e.host.state !== 'running') continue;
-      const found = detectApproval(e.agent as AgentId, e.host.screen.text());
+      let found = detectApproval(e.agent as AgentId, e.host.screen.text());
+      // agy asks before every MCP tool call; Chorus's own tools only read the store or show a card, so Chorus answers
+      // "always allow in this conversation" itself (once per prompt) and you never see that prompt
+      if (found?.tool?.startsWith('chorus/')) {
+        const key = `${e.id} ${found.tool}`;
+        if (Date.now() - (this.autoAllowed.get(key) ?? 0) > 3000) {
+          this.autoAllowed.set(key, Date.now());
+          e.host.write(found.keys.always ?? found.keys.approve);
+        }
+        found = undefined;
+      }
       const had = this.pending.get(e.id);
       if (found && !had) {
         this.pending.set(e.id, found);
@@ -309,7 +323,68 @@ export class Controller {
       }
       if (changed) this.refreshState(e.id);
     }
+    this.checkRequests();
     this.checkQuota();
+  }
+
+  /** The request_approval cards of the chats this app runs: new ones flash like a prompt, answered or gone ones leave. */
+  private checkRequests() {
+    const hosted = new Set(this.app.entries.filter(e => e.host?.state === 'running').map(e => e.id));
+    let rows: RequestRow[];
+    try {
+      rows = this.store.pendingRequests().filter(r => hosted.has(r.thread_id));
+    } catch {
+      return; // the store is closing
+    }
+    const ids = new Set(rows.map(r => r.id));
+    for (const r of rows) {
+      if (this.requests.has(r.id)) continue;
+      this.requests.set(r.id, r);
+      const e = this.app.entry(r.thread_id)!;
+      if (e.id !== this.app.current?.id || this.app.paneId) {
+        this.app.setFlash(`! ${e.title} (${e.agent}) asks you · ${this.app.menuLabel} i answers · ${r.question}`);
+        this.app.bell();
+      }
+      this.refreshState(r.thread_id);
+    }
+    for (const [id, r] of this.requests) {
+      if (ids.has(id)) continue;
+      this.requests.delete(id);
+      this.refreshState(r.thread_id);
+    }
+  }
+
+  /** The oldest open request of a chat. */
+  private requestOf(threadId: string): RequestRow | undefined {
+    return [...this.requests.values()].find(r => r.thread_id === threadId);
+  }
+
+  /**
+   * Answers a request_approval card: the chosen option (and a note) is typed into the agent as your next message, which is
+   * what the tool told the agent to wait for. False when the chat is not running or the card was already answered.
+   */
+  answerRequest(requestId: string, option: string, note?: string): boolean {
+    const r = this.requests.get(requestId) ?? this.store.getRequest(requestId);
+    const host = r ? this.app.entry(r.thread_id)?.host : undefined;
+    if (!r || !host || host.state !== 'running') {
+      this.app.setFlash('that chat is not running: open it, then answer');
+      return false;
+    }
+    if (!this.store.answerRequest(r.id, option, note)) {
+      this.requests.delete(r.id);
+      this.app.setFlash('already answered');
+      return false;
+    }
+    this.requests.delete(r.id);
+    const line = `Chorus approval ${r.id}: ${option}${note?.trim() ? ` (${note.trim().replace(/\s+/g, ' ')})` : ''}`;
+    host.write(line);
+    // text and Enter in one chunk read as a paste in the TUIs: Enter goes apart
+    setTimeout(() => host.state === 'running' && host.write('\r'), 700);
+    const no = /^(no\b|decline|deny|reject|cancel|stop|don.?t)/i.test(option);
+    this.store.logApproval(r.thread_id, `${r.question} → ${option}`, no ? 'denied' : 'approved');
+    this.refreshState(r.thread_id);
+    this.app.setFlash(`answered: ${option} · ${r.question.slice(0, 60)}`);
+    return true;
   }
 
   /** An agent that ran out of quota says so on its screen: warn and point at the handoff. */
@@ -334,9 +409,13 @@ export class Controller {
   /** Answers the request of one chat (default: the one you are looking at, else the one that asked first). */
   answer(approve: boolean, forId?: string): boolean {
     const act = this.app.current;
-    const id = forId ?? (act && this.pending.has(act.id) ? act.id : [...this.pending.keys()][0]);
+    const waiting = (tid: string) => this.pending.has(tid) || !!this.requestOf(tid);
+    const id = forId ?? (act && waiting(act.id) ? act.id : [...this.pending.keys(), ...[...this.requests.values()].map(r => r.thread_id)][0]);
     const p = id && this.pending.get(id);
     const host = id ? this.app.entry(id)?.host : undefined;
+    // no prompt on the screen but a card: y picks its first option, x its last
+    const req = id && !p ? this.requestOf(id) : undefined;
+    if (req) return this.answerRequest(req.id, approve ? req.options[0] : req.options[req.options.length - 1]);
     if (!p || !host) {
       this.app.setFlash('nothing is waiting for approval');
       return false;
@@ -588,12 +667,16 @@ export class Controller {
   /** What waits for you; scope "this" keeps the chats of the project you are in (the chat in front, else where chorus started). */
   approvalItems(scope: ApprovalScope = 'all') {
     const cwd = this.app.current?.cwd ?? this.project;
-    return [...this.pending.entries()]
-      .map(([id, p]) => {
-        const e = this.app.entry(id);
-        return e && { id, cwd: e.cwd, title: e.title, agent: e.agent, waiting: (Date.now() - (this.pendingSince.get(id) ?? Date.now())) / 1000, what: p.what, risk: riskOf(p.what, e.cwd) };
-      })
-      .filter((x): x is NonNullable<typeof x> => !!x && (scope === 'all' || x.cwd === cwd));
+    const prompts = [...this.pending.entries()].map(([id, p]) => {
+      const e = this.app.entry(id);
+      return e && { kind: 'permission' as const, id, cwd: e.cwd, title: e.title, agent: e.agent, waiting: (Date.now() - (this.pendingSince.get(id) ?? Date.now())) / 1000, what: p.what, risk: riskOf(p.what, e.cwd) };
+    });
+    // request_approval cards: the question is "what"; the options and the summary go to the windows that can show them
+    const cards = [...this.requests.values()].map(r => {
+      const e = this.app.entry(r.thread_id);
+      return e && { kind: 'ask' as const, id: r.thread_id, request: r.id, cwd: e.cwd, title: e.title, agent: e.agent, waiting: (Date.now() - new Date(r.created).getTime()) / 1000, what: r.question, question: r.question, details: r.details, options: r.options, risk: { label: 'asks you', level: 'warn' as const } };
+    });
+    return [...prompts, ...cards].filter((x): x is NonNullable<typeof x> => !!x && (scope === 'all' || x.cwd === cwd));
   }
 
   /** Today's answers ("Decided today"). */

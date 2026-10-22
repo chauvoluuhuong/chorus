@@ -53,8 +53,11 @@ test('mcp: get_handoff_context returns the parent thread and the call is logged'
   store.createThread({ id: 'child', title: 'continue', agent: 'agy', cwd: proj, parent_thread_id: 'parent' });
 
   const c = await client(proj, 'child');
+  // a failed assertion must not leave the server running (the test file would never exit)
+  const t = setTimeout(() => void c.close(), 20000);
+  t.unref();
   const tools = (await c.listTools()).tools.map(t => t.name).sort();
-  assert.deepEqual(tools, ['get_handoff_context', 'get_skill', 'get_thread_turns', 'list_artifacts', 'list_skills', 'list_threads']);
+  assert.deepEqual(tools, ['get_handoff_context', 'get_skill', 'get_thread_turns', 'list_artifacts', 'list_skills', 'list_threads', 'request_approval']);
   const out = text(await c.callTool({ name: 'get_handoff_context', arguments: {} }));
   assert.match(out, /parent work/);
   assert.match(out, /echo the probe string/);

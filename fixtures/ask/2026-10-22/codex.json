@@ -1,0 +1,22 @@
+{
+  "agent": "codex",
+  "version": "0.163.0",
+  "task": "Create a file hello.txt in the current directory containing the word hi. Get my approval for your plan before you create anything.",
+  "cardArrived": true,
+  "card": {
+    "question": "Approve creating hello.txt in the current directory with the single word hi?",
+    "details": "Plan: create ./hello.txt containing exactly “hi” (with a trailing newline).",
+    "options": [
+      "Approve",
+      "Decline"
+    ]
+  },
+  "permissionPromptsBeforeCard": 0,
+  "screenAtCard": "\n  >_ OpenAI Codex (v0.163.0)\n     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-ask-codex-pYuipD\n\n\n› Create a file hello.txt in the current directory containing the word hi. Get my approval for your plan before you\n  create anything.\n\n\n• I’ll ask for approval through Chorus before creating hello.txt, as requested.\n\n• Called chorus.request_approval\n  └ Shown to the user as approval card r_2770b473 with the options: Approve / Decline. End your turn now without asking…\n    + Show details                                                                                                      \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n• Working (15s • esc to interrupt)\n\n\n› Ask Codex to do anything\n\n  GPT-6-Luna default · /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-ask-codex-pYuipD\n  ? for shortcuts                                                                              ⚠ 1 warning · f2 to view",
+  "answered": true,
+  "fileCreated": true,
+  "answerSeenByAgent": true,
+  "toolCalled": true,
+  "askedInReplyInstead": false,
+  "ok": true
+}

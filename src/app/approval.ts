@@ -9,7 +9,9 @@ export interface PendingApproval {
   what: string;
   /** the prompt's own question */
   question: string;
-  keys: { approve: string; deny: string };
+  keys: { approve: string; deny: string; always?: string };
+  /** agy's MCP tool prompt: the tool it asks about ("chorus/get_handoff_context") */
+  tool?: string;
 }
 
 const KEYS = { approve: '\r', deny: '\x1b' };
@@ -84,6 +86,10 @@ export function detectApproval(agent: AgentId, lines: string[]): PendingApproval
       if (target) fileChange = `${lines[head].trim()} · ${target.replace(/\s+[+-]\d+(\s+[+-]\d+)?$/, '')}`;
     }
   }
+  // agy names an MCP tool on the line above "Allow calling this tool?" (server/tool); option 2 allows it for the conversation
+  let tool = '';
+  if (agent === 'agy' && /Allow calling this tool\?/.test(lines[qi])) tool = lines.slice(Math.max(0, qi - 3), qi).map(l => l.trim()).reverse().find(l => /^[\w.-]+\/[\w.-]+$/.test(l)) ?? '';
+  if (tool) return { agent, what: `MCP tool · ${tool}`, question: lines[qi].trim(), keys: { ...KEYS, always: '2' }, tool };
   const what = fromBelow || framed || agyCommand || fileChange || lines
     .slice(Math.max(0, qi - 8), qi)
     .map(l => l.replace(/^[\s│┃|]+/, '').replace(/\s+$/, ''))
