@@ -10,6 +10,10 @@ const join = (...p: (string | undefined | false)[]) => p.filter(Boolean).join(';
 const SEL = join('1', T.fg, T.bgSel);
 const home = (p: string) => p.replace(process.env.HOME ?? '\0', '~');
 
+/** "This computer": a chat that belongs to no project. It works in a folder of its own, so no project (or the home folder) is touched. */
+export const computerDir = () => `${process.env.HOME ?? ''}/.chorus/computer`;
+const shown = (folder: string) => (folder.replace(/\/+$/, '') === computerDir() ? 'This computer (no project)' : home(folder));
+
 /** A key hint that is also a button: the same chip teaches the shortcut and takes the click. */
 export const chip = (key: string, label: string, hit = ''): Seg[] => [[` ${key}`, join(T.chorus, T.bgSel), hit], [` ${label} `, join(T.fg, T.bgSel), hit]];
 /** The bottom row: one chip per key ("⏎ start"), two cells apart, like the mockup's F-key bar. */
@@ -72,10 +76,10 @@ export function newChatLines(f: NewChatForm, info: NewChatInfo): PaneLine[] {
     '',
     [label(2, 'Effort'), ...efforts.flatMap((e, i): Seg[] => [chipText(e, i === f.effort, `effort:${i}`), [' ']]), ['  how hard the model thinks', T.dim]],
     '',
-    f.from ? [label(3, 'Project'), [home(f.folder), T.dim], ['  same folder as the chat it continues', T.dim]] : f.focus === 3 ? [label(3, 'Project'), [home(f.folder), T.fg, 'folder'], ['▌', T.chorus], ['   '], [' Browse… ', BTN, 'browse']] : [label(3, 'Project'), [home(f.folder) + ' ▾', LINK, 'folder'], ['   '], [' Browse… ', BTN, 'browse']],
+    f.from ? [label(3, 'Project'), [shown(f.folder), T.dim], ['  same folder as the chat it continues', T.dim]] : [label(3, 'Project'), ...(f.focus === 3 && f.folder.replace(/\/+$/, '') !== computerDir() ? ([[home(f.folder), T.fg, 'folder'], ['▌', T.chorus]] as Seg[]) : ([[shown(f.folder) + ' ▾', LINK, 'folder']] as Seg[])), ['   '], [' Browse… ', BTN, 'browse']],
     f.from ? '' : info.recent.length
-      ? [[under], ['recent: ', T.dim], ...info.recent.slice(0, 3).flatMap((r, i): Seg[] => [[home(r), T.dim, `recent:${i}`], ['  ']]), ['· or type any folder', T.dim]]
-      : [[under], ['type any folder', T.dim]],
+      ? [[under], [' This computer ', f.folder.replace(/\/+$/, '') === computerDir() ? join('1', T.fg, T.bgSel) : BTN, 'computer'], ['  '], ['recent: ', T.dim], ...info.recent.slice(0, 3).flatMap((r, i): Seg[] => [[home(r), T.dim, `recent:${i}`], ['  ']]), ['· or type any folder', T.dim]]
+      : [[under], [' This computer ', f.folder.replace(/\/+$/, '') === computerDir() ? join('1', T.fg, T.bgSel) : BTN, 'computer'], ['  '], ['or type any folder', T.dim]],
     '',
     [label(4, 'Permissions'), [' '], [f.skip ? '[x]' : '[ ]', f.skip ? T.warn : T.fg, 'skip'], [' Skip permission prompts', T.fg, 'skip'], ['  ' + info.skipFlag[agent], T.dim]],
     f.skip
@@ -90,12 +94,13 @@ export function newChatLines(f: NewChatForm, info: NewChatInfo): PaneLine[] {
   return out;
 }
 
-export const NEW_CHAT_HINT: RichLine = hints(chip('⏎', 'start', 'start'), chip('tab', 'next field', 'next'), chip('←/→', 'change'), chip('space', 'tick'), chip('⌃O', 'browse folders', 'browse'));
+export const NEW_CHAT_HINT: RichLine = hints(chip('⏎', 'start', 'start'), chip('tab', 'next field', 'next'), chip('←/→', 'change'), chip('space', 'tick'), chip('⌃O', 'browse folders', 'browse'), chip('⌃T', 'this computer', 'computer'));
 
 /** Keys of the form. Returns what the caller must do. Printable keys edit the folder only while it has the focus. */
 export function newChatKey(f: NewChatForm, key: string, info: Pick<NewChatInfo, 'models' | 'efforts'>): 'start' | 'cancel' | 'browse' | undefined {
   f.error = '';
   if (key === '\x0f' && !f.from) return 'browse'; // ⌃O: choose the project folder in a list
+  if (key === '\x14' && !f.from) return void (f.folder = computerDir()); // ⌃T: no project
   if (key === '\x1b') return 'cancel';
   if (key === '\r' || key === '\n') return 'start';
   if (key === '\t' || key === '\x1b[B') f.focus = (f.focus + 1) % FIELDS;
@@ -124,6 +129,7 @@ export function newChatKey(f: NewChatForm, key: string, info: Pick<NewChatInfo, 
 export function newChatHit(f: NewChatForm, id: string, info: NewChatInfo): 'start' | 'cancel' | 'browse' | undefined {
   f.error = '';
   if (id === 'browse' && !f.from) return 'browse';
+  if (id === 'computer' && !f.from) return void (f.folder = computerDir(), f.focus = 3);
   if (id === 'start') return 'start';
   if (id === 'back') return 'cancel';
   if (id === 'next') f.focus = (f.focus + 1) % FIELDS;
@@ -308,18 +314,18 @@ export const SKILLS_HINT: RichLine = hints(chip('⏎', 'on/off', 'toggle'), chip
 export const ARTIFACTS_HINT: RichLine = hints(chip('↑↓', 'select'), chip('⏎ / click', 'open', 'open'), chip('f', 'show in folder', 'folder'), chip('p', 'copy path', 'copy'), chip('v', 'versions', 'versions'), chip('esc', 'back', 'back'));
 
 
-/* ---------- Folder picker ---------- */
+/* ---------- Folder picker (a box over the screen) ---------- */
 
-export const FOLDER_HINT: RichLine = hints(chip('⏎', 'open', 'open'), chip('←', 'up', 'up'), chip('s', 'use this folder', 'select'), chip('n', 'new folder', 'new'), chip('esc', 'cancel', 'cancel'));
+export const FOLDER_FOOT = '↑↓ move   ⏎ open   ← up   s use this   n new   esc cancel';
 
-/** A list of the folders inside `dir`: ↑↓ move, ⏎ opens one, s picks the one you are in. `shown` is the window of the list in view. */
-export function folderLines(dir: string, names: string[], sel: number, room: number, error = ''): PaneLine[] {
+/** The rows of the folder box: the folders of `dir` by name, a window of `room` of them around `sel`, then the actions. */
+export function folderRows(names: string[], sel: number, room: number): [string, string, boolean?, string?][] {
   const start = Math.max(0, Math.min(sel - Math.floor(room / 2), names.length - room));
-  const out: PaneLine[] = [[['Choose a project folder', join('1', T.chorus)]], [[home(dir), T.fg]], ''];
-  if (!names.length) out.push([['  no folders in here: s uses this one, n makes a new one', T.dim]]);
-  if (start > 0) out.push([[`  ▲ ${start} more`, T.dim]]);
-  names.slice(start, start + room).forEach((n, i) => out.push({ line: [[start + i === sel ? '▸ ' : '  ', T.chorus], [n + '/', T.fg]], hit: `dir:${start + i}`, sel: start + i === sel }));
-  if (start + room < names.length) out.push([[`  ▼ ${names.length - start - room} more`, T.dim]]);
-  if (error) out.push('', [['  ! ' + error, T.err]]);
+  const out: [string, string, boolean?, string?][] = [[' ', '../   (up one level)', false, 'up']];
+  if (!names.length) out.push([' ', '(no folders in here)', false]);
+  if (start > 0) out.push([' ', `▲ ${start} more`, false]);
+  names.slice(start, start + room).forEach((n, i) => out.push([start + i === sel ? '▸' : ' ', n + '/', start + i === sel, `dir:${start + i}`]));
+  if (start + room < names.length) out.push([' ', `▼ ${names.length - start - room} more`, false]);
+  out.push(['s', 'Use this folder', false, 'select'], ['n', 'New folder', false, 'new'], ['esc', 'Cancel', false, 'cancel']);
   return out;
 }

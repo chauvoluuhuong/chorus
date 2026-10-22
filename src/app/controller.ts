@@ -15,7 +15,7 @@ import { Tailer } from './tailer.ts';
 import { spawn } from 'node:child_process';
 import { BTN, LINK, T, agentStyle, type PaneLine, type RichLine, type Seg } from './compositor.ts';
 import { riskOf } from './risk.ts';
-import { ARTIFACTS_HINT, APPROVALS_HINT, FOLDER_HINT, folderLines, chip, hints, MEMORY_HINT, NEW_CHAT_HINT, SKILLS_HINT, approvalLines, memoryLines as memoryScreenLines, type ApprovalScope, newChatForm, newChatHit, newChatKey, newChatLines, skillLines, type NewChatForm, type NewChatInfo } from './screens.ts';
+import { computerDir, ARTIFACTS_HINT, APPROVALS_HINT, FOLDER_FOOT, folderRows, chip, hints, MEMORY_HINT, NEW_CHAT_HINT, SKILLS_HINT, approvalLines, memoryLines as memoryScreenLines, type ApprovalScope, newChatForm, newChatHit, newChatKey, newChatLines, skillLines, type NewChatForm, type NewChatInfo } from './screens.ts';
 import { VERIFIED_VERSION, versionWarning } from '../core/adapters/index.ts';
 import { PreviewServer } from '../core/preview.ts';
 import { defaultOpener, readOpenConfig, writeOpenConfig, type OpenConfig, type Opener } from '../core/opener.ts';
@@ -545,11 +545,14 @@ export class Controller {
     const finish = (r: 'start' | 'cancel' | 'browse' | undefined) => {
       if (r === 'cancel') return this.app.closePane();
       if (r === 'browse') {
-        const resume = (dir?: string) => this.newChatScreen({ agent: AGENTS[f.agent], model: this.modelList(AGENTS[f.agent])[f.model], effort: effortsFor(AGENTS[f.agent], this.modelList(AGENTS[f.agent])[f.model])[f.effort], skip: f.skip, folder: dir ?? f.folder });
-        return this.folderPicker(f.folder, resume);
+        return this.folderPicker(f.folder, dir => {
+          if (dir) f.folder = dir;
+          redraw();
+        });
       }
       if (r !== 'start') return redraw();
       const dir = path.resolve(f.folder.replace(/^~(?=\/|$)/, process.env.HOME ?? '~'));
+      if (dir === computerDir()) fs.mkdirSync(dir, { recursive: true });
       if (!(fs.existsSync(dir) && fs.statSync(dir).isDirectory())) {
         f.error = `${f.folder} is not a folder`;
         return redraw();
@@ -582,10 +585,10 @@ export class Controller {
   folderPicker(start: string, done: (dir?: string) => void) {
     let dir = path.resolve(start.replace(/^~(?=\/|$)/, process.env.HOME ?? '~'));
     if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) dir = process.env.HOME ?? '/';
-    const st = { sel: 0, error: '', finished: false };
+    const st = { sel: 0, error: '' };
     const names = () => {
       try {
-        return fs.readdirSync(dir, { withFileTypes: true }).filter(d => d.isDirectory() && !d.name.startsWith('.')).map(d => d.name).sort((a, b) => a.localeCompare(b));
+        return fs.readdirSync(dir, { withFileTypes: true }).filter(d => d.isDirectory() && !d.name.startsWith('.')).map(d => d.name).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }));
       } catch {
         return [];
       }
@@ -593,8 +596,10 @@ export class Controller {
     const draw = () => {
       const list = names();
       st.sel = Math.max(0, Math.min(st.sel, list.length - 1));
-      this.app.updatePane(folderLines(dir, list, st.sel, Math.max(3, this.app.paneRows() - 6), st.error));
-      this.app.setCrumb(['New chat', 'Choose folder']);
+      this.app.updateModal({
+        lines: [dir.replace(process.env.HOME ?? '\0', '~'), `${list.length} folder${list.length === 1 ? '' : 's'}, sorted by name`, ...(st.error ? [`! ${st.error}`] : []), ''],
+        rows: folderRows(list, st.sel, Math.max(3, this.app.paneRows() - 12)),
+      });
     };
     const go = (to: string) => {
       try {
@@ -608,8 +613,7 @@ export class Controller {
       draw();
     };
     const finish = (chosen?: string) => {
-      st.finished = true;
-      this.app.closePane(false);
+      this.app.closeModal();
       done(chosen);
     };
     const makeFolder = async () => {
@@ -636,28 +640,24 @@ export class Controller {
       if (id === 'open' && list[st.sel]) return go(path.join(dir, list[st.sel]));
       if (id.startsWith('dir:') && list[Number(id.slice(4))]) return go(path.join(dir, list[Number(id.slice(4))]));
     };
-    this.app.showPane('Choose folder', [], {
-      id: 'folder',
-      bare: true,
-      hint: FOLDER_HINT,
-      crumb: ['New chat', 'Choose folder'],
-      onClose: () => {
-        if (!st.finished) done(undefined);
-      },
+    this.app.showModal({
+      title: 'Choose a project folder',
+      lines: [],
+      rows: [],
+      foot: FOLDER_FOOT,
       onKey: key => {
         const n = names().length;
         if (key === '\x1b[A' || key === 'k') st.sel = Math.max(0, st.sel - 1);
         else if (key === '\x1b[B' || key === 'j') st.sel = Math.min(Math.max(0, n - 1), st.sel + 1);
-        else if (key === '\r' || key === '\n' || key === '\x1b[C') act('open');
-        else if (key === '\x1b[D' || key === '\x7f' || key === '\b') act('up');
-        else if (key === 's') return act('select'), true;
-        else if (key === 'n') return act('new'), true;
-        else if (key === '\x1b' || key === 'q') return act('cancel'), true;
-        else return true;
+        else if (key === '\r' || key === '\n' || key === '\x1b[C') return act('open');
+        else if (key === '\x1b[D' || key === '\x7f' || key === '\b') return act('up');
+        else if (key === 's') return act('select');
+        else if (key === 'n') return act('new');
+        else if (key === '\x1b' || key === 'q') return act('cancel');
+        else return;
         draw();
-        return true;
       },
-      onHit: id => act(id),
+      onHit: act,
     });
     draw();
   }

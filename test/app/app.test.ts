@@ -224,6 +224,23 @@ test('mouse: clicks in the chat area reach only agents that asked for the mouse,
   h.app.stop();
 });
 
+test('mouse: the wheel scrolls a full-screen agent that did not ask for the mouse (agy) with its page keys', async () => {
+  const h = harness();
+  h.app.addThread(h.spec('alpha'));
+  h.app.start();
+  await h.until(l => has(l, /READY alpha/), 'ready');
+  h.type('\x1b[<65;40;6M\x1b[<65;40;6M');
+  await sleep(400);
+  assert.ok(!has(h.screen(), /PGDN/), 'a normal-screen agent gets nothing');
+  h.type('alt\r');
+  await h.until(l => has(l, /ALT SCREEN/), 'alternate screen');
+  h.type('\x1b[<64;40;6M\x1b[<64;40;6M'); // wheel up over the chat
+  await h.until(l => has(l, /PGUP/), 'page up');
+  h.type('\x1b[<65;40;6M\x1b[<65;40;6M');
+  await h.until(l => has(l, /PGDN/), 'page down');
+  h.app.stop();
+});
+
 test('top bar: Menu opens the menu, a menu row runs by click, ↑↓ + Enter, and its letter; Back goes up one level', async () => {
   const h = harness();
   h.app.addThread(h.spec('alpha'));

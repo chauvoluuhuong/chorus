@@ -84,6 +84,15 @@ const MOUSE = /\x1b\[<(\d+);(\d+);(\d+)([Mm])/g;
 /** keys the menu hands to the controller */
 export const ACTION_KEYS: Record<string, string> = { D: 'delete', n: 'new', h: 'handoff', m: 'memory', a: 'files', f: 'files', i: 'approvals', k: 'skills', e: 'activity', t: 'activity', y: 'approve', x: 'deny', r: 'retry', d: 'doctor', '?': 'help' };
 
+export interface ModalSpec {
+  title: string;
+  lines: string[];
+  rows: [string, string, boolean?, string?][];
+  foot?: string;
+  onKey: (key: string) => void;
+  onHit: (id: string) => void;
+}
+
 export class App extends EventEmitter {
   readonly entries: Entry[] = [];
   /** how the menu key is named on screen */
@@ -118,6 +127,9 @@ export class App extends EventEmitter {
   private sideMax = 0;
   private alertState: { title: string; lines: string[]; options: { key: string; label: string }[]; sel: number; resolve: (k: string | undefined) => void } | undefined;
   private dialog: { title: string; options: string[]; sel: number; resolve: (i: number | undefined) => void } | undefined;
+  /** a list box over whatever is in front (the folder picker): it reads the keys and clicks while open */
+  private modal: ModalSpec | undefined;
+  private wheelAcc = 0;
   private promptState: { title: string; lines: string[]; value: string; resolve: (v: string | undefined) => void } | undefined;
   private winTitle = '';
   private mouseOn: boolean;
@@ -366,6 +378,25 @@ export class App extends EventEmitter {
     });
   }
 
+  /** Opens a list box over the current screen; `onKey` gets every key, `onHit` every click on one of its rows. */
+  showModal(m: ModalSpec) {
+    this.modal = m;
+    this.router.capture = true;
+    this.schedule();
+  }
+
+  updateModal(m: Partial<ModalSpec>) {
+    if (!this.modal) return;
+    Object.assign(this.modal, m);
+    this.schedule();
+  }
+
+  closeModal() {
+    this.modal = undefined;
+    this.router.capture = !!this.pane || !!this.dialog || !!this.alertState || !!this.promptState;
+    this.schedule();
+  }
+
   /** Terminal bell: a request needs you while you look at another chat (CHORUS_BELL=0 mutes it). */
   bell() {
     if (this.started && process.env.CHORUS_BELL !== '0') this.io.stdout.write('\x07');
@@ -486,7 +517,7 @@ export class App extends EventEmitter {
       const st = this.promptState;
       const done = (v: string | undefined) => {
         this.promptState = undefined;
-        this.router.capture = !!this.pane || !!this.dialog || !!this.alertState;
+        this.router.capture = !!this.pane || !!this.dialog || !!this.alertState || !!this.modal;
         st.resolve(v);
         this.schedule();
       };
@@ -498,6 +529,10 @@ export class App extends EventEmitter {
       return void this.schedule();
     }
     if (this.alertState) return this.alertKey(key);
+    if (this.modal) {
+      this.modal.onKey(key);
+      return void this.schedule();
+    }
     if (this.dialog) {
       const d = this.dialog;
       const done = (i: number | undefined) => {
@@ -565,6 +600,11 @@ export class App extends EventEmitter {
       this.scrollSide((b & 1) ? 3 : -3);
       return;
     }
+    if (this.modal && wheel && press) {
+      this.modal.onKey((b & 1) ? '\x1b[B' : '\x1b[A');
+      this.schedule();
+      return;
+    }
     if (this.pane && wheel && press) {
       this.pane.scroll = Math.max(0, this.pane.scroll + ((b & 1) ? 3 : -3));
       this.schedule();
@@ -574,6 +614,16 @@ export class App extends EventEmitter {
     const { cols, rows } = this.io.size();
     const L = layout(cols, rows, this.sidebarOn);
     const host = this.current?.host;
+    const inThread = !this.pane && !this.promptState && !this.dialog && !this.alertState && !this.router.menuOpen && host?.state === 'running' && x >= L.contentX && y >= L.contentY && y < L.contentY + L.contentRows;
+    // a full-screen agent that did not ask for the mouse (agy) would never see the wheel: send it the page keys it scrolls with
+    if (wheel && press && inThread && host && !host.screen.modes().mouse && host.screen.modes().alt) {
+      this.wheelAcc += (b & 1) ? 1 : -1;
+      if (Math.abs(this.wheelAcc) >= 2) {
+        host.write(this.wheelAcc > 0 ? '\x1b[6~' : '\x1b[5~');
+        this.wheelAcc = 0;
+      }
+      return;
+    }
     if (!this.pane && !this.dialog && !this.alertState && !this.router.menuOpen && host && host.state === 'running' && host.screen.modes().mouse && x >= L.contentX && y >= L.contentY && y < L.contentY + L.contentRows) {
       host.write(`\x1b[<${b};${x - L.contentX + 1};${y - L.contentY + 1}${press ? 'M' : 'm'}`);
     }
@@ -590,6 +640,10 @@ export class App extends EventEmitter {
     if (this.alertState) {
       const i = id.startsWith('alert:') ? Number(id.slice(6)) : -1;
       if (i >= 0) this.alertKey(this.alertState.options[i].key);
+      return true;
+    }
+    if (this.modal) {
+      this.modal.onHit(id);
       return true;
     }
     if (this.dialog) {
@@ -672,6 +726,8 @@ export class App extends EventEmitter {
       ? { title: this.promptState.title, lines: [...this.promptState.lines, '', `> ${this.promptState.value}▌`], selected: this.promptState.lines.length + 1, foot: '⏎ accept   esc cancel' }
       : alert
       ? { title: alert.title, lines: alert.lines, rows: alert.options.map((o, i) => [o.key === '\r' ? '⏎' : o.key, o.label, i === alert.sel, `alert:${i}`] as [string, string, boolean, string]), alert: true }
+      : this.modal
+      ? { title: this.modal.title, lines: this.modal.lines, rows: this.modal.rows, foot: this.modal.foot, minWidth: 64 }
       : dialog
         ? { title: dialog.title, rows: dialog.options.map((o, i) => [i === dialog.sel ? '▸' : ' ', o, i === dialog.sel, `choice:${i}`] as [string, string, boolean, string]), foot: '↑↓ move   ⏎ start   esc cancel' }
         : this.router.menuOpen
@@ -749,5 +805,6 @@ export class App extends EventEmitter {
 
 /** The last folder name of a chat's working directory (the sidebar's project name). */
 export function projectName(cwd: string): string {
+  if (cwd.replace(/\/+$/, '').endsWith('/.chorus/computer')) return 'This computer';
   return path.basename(cwd) || cwd;
 }

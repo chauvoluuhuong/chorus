@@ -994,3 +994,23 @@ test('folder picker: browse, go up, make a new folder and use it; the New chat f
     r.close();
   }
 });
+
+test('New chat screen: "This computer" starts a chat with no project, in a folder of its own', async () => {
+  const r = rig();
+  const oldHome = process.env.HOME;
+  process.env.HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'computer-'));
+  try {
+    r.c.newChatScreen({ agent: 'codex', folder: os.tmpdir() });
+    await r.until(() => has(r.screen(), /Browse…/), 'form');
+    await r.until(() => has(r.screen(), /This computer/), 'the button');
+    r.type('\x14'); // ⌃T
+    await r.until(() => has(r.screen(), /This computer \(no project\)/), 'folder shows as This computer');
+    r.type('\r');
+    const want = path.join(process.env.HOME ?? '', '.chorus', 'computer');
+    await r.until(() => r.launches.at(-1)?.cwd === want, 'chat started in the computer folder');
+    assert.ok(fs.existsSync(want));
+  } finally {
+    process.env.HOME = oldHome;
+    r.close();
+  }
+});

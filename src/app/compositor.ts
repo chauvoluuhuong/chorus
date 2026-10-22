@@ -80,6 +80,8 @@ export interface Overlay {
   selected?: number;
   foot?: string;
   alert?: boolean;
+  /** a box at least this wide (lists of names) */
+  minWidth?: number;
 }
 
 export interface StatusBar {
@@ -487,7 +489,7 @@ function drawOverlay(grid: Grid, o: Overlay, x0: number, w: number, y0: number, 
   const free = o.lines ?? [];
   const rows = o.rows ?? [];
   const body = free.length + rows.length + (free.length && rows.length ? 1 : 0);
-  const inner = Math.min(w - 4, Math.max(o.title.length + 4, o.foot?.length ?? 0, ...free.map(l => l.length + 2), ...rows.map(r => r[1].length + 8), 34));
+  const inner = Math.min(w - 4, Math.max(o.title.length + 4, o.foot?.length ?? 0, ...free.map(l => l.length + 2), ...rows.map(r => r[1].length + 8), o.minWidth ?? 34, 34));
   const boxH = body + 2 + 2 + (o.foot ? 2 : 0); // borders, title + rule, foot rule + foot
   const x = x0 + Math.max(1, Math.floor((w - inner - 2) / 2));
   const y = y0 + Math.max(0, Math.floor((height - boxH) * 0.46));

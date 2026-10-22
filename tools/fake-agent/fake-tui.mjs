@@ -22,6 +22,7 @@ process.stdin.on('data', d => {
   // terminal replies to our DSR query arrive as \x1b[<row>;<col>R
   const m = d.match(/\x1b\[(\d+);(\d+)R/);
   if (m) { out(`CPR ${m[1]};${m[2]}\r\n`); d = d.replace(m[0], ''); }
+  if (d === '\x1b[5~' || d === '\x1b[6~') { out(d === '\x1b[5~' ? 'PGUP\r\n' : 'PGDN\r\n'); return; }
   if (d === '\x1b') { out('KEY esc\r\n'); return; }
   if (d === '\r' && buf === '') { out('KEY enter\r\n'); return; }
   if (d.includes('\x1b[200~')) out(`PASTE ${JSON.stringify(d.replace(/\x1b\[20[01]~/g, ''))}\r\n`);

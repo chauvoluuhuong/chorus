@@ -436,7 +436,8 @@ const SCENES = [
 
   <span class="d">Effort</span>     ${a.efforts.map((m, i) => i === 0 ? `<span class="sel"> ${m} </span>` : m).join('   ')}   <span class="d">how hard the model thinks</span>
 
-  <span class="d">Project</span>    <span class="clk ch">~/projects/cake-shop ▾</span>   <span class="kb">Browse…</span>  <span class="d">⌃O: pick a folder from a list, or make a new one</span>
+  <span class="d">Project</span>    <span class="clk ch">~/projects/cake-shop ▾</span>   <span class="clk kb" data-go="folders">Browse…</span>  <span class="d">⌃O: pick a folder from a list, or make a new one</span>
+             <span class="kb">This computer</span>  <span class="d">⌃T: no project (works in ~/.chorus/computer)</span>
              <span class="d">recent: ~/projects/landing  ~/work/api  · or type any folder</span>
 
   <span class="d">Permissions</span> <span class="clk" data-nc-skip="1">${nc.skip ? '<span class="wn">[x]</span>' : '[ ]'} Skip permission prompts</span>  <span class="d">${a.flag}</span>
@@ -454,6 +455,36 @@ ${nc.skip ? `             <span class="wn">The agent runs every command and edit
       'Effort passes <code>claude --effort &lt;level&gt;</code>, <code>agy --effort &lt;level&gt;</code> and <code>codex -c model_reasoning_effort="&lt;level&gt;"</code> (verified in each interactive screen; the levels are Claude and agy\'s five, and for Codex the list in its own model cache, so it follows the chosen model). "default" passes nothing, and the choice is kept with the chat, so a resumed chat keeps it.',
       'Skip flags, per CLI: Claude <code>--dangerously-skip-permissions</code>, Codex <code>--dangerously-bypass-approvals-and-sandbox</code>, agy <code>--dangerously-skip-permissions</code>. All three are documented; agy\'s is verified headless only, so each still needs a check in the interactive screen before we ship it.',
       'The sidebar is the project list: click a project to open or fold its chats, click a chat to go to it. That is the whole navigation.',
+      '<b>This computer</b> (⌃T) is a chat with no project, like "this computer" in the Claude app. It runs in <code>~/.chorus/computer</code> so no project and not your home folder is touched (skills are synced into the working folder); the sidebar lists it as "This computer".',
+    ],
+  },
+  {
+    id: 'folders', group: 'Start', title: 'Choose a project folder', cmd: '⌃O  (or Browse…)',
+    chrome: '~/projects/cake-shop — chorus',
+    caption: 'Browse opens a box over the form: the folders of the current directory, one per row, sorted by name. Click a row or press Enter to open it, ← to go up, s to use the folder you are in.',
+    top: { back: 'new', crumb: [['New chat', 'new'], ['Choose folder']] },
+    dim: true,
+    interactive: 'overlay',
+    screenFrom: 'new',
+    overlay: {
+      title: 'Choose a project folder',
+      lines: ['~/projects', '5 folders, sorted by name', ''],
+      rows: [
+        [' ', '../   (up one level)', false, 'folders'],
+        [' ', 'api/', false, 'folders'],
+        ['▸', 'cake-shop/', true, 'folders'],
+        [' ', 'landing/', false, 'folders'],
+        [' ', 'notes/', false, 'folders'],
+        [' ', 'web/', false, 'folders'],
+        ['s', 'Use this folder', false, 'new'],
+        ['n', 'New folder', false, 'folders'],
+        ['esc', 'Cancel', false, 'new'],
+      ],
+      foot: '↑↓ move   ⏎ open   ← up   s use this   n new   esc cancel',
+    },
+    behind: [
+      'Folders only, hidden ones left out, sorted by name (case-insensitive, numbers in order). Long lists scroll with the wheel or ↑↓ and show "▲ n more" / "▼ n more".',
+      'The form stays open behind the box and keeps the agent, model, effort and skip choice; "Use this folder" fills the Project field.',
     ],
   },
   {
