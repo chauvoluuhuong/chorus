@@ -238,6 +238,7 @@ test('serve: a chat from an earlier run is parked and resumes when the window op
     assert.deepEqual(info.agents.map((a: any) => a.id), ['claude', 'codex', 'agy']);
     assert.ok(info.agents[0].models.includes('default'));
     assert.equal(info.folder, r.project);
+    assert.match(info.computer, /\.chorus\/computer$/, 'the "This computer" folder is offered');
     const from = (await r.api('GET', '/api/newchat?from=t_old')).json;
     assert.equal(from.from.title, 'Old chat');
     const sk = (await r.api('GET', '/api/skills')).json;

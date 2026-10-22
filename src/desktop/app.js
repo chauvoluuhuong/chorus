@@ -361,7 +361,7 @@ function newChatHtml() {
   const a = S.info.agents.find(x => x.id === f.agent);
   const efforts = a.efforts[f.model] ?? ['default'];
   if (!efforts.includes(f.effort)) f.effort = efforts[0];
-  const recent = [...new Set([...(S.info.recent ?? [])])].filter(r => r && r !== f.folder);
+  const recent = [...new Set([...(S.info.recent ?? []), S.info.computer])].filter(r => r && r !== f.folder);
   return `<div class="page hero">
     <h1><span class="logo" style="height:26px"><i style="width:5px;height:14px"></i><i style="width:5px;height:26px"></i><i style="width:5px;height:19px"></i></span>${src ? 'Continue with another agent' : 'What should we build?'}</h1>
     <p class="lead">${src ? 'A new chat loads the record of the old one through the Chorus MCP server, sums it up and waits for your OK.' : 'Pick an agent and a project folder. You talk to the agent in its own screen.'}</p>
@@ -374,7 +374,7 @@ function newChatHtml() {
       </div>
       <div class="field"><label for="nc-folder">PROJECT FOLDER</label>
         <div class="folder"><input id="nc-folder" type="text" value="${esc(tilde(f.folder))}" data-input="nc-folder" spellcheck="false"${src ? ' disabled' : ''}>${src ? '' : '<button class="btn" data-act="browse">Browse…</button>'}</div>
-        ${src || !recent.length ? '' : `<div class="chips">${recent.map(r => `<button class="chip" data-act="nc-folder" data-arg="${esc(r)}">${esc(tilde(r))}</button>`).join('')}</div>`}
+        ${src || !recent.length ? '' : `<div class="chips">${recent.map(r => `<button class="chip" data-act="nc-folder" data-arg="${esc(r)}">${esc(r === S.info.computer ? 'This computer (no project)' : tilde(r))}</button>`).join('')}</div>`}
       </div>
       ${src ? '' : `<div class="field"><label for="nc-prompt">FIRST MESSAGE <span class="faint" style="font-weight:400">(optional: you can also type it in the agent)</span></label><textarea id="nc-prompt" data-input="nc-prompt" placeholder="What do you want to build today?">${esc(f.prompt)}</textarea></div>`}
       <label class="toggle"><input type="checkbox" data-change="nc-skip"${f.skip ? ' checked' : ''}><span><b>Skip permission prompts</b> <span class="muted">· starts ${esc(AGENT[f.agent].name)} with <code>${esc(a.skipFlag)}</code></span><br><span class="muted" style="font-size:12.5px">${f.skip ? 'Nothing reaches the approvals inbox for this chat: the agent runs commands and edits files without asking.' : 'Off: the agent asks, and Chorus shows it in the approvals inbox.'}</span></span></label>

@@ -16,6 +16,7 @@ import { App, projectName, type AppIO, type Entry } from '../app/app.ts';
 import { AGENTS, type Controller } from '../app/controller.ts';
 import type { ItemState, RichLine } from '../app/compositor.ts';
 import { effortsFor } from '../app/models.ts';
+import { computerDir } from '../app/screens.ts';
 import type { ThreadHost } from '../app/thread-host.ts';
 import { buildHandoff } from '../core/handoff.ts';
 import { SKIP_FLAG } from '../core/launch.ts';
@@ -256,6 +257,7 @@ export class ChorusServer {
         const agent = asAgent(b.agent);
         if (!agent) return { error: 'agent must be claude, codex or agy' };
         const dir = path.resolve(expand(String(b.folder ?? c.project)));
+        if (dir === computerDir()) fs.mkdirSync(dir, { recursive: true }); // "This computer": a chat that belongs to no project
         if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return { error: `${b.folder} is not a folder` };
         const e = c.newThread({ agent, model: b.model, effort: b.effort, cwd: dir, skipPermissions: !!b.skip, prompt: b.prompt?.trim() || undefined });
         this.pushState();
@@ -428,6 +430,7 @@ export class ChorusServer {
     return {
       folder,
       home: process.env.HOME ?? '',
+      computer: computerDir(),
       recent: c.recentFolders(folder),
       from: src ? { id: src.id, title: src.title, agent: src.agent, skip: !!src.skip_permissions } : null,
       agents: AGENTS.map(a => {
