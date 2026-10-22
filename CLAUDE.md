@@ -75,7 +75,7 @@ The risks found before Phase 5 are probed and written down in `docs/risks/`; the
 technical debt TD-2..TD-10 in `docs/roadmap.md` (memory must be injected, not left to agents; errors and file changes are invisible
 to the adapters; transcript matching; kitty keyboard; Windows; plan-limit capture).
 
-1. Technical debt that a buyer would hit first: TD-3 (a failed run looks empty), TD-4 (two Codex/agy chats started together), TD-2
+1. Technical debt that a buyer would hit first: TD-3 (a failed run looks empty), TD-4 for agy (two agy chats started together; Codex is matched by thread marker since 2026-10-22), TD-2
    (memory digest at chat start), TD-1 (one global skill library).
 2. Phase 5 (desktop): `chorus serve` local API over the same core, then the UI; decide D3 (Electron vs Tauri) there.
    The packaging spike (`docs/phase4.md`) says the JS core ships fine as an npm package or a Node single executable.

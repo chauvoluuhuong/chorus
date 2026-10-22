@@ -1,7 +1,7 @@
 // Live transcript tailing: follow a thread's CLI transcript while its TUI runs and keep the store current (P4.3).
 import fs from 'node:fs';
 import { adapters } from '../core/adapters/index.ts';
-import { codexCwd, newTranscripts } from '../core/discover.ts';
+import { codexRolloutFor, newTranscripts } from '../core/discover.ts';
 import { transcriptPath } from '../core/capture.ts';
 import type { Store } from '../core/store.ts';
 import type { AgentId, Session } from '../core/types.ts';
@@ -89,8 +89,9 @@ export class Tailer {
     } else if (nativeId) {
       file = transcriptPath(agent, nativeId, cwd);
     } else {
-      // a new Codex/agy session: the first unclaimed transcript born after we spawned the TUI (Codex: same cwd)
-      const c = newTranscripts(agent, this.since, claimed).find(x => agent !== 'codex' || realEq(codexCwd(x.file), cwd));
+      // a new session. Codex: the rollout whose developer message names this thread (TD-4); none until its first turn, so retry.
+      // agy: the first unclaimed transcript born after we spawned the TUI
+      const c = agent === 'codex' ? codexRolloutFor(threadId, this.since, claimed) : newTranscripts(agent, this.since, claimed)[0];
       if (c) {
         file = c.file;
         store.updateThread(threadId, { native_session_id: c.id });
@@ -101,16 +102,4 @@ export class Tailer {
     claimed.add(file);
     return true;
   }
-}
-
-function realEq(a: string | undefined, b: string): boolean {
-  if (!a) return false;
-  const r = (p: string) => {
-    try {
-      return fs.realpathSync(p);
-    } catch {
-      return p;
-    }
-  };
-  return r(a) === r(b);
 }

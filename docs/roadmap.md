@@ -115,10 +115,16 @@ Probed ([risks/memory-adoption](risks/memory-adoption.md)): agents save a memory
 - [ ] Codex `file_change` → tool call per changed path. Codex `reasoning` is encrypted: do not capture.
 
 ### TD-4 · Transcript matching when two threads start together
-([risks/session-race](risks/session-race.md)) Codex birth order disagreed with launch order in 2/2 trials; same cwd.
-- [ ] Codex: match the rollout by the `This chat is Chorus thread t_…` line in its developer message (`discover.ts`).
+([risks/session-race](risks/session-race.md)) Codex birth order disagreed with launch order in 2/2 trials; same cwd. The Phase 5 desktop proof hit
+the Codex case: a chat that never got a first turn took the next chat's rollout (renamed after its handoff prompt, recorded its turns).
+- [x] Codex: match the rollout by the `This chat is Chorus thread t_…` line in its developer message (`codexRolloutFor` in `discover.ts`,
+  used by the Tailer). Verified 2026-10-22 on codex 0.163.0 (`npm run risk -- codex-thread-marker`, evidence
+  `fixtures/risks/codex-thread-marker/`): a TUI that never gets a turn writes no rollout; the other chat's rollout is born with
+  `session_meta` only and gets the marker with its first turn. Tests: `test/contract/discover.test.ts` (L1, real rollouts),
+  `test/flow/codex-race.test.ts` (L2: idle chat + busy chat in one cwd; rollouts born in reverse launch order).
 - [ ] agy: launch with a per-thread `--log-file` and read the session id from it (verify with interactive `-i`); fallback: serialize agy launches.
-- [ ] Never guess when ambiguous: leave unlinked and retry.
+- [x] Never guess when ambiguous: leave unlinked and retry (Codex: no marker → no link; the cwd + birth-order rule is gone). agy still
+  takes the first unclaimed transcript born after its spawn.
 
 ### TD-5 · Focus events and kitty keyboard are not forwarded to threads (mouse is)
 ([risks/terminal-protocols](risks/terminal-protocols.md)) Codex asks for mouse (1000–1006) and kitty keys; agy for kitty keys; Claude for focus events.

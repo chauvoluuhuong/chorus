@@ -6,7 +6,7 @@ changes product code. A fix gets built only when its trigger fires (or when a ph
 
 ```bash
 node tools/risk/run.ts free      # no model calls: store-concurrency, terminal-protocols, approval-drift
-node tools/risk/run.ts cheap     # a few real model calls: memory-adoption, mcp-visibility, capture-errors, session-race, agy-thread-id
+node tools/risk/run.ts cheap     # a few real model calls: memory-adoption, mcp-visibility, capture-errors, session-race, codex-thread-marker, agy-thread-id
 node tools/risk/run.ts <case> [--agents claude,codex,agy]
 ```
 
@@ -36,6 +36,7 @@ To add a case: one file in `tools/risk/cases/`, one doc here with the sections b
 | R4 memory adoption | [memory-adoption](memory-adoption.md) | cheap | ⚠️ risk (save 7/9, use 3/9) | **before** building the Memory feature: inject a digest, don't rely on `recall` |
 | R5 capture gaps | [capture-errors](capture-errors.md) | cheap | ⚠️ risk | before the UI shows errors or file changes |
 | R6 same-second session matching | [session-race](session-race.md) | cheap | ⚠️ risk, fixes found (Codex: thread id in rollout; agy: `--log-file`) | before shipping Codex/agy multi-thread in one folder |
+| R6c Codex thread marker (TUI, one chat idle) | [session-race](session-race.md) | cheap | ✅ Codex fixed 2026-10-22 (TD-4): match by marker | rerun after a Codex update |
 | R7 Windows | [windows](windows.md) | manual | ❓ unknown | before any Windows build |
 | R8 plan-limit hit | [plan-limit](plan-limit.md) | manual | ❓ unknown | when one happens naturally; capture then |
 

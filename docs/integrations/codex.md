@@ -96,6 +96,20 @@ Session files on disk:
   `session_meta.payload.id`.
 - Hooks and the app-server were not needed; the rollout tail is enough for turns, tool calls and usage.
 
+### Which rollout belongs to which Chorus thread (TD-4) ✅ codex 0.163.0, 2026-10-22
+
+Probed with two TUIs in one folder, the first never sent a turn (`npm run risk -- codex-thread-marker`, evidence
+`fixtures/risks/codex-thread-marker/`).
+- A TUI that gets **no turn writes no rollout file** at all (it still prints a `Session ID` on exit). So "the first new rollout in
+  this cwd" is the next chat's rollout: matching by cwd + birth time gives an idle chat someone else's transcript.
+- A rollout is born ~1 s after the first prompt with `session_meta` + `event_msg/task_started` only (no marker yet). With the
+  first turn, line 3 is `response_item` `{type: "message", role: "developer"}` whose **first content item is our
+  `developer_instructions`**: `This chat is Chorus thread <id>. Files meant for the user …` (`content_item_kinds[0]` is
+  `generic.developer_instructions`; the next items are Codex's skills, permissions and collaboration-mode text).
+- Chorus matches a new rollout to its thread by that line, read only from a developer message (`codexThreadId` in
+  `src/core/discover.ts`); no marker yet → the thread stays unlinked and the Tailer retries. The rollout also carries the
+  user's skill list and account ids in `session_meta`: redact both in fixtures.
+
 ## 5. Tool usage, tokens, limits
 
 - Tool calls: `command_execution` and `mcp_tool_call` items, with start and completion events. ✅
@@ -126,5 +140,6 @@ Session files on disk:
 - [x] Check MCP tool naming and approval behaviour in `exec`
 - [ ] Find the instructions flag or config key for the envelope (not needed: first message carries it)
 - [x] Interactive (PTY) session: rollout tail while the TUI runs
+- [x] Rollout ↔ Chorus thread: the `developer_instructions` marker, present from the first turn (no turn, no rollout)
 - [ ] Approval prompts in the TUI (Phase 4 research)
 - [ ] `reasoning`, `file_change`, `turn.failed`, `error` event shapes; plan-limit message

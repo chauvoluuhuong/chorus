@@ -17,4 +17,9 @@
 2. agy: probed (`agy-thread-id`, agy 1.4.2, headless). The thread id is **not** in `brain/<id>/` (the transcript never mentions Chorus); it only lands in `~/.gemini/antigravity-cli/mcp/chorus/instructions.md`, one shared file per MCP server name that every launch overwrites. What works: **`--log-file <per-thread path>`** (agy flag): the log is written (~28 KB) and names the new session id, so Chorus can read the session id from the log it chose. Not yet verified with interactive `-i` launches: check that once before relying on it. Fallback: serialize agy launches until the new `brain/<id>` appears.
 3. Always: never claim a transcript already claimed; if two candidates remain ambiguous, leave both threads "unlinked" and retry on the next scan instead of guessing.
 
+**Codex fix built (2026-10-22, TD-4).** The Phase 5 desktop proof hit the trigger. A second probe,
+`codex-thread-marker` (interactive TUIs, evidence `fixtures/risks/codex-thread-marker/`), showed the worse case: a Codex TUI with no
+turn writes no rollout, so the next chat's rollout is the only candidate. Discovery now matches the marker only (fix 1 without the
+cwd fallback; fix 3 for Codex). agy (fix 2) is still open.
+
 **Trigger to revisit.** Before advertising multiple Codex/agy chats in one project; the first report of a chat showing another chat's turns.
