@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import WebSocket from 'ws';
 import { Controller } from '../../src/app/controller.ts';
 import { VirtualScreen } from '../../src/app/screen.ts';
+import { buildHandoff } from '../../src/core/handoff.ts';
 import { Store } from '../../src/core/store.ts';
 import type { AgentId } from '../../src/core/types.ts';
 import { ChorusServer, headlessApp } from '../../src/serve/server.ts';
@@ -260,6 +261,62 @@ test('serve: a chat from an earlier run is parked and resumes when the window op
     const folders = (await r.api('GET', `/api/folders?dir=${encodeURIComponent(path.dirname(r.project))}`)).json;
     assert.ok(folders.folders.includes(path.basename(r.project)));
     assert.ok((await r.api('GET', '/api/doctor')).json.lines.some((l: string) => /^claude/.test(l)));
+    v.ws.close();
+  } finally {
+    await r.done();
+  }
+});
+
+test('serve: a dropped file goes into the agent input like a terminal sends it, copied when asked, recorded with the chat', async () => {
+  const r = await rig();
+  try {
+    const v = await viewer(r.url, r.srv.token);
+    const id = (await r.api('POST', '/api/chats', { agent: 'claude', folder: r.project })).json.id as string;
+    v.send({ t: 'attach', id, cols: 100, rows: 30 });
+    await v.until(() => /READY claude/.test(v.text()), 'agent');
+    const outside = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-downloads-')));
+    const spec = path.join(outside, 'my spec.txt');
+    fs.writeFileSync(spec, 'the spec');
+    const pastes = () => v.term.logicalLines().filter(l => l.startsWith('PASTE '));
+
+    // the native window: full paths; nothing is sent (no Enter), the path waits in the input as a bracketed paste
+    v.send({ t: 'drop', id, paths: [spec] });
+    await v.until(() => pastes().length === 1, 'the path reaches the agent');
+    assert.equal(pastes()[0], `PASTE ${JSON.stringify(spec.replace(' ', '\\ ') + ' ')}`);
+    await v.until(() => v.msgs.some(m => m.t === 'dropped'), 'the window hears back');
+    assert.ok(!/got: /.test(v.text()), 'no Enter was sent');
+
+    // copy into the chat: the file lands in its attachments folder, a second one of the same name gets " (2)"
+    v.send({ t: 'drop', id, paths: [spec], copy: true });
+    v.send({ t: 'drop', id, paths: [spec], copy: true });
+    await v.until(() => pastes().length === 3, 'two more pastes');
+    const dir = r.store.attachmentsDir(id);
+    assert.equal(dir, path.join(r.project, '.chorus', 'threads', id, 'attachments'));
+    assert.deepEqual(fs.readdirSync(dir).sort(), ['my spec (2).txt', 'my spec.txt']);
+    assert.match(pastes()[1], /attachments\/my\\\\ spec\.txt /);
+
+    // a browser: the bytes, the name in the address; the same auth as every write
+    const up = (headers: Record<string, string>) => fetch(`${r.url}/api/chats/${id}/attachments?name=${encodeURIComponent('shot.png')}`, { method: 'POST', headers, body: Buffer.from([137, 80, 78, 71]) });
+    assert.equal((await up({ 'x-chorus': '1' })).status, 401, 'no token');
+    assert.equal((await up({ authorization: `Bearer ${r.srv.token}` })).status, 403, 'no X-Chorus');
+    const ok = await up({ authorization: `Bearer ${r.srv.token}`, 'x-chorus': '1' });
+    assert.equal(ok.status, 200);
+    const saved = ((await ok.json()) as { paths: string[] }).paths[0];
+    assert.equal(saved, path.join(dir, 'shot.png'));
+    assert.deepEqual([...fs.readFileSync(saved)], [137, 80, 78, 71]);
+    await v.until(() => pastes().length === 4, 'the uploaded copy reaches the agent');
+
+    // a relative path is ignored; a missing file is a message to the window
+    v.send({ t: 'drop', id, paths: ['relative.txt', path.join(outside, 'gone.txt')] });
+    await v.until(() => v.msgs.some(m => m.t === 'flash' && /gone\.txt does not exist/.test(m.text)), 'missing file');
+
+    // recorded with the chat: the handoff (and so Memory's record) lists them, Activity shows each drop
+    const given = r.store.attachments(id);
+    assert.deepEqual(given.map(a => [path.basename(a.path), a.copied]), [['my spec.txt', false], ['my spec.txt', true], ['my spec (2).txt', true], ['shot.png', true]]);
+    const text = buildHandoff(r.store, r.store.getThread(id)!).text;
+    assert.match(text, /## Files the user gave\n- .*my spec\.txt\n- .*attachments\/my spec\.txt \(a copy of .*my spec\.txt\)/);
+    assert.match(text, /attachments\/shot\.png/);
+    assert.equal(r.c.activityRows(id).rows.filter(x => x.verb === 'drop').length, 4);
     v.ws.close();
   } finally {
     await r.done();

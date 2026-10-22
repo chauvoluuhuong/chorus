@@ -76,7 +76,8 @@ its reply, and to end its turn. The channels: MCP server instructions for Claude
 agy a rule in a Chorus workspace plugin (`.agents/plugins/chorus/rules/AGENTS.md`, git-excluded): agy only shows server
 instructions to its model when it reads them, and with them alone it asked in its reply 2 of 2 times. The tool only writes the request to the shared store and returns at once (no tool timeout to
 meet: Codex's MCP default is 60 s). The app that runs the chat (CLI or desktop) shows it as a card with the agent's options and a
-note field; the answer is typed into the agent as the user's next message, `Chorus approval r_xxxxxxxx: <option> (<note>)`, text
+note field, plus (desktop) **Other…** for an answer of the user's own, sent as `Other: <their words>`; the answer is typed into the
+agent as the user's next message, `Chorus approval r_xxxxxxxx: <option> (<note>)`, text
 and Enter apart. A card is answered once (`answerRequest` updates only a pending row), so two windows cannot both answer it.
 In the CLI app the card is in the inbox like a prompt: `y` picks its first option, `x` its last.
 

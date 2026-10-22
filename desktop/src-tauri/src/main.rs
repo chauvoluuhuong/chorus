@@ -9,7 +9,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Manager, RunEvent, Url};
+use tauri::{AppHandle, DragDropEvent, Manager, RunEvent, Url, WindowEvent};
 
 struct Serve(Mutex<Option<Child>>);
 
@@ -129,6 +129,24 @@ fn stop_serve(app: &AppHandle) {
     let _ = child.kill();
 }
 
+/// Files dropped on the window: Tauri takes the drop (the page gets no HTML drop with paths), so it is passed to the page with the
+/// full paths and the pointer position in CSS pixels; the page decides what the drop does (docs/phase5.md §8.3).
+fn forward_drop(app: &AppHandle, label: &str, d: &DragDropEvent) {
+    let Some(w) = app.get_webview_window(label) else { return };
+    let scale = w.scale_factor().unwrap_or(1.0);
+    let (kind, paths, pos) = match d {
+        DragDropEvent::Enter { paths, position } => ("enter", paths.clone(), Some(*position)),
+        DragDropEvent::Over { position } => ("over", vec![], Some(*position)),
+        DragDropEvent::Drop { paths, position } => ("drop", paths.clone(), Some(*position)),
+        DragDropEvent::Leave => ("leave", vec![], None),
+        #[allow(unreachable_patterns)]
+        _ => return,
+    };
+    let list = paths.iter().map(|p| serde_json_string(&p.to_string_lossy())).collect::<Vec<_>>().join(",");
+    let (x, y) = pos.map(|p| (p.x / scale, p.y / scale)).unwrap_or((-1.0, -1.0));
+    let _ = w.eval(&format!("window.chorusDrop && window.chorusDrop({{kind:\"{kind}\",paths:[{list}],x:{x},y:{y}}})"));
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(Serve(Mutex::new(None)))
@@ -138,9 +156,9 @@ fn main() {
         })
         .build(tauri::generate_context!())
         .expect("error while building the Chorus window")
-        .run(|app, event| {
-            if let RunEvent::Exit = event {
-                stop_serve(app);
-            }
+        .run(|app, event| match event {
+            RunEvent::Exit => stop_serve(app),
+            RunEvent::WindowEvent { label, event: WindowEvent::DragDrop(d), .. } => forward_drop(app, &label, &d),
+            _ => {}
         });
 }

@@ -131,6 +131,14 @@ check('agy opens inside the app', await untilTrusting(/Antigravity CLI|Generatin
 await untilTrusting(/\? for shortcuts/, 90000);
 await sleep(1500);
 {
+  // agy draws top-down from its cursor; Chorus shows its screen anchored to the bottom, so the input box is on the last rows
+  // like Claude's and Codex's (docs/phase5.md §8.2)
+  const rows = text();
+  const footer = rows.findLastIndex(l => /\? for shortcuts/.test(l));
+  check('agy\'s input box is on the last rows of its area, not under the banner', footer >= ROWS - 3, `footer on row ${footer} of ${ROWS}`);
+  shot('agy-input-bottom', 'agy before the first message: its input box and footer sit on the last rows of the chat area, like Claude Code and Codex; the empty rows are above the banner');
+}
+{
   app.write(TASK); // the folder for notes is not mentioned: the agent is told through Chorus's instructions
   await sleep(600);
   app.write('\r');

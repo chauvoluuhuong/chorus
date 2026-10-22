@@ -171,6 +171,12 @@ nav.scenes .group:first-child { padding-top: 0; }
 .side .pj { padding: 0 2ch; line-height: 1.6; color: var(--t-dim); white-space: pre; }
 .side .pj.open { color: var(--t-fg); font-weight: 600; }
 .side .pj:hover { background: #1c232d; color: var(--t-fg); }
+/* "+" at the end of a project row: a new chat in that project */
+.side .pj { display: flex; }
+.side .pj .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.side .pj .add { padding: 0 1ch; color: var(--t-chorus); font-weight: 600; }
+.side .pj.here { background: var(--t-sel); color: var(--t-fg); }
+.side .pj.here .add { background: var(--t-chorus); color: #0b1a19; }
 .side .it { padding: 0 1ch 0 2ch; line-height: 1.6; gap: 0; margin-top: 0.8em; border-left-width: 2px; }
 .side .it.child { padding-left: 4ch; }
 .side .it .m { font-size: 12px; padding-left: 2ch; }
@@ -385,7 +391,8 @@ const SKILLS = [
   { name: 'stripe-payments', desc: 'Card payments with test keys first', on: false, from: 'imported .agents/skills', files: '2 files' },
 ];
 // New chat form state (mockup only)
-const nc = { agent: 0, skip: false };
+const nc = { agent: 0, skip: false, proj: 0, viaRow: false }; // proj: index in TREE, the project the chat starts in; viaRow: opened with a project row's ＋
+let agyBottom = true; // agy scene: input pinned to the bottom (after) or under the last message (today)
 const NC_AGENTS = [
   { name: 'claude', cls: 'cl', quota: '5h 62%', qcls: 'wn', models: ['default', 'sonnet', 'opus', 'haiku'], efforts: ['default', 'low', 'medium', 'high', 'xhigh', 'max'], flag: '--dangerously-skip-permissions' },
   { name: 'codex', cls: 'cx', quota: '5h 8%', qcls: 'ok', models: ['default', '…from codex\'s model list'], efforts: ['default', 'low', 'medium', 'high', 'xhigh', 'max'], flag: '--dangerously-bypass-approvals-and-sandbox' },
@@ -420,10 +427,12 @@ const SCENES = [
     id: 'new', group: 'Start', title: 'New chat', cmd: 'chorus  (or ＋ New chat, or n)',
     chrome: '~/projects/cake-shop — chorus',
     caption: 'Like any AI chat app: pick the agent, the model, the project folder and whether it may skip permission prompts, then Enter. You type your first message in the agent itself. This is also the first screen when you run chorus. Click the agents and the checkbox.',
-    side: { active: -1 },
-    top: { back: 'work', crumb: [['cake-shop', 'new'], ['New chat']] },
+    side: { active: -1, newIn: true },
+    top: { back: 'work', crumb: () => [[TREE[nc.proj].name, 'new'], ['New chat']] },
     screen: () => {
       const a = NC_AGENTS[nc.agent];
+      const p = TREE[nc.proj];
+      const recent = TREE.filter((_, i) => i !== nc.proj).map(x => x.path).join('  ');
       const agents = NC_AGENTS.map((x, i) => `<span class="clk${i === nc.agent ? ' sel' : ''}" data-nc-agent="${i}"> <span class="${x.cls}">${x.name}</span> </span>`).join('    ');
       const quota = NC_AGENTS.map(x => `<span class="${x.qcls}">${x.quota.padEnd(10)}</span>`).join('');
       const models = a.models.map((m, i) => i === 0 ? `<span class="sel"> ${m} </span>` : m).join('   ');
@@ -436,9 +445,9 @@ const SCENES = [
 
   <span class="d">Effort</span>     ${a.efforts.map((m, i) => i === 0 ? `<span class="sel"> ${m} </span>` : m).join('   ')}   <span class="d">how hard the model thinks</span>
 
-  <span class="d">Project</span>    <span class="clk ch">~/projects/cake-shop ▾</span>   <span class="clk kb" data-go="folders">Browse…</span>  <span class="d">⌃O: pick a folder from a list, or make a new one</span>
+  <span class="d">Project</span>    <span class="clk ch">${p.path} ▾</span>   <span class="clk kb" data-go="folders">Browse…</span>  <span class="d">⌃O: pick a folder from a list, or make a new one</span>
              <span class="kb">This computer</span>  <span class="d">⌃T: no project (works in ~/.chorus/computer)</span>
-             <span class="d">recent: ~/projects/landing  ~/work/api  · or type any folder</span>
+             <span class="d">recent: ${recent}  · or type any folder</span>
 
   <span class="d">Permissions</span> <span class="clk" data-nc-skip="1">${nc.skip ? '<span class="wn">[x]</span>' : '[ ]'} Skip permission prompts</span>  <span class="d">${a.flag}</span>
 ${nc.skip ? `             <span class="wn">The agent runs every command and edit without asking.</span>
@@ -455,6 +464,7 @@ ${nc.skip ? `             <span class="wn">The agent runs every command and edit
       'Effort passes <code>claude --effort &lt;level&gt;</code>, <code>agy --effort &lt;level&gt;</code> and <code>codex -c model_reasoning_effort="&lt;level&gt;"</code> (verified in each interactive screen; the levels are Claude and agy\'s five, and for Codex the list in its own model cache, so it follows the chosen model). "default" passes nothing, and the choice is kept with the chat, so a resumed chat keeps it.',
       'Skip flags, per CLI: Claude <code>--dangerously-skip-permissions</code>, Codex <code>--dangerously-bypass-approvals-and-sandbox</code>, agy <code>--dangerously-skip-permissions</code>. All three are documented; agy\'s is verified headless only, so each still needs a check in the interactive screen before we ship it.',
       'The sidebar is the project list: click a project to open or fold its chats, click a chat to go to it. That is the whole navigation.',
+      '<b>New:</b> <b>＋</b> at the end of a project row opens this form with that project already filled in, so the chat lands under that project. <b>＋ New chat</b> at the top keeps using the project of the chat in front. Keyboard: with a project row selected in the sidebar, <code>n</code> does the same as its ＋. Try it: click the ＋ next to <i>landing</i> or <i>api</i>.',
       '<b>This computer</b> (⌃T) is a chat with no project, like "this computer" in the Claude app. It runs in <code>~/.chorus/computer</code> so no project and not your home folder is touched (skills are synced into the working folder); the sidebar lists it as "This computer".',
     ],
   },
@@ -490,7 +500,7 @@ ${nc.skip ? `             <span class="wn">The agent runs every command and edit
   {
     id: 'work', group: 'Working', title: 'Working in Claude Code', cmd: 'the real Claude Code interface',
     chrome: '~/projects/cake-shop — chorus · claude',
-    caption: 'You type into Claude Code exactly as usual. The top bar says where you are and has Back, the approvals badge and the menu button. The sidebar lists your projects with their chats under them, New chat on top, Skills and Memory at the bottom. The bottom line shows this chat\'s plan usage and artifacts.',
+    caption: 'You type into Claude Code exactly as usual. The top bar says where you are and has Back, the approvals badge and the menu button. The sidebar lists your projects with their chats under them, New chat on top (＋ on a project row starts a chat in that project), Skills and Memory at the bottom. The bottom line shows this chat\'s plan usage and artifacts.',
     status: S('claude', 'sonnet', { usage: 62, artifacts: 3, toast: '+ order-flow.html v2' }),
     side: { active: 0 },
     screen:
@@ -515,6 +525,44 @@ ${nc.skip ? `             <span class="wn">The agent runs every command and edit
       '<b>! 2 waiting</b> shows whenever any chat needs approval, in any chat you are looking at. Click it to open the approvals inbox.',
       'Tool calls, tokens and plan usage come from Claude\'s hooks and transcript, not from the screen. A file watcher spots new artifacts even when Claude wrote them with Bash.',
       '<b>New:</b> <code>ctx 34%</code> = how full this agent\'s context window is (last turn\'s input tokens / the model\'s window), next to the plan meter. Both decide when to hand off.',
+    ],
+  },
+  {
+    id: 'agy', group: 'Working', title: 'Working in Antigravity', cmd: 'the real agy interface',
+    chrome: '~/projects/cake-shop — chorus · agy',
+    caption: 'agy draws its screen inline, from the top down, so in a fresh chat its input box sat in the middle with empty rows under it. Now the input sits on the last rows like in Claude Code and Codex: the conversation grows upward from it. Switch between Today and Now above the terminal.',
+    status: S('agy', 'gemini-3.8-flash', { usage: 12, artifacts: 1, title: 'Landing page copy' }),
+    side: { active: 3, states: { 3: 'working' } },
+    agyToggle: true,
+    screen: () => {
+      const rule = '<span class="d">' + '─'.repeat(78) + '</span>';
+      const body = [
+        '<span class="ag">      ▄▀▀▄       </span> <span class="b">Antigravity CLI 1.4.5</span>',
+        '<span class="ag">     ▀▀▀▀▀▀      </span> <span class="d">Gemini 3.8 Flash (High)</span>',
+        '<span class="ag">    ▀▀▀▀▀▀▀▀     </span> <span class="d">~/projects/cake-shop</span>',
+        '<span class="ag">   ▄▀▀    ▀▀▄    </span>',
+        '<span class="ag">  ▄▀▀      ▀▀▄   </span>',
+        '',
+        '<span class="d">&gt;</span> Write the hero copy for the spring sale landing page.',
+        '',
+        '<span class="d">○</span> Thought for 6.2s',
+        '<span class="ag">●</span> Edited 1 file (content/hero.md)',
+        '',
+        '  Saved two versions of the hero in the artifacts folder.',
+        '',
+        rule,
+        '<span class="d">&gt;</span> <span class="cur"> </span>',
+        rule,
+        '<span class="d">? for shortcuts</span>' + ' '.repeat(39) + '<span class="d">Gemini 3.8 Flash · high</span>',
+      ];
+      const blank = Array(9).fill('');
+      return (agyBottom ? [...blank, ...body] : [...body, ...blank]).join('\n');
+    },
+    behind: [
+      '<b>Why it happened (agy 1.4.2, proof screens in <code>docs/proof/phase4-agy/</code>):</b> agy does not use the alternate screen. Like a shell command it writes from where the cursor is, downward, and keeps no rows below its footer. Chorus starts each agent on an empty screen with the cursor at the top, so agy\'s input box ended right under the last message.',
+      '<b>The fix:</b> Chorus shows agy\'s screen anchored to the bottom: its last non-empty row (or the cursor) on the last row of the chat area, the empty rows above the banner. The cursor and the mouse rows Chorus forwards move by the same amount. Nothing in agy or its config changes (rule 4).',
+      '<b>Why not just start agy with the cursor on the last row:</b> probed on agy 1.4.5, that puts the input at the bottom only until agy\'s live area shrinks once (after "Thinking…" or a permission box); then empty rows open under its footer again.',
+      'Same in the desktop window: the page moves xterm\'s drawn screen down by the same rows.',
     ],
   },
   {
@@ -862,7 +910,7 @@ function topbar(s, mode = 'full') {
   const t = s.top || {};
   const back = t.back === undefined ? (s.side ? 'new' : 'work') : t.back;
   // the path says where you are: <project> / <chat> [/ Artifacts]; shared screens (Skills, Memory, Approvals) have no project
-  const crumb = t.crumb || (s.side ? [['cake-shop', 'new'], [(s.status && s.status.title) || 'Cake order page']] : [[s.title]]);
+  const crumb = (typeof t.crumb === 'function' ? t.crumb() : t.crumb) || (s.side ? [['cake-shop', 'new'], [(s.status && s.status.title) || 'Cake order page']] : [[s.title]]);
   const n = THREADS.filter((x, i) => ((s.side && s.side.states && s.side.states[i]) || x.state) === 'approval').length;
   // small windows keep only the last two parts of the path
   const parts = crumb.filter(c => c[0] && c[0] !== 'chorus');
@@ -903,19 +951,21 @@ function sidebar(sd, mode = 'full') {
     const shown = name.length > w ? name.slice(0, w - 1) + '…' : name.padEnd(w);
     return `<div class="${cls}" data-go="${t.go || 'work'}"><span class="t">${dot} ${esc(shown)}${mode === 'full' ? ` <span class="${agentCls}">${t.agent}</span>` : ''}</span></div>`;
   };
-  const projects = TREE.map(p => {
+  const projects = TREE.map((p, pi) => {
     const open = openProjects.has(p.name);
     const list = p.threads.map(x => typeof x === 'number' ? chat(THREADS[x], x, x === sd.active) : chat(x, null, false));
     const busy = p.threads.map(x => typeof x === 'number' ? THREADS[x] : x).filter(t => t.state === 'approval').length;
     if (mode === 'icons') return `<div class="pj" data-tog="${p.name}" title="${p.path}">${open ? '▾' : '▸'}</div>${open ? list.join('') : ''}`;
     const badge = busy ? ` <span class="er">!${busy}</span>` : ` <span class="d">${p.threads.length}</span>`;
-    return `<div class="pj${open ? ' open' : ''}" data-tog="${p.name}" title="${p.path}">${open ? '▾' : '▸'} ${p.name}${badge}</div>${open ? list.join('') : ''}`;
+    const here = sd.newIn && nc.viaRow && pi === nc.proj;
+    const add = `<span class="kb add" data-nc-proj="${pi}" title="New chat in ${p.path}">＋</span>`;
+    return `<div class="pj${open ? ' open' : ''}${here ? ' here' : ''}" data-tog="${p.name}" title="${p.path}"><span class="nm">${open ? '▾' : '▸'} ${p.name}${badge}</span>${add}</div>${open ? list.join('') : ''}`;
   }).join('');
   const foot = mode === 'icons'
     ? `<div class="ft"><span class="kb" data-go="skills" title="Skills">✦</span><span class="kb" data-go="memory" title="Memory">◫</span></div>`
     : `<div class="ft"><span class="kb${sd.footer === 'skills' ? ' on' : ''}" data-go="skills">✦ Skills</span> <span class="kb${sd.footer === 'memory' ? ' on' : ''}" data-go="memory">◫ Memory</span></div>`;
   return `<div class="side side-${mode}">` +
-    `<div class="grp"><div class="newrow${sd.active === -1 && !sd.footer ? ' on' : ''}" data-go="new"><b>＋${mode === 'icons' ? '' : ' New chat'}</b>${mode === 'full' ? '<span class="kbd">n</span>' : ''}</div></div>` +
+    `<div class="grp"><div class="newrow${sd.active === -1 && !sd.footer && !(sd.newIn && nc.viaRow) ? ' on' : ''}" data-nc-proj="0"><b>＋${mode === 'icons' ? '' : ' New chat'}</b>${mode === 'full' ? '<span class="kbd">n</span>' : ''}</div></div>` +
     `<div class="grp">${mode === 'icons' ? '' : '<div class="hd">PROJECTS <span class="ch" style="float:right;margin-right:12px">+ add</span></div>'}${projects}</div>` + foot + `</div>`;
 }
 
@@ -972,6 +1022,7 @@ function render() {
   sceneEl.innerHTML = `
     <div class="scene-head"><h2>${esc(s.title)}</h2>${s.cmd ? `<span class="cmd">${esc(s.cmd)}</span>` : ''}</div>
     <p class="caption">${esc(s.caption)}</p>
+    ${s.agyToggle ? `<div class="ctl sizes"><span class="hint">agy input</span><button data-agy="0" class="${agyBottom ? '' : 'primary'}">Today: under the last message</button><button data-agy="1" class="${agyBottom ? 'primary' : ''}">Now: at the bottom</button></div>` : ''}
     ${s.resize ? `<div class="ctl sizes"><span class="hint">Window width</span>${SIZES.map(c => `<button data-cols="${c}" class="${c === winCols ? 'primary' : ''}">${c} cols</button>`).join('')}<span class="hint"><b>${mode}</b>: ${MODE_NOTE[mode]}</span></div>` : ''}
     <div class="term${s.overlay && s.overlay.rows.length > 8 ? ' tall' : ''}${s.resize ? ' sized' : ''}">
       <div class="chrome"><i></i><i></i><i></i><span>${esc(s.chrome)}</span></div>
@@ -1008,6 +1059,11 @@ function apply(r) {
 sceneEl.addEventListener('click', e => {
   const c = e.target.closest('[data-cols]');
   if (c) { winCols = Number(c.dataset.cols); toast = ''; return render(); }
+  // ＋ on a project row (or ＋ New chat, which means the project in front): the New chat form for that project
+  const np = e.target.closest('[data-nc-proj]');
+  if (np) { nc.proj = Number(np.dataset.ncProj); nc.viaRow = !np.classList.contains('newrow'); openProjects.add(TREE[nc.proj].name); return go(idx('new')); }
+  const ab = e.target.closest('[data-agy]');
+  if (ab) { agyBottom = ab.dataset.agy === '1'; return render(); }
   const pj = e.target.closest('[data-tog]');
   if (pj) { const n = pj.dataset.tog; openProjects.has(n) ? openProjects.delete(n) : openProjects.add(n); return render(); }
   const ag = e.target.closest('[data-nc-agent]');

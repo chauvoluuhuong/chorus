@@ -214,6 +214,15 @@ export class ChorusServer {
     if (!this.allowed(req)) return send(res, 401, { error: 'open the address chorus serve printed (it carries the token)' });
     if (req.method !== 'GET' && (req.headers['x-chorus'] !== '1' || !this.sameOrigin(req))) return send(res, 403, { error: 'missing X-Chorus header' });
     if (!u.pathname.startsWith('/api/')) return this.file(u.pathname, res);
+    // a dropped file with no path (a browser gives the bytes only, or an image dragged from a page): the raw bytes, its name in
+    // the address; saved in the chat's attachments folder and its path put into the agent's input (docs/phase5.md §8.3)
+    const upload = req.method === 'POST' && u.pathname.match(/^\/api\/chats\/([\w-]+)\/attachments$/);
+    if (upload) {
+      const bytes = await readRaw(req, UPLOAD_LIMIT).catch(() => undefined);
+      if (!bytes) return send(res, 413, { error: `a dropped file can be at most ${UPLOAD_LIMIT / 1_000_000} MB` });
+      const r = this.c.dropFiles(upload[1], [{ name: u.searchParams.get('name') ?? 'file', bytes }]);
+      return send(res, 'error' in r ? 409 : 200, r);
+    }
     const body = req.method === 'GET' ? {} : await readJson(req);
     const out = await this.route(req.method ?? 'GET', u.pathname.slice(5).split('/').map(decodeURIComponent), u.searchParams, body);
     if (out === undefined) return send(res, 404, { error: 'not found' });
@@ -507,6 +516,12 @@ export class ChorusServer {
         this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
         host?.resize(this.size.cols, this.size.rows);
       } else if (m.t === 'detach') cl.detach();
+      else if (m.t === 'drop' && typeof m.id === 'string' && Array.isArray(m.paths)) {
+        // files dropped on the native window: Tauri gives their full paths (docs/phase5.md §8.3)
+        const paths = m.paths.filter((p: unknown): p is string => typeof p === 'string' && path.isAbsolute(p));
+        const r = this.c.dropFiles(m.id, paths.map((p: string) => ({ path: p })), !!m.copy);
+        cl.send(JSON.stringify('error' in r ? { t: 'flash', text: r.error } : { t: 'dropped', id: m.id, paths: r.paths }));
+      }
     });
     cl.send(JSON.stringify({ t: 'hello', flashes: this.flashes.slice(-3) }));
     this.pushState();
@@ -596,6 +611,26 @@ function send(res: http.ServerResponse, status: number, body: unknown) {
   if (res.headersSent) return res.end();
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
   res.end(JSON.stringify(body));
+}
+
+const UPLOAD_LIMIT = 50_000_000;
+
+/** The request body as bytes; rejects (and stops reading) past `limit`. */
+function readRaw(req: http.IncomingMessage, limit: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const parts: Buffer[] = [];
+    let n = 0;
+    req.on('data', (d: Buffer) => {
+      n += d.length;
+      if (n > limit) {
+        req.destroy();
+        return reject(new Error('too large'));
+      }
+      parts.push(d);
+    });
+    req.on('end', () => resolve(Buffer.concat(parts)));
+    req.on('error', reject);
+  });
 }
 
 function readJson(req: http.IncomingMessage): Promise<Record<string, any>> {

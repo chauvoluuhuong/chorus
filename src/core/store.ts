@@ -88,6 +88,10 @@ CREATE TABLE IF NOT EXISTS approvals_log (
 CREATE TABLE IF NOT EXISTS mcp_calls (
   id INTEGER PRIMARY KEY AUTOINCREMENT, thread_id TEXT, tool TEXT NOT NULL, ts TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS attachments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, thread_id TEXT NOT NULL, path TEXT NOT NULL, original_path TEXT, copied INTEGER NOT NULL,
+  bytes INTEGER, created TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS requests (
   id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, question TEXT NOT NULL, details TEXT, options TEXT NOT NULL,
   status TEXT NOT NULL, answer TEXT, note TEXT, created TEXT NOT NULL, answered TEXT
@@ -196,6 +200,18 @@ export class Store {
   artifactsDir(id: string) {
     return path.join(this.threadDir(id), 'artifacts');
   }
+  /** Files the user dropped on the chat and asked to copy (or that had no path): <project>/.chorus/threads/<id>/attachments/ */
+  attachmentsDir(id: string) {
+    return path.join(this.threadDir(id), 'attachments');
+  }
+
+  /** A file the user gave this chat by dropping it: where the agent reads it, and where it came from when it was copied. */
+  addAttachment(threadId: string, a: { path: string; originalPath?: string; copied: boolean; bytes?: number }) {
+    this.db.prepare('INSERT INTO attachments (thread_id,path,original_path,copied,bytes,created) VALUES (?,?,?,?,?,?)').run(threadId, a.path, a.originalPath ?? null, a.copied ? 1 : 0, a.bytes ?? null, now());
+  }
+  attachments(threadId: string): { path: string; originalPath?: string; copied: boolean; bytes?: number; created: string }[] {
+    return (this.db.prepare('SELECT * FROM attachments WHERE thread_id = ? ORDER BY id').all(threadId) as any[]).map(r => ({ path: r.path, originalPath: r.original_path ?? undefined, copied: !!r.copied, bytes: r.bytes ?? undefined, created: r.created }));
+  }
 
   createThread(t: Partial<ThreadRow> & { title: string; agent: AgentId; cwd: string }): ThreadRow {
     const row: ThreadRow = {
@@ -231,7 +247,7 @@ export class Store {
     db.exec('BEGIN');
     try {
       db.prepare('UPDATE threads SET parent_thread_id = NULL WHERE parent_thread_id = ?').run(id);
-      for (const table of ['turns', 'tool_calls', 'usage', 'artifacts', 'approvals_log', 'mcp_calls', 'requests']) db.prepare(`DELETE FROM ${table} WHERE thread_id = ?`).run(id);
+      for (const table of ['turns', 'tool_calls', 'usage', 'artifacts', 'approvals_log', 'mcp_calls', 'requests', 'attachments']) db.prepare(`DELETE FROM ${table} WHERE thread_id = ?`).run(id);
       db.prepare('DELETE FROM threads WHERE id = ?').run(id);
       db.exec('COMMIT');
     } catch (e) {

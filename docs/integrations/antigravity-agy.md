@@ -94,6 +94,15 @@ Tool names seen: `view_file` (`AbsolutePath`), `run_command` (`CommandLine`; out
   readable 9 s after launch, including the tool call and its result. Tail it. Fixture:
   `fixtures/agy/1.4.0/pty/`. Ctrl+C once interrupts the running tool; twice exits.
 - Conversation id for `--conversation`: the `brain/<id>` folder name.
+- **Where the input box is drawn** (1.4.5, `tools/probe/drop-probe.mjs agy --startup-only [--start-bottom]`, fixtures
+  `fixtures/agy/1.4.5/startup-{top,bottom}/` and `drop/`) ✅: agy switches to the alternate screen and clears it, but then draws
+  from where the cursor is, top-down, and keeps no rows under its footer. Cursor at the top (Chorus today): banner on row 2,
+  input on row 14 of 40, the rest empty. Cursor on the last row before start: input on the last rows at first, but when its live
+  area shrinks again (after "Thinking…" or a permission box) the frame stays where it was and empty rows open under the
+  footer (input on row 31 of 40 in `drop/image-reply.txt`). So moving the cursor alone does not keep the input at the bottom;
+  showing agy's screen anchored to its last non-empty row does.
+- A pasted file path (a dropped file) stays text and is read with agy's file tools; a file outside the folder asks
+  `Allow access to this file?` first: `docs/integrations/file-drop.md` ✅
 
 ## 5. Errors, exit codes, limits
 

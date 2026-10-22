@@ -36,6 +36,7 @@ export class ThreadHost extends EventEmitter {
     this.title = o.title;
     this.agent = o.agent;
     this.screen = new VirtualScreen(o.cols, o.rows);
+    this.screen.anchorBottom = o.agent === 'agy'; // its input box on the last rows, like Claude's and Codex's
     const env: Record<string, string> = { ...(process.env as Record<string, string>), TERM: 'xterm-256color', ...o.env };
     for (const k of SCRUB_ENV) delete env[k];
     this.pty = factory(o.file, o.args, { cols: o.cols, rows: o.rows, cwd: o.cwd, env });

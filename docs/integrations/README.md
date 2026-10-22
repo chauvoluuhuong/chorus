@@ -13,6 +13,7 @@ probe, diff the new fixtures against the committed ones, and update the doc.
 | Skills (all three) | [skills.md](skills.md) | ✅ all three verified | see doc |
 | Approvals (all three) | [approvals.md](approvals.md) | ✅ keystrokes on the agent's prompt; hooks only deny | see doc |
 | Effort (all three) | [effort.md](effort.md) | ✅ `--effort` (Claude, agy), `-c model_reasoning_effort` (Codex) | see doc |
+| Dropped files (all three) | [file-drop.md](file-drop.md) | ✅ a pasted path: images attach in Claude and Codex; files outside the folder ask first in Claude and agy | see doc |
 
 ## Capability matrix
 
@@ -65,6 +66,7 @@ node tools/probe/probe.mjs agy --scenario mcp       # one scenario
 |---|---|
 | `tools/probe/pty-probe.mjs <cli>` | Starts the real TUI in a PTY, answers the trust prompt, and records whether the transcript is readable while it runs (Claude: also hook events) |
 | `tools/probe/skills-probe.mjs [cli…]` | Writes marker skills into candidate folders and checks which the CLI uses (results: `fixtures/skills/`) |
+| `tools/probe/drop-probe.mjs <cli>` | Pastes a dropped file's path the way a terminal does (image, PDF, outside the folder) and checks the agent used the file; `--start-bottom` / `--startup-only` check where the input box is drawn (results: `fixtures/<cli>/<version>/drop*/`, `startup-*/`) |
 
 ## Rules for adapter code
 

@@ -1,0 +1,44 @@
+  ‹ Back   chorus-agy-bottom-FjIla2 / agy 1                                                                                                ☰ Menu ⌃\  
+                            │                                                                                                                         
+  + New chat             n  │                                                                                                                         
+                            │                                                                                                                         
+  PROJECTS           + add  │                                                                                                                         
+  ▾ chorus-agy-bottom… 1 +  │                                                                                                                         
+▎   ● agy 1             agy │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │      ▄▀▀▄        Antigravity CLI 1.4.5                                                                                  
+                            │     ▀▀▀▀▀▀       <email> (Antigravity Starter Quota)                                                   
+                            │    ▀▀▀▀▀▀▀▀      Gemini 3.8 Flash (High)                                                                                
+                            │   ▄▀▀    ▀▀▄     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-agy-bottom-FjIla2                      
+                            │  ▄▀▀      ▀▀▄                                                                                                           
+                            │                                                                                                                         
+                            │                                                                                                                         
+                            │ ┃ Verbosity now defaults to medium                                                                                      
+                            │ ┃ Verbosity is now medium by default, so tool calls and thoughts roll up into summaries. You can change your preferred  
+────────────────────────────│ ┃ verbosity anytime in /config > Verbosity.                                                                             
+                            │ ┃ esc to dismiss                                                                                                        
+  ✦ Skills                  │─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                            │>                                                                                                                        
+  ◫ Memory                  │─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                            │? for shortcuts                                                                                   Gemini 3.8 Flash · high
+ chorus  agy 1 │ agy │ 0 artifacts                                                                                                            ☰ menu  

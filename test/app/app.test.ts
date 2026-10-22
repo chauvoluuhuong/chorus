@@ -65,7 +65,7 @@ test('two chats: top bar, project tree, switching keeps each screen, input goes 
   assert.match(s[2], /\+ New chat/);
   assert.doesNotMatch(s[3].slice(0, 28), /\w/, 'a blank row between New chat and PROJECTS');
   assert.match(s[4], /PROJECTS/);
-  assert.match(s[5], /▾ .*\s+2\s*│/); // the project, with its two chats
+  assert.match(s[5], /▾ .*\s+2\s+\+\s*│/); // the project, with its two chats, and + for a new chat in it
   assert.match(s[6], /▎.*alpha.*fake/);
   assert.match(s[7], /beta/);
   assert.match(s[23], /chorus\s+alpha\s+│\s*fake/);
