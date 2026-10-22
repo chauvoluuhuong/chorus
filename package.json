@@ -1,6 +1,6 @@
 {
   "name": "chorus-cli",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Work across AI coding CLIs: handoff, threads, skills",
   "type": "module",

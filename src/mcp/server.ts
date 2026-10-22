@@ -25,7 +25,7 @@ export function createServer(project: string, threadId?: string, home?: string):
   const instructions = dir
     ? `This chat is Chorus thread ${threadId}. Files meant for the user (notes, plans, reports, mockups, anything that is not source code of the project) go in ${dir} (create it if missing). Chorus shows them in its Artifacts view. ${APPROVAL_NOTE}`
     : undefined;
-  const server = new McpServer({ name: 'chorus', version: '0.0.1' }, instructions ? { instructions } : undefined);
+  const server = new McpServer({ name: 'chorus', version: '1.0.0' }, instructions ? { instructions } : undefined);
 
   const reply = (tool: string, text: string, isError = false) => {
     try {
