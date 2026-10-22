@@ -28,6 +28,21 @@ const ACTIVITY_KINDS = ['all', 'tool', 'mcp', 'approval', 'file', 'usage', 'erro
 const join2 = (...p: string[]) => p.filter(Boolean).join(';');
 const RAW_CAP = 2 * 1024 * 1024;
 
+/** One row of a chat's Activity timeline (`divider` marks where a continued chat starts). */
+export interface ActivityRow {
+  ts: string;
+  /** the time printed, when it differs from the sort time */
+  shownTs?: string;
+  kind: (typeof ACTIVITY_KINDS)[number];
+  verb: string;
+  agent: string;
+  thread: string;
+  text: string;
+  status?: 'ok' | 'failed' | 'running' | 'approved' | 'denied';
+  durationMs?: number;
+  divider?: boolean;
+}
+
 export interface ControllerOpts {
   project: string;
   store: Store;
@@ -55,7 +70,7 @@ export class Controller {
   private limitShown = new Set<string>();
   preview: PreviewServer | undefined;
   previewOpened = '';
-  private agentInfo = new Map<AgentId, { version?: string; login?: string; ok: boolean }>();
+  readonly agentInfo = new Map<AgentId, { version?: string; login?: string; ok: boolean }>();
   private sessions = new Map<string, Session>();
   private sawStart = new Map<string, number>();
   private detectTimer: NodeJS.Timeout | undefined;
@@ -383,7 +398,7 @@ export class Controller {
   /* ---------- New chat ---------- */
 
   /** Never blocks: agy's list is asked for in the background and the New chat screen redraws when it arrives. */
-  private modelList(agent: AgentId): string[] {
+  modelList(agent: AgentId): string[] {
     let m = this.modelCache.get(agent);
     if (!m) {
       m = modelsFor(agent);
@@ -402,7 +417,7 @@ export class Controller {
   private onModelsLoaded: (() => void) | undefined;
 
   /** Plan text under each agent on the New chat screen, from the latest usage reading we stored. */
-  private quotaInfo(): NewChatInfo['quota'] {
+  quotaInfo(): NewChatInfo['quota'] {
     const out: NewChatInfo['quota'] = {};
     const rows = this.store.db
       .prepare('SELECT t.agent AS agent, u.limit_utilization AS u FROM usage u JOIN threads t ON t.id = u.thread_id WHERE u.limit_utilization IS NOT NULL ORDER BY u.updated DESC')
@@ -415,7 +430,7 @@ export class Controller {
     return out;
   }
 
-  private recentFolders(except: string): string[] {
+  recentFolders(except: string): string[] {
     const seen: string[] = [];
     for (const t of this.store.listThreads()) if (t.cwd !== except && !seen.includes(t.cwd) && fs.existsSync(t.cwd)) seen.push(t.cwd);
     return seen.slice(0, 3);
@@ -571,7 +586,7 @@ export class Controller {
   /* ---------- Approvals inbox ---------- */
 
   /** What waits for you; scope "this" keeps the chats of the project you are in (the chat in front, else where chorus started). */
-  private approvalItems(scope: ApprovalScope = 'all') {
+  approvalItems(scope: ApprovalScope = 'all') {
     const cwd = this.app.current?.cwd ?? this.project;
     return [...this.pending.entries()]
       .map(([id, p]) => {
@@ -582,7 +597,7 @@ export class Controller {
   }
 
   /** Today's answers ("Decided today"). */
-  private decidedItems() {
+  decidedItems() {
     const today = new Date().toDateString();
     return this.store.approvalsLog(50).filter(r => new Date(r.ts).toDateString() === today).slice(0, 6).map(r => ({ decision: r.decision, what: r.what, agent: this.store.getThread(r.thread_id)?.agent ?? '', time: new Date(r.ts).toTimeString().slice(0, 5) }));
   }
@@ -858,7 +873,7 @@ export class Controller {
     });
   }
 
-  private retryContext() {
+  retryContext() {
     const cur = this.app.current;
     const t = cur && this.store.getThread(cur.id);
     const parent = t?.parent_thread_id && this.store.getThread(t.parent_thread_id);
@@ -938,7 +953,7 @@ export class Controller {
     );
   }
 
-  private ago(iso: string): string {
+  ago(iso: string): string {
     const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
     if (s < 60) return 'just now';
     if (s < 3600) return `${Math.floor(s / 60)}m ago`;
@@ -1148,15 +1163,12 @@ export class Controller {
     });
   }
 
-  /** One timeline across a chat and the chats continued from it: tool calls, MCP calls, approvals, files, usage, handoffs. */
-  activityLines(id: string, filter: (typeof ACTIVITY_KINDS)[number] = 'all'): PaneLine[] {
+  /** One timeline across a chat and the chats continued from it: tool calls, MCP calls, approvals, files, usage, handoffs (also served to the desktop). */
+  activityRows(id: string) {
     const root = this.store.getThread(id)!;
     const family: ThreadRow[] = [root];
     for (let i = 0; i < family.length; i++) for (const c of this.store.listThreads()) if (c.parent_thread_id === family[i].id && !family.includes(c)) family.push(c);
-    type Row = { ts: string; kind: (typeof ACTIVITY_KINDS)[number]; segs: Seg[] };
-    const rows: Row[] = [];
-    const clock = (iso: string) => (iso ? new Date(iso).toTimeString().slice(0, 8) : '--:--:--');
-    const dur = (ms?: number) => (ms == null ? '' : ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : ms < 1 ? '<1ms' : `${Math.round(ms)}ms`);
+    const rows: ActivityRow[] = [];
     let tokensIn = 0;
     let tokensOut = 0;
     let cost = 0;
@@ -1166,22 +1178,37 @@ export class Controller {
       tokensIn += u?.inputTokens ?? 0;
       tokensOut += u?.outputTokens ?? 0;
       cost += u?.costUsd ?? 0;
-      const who = (t.agent.padEnd(7)) as string;
-      const head = (ts: string, what: string): Seg[] => [[clock(ts) + '  ', T.dim], [who, agentStyle(t.agent)], [what.padEnd(8)]];
-      if (t !== root) rows.push({ ts: t.created, kind: 'all', segs: [[clock(t.created) + '  ', T.dim], [`──── chat "${t.title}" started with ${t.agent}, continuing "${family[0].title}" ────`, T.chorus]] });
+      const base = { agent: t.agent, thread: t.id };
+      if (t !== root) rows.push({ ...base, ts: t.created, kind: 'all', verb: '', text: `chat "${t.title}" started with ${t.agent}, continuing "${family[0].title}"`, divider: true });
       for (const c of this.store.getToolCalls(t.id)) {
         const ts = [...turns].reverse().find(x => x.seq <= c.turnSeq && x.ts)?.ts ?? t.created;
-        rows.push({ ts, kind: 'tool', segs: [...head(ts, 'tool'), [`${c.tool} ${c.target}`.slice(0, 46).padEnd(48)], [c.status === 'ok' ? 'ok' : c.status === 'failed' ? 'failed' : '…', c.status === 'ok' ? T.ok : c.status === 'failed' ? T.err : T.dim], [dur(c.durationMs) ? '  ' + dur(c.durationMs) : '', T.dim]] });
+        rows.push({ ...base, ts, kind: 'tool', verb: 'tool', text: `${c.tool} ${c.target}`, status: c.status === 'ok' ? 'ok' : c.status === 'failed' ? 'failed' : 'running', durationMs: c.durationMs });
       }
-      for (const m of this.store.mcpCalls(t.id)) rows.push({ ts: m.ts, kind: 'mcp', segs: [...head(m.ts, 'mcp'), [`chorus.${m.tool}`.padEnd(48)], ['ok', T.ok]] });
-      for (const r of this.store.approvalsLog(500).filter(x => x.thread_id === t.id)) rows.push({ ts: r.ts, kind: 'approval', segs: [...head(r.ts, 'approve'), [r.what.split(' · ').slice(-1)[0].slice(0, 46).padEnd(48)], r.decision === 'approved' ? ['approved', T.ok] : ['denied', T.err]] });
+      for (const m of this.store.mcpCalls(t.id)) rows.push({ ...base, ts: m.ts, kind: 'mcp', verb: 'mcp', text: `chorus.${m.tool}`, status: 'ok' });
+      for (const r of this.store.approvalsLog(500).filter(x => x.thread_id === t.id)) rows.push({ ...base, ts: r.ts, kind: 'approval', verb: 'approve', text: r.what.split(' · ').slice(-1)[0], status: r.decision });
       for (const a of this.store.listArtifacts(t.id)) {
         const n = (this.store.db.prepare('SELECT COUNT(*) AS n FROM artifacts WHERE thread_id=? AND path=?').get(t.id, a.path) as { n: number }).n;
-        rows.push({ ts: a.ts, kind: 'file', segs: [...head(a.ts, 'file'), [`${a.path} v${n}`]] });
+        rows.push({ ...base, ts: a.ts, kind: 'file', verb: 'file', text: `${a.path} v${n}` });
       }
-      if (u?.limitUtilization != null) rows.push({ ts: this.store.db.prepare('SELECT updated FROM usage WHERE thread_id=?').get(t.id)?.updated as string ?? t.updated, kind: 'usage', segs: [...head(t.updated, 'usage'), [`5h ${Math.round(u.limitUtilization * 100)}%`]] });
+      if (u?.limitUtilization != null) rows.push({ ...base, ts: this.store.db.prepare('SELECT updated FROM usage WHERE thread_id=?').get(t.id)?.updated as string ?? t.updated, shownTs: t.updated, kind: 'usage', verb: 'usage', text: `5h ${Math.round(u.limitUtilization * 100)}%` });
     }
     rows.sort((x, y) => x.ts.localeCompare(y.ts));
+    return { root, rows, tokensIn, tokensOut, cost };
+  }
+
+  activityLines(id: string, filter: (typeof ACTIVITY_KINDS)[number] = 'all'): PaneLine[] {
+    const { root, rows, tokensIn, tokensOut, cost } = this.activityRows(id);
+    const clock = (iso: string) => (iso ? new Date(iso).toTimeString().slice(0, 8) : '--:--:--');
+    const dur = (ms?: number) => (ms == null ? '' : ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : ms < 1 ? '<1ms' : `${Math.round(ms)}ms`);
+    const STATUS: Record<string, [string, string]> = { ok: ['ok', T.ok], failed: ['failed', T.err], running: ['…', T.dim], approved: ['approved', T.ok], denied: ['denied', T.err] };
+    const segsOf = (r: ActivityRow): Seg[] => {
+      if (r.divider) return [[clock(r.ts) + '  ', T.dim], [`──── ${r.text} ────`, T.chorus]];
+      const out: Seg[] = [[clock(r.shownTs ?? r.ts) + '  ', T.dim], [r.agent.padEnd(7), agentStyle(r.agent)], [r.verb.padEnd(8)]];
+      if (r.kind === 'file' || r.kind === 'usage') return [...out, [r.text]];
+      out.push([r.text.slice(0, 46).padEnd(48)], STATUS[r.status ?? 'ok']);
+      if (r.kind === 'tool') out.push([dur(r.durationMs) ? '  ' + dur(r.durationMs) : '', T.dim]);
+      return out;
+    };
     const count = (kind: string) => rows.filter(r => (kind === 'all' ? true : r.kind === kind)).length;
     const bar: Seg[] = ACTIVITY_KINDS.flatMap((kind): Seg[] => {
       const label = `${kind} ${kind === 'error' ? 0 : count(kind)}`;
@@ -1193,7 +1220,7 @@ export class Controller {
       '',
     ];
     const shown = rows.filter(r => filter === 'all' || r.kind === filter);
-    for (const r of shown) out.push(r.segs);
+    for (const r of shown) out.push(segsOf(r));
     if (!shown.length) out.push([[rows.length ? `Nothing of kind ${filter}.` : 'Nothing recorded yet.', T.dim]]);
     return out;
   }

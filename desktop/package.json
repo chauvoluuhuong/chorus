@@ -1,0 +1,15 @@
+{
+  "name": "chorus-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chorus desktop: a native window over `chorus serve` (Phase 5). No logic of its own.",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "icons": "tauri icon src-tauri/icons/source.png"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.4"
+  }
+}

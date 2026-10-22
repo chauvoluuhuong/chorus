@@ -26,7 +26,9 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 | `tools/probe/` | Capability probes: `probe.mjs` (headless scenarios), `pty-probe.mjs` (interactive), `skills-probe.mjs` |
 | `src/core/` | Adapters (`adapters/`), store, handoff, skills sync, launch, capture (TypeScript, Node 22+, no build step: `node file.ts`) |
 | `src/mcp/`, `src/cli/` | The `chorus mcp` server and the `chorus` entry point |
-| `test/` | `contract/` (L1, fixtures), `flow/` (L2, fake agent), `smoke/` (L3, real CLIs) |
+| `src/serve/`, `src/desktop/` | `chorus serve` (local API + agent screens over WebSocket) and the desktop page it serves (`docs/phase5.md`) |
+| `desktop/` | The native window: a thin Tauri shell that starts `chorus serve` (`npm run build` inside) |
+| `test/` | `contract/` (L1, fixtures), `flow/` + `app/` + `serve/` (L2, fake agent), `smoke/` (L3, real CLIs) |
 | `tools/fake-agent/` | Fake AI CLI for L2 tests |
 | `fixtures/<cli>/<version>/` | Real captured CLI output |
 | `docs/archive/` | v1 material (product concept, UI mockup v3, marketing notes); reference only |
@@ -59,6 +61,9 @@ npm run smoke:app                          # the real app hosting the real agent
 npm run smoke:artifacts                    # each real agent saves a note in the thread's artifacts folder without being told in the prompt
 npm run proof                              # Phase 4 e2e with screenshots → docs/proof/phase4/report.html, opened in the browser (real Claude + Codex, ~10 min)
 npm run proof:agy                          # the same with agy (docs/proof/phase4-agy/, 30/30); agy has a small plan quota, don't repeat it often
+npm run proof:desktop                      # Phase 5 e2e: the desktop page in Chrome + the native app, real Claude + Codex → docs/proof/phase5/
+node src/cli/index.ts serve --open         # the desktop page in your browser (--fake-agents for UI work without model calls)
+node src/cli/index.ts desktop              # the native window (build it first: cd desktop && npm install && npm run build)
 node src/cli/index.ts mux codex agy        # try the app by hand
 npm run risk -- free|cheap|<case>          # risk harness (docs/risks/README.md); `cheap` makes a few real model calls
 node tools/probe/probe.mjs <cli>           # recapture fixtures after a CLI update
@@ -66,7 +71,9 @@ node tools/probe/probe.mjs <cli>           # recapture fixtures after a CLI upda
 
 ## Current state and next steps
 
-Phases 1–4 are built and proven with the real Claude Code 2.1.302, Codex 0.163.0 and agy 1.4.2 (`docs/roadmap.md`).
+Phases 1–5 are built and proven with the real CLIs: 1–4 with Claude Code 2.1.302, Codex 0.163.0 and agy 1.4.2; Phase 5 (desktop:
+`chorus serve` + the page in `src/desktop/` + the Tauri shell in `desktop/`, D3 decided) with Claude Code 2.1.306 and Codex 0.163.0,
+43/43 in `docs/proof/phase5/` (`docs/phase5.md`, `docs/roadmap.md`).
 Phase 4 includes UI pass 2 (P4.10): the CLI app now matches `docs/mockups/chorus-cli.html` (top bar, project-tree sidebar, New chat
 screen with skip-permissions, approvals inbox, shared Memory across projects in `~/.chorus/chorus.db`, Skills screen, window-size
 steps). The e2e proof with screenshots of every step is `docs/proof/phase4/README.md` (`npm run proof`).
@@ -77,8 +84,8 @@ to the adapters; transcript matching; kitty keyboard; Windows; plan-limit captur
 
 1. Technical debt that a buyer would hit first: TD-3 (a failed run looks empty), TD-4 (two Codex/agy chats started together), TD-2
    (memory digest at chat start), TD-1 (one global skill library).
-2. Phase 5 (desktop): `chorus serve` local API over the same core, then the UI; decide D3 (Electron vs Tauri) there.
-   The packaging spike (`docs/phase4.md`) says the JS core ships fine as an npm package or a Node single executable.
+2. Desktop before selling: signing and notarisation of `Chorus.app`, Windows/Linux builds (TD-6), a guard against the CLI app and
+   the desktop resuming the same chat at once (`docs/phase5.md` §7).
 3. D4 (provider terms) before selling.
 
 Known gaps: `file_change`, `reasoning`, `turn.failed` Codex events, agy errors/quota and the Claude plan-limit hit are not

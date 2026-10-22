@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // chorus: the CLI app (Phase 4) and its plain commands. `chorus mcp` is started by the agents, not by you.
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { App } from '../app/app.ts';
 import { AGENTS, Controller } from '../app/controller.ts';
@@ -9,6 +10,7 @@ import { Store } from '../core/store.ts';
 import type { AgentId } from '../core/types.ts';
 import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, syncSkills } from '../core/skills.ts';
 import { runMcp } from '../mcp/server.ts';
+import { ChorusServer, headlessApp } from '../serve/server.ts';
 import { activityCmd, artifactsCmd, doctorCmd, memoryCmd, showCmd, threadsCmd, traceCmd } from './commands.ts';
 
 const argv = process.argv.slice(2);
@@ -17,7 +19,7 @@ const flag = (name: string) => {
   return i >= 0 ? argv[i + 1] : undefined;
 };
 const positional = argv.slice(1).filter((a, i, all) => !a.startsWith('--') && !(all[i - 1] ?? '').startsWith('--'));
-const project = path.resolve(flag('project') ?? process.cwd());
+const project = path.resolve(flag('project') ?? process.env.CHORUS_PROJECT ?? process.cwd()); // CHORUS_PROJECT: for `chorus serve` started by the desktop app
 const asAgent = (s?: string): AgentId | undefined => (AGENTS.includes(s as AgentId) ? (s as AgentId) : undefined);
 const models = (): Partial<Record<AgentId, string>> => ({ claude: process.env.CHORUS_MODEL_CLAUDE, codex: process.env.CHORUS_MODEL_CODEX, agy: process.env.CHORUS_MODEL_AGY });
 
@@ -165,6 +167,55 @@ switch (cmd) {
     } else console.error('usage: chorus skills [list|on <name>|off <name>|import <name>|sync] [--project dir]');
     break;
   }
+  case 'serve': {
+    // the local API the desktop app runs on: the same chats as the CLI app, agents in PTYs here, screens streamed to the window
+    const store = openStore();
+    const fake = argv.includes('--fake-agents') || process.env.CHORUS_FAKE_AGENTS === '1'; // dev: fake TUIs instead of the real agents, for working on the desktop UI
+    const fakeTui = path.resolve(import.meta.dirname, '../../tools/fake-agent/fake-tui.mjs');
+    const c = new Controller({ project, store, app: headlessApp(), models: models(), launcher: fake ? (agent, o) => ({ bin: process.execPath, args: [fakeTui, agent], cwd: o.cwd }) : undefined });
+    c.restore();
+    const quit = () => {
+      srv.close();
+      c.stop();
+      for (const e of c.app.entries) e.host?.kill();
+      setTimeout(() => {
+        store.close();
+        process.exit(0);
+      }, 300);
+    };
+    const srv = new ChorusServer({ controller: c, port: Number(flag('port') ?? 4318), onQuit: quit });
+    await srv.start();
+    // the first line is read by the desktop shell: keep its shape
+    console.log(`chorus serve: ${srv.openUrl}`);
+    if (argv.includes('--open')) spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [srv.openUrl], { stdio: 'ignore', detached: true }).unref();
+    process.on('SIGINT', quit);
+    process.on('SIGTERM', quit);
+    process.on('SIGHUP', quit);
+    // started by the desktop app: it holds our stdin open and never writes; when the app is gone, however it ended, so are we
+    if (argv.includes('--exit-with-stdin')) {
+      process.stdin.on('end', quit).on('close', quit).resume();
+    }
+    await new Promise(() => {});
+    break;
+  }
+  case 'desktop': {
+    // the native window (desktop/, Tauri). It starts `chorus serve` itself; this checkout's CLI when started from here.
+    // No app built yet: the same page in the browser.
+    const repo = path.resolve(import.meta.dirname, '../..');
+    const apps = [process.env.CHORUS_DESKTOP_APP, path.join(repo, 'desktop/src-tauri/target/release/bundle/macos/Chorus.app'), '/Applications/Chorus.app'].filter((p): p is string => !!p);
+    const appDir = apps.find(p => fs.existsSync(p));
+    if (process.platform === 'darwin' && appDir) {
+      const bin = path.join(appDir, 'Contents/MacOS', fs.readdirSync(path.join(appDir, 'Contents/MacOS'))[0]);
+      const env = { ...process.env, CHORUS_SERVE_CMD: `${JSON.stringify(process.execPath)} ${JSON.stringify(path.join(repo, 'src/cli/index.ts'))}` };
+      spawn(bin, [], { stdio: 'ignore', detached: true, env }).unref();
+      console.log(`opened ${appDir}`);
+    } else {
+      console.log('no desktop app built (cd desktop && npm install && npm run build): opening the page in the browser');
+      spawn(process.execPath, [path.join(repo, 'src/cli/index.ts'), 'serve', '--open', ...argv.slice(1)], { stdio: 'inherit' }).on('exit', code => process.exit(code ?? 0));
+      await new Promise(() => {});
+    }
+    break;
+  }
   case 'mux': {
     // dev command: run each shell command as a thread, e.g. chorus mux codex agy
     const ui = new App();
@@ -175,6 +226,6 @@ switch (cmd) {
     break;
   }
   default:
-    console.error('usage: chorus [new|run|handoff|threads|show|memory|artifacts|activity|trace|doctor|skills|mcp|mux] …');
+    console.error('usage: chorus [new|run|handoff|serve|desktop|threads|show|memory|artifacts|activity|trace|doctor|skills|mcp|mux] …');
     process.exit(2);
 }

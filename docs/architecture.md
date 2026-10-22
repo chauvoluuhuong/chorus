@@ -128,6 +128,12 @@ between them, hand off, answer an approval from the inbox, see an artifact liste
 The same operations with a graphical UI, over `chorus serve` (a local API exposed by the CLI).
 No business logic of its own. Design reference: [archive/ui-mockup-v3.html](archive/ui-mockup-v3.html).
 
+**As built** ([phase5.md](phase5.md)): `chorus serve` hosts the CLI app's Controller without a terminal and exposes it as a
+token-protected HTTP + WebSocket API on 127.0.0.1; the window is a web page (xterm.js draws each agent's own screen) inside a
+4.9 MB Tauri shell that starts `chorus serve` through the user's login shell. **Proof (e2e):** `npm run proof:desktop` drives
+the page in Chrome with the real Claude Code and Codex (new chat, approval from the inbox, artifacts, handoff, Memory, Skills,
+restart and resume) and starts the native app.
+
 ## 3. Components
 
 ```
@@ -282,6 +288,6 @@ user: Ctrl+Space h → pick codex        (or: chorus handoff --to codex)
 |---|---|---|
 | D1 | Language for core, MCP server and CLI app | **Decided: TypeScript on Node 22+ for Phases 1–3** (adapters, store, MCP server; fastest while the CLI formats are still moving; official MCP SDK; `node:sqlite` built in). **Phase 4: stay on TypeScript** (spike: PTY + virtual screens + sidebar + switching works, see [phase4.md](phase4.md)); packaging is decided by a binary spike in P4.8, with a Rust port of only the thin app layer as the fallback. Keep `node-pty` behind a small interface so a port stays cheap |
 | D2 | Per-session MCP config for agy | **Decided:** workspace `.agents/mcp_config.json`, verified with agy 1.4.0 |
-| D3 | Desktop technology | Decide at Phase 5; it only needs `chorus serve` |
+| D3 | Desktop technology | **Decided: Tauri 2 as a thin shell** (4.9 MB; Electron ~200 MB). It starts `chorus serve` on the user's Node and shows its page; no logic in the shell. See [phase5.md §3](phase5.md#3-decision-d3-tauri-as-a-thin-shell) |
 | D4 | Provider terms (agy subscription orchestration, Claude and Codex account use) | Check before selling; see integration docs |
 | D5 | Command name and menu key | `chorus` (package `chorus-cli`); menu key **Ctrl+\** and also Ctrl+Space (macOS keeps Ctrl+Space for input-source switching, so the default had to change), configurable with CHORUS_MENU_KEY |

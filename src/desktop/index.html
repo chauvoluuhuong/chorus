@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chorus</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='2' y='7' width='3' height='7' rx='1' fill='%230f766e'/%3E%3Crect x='6.5' y='3' width='3' height='11' rx='1' fill='%230f766e'/%3E%3Crect x='11' y='5' width='3' height='9' rx='1' fill='%230f766e'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/vendor/xterm.css">
+<link rel="stylesheet" href="/style.css">
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/addon-fit.js"></script>
+</head>
+<body>
+<div id="app">
+  <aside id="side" aria-label="Chats and projects"></aside>
+  <main id="main">
+    <header id="top"></header>
+    <div id="notice" hidden></div>
+    <section id="view"></section>
+  </main>
+</div>
+<div id="dialogs"></div>
+<div id="toasts" aria-live="polite"></div>
+<div id="conn" hidden>Lost the connection to chorus serve. Trying again…</div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

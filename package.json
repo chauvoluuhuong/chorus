@@ -26,18 +26,24 @@
     "proof:agy": "node test/smoke/proof-agy.ts --open",
     "install:global": "npm install && npm link",
     "start": "node src/cli/index.ts",
-    "smoke:artifacts": "node test/smoke/artifacts.ts"
+    "smoke:artifacts": "node test/smoke/artifacts.ts",
+    "proof:desktop": "node test/smoke/proof-desktop.ts --open",
+    "serve": "node src/cli/index.ts serve --open"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "@types/ws": "^8.18.2",
     "esbuild": "^0.28.2",
     "node-pty": "^1.1.0",
     "typescript": "^7.0.2"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-serialize": "^0.14.0",
     "@xterm/headless": "^6.0.0",
+    "@xterm/xterm": "^6.0.0",
+    "ws": "^8.22.0",
     "zod": "^4.6.7"
   }
 }

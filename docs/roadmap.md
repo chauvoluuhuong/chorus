@@ -74,8 +74,13 @@ Probe the known risks first, document the fix for each, build only when its trig
 
 ## Phase 5 · Desktop app
 
-- [ ] `chorus serve` local API
-- [ ] Desktop UI over it
+Plan and results: [phase5.md](phase5.md). D3 decided: Tauri as a thin shell. E2E proof with screenshots: [proof/phase5/README.md](proof/phase5/README.md).
+
+- [x] `chorus serve` local API (`src/serve/server.ts`): the CLI app's Controller without a terminal; HTTP for every operation, a WebSocket for the agent screens (replay + live bytes, keys, resize) and state pushes; the Controller's questions become dialogs in the window. 127.0.0.1, token + Strict cookie, Host check, `X-Chorus` on writes, Origin on the socket. L2 tests `test/serve/`
+- [x] Desktop UI over it (`src/desktop/`): sidebar project tree, New chat (with an optional first message), the agent's own screen in xterm.js, Artifacts / Activity / Record drawers, Hand off, Approvals inbox with toasts, Memory, Skills, Doctor, dialogs; light and dark
+- [x] Native window (`desktop/`, Tauri 2, 4.9 MB): starts `chorus serve` through the login shell, stops it on quit (and on a hard kill, through the stdin pipe); `chorus desktop`
+- [x] **Proof:** `npm run proof:desktop` with the real Claude Code 2.1.306 and Codex 0.163.0: **43/43 checks**, 21 screenshots in `docs/proof/phase5/` (new chat with a first message, skip permissions, an approval answered from the inbox while Codex is in front, artifacts / activity / record drawers, handoff Claude → Codex with the MCP call, Memory search, Skills on/off and import, dark mode, a server restart that resumes the Claude session, the native window starting its own server and stopping it on a hard kill)
+- [ ] Not done: signing/notarisation, Windows and Linux builds (TD-6), a guard against the CLI app and the desktop hosting the same chat at once, OS notifications
 
 ## Technical debt
 
