@@ -113,6 +113,9 @@ a { color: var(--accent); }
 .proj-row .proj { flex: 1; min-width: 0; }
 .proj .pname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .proj-add { flex: none; width: 20px; height: 20px; margin: 0 8px 0 2px; border: 0; border-radius: 50%; padding: 0; display: grid; place-items: center; background: transparent; color: var(--accent); opacity: 0; }
+.proj-rm { flex: none; width: 20px; height: 20px; margin: 0 0 0 2px; border: 0; border-radius: 50%; padding: 0; background: transparent; color: var(--faint); font-size: 15px; line-height: 1; opacity: 0; }
+.proj-row:hover .proj-rm, .proj-rm:focus-visible { opacity: 1; }
+.proj-rm:hover { background: var(--hover); color: var(--bad); }
 .proj-add svg { display: block; }
 .proj-row:hover .proj-add, .proj-row.here .proj-add, .proj-add:focus-visible { opacity: 1; }
 .proj-add:hover { background: var(--accent); color: var(--accent-ink); }

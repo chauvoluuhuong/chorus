@@ -32,6 +32,9 @@ const S = {
   form: null,
   browse: null,
   folded: new Set(JSON.parse(localStorage.getItem('chorus.folded') || '[]')),
+  // projects taken off the sidebar: folder -> ids of the chats it had then. Only the sidebar forgets them (chats and folder stay);
+  // a chat that is new since then brings the project back.
+  hidden: JSON.parse(localStorage.getItem('chorus.hidden') || '{}'),
   asked: new Set(),
   detail: {},
   drawerData: null,
@@ -263,6 +266,7 @@ function back() {
 function chatsByProject() {
   const groups = new Map();
   for (const c of S.state?.chats ?? []) {
+    if (S.hidden[c.cwd]?.includes(c.id) && c.id !== S.view.id) continue;
     if (!groups.has(c.cwd)) groups.set(c.cwd, []);
     groups.get(c.cwd).push(c);
   }
@@ -280,7 +284,7 @@ function renderChrome() {
     const bang = chats.filter(c => c.state === 'approval').length;
     // the project in front: the chat you look at is in it, or the New chat form starts there. Its ＋ always shows; others on hover.
     const here = (v.name === 'chat' && chats.some(c => c.id === v.id)) || (v.name === 'new' && !v.from && (S.form?.folder ?? v.folder) === cwd);
-    tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button></div>`;
+    tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-rm" data-act="rm-project" data-arg="${esc(cwd)}" title="Remove from the sidebar (the folder and its chats are kept)" aria-label="Remove ${esc(base(cwd))} from the sidebar">×</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button></div>`;
     if (folded) continue;
     for (const c of chats) {
       const child = c.parentId && chats.some(p => p.id === c.parentId);
@@ -1192,6 +1196,13 @@ document.addEventListener('click', async e => {
       S.folded.has(arg) ? S.folded.delete(arg) : S.folded.add(arg);
       localStorage.setItem('chorus.folded', JSON.stringify([...S.folded]));
       return renderChrome();
+    case 'rm-project': {
+      S.hidden[arg] = (S.state?.chats ?? []).filter(c => c.cwd === arg).map(c => c.id);
+      localStorage.setItem('chorus.hidden', JSON.stringify(S.hidden));
+      const open = S.view.name === 'chat' && S.state?.chats.find(c => c.id === S.view.id)?.cwd === arg;
+      if (open) return go({ name: 'new' });
+      return renderChrome();
+    }
     case 'fold-open':
       S.folded.delete(arg);
       return renderChrome();
