@@ -9,7 +9,7 @@
 # The files it downloads are written by scripts/release-downloads.mjs, which also sets VERSION below.
 set -euo pipefail
 
-VERSION="1.0.2"
+VERSION="1.0.3"
 BASE="${CHORUS_DOWNLOADS:-https://chorus-cli.web.app/dl}"
 CLI_URL="$BASE/chorus-cli-$VERSION.tgz"
 APP_URL="$BASE/Chorus-macOS-$VERSION.zip"
