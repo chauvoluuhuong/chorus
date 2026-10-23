@@ -12,7 +12,7 @@
 # The files it downloads are written by scripts/release-downloads.mjs, which also sets VERSION below.
 set -euo pipefail
 
-VERSION="1.0.4"
+VERSION="1.0.5"
 BASE="${CHORUS_DOWNLOADS:-https://chorus-cli.web.app/dl}"
 ROOT="${CHORUS_INSTALL_DIR:-$HOME/.chorus}"
 BIN="${CHORUS_BIN_DIR:-$HOME/.local/bin}"
