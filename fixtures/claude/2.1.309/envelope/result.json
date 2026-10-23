@@ -1,0 +1,41 @@
+{
+  "cli": "claude",
+  "version": "2.1.309 (Claude Code)",
+  "scenario": "envelope",
+  "date": "2026-10-23T02:00:05.014Z",
+  "platform": "darwin 27.0.0 arm64",
+  "node": "v26.10.0",
+  "scrubbedEnv": [
+    "CLAUDECODE",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_PID"
+  ],
+  "passed": true,
+  "checks": [
+    {
+      "name": "exit code 0",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "name": "model saw the standing note",
+      "ok": true
+    }
+  ],
+  "runs": [
+    {
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "durationMs": 6478,
+      "sessionId": "67f0ea10-db9e-4338-9ad2-f773740fe5da",
+      "eventTypes": [
+        "system",
+        "assistant",
+        "rate_limit_event",
+        "result"
+      ]
+    }
+  ]
+}

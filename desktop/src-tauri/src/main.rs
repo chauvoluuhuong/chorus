@@ -108,7 +108,7 @@ fn start_serve(app: &AppHandle) {
             let tail = lines.iter().rev().take(6).rev().cloned().collect::<Vec<_>>().join("\n");
             show_error(
                 &app,
-                &format!("`chorus serve` stopped before it started.\n\n{tail}\n\nInstall the CLI with: npm install -g chorus-cli (Node 22 or newer). Log: {}", log.display()),
+                &format!("`chorus serve` stopped before it started.\n\n{tail}\n\nInstall the CLI with: npm install -g @chauvoluuhuong/chorus (Node 22.18 or newer). Log: {}", log.display()),
             );
         }
     });

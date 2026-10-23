@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Approval research (docs/phase4.md §4): can a hook decide a tool call in the INTERACTIVE TUI?
 //
-//   node tools/probe/approval-probe.mjs <claude|codex|agy> <allow|deny|ask> [--out fixtures] [--wait 60]
+//   node tools/probe/approval-probe.mjs <claude|codex|agy> <allow|deny|ask> [--out fixtures] [--wait 60] [--bin <path>]
 //
 // Starts the real TUI with a PreToolUse (or permission) hook that logs its stdin and answers with the given
 // decision after a 3 s delay (a person reading a card), then asks the agent to create a file with the shell.
@@ -20,7 +20,8 @@ const args = process.argv.slice(2);
 const opt = (n, d) => (args.indexOf(`--${n}`) >= 0 ? args[args.indexOf(`--${n}`) + 1] : d);
 const outRoot = path.resolve(opt('out', 'fixtures'));
 const waitSec = Number(opt('wait', 70));
-const version = spawnSync(cli, ['--version'], { encoding: 'utf8' }).stdout.trim().replace(/^codex-cli /, '').replace(/ \(.*/, '');
+const bin = opt('bin', cli); // a pinned version (tools/probe/clis.mjs) instead of the one on PATH
+const version = spawnSync(bin, ['--version'], { encoding: 'utf8' }).stdout.trim().replace(/^codex-cli /, '').replace(/ \(.*/, '');
 const ws = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), `chorus-appr-${cli}-`)));
 spawnSync('git', ['init', '-q'], { cwd: ws });
 const answerOverride = opt('answer', '');
@@ -79,7 +80,7 @@ if (args.includes('--skip')) {
 }
 
 const term = new Terminal({ cols: 120, rows: 40, allowProposedApi: true });
-const p = pty.spawn(cli, argv, { name: 'xterm-256color', cols: 120, rows: 40, cwd: ws, env });
+const p = pty.spawn(bin, argv, { name: 'xterm-256color', cols: 120, rows: 40, cwd: ws, env });
 p.onData(d => term.write(d));
 p.onExit(e => (exited = e.exitCode));
 let exited = null;
@@ -88,11 +89,17 @@ const redact = s => s.split(os.homedir()).join('~').replace(/[A-Za-z0-9._%+-]+@[
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 let answered = 0;
+let daemonAnswered = false;
 const t0 = Date.now();
 let sawPrompt = '';
 while (Date.now() - t0 < waitSec * 1000) {
   await sleep(1500);
   const s = screen();
+  // an older Codex TUI next to a newer Codex's shared background server (seen with 0.160.0 while 0.163.0 runs): "Run without
+  // daemon this time" changes nothing; "Restart with these settings" would rewrite the user's shared settings, never picked
+  if (!daemonAnswered && /Background server has incompatible feature settings/.test(s) && /1\. Run without daemon this time/.test(s)) {
+    p.write('1'); daemonAnswered = true; await sleep(800); p.write('\r'); continue;
+  }
   if (answered < 2 && /trust (this|the contents)|Trust and continue|Yes, I trust/i.test(s) && !/approval-probe|finished/.test(s)) {
     if (cli === 'claude') { p.write('\x1b[A'); await sleep(300); }
     p.write('\r'); answered++; continue;
@@ -120,6 +127,7 @@ const result = {
   hookCalled: fs.existsSync(log),
   fileCreated: outside ? created : fs.existsSync(target),
   answeredStartupPrompts: answered,
+  answeredDaemonPrompt: daemonAnswered,
   promptSeenAndKeysSent: keysSent,
   hookLog: fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').map(l => JSON.parse(l)) : [],
 };

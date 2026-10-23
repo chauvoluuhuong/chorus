@@ -14,6 +14,9 @@ probe, diff the new fixtures against the committed ones, and update the doc.
 | Approvals (all three) | [approvals.md](approvals.md) | ✅ keystrokes on the agent's prompt; hooks only deny | see doc |
 | Effort (all three) | [effort.md](effort.md) | ✅ `--effort` (Claude, agy), `-c model_reasoning_effort` (Codex) | see doc |
 
+Which **versions** of each CLI were tested end to end, with the verdict and the evidence per version: [versions.md](versions.md)
+(`tools/probe/matrix.mjs`).
+
 ## Capability matrix
 
 What Chorus needs from each CLI, and how each provides it.

@@ -1,0 +1,42 @@
+{
+  "cli": "codex",
+  "version": "codex-cli 0.160.0",
+  "scenario": "shell",
+  "date": "2026-10-23T01:36:49.612Z",
+  "platform": "darwin 27.0.0 arm64",
+  "node": "v26.10.0",
+  "scrubbedEnv": [
+    "CLAUDECODE",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_PID"
+  ],
+  "passed": true,
+  "checks": [
+    {
+      "name": "exit code 0",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "name": "command output visible in stream",
+      "ok": true
+    }
+  ],
+  "runs": [
+    {
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "durationMs": 8449,
+      "sessionId": "01a16667-3104-7c10-95cd-f947347e85a4",
+      "eventTypes": [
+        "thread.started",
+        "turn.started",
+        "item.started",
+        "item.completed",
+        "turn.completed"
+      ]
+    }
+  ]
+}

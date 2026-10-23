@@ -1,0 +1,46 @@
+{
+  "cli": "codex",
+  "version": "codex-cli 0.155.0",
+  "scenario": "hello",
+  "date": "2026-10-23T01:40:40.902Z",
+  "platform": "darwin 27.0.0 arm64",
+  "node": "v26.10.0",
+  "scrubbedEnv": [
+    "CLAUDECODE",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_PID"
+  ],
+  "passed": true,
+  "checks": [
+    {
+      "name": "exit code 0",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "name": "session id found in stream",
+      "ok": true,
+      "detail": "01a1666a-bd81-7ee1-b4c9-3975bee43c0a"
+    },
+    {
+      "name": "token usage present in stream",
+      "ok": true
+    }
+  ],
+  "runs": [
+    {
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "durationMs": 7774,
+      "sessionId": "01a1666a-bd81-7ee1-b4c9-3975bee43c0a",
+      "eventTypes": [
+        "thread.started",
+        "turn.started",
+        "item.completed",
+        "turn.completed"
+      ]
+    }
+  ]
+}

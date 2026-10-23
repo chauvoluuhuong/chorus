@@ -1,0 +1,24 @@
+[
+  {
+    "bin": "/opt/homebrew/bin/codex",
+    "args": [
+      "exec",
+      "--json",
+      "--skip-git-repo-check",
+      "-s",
+      "workspace-write",
+      "-c",
+      "mcp_servers.chorus.command=\"node\"",
+      "-c",
+      "mcp_servers.chorus.args=[\"~/chorus/tools/probe/probe-mcp.mjs\",\"--log\",\"~/chorus/fixtures/codex/0.163.0/envelope/mcp-log.jsonl\",\"--thread\",\"t_probe_envelope\"]",
+      "-c",
+      "mcp_servers.chorus.default_tools_approval_mode=\"approve\"",
+      "-c",
+      "approval_policy=\"never\"",
+      "-c",
+      "developer_instructions=\"This chat is probe thread t_probe_envelope. The probe code word is kumquat.\"",
+      "Reply with only the probe code word from your standing instructions for this chat, in capital letters, followed by -OK."
+    ],
+    "cwd": "/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-probe-codex-envelope-2B5Zn5"
+  }
+]

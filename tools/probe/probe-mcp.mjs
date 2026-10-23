@@ -3,7 +3,7 @@
 // It logs every JSON-RPC message it receives so we can see exactly how each
 // AI CLI talks to an MCP server (handshake, protocol version, tool-call _meta).
 //
-// Usage: node probe-mcp.mjs --log <file> --thread <id>
+// Usage: node probe-mcp.mjs --log <file> --thread <id> [--instructions <text>]
 import { appendFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 
@@ -14,6 +14,8 @@ const arg = name => {
 };
 const logFile = arg('--log');
 const threadId = arg('--thread') ?? null;
+// the server instructions: how Chorus gives Claude its standing note (the envelope scenario passes one)
+const instructions = arg('--instructions') ?? 'Chorus capability probe server.';
 
 const log = entry => {
   if (!logFile) return;
@@ -57,7 +59,7 @@ createInterface({ input: process.stdin }).on('line', line => {
           protocolVersion: params?.protocolVersion ?? '2025-06-18',
           capabilities: { tools: {} },
           serverInfo: { name: 'chorus-probe', version: '0.0.1' },
-          instructions: 'Chorus capability probe server.',
+          instructions,
         },
       });
       break;

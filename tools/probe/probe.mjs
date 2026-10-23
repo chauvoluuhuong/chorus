@@ -8,7 +8,7 @@
 //   node tools/probe/probe.mjs <claude|codex|agy> [options]
 //
 // Options:
-//   --scenario <name>   hello | mcp | shell | artifact | resume | all (default: all)
+//   --scenario <name>   hello | mcp | shell | artifact | resume | envelope | all (default: all)
 //   --model <id>        model to pass to the CLI (default: the CLI's own default)
 //   --bin <path>        CLI binary (default: claude / codex / agy on PATH)
 //   --out <dir>         fixture root (default: fixtures)
@@ -82,9 +82,13 @@ const writeRedacted = (file, text) => fs.writeFileSync(file, redact(text));
 const HOME = os.homedir();
 const tomlString = s => JSON.stringify(s); // JSON strings are valid TOML basic strings
 
+// Each CLI gets Chorus's standing note (the envelope scenario) through the channel Chorus uses for it
+// (src/core/launch.ts): Claude through the MCP server's instructions, Codex as developer_instructions, agy as a
+// workspace rules plugin. Only that channel carries it, so a pass proves that channel.
 const ADAPTERS = {
   claude: {
     homeDirs: [path.join(HOME, '.claude', 'projects')],
+    mcpInstructions: true,
     setup() {},
     args({ prompt, ws, mcpArgs, sessionId, resumeId }) {
       const mcpConfig = JSON.stringify({ mcpServers: { chorus: { command: 'node', args: mcpArgs } } });
@@ -104,12 +108,13 @@ const ADAPTERS = {
   codex: {
     homeDirs: [process.env.CODEX_HOME || path.join(HOME, '.codex')],
     setup() {},
-    args({ prompt, mcpArgs, resumeId }) {
+    args({ prompt, mcpArgs, resumeId, instructions }) {
       const cfg = [
         '-c', `mcp_servers.chorus.command=${tomlString('node')}`,
         '-c', `mcp_servers.chorus.args=[${mcpArgs.map(tomlString).join(',')}]`,
         '-c', 'mcp_servers.chorus.default_tools_approval_mode="approve"',
         '-c', 'approval_policy="never"',
+        ...(instructions ? ['-c', `developer_instructions=${tomlString(instructions)}`] : []),
       ];
       const common = ['--json', '--skip-git-repo-check', '-s', 'workspace-write', ...(model ? ['-m', model] : []), ...cfg];
       return resumeId ? ['exec', ...common, 'resume', resumeId, prompt] : ['exec', ...common, prompt];
@@ -119,7 +124,7 @@ const ADAPTERS = {
     // ~/.gemini/antigravity-cli is the CLI store per community docs; ~/.gemini/config
     // holds global mcp_config.json/rules. Both are watched so the probe shows which is real.
     homeDirs: [path.join(HOME, '.gemini')],
-    setup({ ws, mcpArgs }) {
+    setup({ ws, mcpArgs, instructions }) {
       // agy has no known per-session MCP flag. Try the workspace-level config
       // (.agents/mcp_config.json) so the user's global config is never touched.
       // Whether agy reads it is one of the things this probe verifies.
@@ -128,6 +133,13 @@ const ADAPTERS = {
         path.join(ws, '.agents', 'mcp_config.json'),
         JSON.stringify({ mcpServers: { chorus: { command: 'node', args: mcpArgs } } }, null, 2),
       );
+      if (instructions) {
+        // the same plugin layout writeAgyRules (src/core/launch.ts) writes
+        const dir = path.join(ws, '.agents', 'plugins', 'chorus');
+        fs.mkdirSync(path.join(dir, 'rules'), { recursive: true });
+        fs.writeFileSync(path.join(dir, 'plugin.json'), JSON.stringify({ name: 'chorus' }, null, 2) + '\n');
+        fs.writeFileSync(path.join(dir, 'rules', 'AGENTS.md'), `# Chorus\n\n${instructions}\n`);
+      }
     },
     args({ prompt, resumeId }) {
       return [
@@ -196,6 +208,16 @@ const SCENARIOS = {
       const f = path.join(ws, '.chorus', 'artifacts', 'probe', 'hello.md');
       return [check('artifact file written at requested path', fs.existsSync(f))];
     },
+  },
+  envelope: {
+    // The code word is only in the standing note and "-OK" only in the prompt, so "kumquat-OK" can't come from an echo of
+    // either. Case is not checked: Claude 2.1.309 on haiku answered "kumquat-OK" (fixtures/claude/2.1.309/envelope/).
+    instructions: 'This chat is probe thread t_probe_envelope. The probe code word is kumquat.',
+    runs: [{ prompt: 'Reply with only the probe code word from your standing instructions for this chat, in capital letters, followed by -OK.' }],
+    checks: ({ runs }) => [
+      check('exit code 0', runs[0].exitCode === 0, runs[0].exitCode),
+      check('model saw the standing note', /kumquat-OK/i.test(runs[0].stdout)),
+    ],
   },
   resume: {
     runs: [
@@ -369,8 +391,9 @@ for (const name of names) {
   spawnSync('git', ['init', '-q'], { cwd: ws });
   const threadId = `t_probe_${name}`;
   const mcpLogFile = path.join(dest, 'mcp-log.jsonl');
-  const mcpArgs = [MCP_SERVER, '--log', mcpLogFile, '--thread', threadId];
-  adapter.setup({ ws, mcpArgs });
+  const instructions = scenario.instructions;
+  const mcpArgs = [MCP_SERVER, '--log', mcpLogFile, '--thread', threadId, ...(instructions && adapter.mcpInstructions ? ['--instructions', instructions] : [])];
+  adapter.setup({ ws, mcpArgs, instructions });
 
   const before = Object.fromEntries(adapter.homeDirs.map(r => [r, snapshot(r)]));
   const runs = [];
@@ -382,7 +405,7 @@ for (const name of names) {
       continue;
     }
     const sessionId = randomUUID();
-    const args = adapter.args({ prompt: spec.prompt, ws, mcpArgs, sessionId, resumeId });
+    const args = adapter.args({ prompt: spec.prompt, ws, mcpArgs, sessionId, resumeId, instructions });
     commands.push({ bin, args, cwd: ws });
     process.stdout.write(`  ${name}#${i + 1} … `);
     const r = await run(args, ws);

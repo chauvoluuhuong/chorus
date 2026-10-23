@@ -5,7 +5,7 @@
 > the agents do and make.
 
 **Status:** Phases 1–4 are built and proven with the real CLIs (branch `feat/phase-1`); the desktop app (Phase 5)
-comes after. First product: the **`chorus`** CLI app (package `chorus-cli`).
+comes after. First product: the **`chorus`** CLI app (npm package `@chauvoluuhuong/chorus`).
 
 **Goal:** $5 lifetime license, ~5,000 buyers. See [docs/product.md](docs/product.md).
 
@@ -80,3 +80,8 @@ node tools/probe/probe.mjs claude --model haiku
 node tools/probe/probe.mjs codex
 node tools/probe/probe.mjs agy
 ```
+
+## Licence
+
+GNU AGPL version 3 only ([LICENSE](LICENSE)), with an additional permission to combine Chorus with its CLI integration
+library `@chauvoluuhuong/chorus-core`, which has its own licence. See [NOTICE.md](NOTICE.md).

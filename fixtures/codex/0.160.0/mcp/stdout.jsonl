@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"01a16667-0ac9-77f3-9992-f2c614223d1e"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"mcp_tool_call","server":"chorus","tool":"probe_get_context","arguments":{},"result":null,"error":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_0","type":"mcp_tool_call","server":"chorus","tool":"probe_get_context","arguments":{},"result":{"content":[{"type":"text","text":"{\"thread_from_argv\":\"t_probe_mcp\",\"thread_from_env\":null,\"secret_word\":\"pineapple\"}"}],"structured_content":null},"error":null,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"pineapple"}}
+{"type":"turn.completed","usage":{"input_tokens":57428,"cached_input_tokens":37760,"cache_write_input_tokens":0,"output_tokens":75,"reasoning_output_tokens":0}}

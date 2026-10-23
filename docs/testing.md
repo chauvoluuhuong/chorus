@@ -9,7 +9,7 @@ scripted.
 | Layer | What it tests | Real CLI? | Runs where | Cost |
 |---|---|---|---|---|
 | **L1 contract** | Adapters parse real captured output (`fixtures/<cli>/<version>/`) into the right normalized events | No (fixtures) | CI, anywhere | free |
-| **L2 flow** | chorus-cli + chorus-mcp + store end to end, with `fake-agent` standing in for the AI CLI (it launches like one, emits recorded-style events, calls MCP tools, writes artifacts, can simulate a limit hit) | No (fake) | CI, anywhere | free |
+| **L2 flow** | the chorus CLI + `chorus mcp` + store end to end, with `fake-agent` standing in for the AI CLI (it launches like one, emits recorded-style events, calls MCP tools, writes artifacts, can simulate a limit hit) | No (fake) | CI, anywhere | free |
 | **L3 smoke** | The same flows against the real `claude`, `codex`, `agy` | Yes | where the CLI is installed and logged in | small (~$0.02–0.10 per run with cheap models) |
 
 Rules:

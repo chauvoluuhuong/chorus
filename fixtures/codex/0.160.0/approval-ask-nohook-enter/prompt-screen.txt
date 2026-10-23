@@ -1,0 +1,24 @@
+│                                                 │
+│ See full release notes:                         │
+│ https://github.com/openai/codex/releases/latest │
+╰─────────────────────────────────────────────────╯
+  >_ OpenAI Codex (v0.160.0)
+     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-codex-Bekm03
+  Ah, the terminal. A classic meeting spot.
+› Use your shell tool to run exactly: mkdir -p /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-
+  codex-Bekm03 && touch /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-codex-Bekm03/approval-
+  probe-file.txt . Then reply with only: finished
+• I can’t run that command in the current read-only filesystem. I’ll request the required write approval for the exact
+  command.
+• Running mkdir -p /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-codex-Bekm03 && touch /private/…
+    + Show details                                                                                                      
+  Would you like to run the following command?
+  Environment: local
+  Reason: May I run the exact command you requested to create the directory and probe file?
+  $ mkdir -p /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-codex-Bekm03 && touch
+  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-codex-Bekm03/approval-probe-file.txt
+› 1. Yes, proceed (y)                                                                                                   
+  2. Yes, and don't ask again for commands that start with `mkdir -p /private/var/folders/hj/
+     b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-codex-Bekm03` (p)
+  3. No, and tell Codex what to do differently (esc)
+  Press enter to confirm or esc to cancel                                                                               

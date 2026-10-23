@@ -143,7 +143,7 @@ interactive session. ✅
 
 ## 8. Gotchas (read these when debugging)
 
-1. **Environment leak from a parent Claude session.** If `chorus-cli` itself runs inside Claude
+1. **Environment leak from a parent Claude session.** If Chorus itself runs inside Claude
    Code (or the cloud), `CLAUDE_CODE_SESSION_ID` is inherited and the child `claude` reports the
    *parent's* session id in hooks. Always remove `CLAUDECODE`, `CLAUDE_CODE_SESSION_ID`,
    `CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_PID` before spawning. ✅

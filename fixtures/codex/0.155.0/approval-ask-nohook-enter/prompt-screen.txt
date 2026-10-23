@@ -1,0 +1,25 @@
+╭──────────────────────────────────────────────────────╮
+│ >_ OpenAI Codex (v0.155.0)                           │
+│                                                      │
+│ model:     gpt-6-luna   /model to change             │
+│ directory: /private/var/…/T/chorus-appr-codex-rx5sfC │
+╰──────────────────────────────────────────────────────╯
+  Tip: New For a limited time, Codex is included in your plan for free – let’s build together.
+› Use your shell tool to run exactly: mkdir -p /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-
+  codex-rx5sfC && touch /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-codex-rx5sfC/approval-
+  probe-file.txt . Then reply with only: finished
+⚠ Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.
+    session-flags: `token_budget` is ignored.
+• I need to run that exact command, which writes to the workspace. The current filesystem permission is read-only, so
+  I’m requesting the required approval to execute it.
+• Running mkdir -p /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-codex-rx5sfC && touch /private/
+  │ var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-codex-rx5sfC/approval-probe-file.txt
+  Would you like to run the following command?
+  Environment: local
+  Reason: May I run the exact command you provided to create the workspace directory and approval probe file?
+  $ mkdir -p /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-codex-rx5sfC && touch
+  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-codex-rx5sfC/approval-probe-file.txt
+› 1. Yes, proceed (y)
+  2. Yes, and don't ask again for commands that start with `mkdir -p /private/var/folders/hj/
+     b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-codex-rx5sfC` (p)
+  3. No, and tell Codex what to do differently (esc)

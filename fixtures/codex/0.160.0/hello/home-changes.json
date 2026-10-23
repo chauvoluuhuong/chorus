@@ -1,0 +1,386 @@
+[
+  {
+    "path": "~/.codex/config.toml",
+    "status": "modified",
+    "size": 12754,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/logs_2.sqlite",
+    "status": "modified",
+    "size": 50073600,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/logs_2.sqlite-wal",
+    "status": "modified",
+    "size": 4626792,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/models_cache.json",
+    "status": "modified",
+    "size": 177686,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/state_5.sqlite-shm",
+    "status": "created",
+    "size": 32768,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/state_5.sqlite-wal",
+    "status": "created",
+    "size": 284312,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/thread_history_1.sqlite-shm",
+    "status": "created",
+    "size": 32768,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/thread_history_1.sqlite-wal",
+    "status": "created",
+    "size": 144232,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/.codex-system-skills.marker",
+    "status": "modified",
+    "size": 17,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/skill-installer/LICENSE.txt",
+    "status": "modified",
+    "size": 11358,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/skill-installer/SKILL.md",
+    "status": "modified",
+    "size": 3367,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/skill-installer/scripts/github_utils.py",
+    "status": "modified",
+    "size": 659,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py",
+    "status": "modified",
+    "size": 11917,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/skill-installer/scripts/list-skills.py",
+    "status": "modified",
+    "size": 2948,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer-small.svg",
+    "status": "modified",
+    "size": 923,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer.png",
+    "status": "modified",
+    "size": 1086,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/skill-installer/agents/openai.yaml",
+    "status": "modified",
+    "size": 221,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/skill-creator/SKILL.md",
+    "status": "modified",
+    "size": 15311,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/skill-creator/license.txt",
+    "status": "modified",
+    "size": 11358,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/skill-creator/scripts/generate_openai_yaml.py",
+    "status": "modified",
+    "size": 6669,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/skill-creator/scripts/init_skill.py",
+    "status": "modified",
+    "size": 10314,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/skill-creator/scripts/quick_validate.py",
+    "status": "modified",
+    "size": 4249,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/skill-creator/references/openai_yaml.md",
+    "status": "modified",
+    "size": 2356,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator-small.svg",
+    "status": "modified",
+    "size": 1319,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator.png",
+    "status": "modified",
+    "size": 1563,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/skill-creator/agents/openai.yaml",
+    "status": "modified",
+    "size": 183,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/review-agent/SKILL.md",
+    "status": "modified",
+    "size": 2661,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/review-agent/agents/openai.yaml",
+    "status": "modified",
+    "size": 252,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/openai-docs/LICENSE.txt",
+    "status": "modified",
+    "size": 10776,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/openai-docs/SKILL.md",
+    "status": "modified",
+    "size": 5437,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/openai-docs/scripts/fetch-codex-manual.mjs",
+    "status": "modified",
+    "size": 16085,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info",
+    "status": "modified",
+    "size": 1038,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info.cjs",
+    "status": "modified",
+    "size": 3937,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/openai-docs/references/codex-self-knowledge.md",
+    "status": "modified",
+    "size": 7417,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/openai-docs/references/latest-model.md",
+    "status": "modified",
+    "size": 2147,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/openai-docs/references/mcp-diagnostics.md",
+    "status": "modified",
+    "size": 2318,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/openai-docs/references/model-migration.md",
+    "status": "modified",
+    "size": 5094,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/openai-docs/references/model-selection.md",
+    "status": "modified",
+    "size": 1344,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/openai-docs/references/official-docs.md",
+    "status": "modified",
+    "size": 3337,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/openai-docs/references/prompting-guide.md",
+    "status": "modified",
+    "size": 10166,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/openai-docs/references/upgrade-guide.md",
+    "status": "modified",
+    "size": 1027,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/openai-docs/references/upgrading-to-gpt-6-astra.md",
+    "status": "modified",
+    "size": 18993,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/openai-docs/assets/openai-small.svg",
+    "status": "modified",
+    "size": 1091,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/openai-docs/assets/openai.png",
+    "status": "modified",
+    "size": 1429,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/openai-docs/agents/openai.yaml",
+    "status": "modified",
+    "size": 370,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/imagegen/LICENSE.txt",
+    "status": "modified",
+    "size": 10776,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/imagegen/SKILL.md",
+    "status": "modified",
+    "size": 19201,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/imagegen/scripts/image_gen.py",
+    "status": "modified",
+    "size": 34667,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/imagegen/scripts/remove_chroma_key.py",
+    "status": "modified",
+    "size": 13905,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/imagegen/references/cli.md",
+    "status": "modified",
+    "size": 9655,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/imagegen/references/codex-network.md",
+    "status": "modified",
+    "size": 1779,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/imagegen/references/image-api.md",
+    "status": "modified",
+    "size": 6072,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/imagegen/references/prompting.md",
+    "status": "modified",
+    "size": 8282,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/imagegen/references/sample-prompts.md",
+    "status": "modified",
+    "size": 17617,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/imagegen/assets/imagegen-small.svg",
+    "status": "modified",
+    "size": 2889,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/imagegen/assets/imagegen.png",
+    "status": "modified",
+    "size": 1711,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/skills/.system/imagegen/agents/openai.yaml",
+    "status": "modified",
+    "size": 275,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/sessions/2026/10/23/rollout-2026-10-23T08-36-24-01a16666-ed96-7ca1-ae9b-2879a3f041cb.jsonl",
+    "status": "created",
+    "size": 81828,
+    "copied": true
+  },
+  {
+    "path": "~/.codex/plugins/cache/openai-curated-remote/work-pets/.codex-remote-plugin-install.json",
+    "status": "modified",
+    "size": 104,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/plugins/cache/openai-curated-remote/plugin-management/.codex-remote-plugin-install.json",
+    "status": "modified",
+    "size": 104,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/plugins/cache/openai-curated-remote/plugin-creator/.codex-remote-plugin-install.json",
+    "status": "modified",
+    "size": 104,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/plugins/cache/openai-curated-remote/canva/.codex-remote-plugin-install.json",
+    "status": "modified",
+    "size": 101,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/cache/codex_apps_tools/750f8d17fcd23adb34ddddcc748139d0d99c235c.json",
+    "status": "modified",
+    "size": 419789,
+    "copied": false
+  },
+  {
+    "path": "~/.codex/cache/codex_apps_server_info/750f8d17fcd23adb34ddddcc748139d0d99c235c.json",
+    "status": "modified",
+    "size": 189,
+    "copied": false
+  }
+]

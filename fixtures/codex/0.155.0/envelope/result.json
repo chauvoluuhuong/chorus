@@ -1,0 +1,41 @@
+{
+  "cli": "codex",
+  "version": "codex-cli 0.155.0",
+  "scenario": "envelope",
+  "date": "2026-10-23T01:41:30.219Z",
+  "platform": "darwin 27.0.0 arm64",
+  "node": "v26.10.0",
+  "scrubbedEnv": [
+    "CLAUDECODE",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_PID"
+  ],
+  "passed": true,
+  "checks": [
+    {
+      "name": "exit code 0",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "name": "model saw the standing note",
+      "ok": true
+    }
+  ],
+  "runs": [
+    {
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "durationMs": 6573,
+      "sessionId": "01a1666b-805b-74e0-8643-b8cba94c33c5",
+      "eventTypes": [
+        "thread.started",
+        "turn.started",
+        "item.completed",
+        "turn.completed"
+      ]
+    }
+  ]
+}

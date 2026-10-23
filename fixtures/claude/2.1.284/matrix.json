@@ -1,0 +1,93 @@
+{
+  "cli": "claude",
+  "version": "2.1.284",
+  "reported": "2.1.284 (Claude Code)",
+  "install": "npm @anthropic-ai/claude-code@2.1.284 (pinned)",
+  "date": "2026-10-23T01:57:57.821Z",
+  "platform": "darwin 27.0.0 arm64",
+  "capture": {
+    "hello": {
+      "passed": true,
+      "failed": [],
+      "date": "2026-10-17T05:17:11.348Z",
+      "platform": "darwin 27.0.0 arm64"
+    },
+    "mcp": {
+      "passed": true,
+      "failed": [],
+      "date": "2026-10-17T05:17:19.280Z",
+      "platform": "darwin 27.0.0 arm64"
+    },
+    "shell": {
+      "passed": true,
+      "failed": [],
+      "date": "2026-10-17T05:17:25.900Z",
+      "platform": "darwin 27.0.0 arm64"
+    },
+    "artifact": {
+      "passed": true,
+      "failed": [],
+      "date": "2026-10-17T05:17:33.735Z",
+      "platform": "darwin 27.0.0 arm64"
+    },
+    "resume": {
+      "passed": true,
+      "failed": [],
+      "date": "2026-10-17T05:17:42.909Z",
+      "platform": "darwin 27.0.0 arm64"
+    },
+    "envelope": {
+      "passed": true,
+      "failed": [],
+      "date": "2026-10-23T01:57:57.616Z",
+      "platform": "darwin 27.0.0 arm64"
+    },
+    "approval": {
+      "passed": true,
+      "failed": []
+    }
+  },
+  "chorus": [
+    {
+      "test": "hello (stream) has an assistant turn, a session id and usage",
+      "result": "pass"
+    },
+    {
+      "test": "shell (stream) records the command and its output",
+      "result": "pass"
+    },
+    {
+      "test": "shell (transcript) matches the stream",
+      "result": "pass"
+    },
+    {
+      "test": "mcp call is a tool call to the chorus server and returns the secret",
+      "result": "pass"
+    },
+    {
+      "test": "resume keeps the session id and the second turn is parsed",
+      "result": "pass"
+    },
+    {
+      "test": "artifact write is visible as a tool call",
+      "result": "pass"
+    },
+    {
+      "test": "envelope: the reply carries the code word that only the standing note had",
+      "result": "pass"
+    },
+    {
+      "test": "approval: the prompt is recognised and Enter approves it",
+      "result": "pass"
+    },
+    {
+      "test": "stream reports a plan-limit reading",
+      "result": "pass"
+    },
+    {
+      "test": "live interactive transcript parses (user turn, tool call, result)",
+      "result": "pass"
+    }
+  ],
+  "verdict": "tested"
+}

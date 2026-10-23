@@ -3,12 +3,21 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
+import { detectApproval } from '../../src/app/approval.ts';
 import { adapters } from '../../src/core/adapters/index.ts';
 import type { AgentId, Session } from '../../src/core/types.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '../../fixtures');
-// every committed fixture version is tested (claude: cloud capture 2.1.301 and Mac capture 2.1.284)
-const VERSIONS: Record<AgentId, string[]> = { claude: ['2.1.301', '2.1.284'], codex: ['0.163.0'], agy: ['1.4.0'] };
+// every fixture version with a full probe capture (tools/probe/matrix.mjs) is tested; the matrix runs these tests per
+// version (`--test-name-pattern "^<cli> <version>: "`) and writes the result into docs/integrations/versions.md
+const PROBED = ['hello', 'mcp', 'shell', 'artifact', 'resume'];
+const VERSIONS = Object.fromEntries(
+  (['claude', 'codex', 'agy'] as AgentId[]).map(a => {
+    const d = path.join(ROOT, a);
+    const vs = fs.existsSync(d) ? fs.readdirSync(d).filter(v => PROBED.every(s => fs.existsSync(path.join(d, v, s, 'result.json')))) : [];
+    return [a, vs];
+  }),
+) as Record<AgentId, string[]>;
 const SHELL_PROMPT = 'Use your shell / terminal tool to run exactly this command: echo chorus-probe-$((6*7)) Then reply with the command output only.';
 
 const dir = (agent: AgentId, v: string, scenario: string) => path.join(ROOT, agent, v, scenario);
@@ -84,6 +93,22 @@ for (const agent of Object.keys(VERSIONS) as AgentId[]) {
     test(name('artifact write is visible as a tool call'), () => {
       const s = a.parseStream(stream(agent, v, 'artifact'));
       assert.ok(s.toolCalls.some(c => c.target.endsWith('.chorus/artifacts/probe/hello.md') || c.target.includes('.chorus/artifacts/probe/hello.md')), JSON.stringify(s.toolCalls.map(c => c.target)));
+    });
+
+    // the standing note Chorus gives each chat reached the model through this CLI's channel (probe.mjs "envelope")
+    const envelope = path.join(dir(agent, v, 'envelope'), 'stdout.jsonl');
+    test(name('envelope: the reply carries the code word that only the standing note had'), { skip: !fs.existsSync(envelope) }, () => {
+      const s = a.parseStream(read(envelope));
+      assert.match(s.turns.at(-1)?.text ?? '', /kumquat-OK/i);
+    });
+
+    // the CLI's own permission prompt, captured in the TUI (approval-probe.mjs ask, then Enter)
+    const approval = ['approval-ask-nohook-enter', 'approval-ask-manual-enter'].map(n => dir(agent, v, n)).find(d => fs.existsSync(path.join(d, 'prompt-screen.txt')));
+    test(name('approval: the prompt is recognised and Enter approves it'), { skip: !approval }, () => {
+      const p = detectApproval(agent, read(path.join(approval!, 'prompt-screen.txt')).split('\n'));
+      assert.ok(p, 'prompt detected');
+      assert.match(p.what, /approval-probe-file\.txt/);
+      assert.equal(JSON.parse(read(path.join(approval!, 'result.json'))).fileCreated, true, 'file created after Enter');
     });
 
     test(name('stream reports a plan-limit reading'), { skip: agent !== 'claude' }, () => {

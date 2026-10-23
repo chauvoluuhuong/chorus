@@ -1,0 +1,24 @@
+[
+  {
+    "bin": "~/.cache/chorus/clis/claude/2.1.290/node_modules/.bin/claude",
+    "args": [
+      "-p",
+      "Reply with only the probe code word from your standing instructions for this chat, in capital letters, followed by -OK.",
+      "--session-id",
+      "4edb344f-9bd8-41ec-b12f-eabc995ad16b",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--permission-mode",
+      "acceptEdits",
+      "--model",
+      "haiku",
+      "--strict-mcp-config",
+      "--mcp-config",
+      "{\"mcpServers\":{\"chorus\":{\"command\":\"node\",\"args\":[\"~/chorus/tools/probe/probe-mcp.mjs\",\"--log\",\"~/chorus/fixtures/claude/2.1.290/envelope/mcp-log.jsonl\",\"--thread\",\"t_probe_envelope\",\"--instructions\",\"This chat is probe thread t_probe_envelope. The probe code word is kumquat.\"]}}}",
+      "--allowedTools",
+      "mcp__chorus__probe_get_context,Bash(echo *),Write,Edit"
+    ],
+    "cwd": "/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-probe-claude-envelope-7zCqUk"
+  }
+]
