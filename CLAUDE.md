@@ -19,11 +19,12 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 | Repo | Visibility, licence | Holds |
 |---|---|---|
 | `chauvoluuhuong/chorus` (this one) | Public from launch. AGPL-3.0-only, with an additional permission to combine it with chorus-core (`LICENSE`, `NOTICE.md`) | The app: store, handoff, memory, MCP tools, desktop, CLI app, installers (curl, Homebrew, npx), landing page. Buyers install from here and file issues and doctor reports here |
-| `chauvoluuhuong/chorus-core` (private, not created yet) | Private source, `UNLICENSED`. Only its built bundle is published, to public npm as `@chauvoluuhuong/chorus-core`, so installing Chorus installs it with no login | The CLI integration: adapters, launch flags, transcript discovery, approval detection, the doctor, the probes, the version matrix, fixtures, `docs/integrations/` |
+| `chauvoluuhuong/chorus-core` (private, `git@github.com:chauvoluuhuong/chorus-core.git`, checked out next to this one; branches `dev` and `main`) | Private source, `UNLICENSED`. Only its built bundle is published, to public npm as `@chauvoluuhuong/chorus-core`, so installing Chorus installs it with no login | The CLI integration: adapters, launch flags, transcript discovery, approval detection, the doctor, the probes, the version matrix, fixtures, `docs/integrations/` |
 
 - This repo's npm package is **`@chauvoluuhuong/chorus`**. `chorus-cli` on npm belongs to someone else: never install or publish it.
-- Until the split (`docs/chorus-core.md` §6), the core's parts still live here: `src/core/`, `src/app/approval.ts`,
-  `tools/probe/`, `fixtures/`, `docs/integrations/`. Keep new integration code free of store/UI imports so it can move.
+- The split is done (`docs/chorus-core.md` §6): CLI integration code (adapters, launch flags, the doctor and its install commands,
+  probes, fixtures, `docs/integrations/`) lives in chorus-core; `src/core/` here is what Chorus does with it (store, handoff,
+  skills, launch with the MCP server). A fact or fix about how a CLI behaves goes in chorus-core, not here.
 - **Clone both side by side**: `chorus/` and `chorus-core/` in the same folder. Here `fixtures/` and `docs/integrations/` are
   symlinks to `../chorus-core/`, and `package.json` depends on `file:../chorus-core` (run `npm run build` there first).
   `fixtures/` is the real captured output of each CLI per version: the evidence for every integration fact, and the data the
@@ -60,24 +61,43 @@ The v1 Tauri/React prototype was removed; it is in git history. New work branche
 
 ## Workflow: every new feature or bug fix
 
-1. **Branch from `dev`.** `git fetch origin && git switch -c feat/<short-name> origin/dev` for a
-   feature, `fix/<short-name>` for a bug fix. Never work directly on `dev` or `main`.
-2. **Do the work** on that branch and commit there. Run `npm test` and `npm run typecheck`; when
-   the change touches an agent integration, also run the matching `npm run smoke*`.
+Applies to **both repos** (this one and `../chorus-core`, see "Working across the two repos"). GitHub is the source of truth: finish
+every task with the work pushed and merged, never left only on this machine.
+
+1. **Start from the remote.** `git fetch origin`. Local `dev` must equal `origin/dev`: if it is behind, `git merge --ff-only
+   origin/dev`; if it is ahead (unpushed work), push it first. Then `git switch -c feat/<short-name> dev` for a feature,
+   `fix/<short-name>` for a bug fix. Never work directly on `dev` or `main`.
+2. **Do the work** on that branch and commit there. Stage files by path (`git add <files>`), never `git add -A` or
+   `git commit -a`: other Claude sessions may be editing this same checkout, and their half-done files must not end up in your commit
+   (run `git status` before committing and look at what is staged). Run `npm test` and `npm run typecheck`; when the change touches
+   an agent integration, also run the matching `npm run smoke*`. Push the branch (`git push -u origin <branch>`) after the first
+   commit and again after each later one.
 3. **Prove it.** Capture what the change looks like in the real app:
    - UI (desktop page, CLI app): a screenshot of the new or fixed screen, or a short video
      (≤30 s) when the change is a flow or an animation.
    - No visible UI: the terminal output of the command or test that shows it working.
    Save proof in `.chorus/proof/<branch-name>/` (gitignored; don't commit videos).
-4. **Merge into `dev`** when tests pass: `git switch dev && git merge --no-ff <branch>`. If `dev`
-   is checked out in another worktree, merge there with `git -C <that path>`, but only if that
-   checkout is clean; otherwise ask. Don't push unless asked.
+4. **Merge into `dev` and push it** when tests pass: `git switch dev && git merge --no-ff <branch>` then `git push origin dev` (and
+   push the branch too). If `dev` is checked out in another worktree, merge there with `git -C <that path>`, but only if that
+   checkout is clean; otherwise ask. `main` is the release line: merge `dev` into `main` only when the user asks for a release
+   (in chorus-core that publishes a new version).
 5. **Report the merge** in a few lines: what changed and why (one or two sentences), the branch,
    tests run and their result, and the proof attached (send the screenshot or video to the user,
    with its path). Name anything not done or not verified.
    Then close with a short checklist as a workflow: the steps in order (ticked when done and
-   verified), what is still open (not pushed, not rebuilt, not tested, follow-ups), and the risks
-   if any ("none found" when there are none).
+   verified), what is still open (not rebuilt, not tested, not deployed, follow-ups), and the risks
+   if any ("none found" when there are none). "Pushed" and "merged into dev" are part of done, not open items.
+
+### Working across the two repos
+
+- Both checkouts sit side by side (`chorus/` and `chorus-core/`) and a session may edit both. `gh` is logged in as
+  `chauvoluuhuong` (SSH remotes), so pushing either repo works.
+- A change that needs both goes **core first**: workflow above in `../chorus-core` (its own `npm test`, `npm run typecheck`,
+  branch from `dev`, push, merge into `dev`, push), then `cd ../chorus-core && npm run build` so this repo sees it (`package.json`
+  depends on `file:../chorus-core`), then the workflow here. Say in the report which commit of each repo belongs together.
+- Never copy chorus-core source into this repo or print its source into public places (issues, the landing page, docs here).
+  The release build (`npm run release:downloads`) builds the core from `../chorus-core` and ships only its `dist/`.
+- `fixtures/` and `docs/integrations/` here are symlinks into chorus-core: edits to them are commits in chorus-core.
 
 ## Rules
 
