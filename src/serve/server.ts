@@ -23,6 +23,8 @@ import { SKIP_FLAG } from '../core/launch.ts';
 import { defaultOpener } from '../core/opener.ts';
 import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, sourceDir, syncSkills } from '../core/skills.ts';
 import type { AgentId } from '../core/types.ts';
+import { CLIS, type DeepReport } from '@chauvoluuhuong/chorus-core/doctor';
+import { check, ghReady, isDue, issue, markSeen, openUrl, runCommand, runDeep, sendIssue, DOCTOR_DIR } from '../core/doctor.ts';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(import.meta.dirname, '../..');
@@ -35,7 +37,7 @@ const VENDOR: Record<string, string> = {
 };
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const DEFAULT_SIZE = { cols: 120, rows: 36 };
-const LITERAL = new Set(['POST skills/import']);
+const LITERAL = new Set(['POST skills/import', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/send']);
 
 /** The App without a terminal: input and output go nowhere, the Controller drives it as usual. */
 export function headlessIO(): AppIO {
@@ -69,6 +71,18 @@ export interface ServeOpts {
 
 const plain = (l: RichLine): string => (typeof l === 'string' ? l : l.map(s => s[0]).join(''));
 
+interface DoctorJob {
+  id: string;
+  agent: AgentId;
+  action: string;
+  command?: string;
+  done: boolean;
+  ok?: boolean;
+  output: string;
+  results: unknown[];
+  dir?: string;
+}
+
 export class ChorusServer {
   readonly c: Controller;
   readonly app: App;
@@ -85,6 +99,9 @@ export class ChorusServer {
   size = { ...DEFAULT_SIZE };
   private flashes: { text: string; ts: number }[] = [];
   private closed = false;
+  /** install, sign-in and deeper-test runs the doctor popup started; polled by the page */
+  private doctorJobs = new Map<string, DoctorJob>();
+  private deepReports: DeepReport[] = [];
 
   constructor(o: ServeOpts) {
     this.o = o;
@@ -243,6 +260,31 @@ export class ChorusServer {
   }
 
   /** Every operation of the desktop. Returns undefined for an unknown route (404). */
+  /** Start what the user clicked in the doctor popup: install (pinned to the newest tested version when it can be), the
+   *  tested version, a sign-in, or the deeper test. Only commands from the install table run here. */
+  private async doctorRun(agent: AgentId, action: string): Promise<unknown> {
+    const info = CLIS[agent];
+    if (!info) return { error: 'unknown agent' };
+    const a = (await check([agent])).agents[0];
+    const command = action === 'install' ? a.install?.command : action === 'tested' ? a.testedInstall : action === 'login' ? info.login.join(' ') : undefined;
+    if (action !== 'deep' && !command) return { error: `nothing to ${action} for ${info.name}` };
+    if (action === 'login' && agent === 'agy') return { error: 'agy signs in when it starts: run `agy` once in a terminal' };
+    const job: DoctorJob = { id: crypto.randomBytes(4).toString('hex'), agent, action, command, done: false, output: '', results: [] };
+    this.doctorJobs.set(job.id, job);
+    void (async () => {
+      if (action === 'deep') {
+        const run = await runDeep(agent, e => e.type === 'scenario-end' && job.results.push(e.result));
+        this.deepReports = [...this.deepReports.filter(d => d.agent !== agent), run.report];
+        job.ok = run.report.ok;
+        job.dir = run.dir;
+      } else {
+        job.ok = (await runCommand(command!, s => (job.output = (job.output + s).slice(-20_000)))) === 0;
+      }
+      job.done = true;
+    })();
+    return job;
+  }
+
   private async route(method: string, parts: string[], q: URLSearchParams, b: Record<string, any>): Promise<unknown> {
     const [a, id, sub] = parts;
     const c = this.c;
@@ -354,8 +396,30 @@ export class ChorusServer {
         this.app.setFlash(`Imported ${f.name}: now in the library, seen by all three`);
         return this.skills();
       }
-      case 'GET doctor':
-        return { lines: c.doctorLines().map(plain) };
+      case 'GET doctor': {
+        // the fast check for the popup and the Doctor page (docs/doctor.md §6); `lines` is the store/paths part
+        const fast = await check();
+        return { lines: c.doctorLines().map(plain), fast, due: isDue(fast), gh: ghReady(), deep: this.deepReports, jobs: [...this.doctorJobs.values()] };
+      }
+      case 'POST doctor/seen':
+        markSeen(await check());
+        return { ok: true };
+      case 'POST doctor/open': {
+        const a = b.agent as AgentId;
+        if (!CLIS[a]) return { error: 'unknown agent' };
+        openUrl(CLIS[a].page);
+        return { ok: true };
+      }
+      case 'POST doctor/run':
+        return this.doctorRun(b.agent as AgentId, b.action);
+      case 'GET doctor/:id':
+        return this.doctorJobs.get(id) ?? { error: 'no such job' };
+      case 'POST doctor/issue':
+        return issue(await check(), this.deepReports);
+      case 'POST doctor/issue/send': {
+        if (typeof b.title !== 'string' || typeof b.body !== 'string') return { error: 'title and body' };
+        return sendIssue(b.title, b.body, path.join(DOCTOR_DIR(), 'issue.md'));
+      }
       case 'POST dialogs/:id':
         return { ok: this.answer(id, b.value) };
       case 'POST quit':

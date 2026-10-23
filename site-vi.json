@@ -79,5 +79,9 @@
   "au.yt.d": "Thêm nhiều giải pháp tự động hóa",
   "au.more": "Muốn biết thêm giải pháp tự động hóa? Xem kênh YouTube của tôi",
   "foot.privacy": "Quyền riêng tư",
-  "foot.help": "Báo lỗi"
+  "foot.help": "Báo lỗi",
+  "hero.cta": "Tải Chorus",
+  "set.hint.linux": "Sau đó chạy <code>chorus desktop</code>: Chorus mở trong trình duyệt và tự tìm các CLI bạn đang dùng.",
+  "set.needs.linux": "Cần Node.js 22.18 trở lên, python3, make và trình biên dịch C++, cùng ít nhất một trong Claude Code, Codex hoặc Antigravity, đăng nhập bằng gói của chính bạn. Trên Linux chưa có cửa sổ ứng dụng: Chorus chạy trong trình duyệt hoặc terminal của bạn.",
+  "set.needs.other": "Chorus chạy trên macOS và Linux. Trên Windows, hãy chạy lệnh trong WSL."
 }
