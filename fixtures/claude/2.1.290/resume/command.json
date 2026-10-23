@@ -1,0 +1,46 @@
+[
+  {
+    "bin": "~/.cache/chorus/clis/claude/2.1.290/node_modules/.bin/claude",
+    "args": [
+      "-p",
+      "Remember this code word for later: mango. Reply with only: ok",
+      "--session-id",
+      "65ea18ec-44f0-49a1-926d-f2baa1d7423e",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--permission-mode",
+      "acceptEdits",
+      "--model",
+      "haiku",
+      "--strict-mcp-config",
+      "--mcp-config",
+      "{\"mcpServers\":{\"chorus\":{\"command\":\"node\",\"args\":[\"~/chorus/tools/probe/probe-mcp.mjs\",\"--log\",\"~/chorus/fixtures/claude/2.1.290/resume/mcp-log.jsonl\",\"--thread\",\"t_probe_resume\"]}}}",
+      "--allowedTools",
+      "mcp__chorus__probe_get_context,Bash(echo *),Write,Edit"
+    ],
+    "cwd": "/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-probe-claude-resume-w4S9TJ"
+  },
+  {
+    "bin": "~/.cache/chorus/clis/claude/2.1.290/node_modules/.bin/claude",
+    "args": [
+      "-p",
+      "What was the code word I gave you earlier? Reply with one word only.",
+      "--resume",
+      "65ea18ec-44f0-49a1-926d-f2baa1d7423e",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--permission-mode",
+      "acceptEdits",
+      "--model",
+      "haiku",
+      "--strict-mcp-config",
+      "--mcp-config",
+      "{\"mcpServers\":{\"chorus\":{\"command\":\"node\",\"args\":[\"~/chorus/tools/probe/probe-mcp.mjs\",\"--log\",\"~/chorus/fixtures/claude/2.1.290/resume/mcp-log.jsonl\",\"--thread\",\"t_probe_resume\"]}}}",
+      "--allowedTools",
+      "mcp__chorus__probe_get_context,Bash(echo *),Write,Edit"
+    ],
+    "cwd": "/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-probe-claude-resume-w4S9TJ"
+  }
+]

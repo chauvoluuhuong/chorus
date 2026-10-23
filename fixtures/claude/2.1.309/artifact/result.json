@@ -1,0 +1,36 @@
+{
+  "cli": "claude",
+  "version": "2.1.309 (Claude Code)",
+  "scenario": "artifact",
+  "date": "2026-10-23T01:55:57.942Z",
+  "platform": "darwin 27.0.0 arm64",
+  "node": "v26.10.0",
+  "scrubbedEnv": [
+    "CLAUDECODE",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_PID"
+  ],
+  "passed": true,
+  "checks": [
+    {
+      "name": "artifact file written at requested path",
+      "ok": true
+    }
+  ],
+  "runs": [
+    {
+      "exitCode": 143,
+      "signal": null,
+      "timedOut": true,
+      "durationMs": 543475,
+      "sessionId": "902a9c95-243a-45b4-8397-6cd3e85a50e9",
+      "eventTypes": [
+        "system",
+        "assistant",
+        "rate_limit_event",
+        "user"
+      ]
+    }
+  ]
+}

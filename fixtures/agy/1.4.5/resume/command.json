@@ -1,0 +1,26 @@
+[
+  {
+    "bin": "~/.local/bin/agy",
+    "args": [
+      "-p",
+      "Remember this code word for later: mango. Reply with only: ok",
+      "--output-format",
+      "stream-json",
+      "--dangerously-skip-permissions"
+    ],
+    "cwd": "/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-probe-agy-resume-zaNgcX"
+  },
+  {
+    "bin": "~/.local/bin/agy",
+    "args": [
+      "--conversation",
+      "7e221ec8-f5fb-4486-ad2e-51033b3bf19d",
+      "-p",
+      "What was the code word I gave you earlier? Reply with one word only.",
+      "--output-format",
+      "stream-json",
+      "--dangerously-skip-permissions"
+    ],
+    "cwd": "/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-probe-agy-resume-zaNgcX"
+  }
+]

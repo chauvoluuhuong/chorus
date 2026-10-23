@@ -1,0 +1,24 @@
+[
+  {
+    "bin": "~/.cache/chorus/clis/claude/2.1.300/node_modules/.bin/claude",
+    "args": [
+      "-p",
+      "Use your shell / terminal tool to run exactly this command: echo chorus-probe-$((6*7)) Then reply with the command output only.",
+      "--session-id",
+      "e33a5ac3-fbb7-4d2b-8a0c-b7c69960c1df",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--permission-mode",
+      "acceptEdits",
+      "--model",
+      "haiku",
+      "--strict-mcp-config",
+      "--mcp-config",
+      "{\"mcpServers\":{\"chorus\":{\"command\":\"node\",\"args\":[\"~/chorus/tools/probe/probe-mcp.mjs\",\"--log\",\"~/chorus/fixtures/claude/2.1.300/shell/mcp-log.jsonl\",\"--thread\",\"t_probe_shell\"]}}}",
+      "--allowedTools",
+      "mcp__chorus__probe_get_context,Bash(echo *),Write,Edit"
+    ],
+    "cwd": "/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-probe-claude-shell-rnym3i"
+  }
+]

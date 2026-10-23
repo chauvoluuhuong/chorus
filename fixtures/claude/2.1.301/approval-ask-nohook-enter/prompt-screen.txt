@@ -1,0 +1,24 @@
+ ▐▛███▛█   Claude Code v2.1.301
+▝▜██████▀  Haiku 5.5 · Claude Pro
+ ▝▝   ▝▝   /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-claude-p5UGOU
+❯ Use your shell tool to run exactly: mkdir -p                                                                          
+  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-claude-p5UGOU && touch                           
+  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-claude-p5UGOU/approval-probe-file.txt . Then     
+  reply with only: finished                                                                                             
+⏺ Creating probe directory and touching approval probe file
+  ⎿  $ mkdir -p /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-claude-p5UGOU && touch 
+     /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-claude-p5UGOU/approval-probe-file.txt
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Bash command
+ Create probe directory and touch approval probe file
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ │ mkdir -p /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-claude-p5UGOU && touch
+ │ /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-appr-claude-p5UGOU/approval-probe-file.txt
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ │ Hook PreToolUse:Bash requires confirmation for this command:
+ │ chorus probe: ask [settings]
+ settings.json to update hooks
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. No
+ Esc to cancel · Tab to amend

@@ -1,0 +1,37 @@
+{
+  "cli": "codex",
+  "version": "codex-cli 0.155.0",
+  "scenario": "artifact",
+  "date": "2026-10-23T01:41:10.379Z",
+  "platform": "darwin 27.0.0 arm64",
+  "node": "v26.10.0",
+  "scrubbedEnv": [
+    "CLAUDECODE",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_PID"
+  ],
+  "passed": true,
+  "checks": [
+    {
+      "name": "artifact file written at requested path",
+      "ok": true
+    }
+  ],
+  "runs": [
+    {
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "durationMs": 8869,
+      "sessionId": "01a1666b-29e4-7330-bacb-5eab3cb6af24",
+      "eventTypes": [
+        "thread.started",
+        "turn.started",
+        "item.completed",
+        "item.started",
+        "turn.completed"
+      ]
+    }
+  ]
+}

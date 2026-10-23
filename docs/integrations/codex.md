@@ -131,6 +131,11 @@ Probed with two TUIs in one folder, the first never sent a turn (`npm run risk -
    the dir as Codex's, read-only for us. ✅
 7. MCP approval needs `default_tools_approval_mode="approve"` (see §3). ✅
 8. The shell tool runs commands as `/bin/zsh -lc '<cmd>'`. ✅
+9. **An older TUI next to a newer Codex's background server** (0.160.0 pinned while 0.163.0 is installed, 2026-10-23): before the
+   first prompt the TUI asks "Background server has incompatible feature settings … 1. Run without daemon this time 2. Restart
+   with these settings 3. Cancel" (cursor on Cancel). `1` runs this session alone and changes nothing; `2` rewrites the shared
+   settings for every Codex client. The approval probe answers `1`; a Chorus chat on such a version shows the dialog on the agent's
+   screen for the user to answer. `exec` (headless) is not affected. Evidence: `fixtures/codex/0.160.0/approval-ask-nohook-enter/`. ✅
 
 ## 7. Verification checklist
 

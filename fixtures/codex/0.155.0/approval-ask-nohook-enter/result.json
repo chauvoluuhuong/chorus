@@ -1,0 +1,11 @@
+{
+  "cli": "codex",
+  "version": "0.155.0",
+  "decision": "ask",
+  "hookCalled": false,
+  "fileCreated": true,
+  "answeredStartupPrompts": 1,
+  "answeredDaemonPrompt": false,
+  "promptSeenAndKeysSent": true,
+  "hookLog": []
+}

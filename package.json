@@ -1,8 +1,17 @@
 {
-  "name": "chorus-cli",
+  "name": "@chauvoluuhuong/chorus",
   "version": "1.0.0",
   "private": true,
   "description": "Work across AI coding CLIs: handoff, threads, skills",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chauvoluuhuong/chorus.git"
+  },
+  "homepage": "https://chorus-cli.web.app",
+  "bugs": {
+    "url": "https://github.com/chauvoluuhuong/chorus/issues"
+  },
   "type": "module",
   "engines": {
     "node": ">=22.18"

@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"01a1666b-805b-74e0-8643-b8cba94c33c5"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"KUMQUAT-OK"}}
+{"type":"turn.completed","usage":{"input_tokens":18991,"cached_input_tokens":11904,"cache_write_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":0}}
