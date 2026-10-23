@@ -213,12 +213,12 @@ switch (cmd) {
       console.log(`opened ${installed}`);
     } else if (process.platform === 'darwin' && fs.existsSync(appDir)) {
       const bin = path.join(appDir, 'Contents/MacOS', fs.readdirSync(path.join(appDir, 'Contents/MacOS'))[0]);
-      const env = { ...process.env, CHORUS_SERVE_CMD: `${JSON.stringify(process.execPath)} ${JSON.stringify(path.join(repo, 'src/cli/index.ts'))}` };
+      const env = { ...process.env, CHORUS_SERVE_CMD: `${JSON.stringify(process.execPath)} ${JSON.stringify(import.meta.filename)}` };
       spawn(bin, [], { stdio: 'ignore', detached: true, env }).unref();
       console.log(`opened ${appDir}`);
     } else {
-      console.log('no desktop app installed (npm run install:global builds and installs it): opening the page in the browser');
-      spawn(process.execPath, [path.join(repo, 'src/cli/index.ts'), 'serve', '--open', ...argv.slice(1)], { stdio: 'inherit' }).on('exit', code => process.exit(code ?? 0));
+      console.log(process.platform === 'darwin' ? 'no desktop app installed (npm run install:global builds and installs it): opening the page in the browser' : 'opening Chorus in your browser');
+      spawn(process.execPath, [import.meta.filename, 'serve', '--open', ...argv.slice(1)], { stdio: 'inherit' }).on('exit', code => process.exit(code ?? 0));
       await new Promise(() => {});
     }
     break;
