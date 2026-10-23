@@ -77,6 +77,13 @@
   .lead { font-size: 19px; color: var(--muted); margin: 0 0 26px; max-width: 36em; }
   .lead b, .sub b, .author p b, .fix b { color: var(--ink); font-weight: 600; }
   .note { color: var(--muted); font-size: 14.5px; margin: 12px 0 0; }
+  .badges { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 18px 0 0; }
+  .badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line); font-size: 15.5px; font-weight: 600; color: var(--ink); text-decoration: none; }
+  .badge.keep { border-color: var(--ac); color: var(--ac); }
+  .badge.keep b { font-size: 17px; }
+  a.badge:hover { border-color: var(--ac); }
+  .badge svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
+  .badge small { font-weight: 500; color: var(--muted); font-size: 13.5px; }
   .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ac); margin: 0 0 8px; }
   .sub { color: var(--muted); max-width: 40em; margin: 0 0 26px; font-size: 17px; }
   section { margin-top: 104px; scroll-margin-top: 20px; }
@@ -264,7 +271,10 @@
     <h1 class="serif" data-t="hero.title">Mọi AI agent của bạn.<br>Ở cùng một chỗ.</h1>
     <p class="lead" data-t="hero.lead">Claude Code, Codex và Antigravity trong <b>một cửa sổ</b>, với <b>một bộ nhớ chung</b> và <b>một bộ skill</b>. Đổi sang model tốt nhất cho từng bước mà không mất ngữ cảnh.</p>
     <a class="cta" href="#install" data-t="hero.cta">Tải Chorus</a>
-    <p class="note" data-t="hero.note">✓ Giữ nguyên mọi tính năng của CLI</p>
+    <div class="badges">
+      <span class="badge keep"><b>✓</b> <span data-t="hero.note">Giữ nguyên mọi tính năng của CLI</span></span>
+      <a class="badge" href="https://github.com/chauvoluuhuong/chorus" target="_blank" rel="noopener" data-channel="github"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span data-t="hero.os">Mã nguồn mở</span> <small data-t="hero.src">Xem mã nguồn trên GitHub →</small></a>
+    </div>
   </div>
 
   <section id="demo" style="margin-top:28px" aria-label="Demo">
@@ -456,6 +466,7 @@
 
   <footer>
     <span>Chorus</span>
+    <a href="https://github.com/chauvoluuhuong/chorus" target="_blank" rel="noopener" data-channel="github" data-t="foot.src">Mã nguồn</a>
     <a href="/privacy" data-t="foot.privacy">Quyền riêng tư</a>
     <a href="https://www.facebook.com/luuhuongtech/" target="_blank" rel="noopener" data-t="foot.help">Báo lỗi</a>
     <span class="social"><a href="https://www.facebook.com/luuhuongtech/" target="_blank" rel="noopener" data-channel="facebook" aria-label="Facebook"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#1877f2"/><path d="M13.4 20v-6.6h2.2l.4-2.7h-2.6V9c0-.8.3-1.4 1.4-1.4h1.3V5.2c-.3 0-1.1-.1-1.9-.1-2 0-3.3 1.2-3.3 3.4v2.2H8.7v2.7h2.2V20z" fill="#fff"/></svg></a><a href="https://wa.me/84378352096" target="_blank" rel="noopener" data-channel="whatsapp" aria-label="WhatsApp"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="#25d366"/><path d="M12 5.3a6.6 6.6 0 0 0-5.7 10l-.9 3.3 3.4-.9A6.6 6.6 0 1 0 12 5.3z" fill="none" stroke="#fff" stroke-width="1.3" stroke-linejoin="round"/><path d="M9.5 8.8c.2-.3.4-.3.6-.3h.4c.1 0 .3 0 .5.4l.5 1.3c.1.2 0 .4-.1.5l-.4.5c-.1.1-.2.3 0 .5.5.8 1.2 1.5 2.1 1.9.2.1.4.1.5-.1l.5-.6c.1-.2.3-.2.5-.1l1.3.6c.2.1.3.2.3.4 0 .5-.3 1-.7 1.3-.5.3-1.1.3-1.9.1-2.2-.6-4-2.3-4.6-4.4-.2-.8 0-1.5.5-2z" fill="#fff"/></svg></a><a href="https://www.youtube.com/@luuhuongtech" target="_blank" rel="noopener" data-channel="youtube" aria-label="YouTube"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect y="3.5" width="24" height="17" rx="5" fill="#f00"/><path d="M9.8 8.3v7.4l6.3-3.7z" fill="#fff"/></svg></a></span>
