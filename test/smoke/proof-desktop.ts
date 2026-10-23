@@ -16,7 +16,7 @@ import { activityCmd, artifactsCmd, threadsCmd } from '../../src/cli/commands.ts
 import { buildHandoff } from '../../src/core/handoff.ts';
 import { Store } from '../../src/core/store.ts';
 // @ts-expect-error: a plain .mjs helper without types
-import { pdf, png } from '../../tools/probe/sample-files.mjs';
+import { pdf, png } from './sample-files.mjs';
 import { openReport, writeReport } from './report.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');

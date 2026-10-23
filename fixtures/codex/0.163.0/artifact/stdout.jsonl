@@ -1,7 +1,0 @@
-{"type":"thread.started","thread_id":"01a147ea-bd87-7133-a1fa-6eb1462cf8e1"}
-{"type":"turn.started"}
-{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll create the requested Markdown file and its parent folders."}}
-{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -lc \"mkdir -p .chorus/artifacts/probe && cat > .chorus/artifacts/probe/hello.md <<'EOF'\n# Probe artifact\n\nThis is a short probe sentence.\nEOF\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
-{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -lc \"mkdir -p .chorus/artifacts/probe && cat > .chorus/artifacts/probe/hello.md <<'EOF'\n# Probe artifact\n\nThis is a short probe sentence.\nEOF\"","aggregated_output":"","exit_code":0,"status":"completed"}}
-{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"done"}}
-{"type":"turn.completed","usage":{"input_tokens":38217,"cached_input_tokens":30720,"cache_write_input_tokens":0,"output_tokens":97,"reasoning_output_tokens":0}}

@@ -32,6 +32,9 @@ const S = {
   form: null,
   browse: null,
   folded: new Set(JSON.parse(localStorage.getItem('chorus.folded') || '[]')),
+  // projects taken off the sidebar: folder -> ids of the chats it had then. Only the sidebar forgets them (chats and folder stay);
+  // a chat that is new since then brings the project back.
+  hidden: JSON.parse(localStorage.getItem('chorus.hidden') || '{}'),
   asked: new Set(),
   detail: {},
   drawerData: null,
@@ -41,6 +44,13 @@ const S = {
   decided: [],
   scope: 'all',
   doctor: null,
+  docJobs: {},
+  docAutoClose: null,
+  docOpen: new Set(),
+  docNotNow: new Set(),
+  docKept: new Set(),
+  docRan: false,
+  docChecking: false,
   attached: null,
   screen: { live: true, exited: false, waiting: true },
   shownDialogs: new Set(),
@@ -122,7 +132,10 @@ function onState(st) {
     return go({ name: 'new' }, false);
   }
   showDialogs(st.dialogs);
+  // first load: the doctor's popup when this is a first launch or something was updated (docs/doctor.md §6.1)
+  if (first) void loadDoctor(true).then(d => (d.due ? openDoctorPopup() : renderDoctorDot())).catch(() => {});
   renderChrome();
+  renderDoctorDot();
   if (S.view.name === 'chat') renderChatParts();
   else if (S.view.name === 'approvals' && !$('#view').contains(document.activeElement?.closest('.note-input, .other-input'))) renderView();
   else if (S.view.name === 'new' && S.form) renderAgentsOnly();
@@ -238,8 +251,9 @@ function go(view, push = true) {
   if (view.name === 'memory') void loadMemory();
   if (view.name === 'skills') void loadSkills();
   if (view.name === 'approvals') void loadDecided();
-  if (view.name === 'doctor') void api('GET', '/api/doctor').then(d => ((S.doctor = d.lines), renderView()));
+  if (view.name === 'doctor') void loadDoctor().then(() => renderView());
   renderChrome();
+  renderDoctorDot();
   renderView();
 }
 function back() {
@@ -252,6 +266,7 @@ function back() {
 function chatsByProject() {
   const groups = new Map();
   for (const c of S.state?.chats ?? []) {
+    if (S.hidden[c.cwd]?.includes(c.id) && c.id !== S.view.id) continue;
     if (!groups.has(c.cwd)) groups.set(c.cwd, []);
     groups.get(c.cwd).push(c);
   }
@@ -269,7 +284,7 @@ function renderChrome() {
     const bang = chats.filter(c => c.state === 'approval').length;
     // the project in front: the chat you look at is in it, or the New chat form starts there. Its ＋ always shows; others on hover.
     const here = (v.name === 'chat' && chats.some(c => c.id === v.id)) || (v.name === 'new' && !v.from && (S.form?.folder ?? v.folder) === cwd);
-    tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button></div>`;
+    tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-rm" data-act="rm-project" data-arg="${esc(cwd)}" title="Remove from the sidebar (the folder and its chats are kept)" aria-label="Remove ${esc(base(cwd))} from the sidebar">×</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button></div>`;
     if (folded) continue;
     for (const c of chats) {
       const child = c.parentId && chats.some(p => p.id === c.parentId);
@@ -358,6 +373,7 @@ async function openNew(from, folder) {
   S.form = { agent, model: 'default', effort: 'default', folder: folder ?? S.info.folder, skip: src ? src.skip : false, prompt: '', error: '', busy: false };
   if (S.view.name === 'new') {
     renderChrome();
+  renderDoctorDot();
     renderView();
   }
 }
@@ -558,8 +574,260 @@ function skillsHtml() {
     <div class="card list">${k.found.length ? k.found.map(f => `<div class="item skill"><span class="badge mini ${esc(f.agent)}">${esc(AGENT[f.agent]?.letter ?? '·')}</span><div class="grow"><div style="font-weight:600">${esc(f.name)}</div><div class="muted mono">${esc(tilde(f.from))}</div></div><button class="btn" data-act="sk-import" data-arg="${esc(f.dir)}">Import</button></div>`).join('') : '<div class="empty">Nothing new to import.</div>'}</div></div>`;
 }
 
+/* ---------- the doctor (docs/doctor.md §6; looks and words: docs/mockups/desktop-doctor.html) ---------- */
+
+const DR_STEPS = 7;
+const DR_METHOD = { native: 'native installer', npm: 'npm', brew: 'Homebrew', other: 'installed by hand' };
+/** What a failing detailed check means for the user (the failure banner). */
+const DR_EFFECT = {
+  envelope: "Chorus's note does not reach the agent, so it does not know where to save files for you or how to ask for approval",
+  hello: "Chorus cannot read the agent's replies",
+  shell: "Chorus cannot read the agent's commands and their output",
+  transcript: `Chorus cannot find the transcript of an interactive chat, so its activity stays empty`,
+  mcp: "the agent cannot reach Chorus's tools, so handoff and memory do not work",
+  resume: 'a chat cannot be continued after Chorus restarts',
+  approval: "Chorus cannot see the agent's permission prompts, so they do not reach Approvals",
+};
+
+async function loadDoctor(fresh = false) {
+  S.doctor = await api('GET', `/api/doctor${fresh ? '?fresh=1' : ''}`);
+  return S.doctor;
+}
+
+async function runShortTest() {
+  S.docChecking = true;
+  drawDoctor();
+  try {
+    S.doctor = await api('POST', '/api/doctor/check');
+    S.docRan = true;
+  } finally {
+    S.docChecking = false;
+    drawDoctor();
+  }
+}
+
+const drJob = (agent, action) => (S.docJobs[agent]?.action === action || (!action && S.docJobs[agent]) ? S.docJobs[agent] : null);
+const drRunning = agent => !!S.docJobs[agent] && !S.docJobs[agent].done;
+const drDeepRunning = () => Object.values(S.docJobs).find(j => j.action === 'deep' && !j.done);
+const drFailed = a => {
+  const j = drJob(a.agent, 'deep');
+  return j && j.done && !j.ok ? j : null;
+};
+const drName = agent => S.doctor?.fast.agents.find(a => a.agent === agent)?.name ?? AGENT[agent]?.name ?? agent;
+
+function drWhen(iso) {
+  const d = new Date(iso);
+  const t = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  return d.toDateString() === new Date().toDateString() ? `today ${t}` : `${d.getDate()} ${d.toLocaleString('en', { month: 'short' })}, ${t}`;
+}
+
+function drChip(a) {
+  const job = S.docJobs[a.agent];
+  let c;
+  if (S.docChecking) c = ['plain', 'Checking…', true];
+  else if (job && !job.done) c = ['plain', job.action === 'deep' ? `Detailed test · ${job.results.length} of ${DR_STEPS}` : job.action === 'login' ? 'Signing in…' : 'Installing…', true];
+  else if (drFailed(a)) c = ['bad', 'Problem'];
+  else if (a.state === 'missing') c = ['warn', 'Not installed'];
+  else if (a.state === 'needs-login') c = ['warn', 'Signed out'];
+  else if (a.state === 'untested') c = ['warn', 'New version'];
+  else c = ['ok', 'Ready'];
+  const [kind, text, busy] = c;
+  return `<span class="badge ${kind}">${busy ? '<span class="spin"></span>' : kind === 'ok' ? '✔ ' : ''}${esc(text)}</span>`;
+}
+
+function drVersionLine(a) {
+  const latest = S.doctor.latest?.[a.agent];
+  const suggested = a.newestTested;
+  if (!suggested) return 'Chorus has no tested version of it yet';
+  if (a.state === 'missing' && !a.install?.version) return `Installs its newest release · Chorus is tested up to <span class="mono">${esc(suggested)}</span> (${esc(a.agent)} cannot be pinned to a version)`;
+  if (a.state === 'missing') return `Suggested <span class="mono">${esc(suggested)}</span> · the newest version Chorus is tested with`;
+  const newer = latest && latest !== suggested ? ` · latest release <span class="mono">${esc(latest)}</span> <span class="faint">(not tested yet)</span>` : '';
+  return a.version === suggested ? `Suggested <span class="mono">${esc(suggested)}</span> · up to date${newer}` : `Suggested <span class="mono">${esc(suggested)}</span> (tested)${newer}`;
+}
+
+function drChecks(list) {
+  return list
+    .map(([m, t, time = '', why]) => `<div class="dr-check"><span class="dr-m ${m}">${m === 'ok' ? '✔' : m === 'bad' ? '✖' : m === 'warn' ? '⚠' : m === 'run' ? '<span class="spin"></span>' : '○'}</span><span${m === 'wait' ? ' class="faint"' : ''}>${esc(t)}</span><span class="dr-time">${esc(time)}</span>${why ? `<span class="dr-why">${esc(why)}</span>` : ''}</div>`)
+    .join('');
+}
+
+function drShort(a) {
+  if (a.state === 'missing') return [['bad', 'Not found on PATH or in ~/.local/bin, /opt/homebrew/bin']];
+  const out = [['ok', `Installed at ${tilde(a.bin)} (${DR_METHOD[a.method] ?? a.method})`]];
+  if (a.coverage === 'tested') out.push(['ok', `Version ${a.version} is tested with Chorus`]);
+  else if (a.coverage === 'in-range') out.push(['ok', `Version ${a.version} is between versions Chorus is tested with`]);
+  else out.push(['warn', `Version ${a.version ?? '?'} is ${a.newestTested && cmpV(a.version ?? '0', a.newestTested) < 0 ? 'older than the tested' : 'newer than the tested'} ${a.newestTested ?? 'versions'}`]);
+  if (a.login === 'yes') out.push(['ok', 'Signed in']);
+  else if (a.login === 'no') out.push(['bad', 'Not signed in', '', a.agent === 'agy' ? 'agy signs in on its first start: run agy once in a terminal' : `${a.loginCommand.join(' ')} signs in`]);
+  else out.push(['warn', 'Sign-in could not be checked']);
+  return out;
+}
+
+function cmpV(x, y) {
+  const a = x.split(/[.-]/).map(Number);
+  const b = y.split(/[.-]/).map(Number);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) - (b[i] || 0);
+  return 0;
+}
+
+const DR_TITLES = ['The standing note reaches the model', 'A turn runs and is read: session id, reply, usage', 'A shell command and its output are read', "The CLI's own transcript is found and read", 'The per-session MCP server is reached', 'A chat resumes with its context', 'The permission prompt is recognised and approved'];
+const drResult = r => [r.status === 'pass' ? 'ok' : r.status === 'fail' ? 'bad' : r.status === 'blocked' ? 'warn' : 'wait', r.title, `${(r.ms / 1000).toFixed(1)} s`, r.status === 'pass' ? '' : r.reason];
+
+function drDetailed(a) {
+  const job = drJob(a.agent, 'deep');
+  if (job && !job.done) {
+    const list = DR_TITLES.map((t, i) => (job.results[i] ? drResult(job.results[i]) : i === job.results.length ? ['run', t] : ['wait', t]));
+    return ['running', list];
+  }
+  const r = job?.done ? { ...job.report, at: new Date().toISOString() } : S.doctor.lastDeep?.[a.agent];
+  if (!r?.results) return null;
+  const pass = r.results.filter(x => x.status === 'pass').length;
+  const head = `last run ${drWhen(r.at)} · ${pass} of ${r.results.length}${r.version && r.version !== a.version ? ` on ${r.version}` : ''}`;
+  return [head, r.results.map(drResult)];
+}
+
+function drRow(a) {
+  const open = S.docOpen.has(a.agent);
+  const job = S.docJobs[a.agent];
+  const deep = drDetailed(a);
+  let acts = '';
+  if (!drRunning(a.agent) && a.state === 'missing') acts = `<button class="btn primary" data-act="doc-run" data-arg="${a.agent}:install">Install</button><button class="btn" data-act="doc-open" data-arg="${a.agent}">Open page ↗</button>`;
+  else if (!drRunning(a.agent) && a.state === 'needs-login' && a.agent !== 'agy') acts = `<button class="btn primary" data-act="doc-run" data-arg="${a.agent}:login">Sign in</button>`;
+  const out = job && job.action !== 'deep' && job.output ? `<pre class="record dr-out">${esc(job.output.slice(-1500))}</pre>` : '';
+  const shortWhen = S.docChecking ? 'running' : drWhenShort();
+  const detail = `<div class="dr-detail">
+      <div class="dr-group"><h4>Short test <span>${esc(shortWhen)}</span></h4>${S.docChecking ? '' : drChecks(drShort(a))}</div>
+      <div class="dr-group"><h4>Detailed test <span>${deep ? esc(deep[0]) : 'not run for this version'}</span></h4>${deep ? drChecks(deep[1]) : '<div class="faint" style="font-size:13px">Chorus asks for it when a version is new to it.</div>'}</div>
+      ${a.state !== 'missing' && a.testedInstall && a.version !== a.newestTested ? `<div class="dr-group"><h4>Suggested version</h4><div class="dr-cmd"><span>${esc(a.testedInstall)}</span><button class="btn" data-act="doc-run" data-arg="${a.agent}:tested">Install</button></div></div>` : ''}
+      ${a.state === 'missing' ? `<div class="dr-group"><h4>Install</h4><div class="dr-cmd"><span>${esc(a.install.command)}</span><button class="btn" data-act="doc-copy" data-arg="${esc(a.install.command)}">Copy</button></div></div>` : ''}
+    </div>`;
+  return `<div class="dr-row${open ? ' open' : ''}">
+    <button class="dr-head" data-act="doc-toggle" data-arg="${a.agent}" aria-expanded="${open}">
+      <span class="badge mini ${a.agent}">${AGENT[a.agent].letter}</span>
+      <span class="dr-main"><span class="dr-name"><b>${esc(a.name)}</b>${a.version ? `<span class="mono muted">${esc(a.version)}</span>` : ''}${drChip(a)}</span><span class="dr-sub">${drVersionLine(a)}</span></span>
+      <span class="dr-caret">▾</span>
+    </button>${acts ? `<div class="dr-acts">${acts}</div>` : ''}${out}${detail}</div>`;
+}
+
+function drWhenShort() {
+  const d = S.doctor;
+  if (!d) return '';
+  const fresh = Date.now() - new Date(d.at).getTime() < 60_000;
+  return fresh ? `just now · ${(d.fast.ms / 1000).toFixed(1)} s` : drWhen(d.at);
+}
+
+/** The one banner that matters most now: a failed detailed test, a version that needs one, agents that need the user, all fine. */
+function drBanner(popup = false) {
+  const d = S.doctor;
+  if (!d || S.docChecking || drDeepRunning()) return '';
+  const agents = d.fast.agents;
+  const failed = agents.map(a => [a, drFailed(a)]).find(([a, j]) => j && !S.docKept.has(a.agent));
+  if (failed) {
+    const [a, j] = failed;
+    const fails = j.report.results.filter(r => r.status === 'fail');
+    const effect = fails.map(f => DR_EFFECT[f.id] ?? f.title).join('; ');
+    const fix = a.testedInstall && a.version !== a.newestTested ? ` ${a.name} ${a.newestTested} is tested and works. Installing it is optional.` : '';
+    const acts = [a.testedInstall && a.version !== a.newestTested ? `<button class="btn primary" data-act="doc-run" data-arg="${a.agent}:tested">Install ${esc(a.name)} ${esc(a.newestTested)}</button>` : '', `<button class="btn" data-act="doc-keep" data-arg="${a.agent}">Keep ${esc(a.version)}</button>`, `<button class="btn" data-act="doc-report">Report issue</button>`].join('');
+    return drBannerHtml('bad', `${a.name} ${a.version}: ${fails.length} of ${j.report.results.length} checks failed.`, `Chats still start; this part does not work: ${effect}.${fix}`, acts);
+  }
+  const fresh = agents.find(a => a.state === 'untested' && !S.docNotNow.has(a.agent) && !drJob(a.agent, 'deep'));
+  if (fresh) {
+    const text = popup
+      ? `Test that it works? About 2 minutes, a few short model turns on your ${fresh.name} plan.`
+      : `Chorus is tested with ${fresh.newestTested && fresh.version && cmpV(fresh.version, fresh.newestTested) < 0 ? `newer versions of ${fresh.name} (up to ${fresh.newestTested})` : `${fresh.name} up to ${fresh.newestTested ?? 'no version yet'}`}. A detailed test checks that ${fresh.version} works with Chorus: about 2 minutes and a few short model turns on your ${fresh.name} plan.`;
+    return drBannerHtml('warn', `${fresh.name} ${fresh.version} is new to Chorus.`, text, `<button class="btn primary" data-act="doc-run" data-arg="${fresh.agent}:deep">Run detailed test</button><button class="btn" data-act="doc-notnow" data-arg="${fresh.agent}">Not now</button>`);
+  }
+  const need = agents.filter(a => a.state === 'missing' || a.state === 'needs-login').length;
+  if (need && !popup) return drBannerHtml('warn', `${need} agent${need > 1 ? 's' : ''} need${need > 1 ? '' : 's'} you.`, 'Chorus works with any one of them; each one more is another agent to hand work to.');
+  if (S.docRan && agents.every(a => a.state === 'ready') && !popup) return drBannerHtml('ok', `All ${agents.length} agents work with Chorus.`, 'Each one is on a version Chorus is tested with, and signed in.');
+  return '';
+}
+const drBannerHtml = (kind, t, text, acts = '') => `<div class="dr-banner ${kind}"><div class="grow"><div class="dr-bt">${esc(t)}</div><div class="muted" style="font-size:13px">${esc(text)}</div></div>${acts ? `<div class="dr-bacts">${acts}</div>` : ''}</div>`;
+
+function drRunLine() {
+  const d = S.doctor;
+  const deep = drDeepRunning();
+  const busy = S.docChecking || !!deep;
+  let when = '';
+  if (S.docChecking) when = `Checking ${d?.fast.agents.length ?? 3} agents · no model calls`;
+  else if (deep) when = `Detailed test of ${drName(deep.agent)} · ${deep.results.length} of ${DR_STEPS} · you can keep working`;
+  else if (d) {
+    const done = Object.values(S.docJobs).filter(j => j.action === 'deep' && j.done).at(-1);
+    const need = d.fast.agents.filter(a => a.state !== 'ready').length;
+    if (done && !S.docRan) when = `Detailed test of ${drName(done.agent)} finished · ${done.ok ? 'all passed' : `${done.report.results.filter(r => r.status === 'fail').length} problem`}`;
+    else if (Date.now() - new Date(d.at).getTime() < 60_000) when = `Tested just now · ${(d.fast.ms / 1000).toFixed(1)} s`;
+    else when = `Last test: ${drWhen(d.at)} · ${need ? `${need} need${need > 1 ? '' : 's'} you` : 'all ready'}`;
+  }
+  return `<div class="dr-run"><button class="btn primary dr-big" data-act="doc-test"${busy ? ' disabled' : ''}>${busy ? '<span class="spin"></span> Testing…' : '▶ Run test'}</button><span class="dr-when">${esc(when)}</span></div>`;
+}
+
 function doctorHtml() {
-  return `<div class="page"><h1>Doctor</h1><p class="lead">The agents Chorus starts, their versions and logins, and where Chorus keeps its data.</p><div class="card"><pre class="record">${esc((S.doctor ?? ['checking…']).map(tilde).join('\n'))}</pre></div></div>`;
+  const d = S.doctor;
+  if (!d) return `<div class="page"><h1>Doctor</h1><p class="lead">Checking your agents…</p></div>`;
+  return `<div class="page"><h1>Doctor</h1><p class="lead">Your AI coding CLIs: are they installed, on a version Chorus is tested with, and signed in.</p>
+    ${drRunLine()}${drBanner()}<div class="card" id="dr-rows">${d.fast.agents.map(drRow).join('')}</div></div>`;
+}
+
+function openDoctorPopup() {
+  if ($('#doctor-pop')) return;
+  const el = document.createElement('div');
+  el.className = 'scrim';
+  el.id = 'doctor-pop';
+  el.innerHTML = `<div class="dialog dr-dialog" role="dialog"><h2>Checking your agents</h2><div class="body" id="dr-pop-body"></div><div class="foot"><span class="grow faint" id="dr-pop-note" style="font-size:12.5px"></span><button class="btn primary" data-act="doc-continue">Continue</button></div></div>`;
+  $('#dialogs').append(el);
+  drawDoctor();
+}
+
+function drawDoctor() {
+  const d = S.doctor;
+  if (d && $('#dr-pop-body')) {
+    $('#dr-pop-body').innerHTML = `${drBanner(true)}<div class="card">${d.fast.agents.map(drRow).join('')}</div>`;
+    const ready = d.fast.agents.filter(a => a.state === 'ready');
+    const busy = Object.values(S.docJobs).some(j => !j.done);
+    $('#dr-pop-note').textContent = busy ? 'You can continue: the test keeps running, and its result shows on the Doctor page.' : ready.length === d.fast.agents.length ? 'Every agent is on a version Chorus is tested with.' : ready.length ? `${ready.map(a => a.name).join(' and ')} ${ready.length > 1 ? 'are' : 'is'} ready.` : '';
+    clearTimeout(S.docAutoClose);
+    if (ready.length === d.fast.agents.length && !busy) S.docAutoClose = setTimeout(closeDoctorPopup, 4000);
+  }
+  if (S.view.name === 'doctor') renderView();
+  renderDoctorDot();
+}
+
+/** The Doctor button's dot: red on a problem, amber while testing or when an agent needs the user, green when all are ready. */
+function renderDoctorDot() {
+  const btn = document.querySelector('[data-act="doctor"]');
+  const d = S.doctor;
+  if (!btn || !d) return;
+  const bad = d.fast.agents.some(a => drFailed(a));
+  const warn = Object.values(S.docJobs).some(j => !j.done) || d.fast.agents.some(a => a.state !== 'ready');
+  btn.innerHTML = `<span class="dr-dot ${bad ? 'bad' : warn ? 'warn' : 'ok'}"></span>Doctor`;
+}
+
+function closeDoctorPopup() {
+  clearTimeout(S.docAutoClose);
+  $('#doctor-pop')?.remove();
+  void api('POST', '/api/doctor/seen').catch(() => {});
+}
+
+async function pollDoctorJob(agent, id) {
+  const j = await api('GET', `/api/doctor/${id}`).catch(() => null);
+  if (!j) return;
+  S.docJobs[agent] = j;
+  if (j.done) {
+    // a passed detailed test makes the version Ready here; an install or sign-in is checked again
+    if (j.ok || j.action !== 'deep') await loadDoctor(true);
+    if (j.ok && j.action !== 'deep') delete S.docJobs[agent];
+    toast(`${drName(agent)}: ${j.action === 'deep' ? (j.ok ? 'works with Chorus' : 'a check did not pass') : j.ok ? 'done' : 'the command failed'}`);
+  }
+  drawDoctor();
+  if (!j.done) setTimeout(() => pollDoctorJob(agent, id), 1000);
+}
+
+async function reportIssue() {
+  const { title, body } = await api('POST', '/api/doctor/issue');
+  const el = document.createElement('div');
+  el.className = 'scrim';
+  el.innerHTML = `<div class="dialog dr-dialog" role="dialog"><h2>Report an issue</h2><div class="body"><p class="muted">This goes to github.com/chauvoluuhuong/chorus/issues. Emails, account ids, keys and your home path are taken out; read it and edit what you like before sending.</p><input type="text" class="dlg-input" id="doc-issue-title" value="${esc(title)}"><textarea class="dr-issue" id="doc-issue-body" spellcheck="false">${esc(body)}</textarea></div><div class="foot"><span class="grow"></span><button class="btn" data-act="doc-issue-cancel">Cancel</button><button class="btn primary" data-act="doc-send">${S.doctor?.gh ? 'Create issue' : 'Open on GitHub'}</button></div></div>`;
+  $('#dialogs').append(el);
 }
 
 /* ---------- a chat ---------- */
@@ -880,16 +1148,61 @@ document.addEventListener('click', async e => {
       return go({ name: act });
     case 'chat':
       return go({ name: 'chat', id: arg });
+    case 'doc-continue':
+      return closeDoctorPopup();
+    case 'doc-test':
+      return void runShortTest();
+    case 'doc-toggle':
+      S.docOpen.has(arg) ? S.docOpen.delete(arg) : S.docOpen.add(arg);
+      return drawDoctor();
+    case 'doc-open':
+      return void api('POST', '/api/doctor/open', { agent: arg });
+    case 'doc-copy':
+      return void navigator.clipboard.writeText(arg).then(() => toast('Copied'));
+    case 'doc-notnow':
+      S.docNotNow.add(arg);
+      return drawDoctor();
+    case 'doc-keep':
+      S.docKept.add(arg);
+      return drawDoctor();
+    case 'doc-run': {
+      const [agent, action] = arg.split(':');
+      if (action === 'install') void api('POST', '/api/doctor/open', { agent }).catch(() => {});
+      const j = await api('POST', '/api/doctor/run', { agent, action }).catch(err => (toast(err.message), null));
+      if (!j || j.error) return j?.error && toast(j.error);
+      S.docJobs[agent] = j;
+      S.docOpen.add(agent);
+      S.docRan = false;
+      drawDoctor();
+      return void pollDoctorJob(agent, j.id);
+    }
+    case 'doc-report':
+      return void reportIssue();
+    case 'doc-issue-cancel':
+      return el.closest('.scrim')?.remove();
+    case 'doc-send': {
+      const r = await api('POST', '/api/doctor/issue/send', { title: $('#doc-issue-title').value, body: $('#doc-issue-body').value }).catch(err => ({ error: err.message }));
+      el.closest('.scrim')?.remove();
+      return toast(r.error ? `Not sent: ${r.error}` : r.via === 'gh' ? `Issue created: ${r.url}` : 'Opened GitHub; the report is on your clipboard: paste it as the description');
+    }
     case 'back':
       return back();
     case 'sidebar':
       $('#app').classList.toggle('side-off');
       renderChrome();
+  renderDoctorDot();
       return setTimeout(refit, 50);
     case 'fold':
       S.folded.has(arg) ? S.folded.delete(arg) : S.folded.add(arg);
       localStorage.setItem('chorus.folded', JSON.stringify([...S.folded]));
       return renderChrome();
+    case 'rm-project': {
+      S.hidden[arg] = (S.state?.chats ?? []).filter(c => c.cwd === arg).map(c => c.id);
+      localStorage.setItem('chorus.hidden', JSON.stringify(S.hidden));
+      const open = S.view.name === 'chat' && S.state?.chats.find(c => c.id === S.view.id)?.cwd === arg;
+      if (open) return go({ name: 'new' });
+      return renderChrome();
+    }
     case 'fold-open':
       S.folded.delete(arg);
       return renderChrome();

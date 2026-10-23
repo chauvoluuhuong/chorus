@@ -290,4 +290,4 @@ user: Ctrl+Space h → pick codex        (or: chorus handoff --to codex)
 | D2 | Per-session MCP config for agy | **Decided:** workspace `.agents/mcp_config.json`, verified with agy 1.4.0 |
 | D3 | Desktop technology | **Decided: Tauri 2 as a thin shell** (4.9 MB; Electron ~200 MB). It starts `chorus serve` on the user's Node and shows its page; no logic in the shell. See [phase5.md §3](phase5.md#3-decision-d3-tauri-as-a-thin-shell) |
 | D4 | Provider terms (agy subscription orchestration, Claude and Codex account use) | Check before selling; see integration docs |
-| D5 | Command name and menu key | `chorus` (package `chorus-cli`); menu key **Ctrl+\** and also Ctrl+Space (macOS keeps Ctrl+Space for input-source switching, so the default had to change), configurable with CHORUS_MENU_KEY |
+| D5 | Command name and menu key | `chorus` (npm package `@chauvoluuhuong/chorus`, renamed 2026-10-23: `chorus-cli` on npm belongs to someone else); menu key **Ctrl+\** and also Ctrl+Space (macOS keeps Ctrl+Space for input-source switching, so the default had to change), configurable with CHORUS_MENU_KEY |

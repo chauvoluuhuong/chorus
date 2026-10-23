@@ -27,7 +27,9 @@ fn log_file() -> PathBuf {
 /// (an app opened from the Finder gets a bare PATH). CHORUS_SERVE_CMD replaces `chorus` (development: `node …/src/cli/index.ts`).
 fn serve_command() -> Command {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
-    let cli = std::env::var("CHORUS_SERVE_CMD").unwrap_or_else(|_| "chorus".into());
+    // the installer's own copy (~/.chorus/current, with its Node inside) first, so the app needs nothing on the PATH; else `chorus`
+    let bundled = home().join(".chorus/current/bin/chorus");
+    let cli = std::env::var("CHORUS_SERVE_CMD").unwrap_or_else(|_| if bundled.exists() { format!("'{}'", bundled.display()) } else { "chorus".into() });
     let mut c = Command::new(shell);
     // --exit-with-stdin: serve stops when this app's end of the pipe closes, even when the app is killed
     c.arg("-l").arg("-c").arg(format!("exec {cli} serve --port 0 --exit-with-stdin"));
@@ -108,7 +110,7 @@ fn start_serve(app: &AppHandle) {
             let tail = lines.iter().rev().take(6).rev().cloned().collect::<Vec<_>>().join("\n");
             show_error(
                 &app,
-                &format!("`chorus serve` stopped before it started.\n\n{tail}\n\nInstall the CLI with: npm install -g chorus-cli (Node 22 or newer). Log: {}", log.display()),
+                &format!("`chorus serve` stopped before it started.\n\n{tail}\n\nInstall or repair it with: curl -fsSL https://chorus-cli.web.app/install.sh | bash. Log: {}", log.display()),
             );
         }
     });
