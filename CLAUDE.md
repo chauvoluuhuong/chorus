@@ -75,6 +75,9 @@ The v1 Tauri/React prototype was removed; it is in git history. New work branche
 5. **Report the merge** in a few lines: what changed and why (one or two sentences), the branch,
    tests run and their result, and the proof attached (send the screenshot or video to the user,
    with its path). Name anything not done or not verified.
+   Then close with a short checklist as a workflow: the steps in order (ticked when done and
+   verified), what is still open (not pushed, not rebuilt, not tested, follow-ups), and the risks
+   if any ("none found" when there are none).
 
 ## Rules
 
