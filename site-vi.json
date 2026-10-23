@@ -6,7 +6,7 @@
   "nav.cta": "Tải Chorus",
   "hero.title": "Mọi AI agent của bạn.<br>Ở cùng một chỗ.",
   "hero.lead": "Claude Code, Codex và Antigravity trong <b>một cửa sổ</b>, với <b>một bộ nhớ chung</b> và <b>một bộ skill</b>. Đổi sang model tốt nhất cho từng bước mà không mất ngữ cảnh.",
-  "hero.note": "✓ Giữ nguyên mọi tính năng của CLI",
+  "hero.note": "Giữ nguyên mọi tính năng của CLI",
   "act1.t": "Một cửa sổ",
   "act1.d": "Ba agent và mọi yêu cầu duyệt",
   "act2.t": "Một bộ nhớ chung",
@@ -83,5 +83,8 @@
   "hero.cta": "Tải Chorus",
   "set.hint.linux": "Sau đó chạy <code>chorus desktop</code>: Chorus mở trong trình duyệt và tự tìm các CLI bạn đang dùng.",
   "set.needs.linux": "Cần Linux (x86_64 hoặc arm64, glibc) và ít nhất một trong Claude Code, Codex hoặc Antigravity, đăng nhập bằng gói của chính bạn. Không cần cài thêm gì: Chorus mang theo môi trường chạy riêng. Trên Linux chưa có cửa sổ ứng dụng: Chorus chạy trong trình duyệt hoặc terminal của bạn.",
-  "set.needs.other": "Chorus chạy trên macOS và Linux. Trên Windows, hãy chạy lệnh trong WSL."
+  "set.needs.other": "Chorus chạy trên macOS và Linux. Trên Windows, hãy chạy lệnh trong WSL.",
+  "hero.os": "Mã nguồn mở",
+  "hero.src": "Xem mã nguồn trên GitHub →",
+  "foot.src": "Mã nguồn"
 }
