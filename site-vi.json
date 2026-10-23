@@ -68,7 +68,7 @@
   "set.eyebrow": "Cài đặt",
   "set.title": "Một lệnh",
   "set.hint": "Chorus mở ra và tự tìm các CLI bạn đang dùng. Bấm <b>New chat</b>, chọn agent, rồi làm việc như bình thường.",
-  "set.needs": "Cần máy Mac chip Apple (M1 trở lên), Node.js 22.18 trở lên, và ít nhất một trong Claude Code, Codex hoặc Antigravity, đăng nhập bằng gói của chính bạn.",
+  "set.needs": "Cần máy Mac chip Apple (M1 trở lên) và ít nhất một trong Claude Code, Codex hoặc Antigravity, đăng nhập bằng gói của chính bạn. Không cần cài thêm gì: Chorus mang theo môi trường chạy riêng.",
   "au.by": "Tác giả: <a href=\"https://github.com/chauvoluuhuong\">chauvoluuhuong</a>",
   "au.title": "Thấy hữu ích? Mời tôi một ly cà phê nhé.",
   "au.coffee": "Nếu Chorus giúp bạn tiết kiệm thời gian, hãy <b>mời tôi một ly cà phê</b>: quét mã bằng ứng dụng ngân hàng của bạn.",
@@ -82,6 +82,6 @@
   "foot.help": "Báo lỗi",
   "hero.cta": "Tải Chorus",
   "set.hint.linux": "Sau đó chạy <code>chorus desktop</code>: Chorus mở trong trình duyệt và tự tìm các CLI bạn đang dùng.",
-  "set.needs.linux": "Cần Node.js 22.18 trở lên, python3, make và trình biên dịch C++, cùng ít nhất một trong Claude Code, Codex hoặc Antigravity, đăng nhập bằng gói của chính bạn. Trên Linux chưa có cửa sổ ứng dụng: Chorus chạy trong trình duyệt hoặc terminal của bạn.",
+  "set.needs.linux": "Cần Linux (x86_64 hoặc arm64, glibc) và ít nhất một trong Claude Code, Codex hoặc Antigravity, đăng nhập bằng gói của chính bạn. Không cần cài thêm gì: Chorus mang theo môi trường chạy riêng. Trên Linux chưa có cửa sổ ứng dụng: Chorus chạy trong trình duyệt hoặc terminal của bạn.",
   "set.needs.other": "Chorus chạy trên macOS và Linux. Trên Windows, hãy chạy lệnh trong WSL."
 }
