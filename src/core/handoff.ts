@@ -33,6 +33,7 @@ export function buildHandoff(store: Store, thread: ThreadRow, opts: { maxTurns?:
   const calls = store.getToolCalls(thread.id);
   const usage = store.getUsage(thread.id);
   const artifacts = store.listArtifacts(thread.id);
+  const given = store.attachments(thread.id); // files the user dropped on the chat
 
   const first = turns.find(t => t.role === 'user');
   const lastAssistant = [...turns].reverse().find(t => t.role === 'assistant');
@@ -64,6 +65,7 @@ export function buildHandoff(store: Store, thread: ThreadRow, opts: { maxTurns?:
   if (commands.length) out.push(`\n## Commands run (${commands.length})\n${commands.slice(-12).join('\n')}`);
   if (tests.length) out.push(`\n## Tests / checks\n${tests.slice(-6).join('\n')}`);
   if (failures.length) out.push(`\n## Failed tool calls\n${failures.slice(-5).map(f => `- ${f}`).join('\n')}`);
+  if (given.length) out.push(`\n## Files the user gave\n${given.map(a => `- ${a.path}${a.copied && a.originalPath ? ` (a copy of ${a.originalPath})` : ''}`).join('\n')}`);
   if (artifacts.length) out.push(`\n## Artifacts\n${artifacts.map(a => `- ${a.abs}`).join('\n')}`);
   out.push(`\n## Recent conversation (last ${recent.length} of ${turns.length} turns)\n` + recent.map(t => `**${t.role}:** ${clip(t.text, 800)}`).join('\n\n'));
   if (lastAssistant) out.push(`\n## Last assistant message\n${clip(lastAssistant.text, 1500)}`);

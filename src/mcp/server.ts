@@ -97,7 +97,7 @@ export function createServer(project: string, threadId?: string, home?: string):
     'request_approval',
     {
       description:
-        "The way to get the user's approval, confirmation or choice in this chat: use it instead of asking in your reply whenever you need the user's OK on a plan, a risky or irreversible change, or a choice between options. Chorus shows it as a card with your options wherever the user is. Returns at once: end your turn after calling it. The user's answer arrives as their next message, starting with \"Chorus approval <id>:\" and the option they chose (and maybe a note).",
+        "The way to get the user's approval, confirmation or choice in this chat: use it instead of asking in your reply whenever you need the user's OK on a plan, a risky or irreversible change, or a choice between options. Chorus shows it as a card with your options wherever the user is. Returns at once: end your turn after calling it. The user's answer arrives as their next message, starting with \"Chorus approval <id>:\" and the option they chose, or \"Other: <their own words>\" when none of your options fit (and maybe a note).",
       inputSchema: {
         question: z.string().min(1).describe('What you ask, in one sentence (e.g. "Apply the migration plan to the production database?")'),
         details: z.string().optional().describe('A short summary the user needs to decide: the plan, the command, what changes (a few lines; the full plan can be an artifact)'),
@@ -107,7 +107,7 @@ export function createServer(project: string, threadId?: string, home?: string):
     async ({ question, details, options }) => {
       if (!threadId) return reply('request_approval', 'This chat is not a Chorus thread: ask the user in your reply.', true);
       const r = store.createRequest({ threadId, question, details, options });
-      return reply('request_approval', `Shown to the user as approval card ${r.id} with the options: ${r.options.join(' / ')}. End your turn now without asking again in your reply. Their answer arrives as their next message: "Chorus approval ${r.id}: <option>".`);
+      return reply('request_approval', `Shown to the user as approval card ${r.id} with the options: ${r.options.join(' / ')}. End your turn now without asking again in your reply. Their answer arrives as their next message: "Chorus approval ${r.id}: <option>", or "Other: <their own words>" when none fit.`);
     },
   );
 

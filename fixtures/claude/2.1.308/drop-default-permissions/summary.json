@@ -1,0 +1,31 @@
+{
+  "cli": "claude",
+  "version": "2.1.308",
+  "argv": [
+    "--model",
+    "haiku",
+    "--permission-mode",
+    "default"
+  ],
+  "startBottom": false,
+  "startup": {
+    "clearedScreen": true,
+    "homedCursor": true,
+    "altScreen": true,
+    "lastNonEmptyRow": 39
+  },
+  "answeredStartupPrompts": 1,
+  "image": {
+    "bracketedPaste": true,
+    "shownAs": "image attachment",
+    "answered": true,
+    "permissionPrompts": 0
+  },
+  "pdf": {
+    "bracketedPaste": true,
+    "shownAs": "path text",
+    "answered": true,
+    "permissionPrompts": 1
+  },
+  "ms": 17335
+}

@@ -238,8 +238,10 @@ export function compose(v: View): { grid: Grid; cursor: { x: number; y: number }
       if (m.length > 1) put(grid, hy, right - m.length - 2, m, T.ok, right);
     }
   } else if (v.screen) {
-    for (let y = 0; y < L.contentRows; y++) {
-      const row = v.screen.row(y, L.contentCols);
+    // an anchored screen (agy) moves down by its empty rows at the bottom; the rows above it stay blank
+    const off = v.screen.shift();
+    for (let y = off; y < L.contentRows; y++) {
+      const row = v.screen.row(y - off, L.contentCols);
       for (let x = 0; x < row.length; x++) grid[Y + y][L.contentX + x] = row[x];
     }
   }
@@ -249,7 +251,8 @@ export function compose(v: View): { grid: Grid; cursor: { x: number; y: number }
   let cursor: { x: number; y: number } | null = null;
   if (v.screen && !v.overlay && !v.pane) {
     const c = v.screen.cursor();
-    if (!c.hidden && c.y < L.contentRows && c.x < L.contentCols) cursor = { x: L.contentX + c.x, y: Y + c.y };
+    const y = c.y + v.screen.shift();
+    if (!c.hidden && y < L.contentRows && c.x < L.contentCols) cursor = { x: L.contentX + c.x, y: Y + y };
   }
 
   if (v.overlay) drawOverlay(grid, v.overlay, L.contentX, L.contentCols, Y, L.contentRows, hits);
@@ -399,11 +402,14 @@ function drawSideRow(grid: Grid, r: SideRow, mode: SideMode, w: number, y: numbe
       if (r.waiting) put(grid, y, 3, '!', join('1', T.err, b), w);
       return;
     }
-    // "▾ cake-shop !2": the count (or the waiting chats, in red) right after the name; an open project is bold
+    // "▾ cake-shop !2      +": the count (or the waiting chats, in red) right after the name; an open project is bold.
+    // The + at the end starts a new chat in this project (its hit comes after the row's, so it wins).
     const badge = r.waiting ? `!${r.waiting}` : String(r.count);
-    const name = clip(r.name, w - 6 - badge.length);
+    const name = clip(r.name, w - 9 - badge.length);
     put(grid, y, 4, name, r.open ? join('1', T.fg, b) : join(T.dim, b), w);
     put(grid, y, 4 + [...name].length + 1, badge, r.waiting ? join('1', T.err, b) : join(T.dim, b), w);
+    put(grid, y, w - 3, '+', join('1', T.chorus, b), w);
+    hits.push({ id: `newin:${r.cwd}`, x0: w - 4, x1: w - 1, y0: y, y1: y + 1 });
     return;
   }
   const b = bg(r.active);

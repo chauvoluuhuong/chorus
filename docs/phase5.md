@@ -127,3 +127,73 @@ the legacy keys (TD-5).
 - Windows and Linux shells are not built or tested (TD-6). The Tauri config has the icons for them.
 - No signing/notarisation yet (needed before selling, with D4).
 - Desktop notifications for a background approval (the window shows a toast; the OS notification centre is not used).
+
+## 8. A chat inside a project, agy's input at the bottom, dropped files, approval cards
+
+Asked for on 2026-10-22, built the same day. Mockup: `docs/mockups/chorus-cli.html` scenes 01 and 04. Proof: steps 1b and 5b of
+`npm run proof:desktop` (`docs/proof/phase5/`): **53/54** with Claude Code 2.1.308 and Codex 0.163.0, every new check passing. The
+one failure is step 5's "Artifacts lists … the files the tools wrote": in that run Claude wrote `calc.js` with a shell command,
+which the adapters do not see as a file change (TD-3); it passed in the run before.
+
+### 8.1 New chat inside a project
+- Desktop: a ＋ at the end of each project header (`src/desktop/app.js`, `renderChrome`), always shown for the project in front
+  (the chat you look at, or the folder the New chat form starts in), on hover for the others. It opens New chat with that folder
+  (`#/new/in/<folder>`), so the chat lands under that project. New chat at the top keeps using the project in front.
+- Terminal app: a `+` at the end of each project row (`src/app/compositor.ts`), hidden in the icons layout; its click
+  (`newin:<folder>`) opens `newChatScreen({ folder })`.
+- Not built, on purpose: `⌘⇧N` (⌘N already opens New chat in the project in front: the server picks the folder of the chat in
+  front) and `n` on a selected project row (the terminal app has no keyboard selection in the sidebar; menu key + `n` is New
+  chat in the project in front).
+- Tests: `test/app/compositor.test.ts` (the + and its hit region), `test/app/controller.test.ts` (the + starts the chat in that
+  folder, listed under it).
+
+### 8.2 agy's input at the bottom
+- Probed on agy 1.4.5 (`docs/integrations/antigravity-agy.md` §4): agy draws top-down from the cursor and keeps no rows under
+  its footer; starting with the cursor on the last row helps only until its live area shrinks once.
+- So an agy screen is shown anchored to the bottom: `VirtualScreen.anchorBottom` (set for agy in `thread-host.ts`) and
+  `shift()` = the empty rows under its last line or the cursor. The terminal app draws the screen that many rows lower and moves
+  the cursor and the mouse rows it forwards by the same amount (`compositor.ts`, `app.ts`). The desktop does the same in the
+  page: it moves xterm's drawn screen down by those rows (`anchorBottom()` in `app.js`, on every render); xterm takes mouse
+  positions from that element, so clicks stay right. Simpler than re-rendering frames on the server, as first planned.
+- agy only; Claude and Codex already fill the screen. The banner scrolls away as the chat grows, as in a plain terminal.
+- Tests: `test/app/compositor.test.ts` (anchored frame from `fixtures/agy/1.4.5/startup-top/startup.txt`). With the real agy
+  1.4.5 in the real app (a PTY, no message sent): footer on row 42 of 44, the last row of the chat area, banner moved down to row 28
+  (`fixtures/agy/1.4.5/app-anchored/screen.txt`). `npm run proof:agy` now has the same check, but that proof is out of date
+  since UI pass 2 (P4.10): it still expects the old home screen and form, and fails at step 1 before reaching agy.
+
+### 8.3 Dropped files
+Probed on all three agents: `docs/integrations/file-drop.md`. A dropped file is inserted as its path, escaped and pasted the way
+a terminal does it; Claude and Codex then attach images themselves, agy reads the file with its tools. Nothing is sent: the path
+waits in the agent's input.
+
+- **Native window:** Tauri gets the drop with full paths (`WindowEvent::DragDrop` in `desktop/src-tauri/src/main.rs`: enter,
+  over, drop, leave) and calls `window.chorusDrop({ kind, paths, x, y })` in the page. The page shows two drop zones over the
+  agent screen: **Add the path** and **Copy into the chat**; the one under the pointer fills. Two zones instead of ⌥ as first
+  planned: Tauri's drop event carries paths and a position, no modifier keys, and a window you drag onto from the Finder does not
+  have the keyboard focus, so ⌥ cannot be read reliably.
+- **Browser (`chorus serve --open`):** the page gets the bytes, not the path: one zone, **Copy into the chat**; each file goes to
+  `POST /api/chats/:id/attachments?name=…` (raw bytes, at most 50 MB; token, `X-Chorus` and Origin like every write).
+- **Copy into the chat:** `<chat folder>/.chorus/threads/<id>/attachments/<name>` (`src/core/drop.ts`; a second file of the same
+  name gets ` (2)`); that path is inserted. Inside the folder, so no read prompt, and it survives a move of the original. A folder
+  is never copied.
+- **Server:** the socket message `{ t: 'drop', id, paths, copy }` → `Controller.dropFiles`: copies when asked, escapes each path
+  like Terminal.app, writes it to the chat's PTY inside bracketed-paste markers when the agent turned that mode on. The window
+  gets `dropped` (a toast) or a message when a file is missing.
+- **Recorded with the chat:** store table `attachments`. `get_handoff_context` (and so the Memory record) lists "Files the user
+  gave"; Activity has a `drop` row per file.
+- **New chat form:** a drop puts the path into the first message (one zone). No copy there: the chat and its folder do not exist
+  yet.
+- **Terminal app:** nothing built. The terminal pastes the path and Chorus passes pastes through (`src/app/input.ts`).
+- **Approvals:** Claude's `Read file` prompt (default mode) and agy's `File access` box for a file outside the folder are not in
+  the approval detector's fixtures yet (`fixtures/claude/2.1.308/drop-default-permissions/pdf-permission-1.txt`,
+  `fixtures/agy/1.4.5/drop/pdf-permission-1.txt`). "Copy into the chat" avoids them.
+- Tests: `test/app/drop.test.ts` (escaping, names, copies), `test/serve/serve.test.ts` (socket drop, copy, upload route and its
+  auth, record, handoff text, Activity), `npm run proof:desktop` step 5b with the real Claude (an image → `[Image #1]`, answers
+  "red") and Codex (a PDF copied in, answers the word in it).
+
+### 8.4 Approval cards (asked for while building §8)
+- More room: who asks on its own line above the question, then the details, the options, the note; gaps between all of them.
+- **Other…** next to the agent's options: a field for an answer of your own, sent as `Other: <your words>` (plus the note). The
+  agents are told this answer may come (`request_approval`'s description and reply in `src/mcp/server.ts`). Desktop only; the
+  terminal app's inbox keeps `y` / `x`.
+- An answered card leaves the chat right away (the banner did not redraw while one of its fields had the focus).

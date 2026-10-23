@@ -1,0 +1,29 @@
+{
+  "cli": "codex",
+  "version": "0.163.0",
+  "argv": [
+    "-c",
+    "model_reasoning_effort=\"low\""
+  ],
+  "startBottom": false,
+  "startup": {
+    "clearedScreen": false,
+    "homedCursor": true,
+    "altScreen": true,
+    "lastNonEmptyRow": 39
+  },
+  "answeredStartupPrompts": 1,
+  "image": {
+    "bracketedPaste": true,
+    "shownAs": "image attachment",
+    "answered": true,
+    "permissionPrompts": 0
+  },
+  "pdf": {
+    "bracketedPaste": true,
+    "shownAs": "path text",
+    "answered": true,
+    "permissionPrompts": 0
+  },
+  "ms": 22340
+}

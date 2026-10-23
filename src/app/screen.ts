@@ -83,6 +83,25 @@ export class VirtualScreen {
     return out;
   }
 
+  /**
+   * Show this screen anchored to the bottom. For agy: it draws top-down from the cursor and keeps no rows under its footer, so
+   * its input box would sit under the last message with empty rows below (docs/integrations/antigravity-agy.md §4).
+   */
+  anchorBottom = false;
+
+  /** Rows the screen moves down when it is shown: the empty rows under its last line (or the cursor), when anchored. */
+  shift(): number {
+    if (!this.anchorBottom) return 0;
+    const b = this.term.buffer.active;
+    let last = b.cursorY;
+    for (let y = this.rows - 1; y > last; y--)
+      if ((b.getLine(y)?.translateToString(true) ?? '').trim()) {
+        last = y;
+        break;
+      }
+    return Math.max(0, this.rows - 1 - last);
+  }
+
   cursor(): { x: number; y: number; hidden: boolean } {
     const b = this.term.buffer.active;
     const hidden = this.term._core?.coreService?.isCursorHidden ?? false;
