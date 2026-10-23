@@ -24,7 +24,7 @@ import { defaultOpener } from '../core/opener.ts';
 import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, sourceDir, syncSkills } from '../core/skills.ts';
 import type { AgentId } from '../core/types.ts';
 import { CLIS, type DeepReport } from '@chauvoluuhuong/chorus-core/doctor';
-import { check, ghReady, isDue, issue, markSeen, openUrl, runCommand, runDeep, sendIssue, DOCTOR_DIR } from '../core/doctor.ts';
+import { check, ghReady, isDue, issue, lastCheck, lastDeep, latestReleases, markSeen, openUrl, runCommand, runDeep, sendIssue, DOCTOR_DIR } from '../core/doctor.ts';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(import.meta.dirname, '../..');
@@ -37,7 +37,7 @@ const VENDOR: Record<string, string> = {
 };
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const DEFAULT_SIZE = { cols: 120, rows: 36 };
-const LITERAL = new Set(['POST skills/import', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/send']);
+const LITERAL = new Set(['POST skills/import', 'POST doctor/check', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/send']);
 
 /** The App without a terminal: input and output go nowhere, the Controller drives it as usual. */
 export function headlessIO(): AppIO {
@@ -396,10 +396,14 @@ export class ChorusServer {
         this.app.setFlash(`Imported ${f.name}: now in the library, seen by all three`);
         return this.skills();
       }
-      case 'GET doctor': {
-        // the fast check for the popup and the Doctor page (docs/doctor.md §6); `lines` is the store/paths part
-        const fast = await check();
-        return { lines: c.doctorLines().map(plain), fast, due: isDue(fast), gh: ghReady(), deep: this.deepReports, jobs: [...this.doctorJobs.values()] };
+      case 'GET doctor':
+      case 'POST doctor/check': {
+        // the short test for the popup and the Doctor page (docs/doctor.md §6, docs/mockups/desktop-doctor.html). GET shows
+        // the last one when there is one (?fresh=1 runs it); POST doctor/check is the "Run test" button.
+        const saved = method === 'GET' && !q.get('fresh') ? lastCheck() : undefined;
+        const fast = saved?.report ?? (await check());
+        const at = saved?.at ?? new Date().toISOString();
+        return { lines: c.doctorLines().map(plain), fast, at, due: isDue(fast), gh: ghReady(), latest: await latestReleases(), lastDeep: lastDeep(), jobs: [...this.doctorJobs.values()] };
       }
       case 'POST doctor/seen':
         markSeen(await check());
