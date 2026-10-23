@@ -324,17 +324,52 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
   .drawer { position: absolute; right: 0; top: 0; bottom: 0; width: min(380px, 100%); z-index: 5; }
 }
 
-/* the doctor (docs/doctor.md §6) */
-.doc-dialog { width: min(640px, calc(100vw - 32px)); }
-.doc-row { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-bottom: 1px solid var(--line); }
-.doc-row:last-child { border-bottom: 0; }
-.doc-row .grow { flex: 1; min-width: 0; }
-.doc-note { font-size: 13px; margin-top: 4px; overflow-wrap: anywhere; }
-.doc-acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-.doc-results { font-size: 13px; margin-top: 6px; display: grid; gap: 2px; }
-.doc-results .ok { color: var(--ok); }
-.doc-results .bad { color: var(--bad); }
-.doc-out { max-height: 140px; overflow: auto; margin-top: 6px; font-size: 11.5px; }
-.doc-issue { width: 100%; min-height: 260px; margin-top: 8px; font-family: var(--f-mono); font-size: 12px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--bg); color: var(--ink, inherit); }
-.spin { width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; display: inline-block; animation: doc-spin 0.8s linear infinite; }
-@keyframes doc-spin { to { transform: rotate(360deg); } }
+/* the doctor (docs/doctor.md §6; looks: docs/mockups/desktop-doctor.html) */
+.btn.dr-big { padding: 8px 18px; font-size: 14px; }
+.dr-run { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.dr-when { color: var(--muted); font-size: 13px; }
+.dr-banner { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; }
+.dr-banner.ok { background: var(--ok-soft); }
+.dr-banner.warn { background: var(--warn-soft); }
+.dr-banner.bad { background: var(--bad-soft); }
+.dr-banner .grow { flex: 1; }
+.dr-bt { font-weight: 600; }
+.dr-bacts { display: flex; gap: 8px; flex-wrap: wrap; }
+.dr-row { border-bottom: 1px solid var(--line); }
+.dr-row:last-child { border-bottom: 0; }
+.dr-head { display: flex; gap: 12px; align-items: center; padding: 12px 14px; width: 100%; border: 0; background: transparent; text-align: left; color: inherit; }
+.dr-head:hover { background: var(--hover); }
+.dr-row:first-child .dr-head { border-radius: 14px 14px 0 0; }
+.dr-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.dr-name { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.dr-name b { font-weight: 600; }
+.dr-sub { font-size: 12.5px; color: var(--muted); }
+.dr-sub .mono { font-size: 12px; }
+.dr-caret { color: var(--muted); transition: transform 0.15s; font-size: 15px; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 7px; border: 1px solid var(--line); flex: none; }
+.dr-head:hover .dr-caret { color: var(--ink); }
+.dr-row.open .dr-caret { transform: rotate(180deg); }
+.dr-acts { display: flex; gap: 6px; padding: 0 14px 12px 46px; flex-wrap: wrap; margin-top: -4px; }
+.dr-out { max-height: 140px; overflow: auto; margin: 0 14px 12px 46px; font-size: 11.5px; }
+.dr-detail { display: none; padding: 2px 14px 14px 46px; }
+.dr-row.open .dr-detail { display: grid; gap: 12px; }
+.dr-group h4 { margin: 0 0 4px; font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); font-weight: 600; display: flex; gap: 8px; align-items: baseline; }
+.dr-group h4 span { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.dr-check { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; font-size: 13px; padding: 2px 0; align-items: baseline; }
+.dr-m.ok { color: var(--ok); }
+.dr-m.bad { color: var(--bad); }
+.dr-m.warn { color: var(--warn); }
+.dr-m.wait { color: var(--faint); }
+.dr-why { grid-column: 2 / 4; font-size: 12.5px; color: var(--bad); margin-top: -1px; }
+.dr-time { color: var(--faint); font-size: 12px; }
+.dr-cmd { font-family: var(--f-mono); font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; display: flex; justify-content: space-between; gap: 10px; align-items: center; overflow-wrap: anywhere; }
+.dr-cmd .btn { font-family: var(--f-sans); }
+.dr-dialog { width: min(600px, calc(100vw - 32px)); }
+.dr-dialog .body { max-height: calc(100vh - 220px); overflow: auto; }
+.dr-issue { width: 100%; min-height: 260px; margin-top: 8px; font-family: var(--f-mono); font-size: 12px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--bg); color: var(--ink); }
+.dr-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: 1px; }
+.dr-dot.ok { background: var(--ok); }
+.dr-dot.warn { background: var(--warn); }
+.dr-dot.bad { background: var(--bad); }
+.spin { width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; display: inline-block; animation: dr-spin 0.8s linear infinite; }
+@keyframes dr-spin { to { transform: rotate(360deg); } }
+@media (max-width: 720px) { .dr-acts, .dr-detail, .dr-out { padding-left: 14px; margin-left: 14px; } }

@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import { buildIssue, deepTest, fastCheck, type DeepEvent, type DeepReport, type FastReport, type Host, type TuiHost } from '@chauvoluuhuong/chorus-core/doctor';
+import { AGENTS, buildIssue, deepTest, fastCheck, latestRelease, type DeepEvent, type DeepReport, type FastReport, type Host, type TuiHost } from '@chauvoluuhuong/chorus-core/doctor';
 import { nodePtyFactory } from '../app/pty.ts';
 import { VirtualScreen } from '../app/screen.ts';
 import type { AgentId } from './types.ts';
@@ -51,7 +51,36 @@ function addKnown(entry: string) {
   writeJson(path.join(DOCTOR_DIR(), 'known.json'), [...new Set([...known(), entry])]);
 }
 
-export const check = (agents?: AgentId[]) => fastCheck({ agents, known: known() });
+/** The short test; the last one is kept with its time, so the Doctor page shows it without running it again. */
+export async function check(agents?: AgentId[]): Promise<FastReport> {
+  const r = await fastCheck({ agents, known: known() });
+  if (!agents) writeJson(path.join(DOCTOR_DIR(), 'fast.json'), { at: new Date().toISOString(), report: r });
+  return r;
+}
+export function lastCheck(): { at: string; report: FastReport } | undefined {
+  return readJson(path.join(DOCTOR_DIR(), 'fast.json'), undefined);
+}
+
+/** Each agent's newest detailed test, from the report folders (survives a restart). */
+export function lastDeep(): Partial<Record<AgentId, DeepReport & { at: string }>> {
+  const out: Partial<Record<AgentId, DeepReport & { at: string }>> = {};
+  const dir = DOCTOR_DIR();
+  const runs = fs.existsSync(dir) ? fs.readdirSync(dir).filter(d => /^\d{4}-\d\d-\d\dT/.test(d)).sort() : [];
+  for (const run of runs) {
+    const r = readJson(path.join(dir, run, 'report.json'), undefined)?.report as DeepReport | undefined;
+    if (r?.agent && r.results?.length === 7) out[r.agent] = { ...r, at: fs.statSync(path.join(dir, run, 'report.json')).mtime.toISOString() };
+  }
+  return out;
+}
+
+/** The newest release of each CLI on npm, looked up at most once an hour (none for agy). */
+let latest: { at: number; v: Partial<Record<AgentId, string>> } | undefined;
+export async function latestReleases(): Promise<Partial<Record<AgentId, string>>> {
+  if (latest && Date.now() - latest.at < 3_600_000) return latest.v;
+  const v = Object.fromEntries(await Promise.all(AGENTS.map(async a => [a, await latestRelease(a, 2500)] as const)));
+  latest = { at: Date.now(), v };
+  return v;
+}
 
 /** What the last shown check saw; the desktop popup opens again only when one of these changes (docs/doctor.md §6.1). */
 interface Seen {
