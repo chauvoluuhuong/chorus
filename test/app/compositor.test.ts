@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { test } from 'node:test';
 import { compose, Differ, gridText, hitAt, layout, rowToAnsi, T, type SideRow, type View } from '../../src/app/compositor.ts';
 import { VirtualScreen } from '../../src/app/screen.ts';
@@ -54,10 +55,10 @@ test('top bar, project tree, child screen and status bar land in the right cells
   assert.match(t[1], /^\s+│hello from the agent/); // a blank row above New chat
   assert.match(t[2], /^  \+ New chat\s+n  │red 漢字 end/); // a full-width button with its key
   assert.match(t[4], /^  PROJECTS\s+\+ add\s+│/); // a "+ add" link: choose or create a project folder
-  assert.match(t[5], /^  ▾ cake-shop 2\s+│/); // the count right after the name
+  assert.match(t[5], /^  ▾ cake-shop 2\s+\+  │/); // the count right after the name; + at the end: a new chat in this project
   assert.match(t[6], /^▎   ● fix bug\s+claude │/);
   assert.match(t[7], /^      ○ ↳ review\s+codex │/); // chats sit under the project's name, a continued one two cells further
-  assert.match(t[8], /^  ▸ api !1\s+│/); // a project with a chat waiting for approval shows how many
+  assert.match(t[8], /^  ▸ api !1\s+\+  │/); // a project with a chat waiting for approval shows how many
   assert.match(t[17], /^─+│/); // rule above the footer
   assert.match(t[19], /^  ✦ Skills\s+│/); // the two shared things, one button row each, a blank row above each
   assert.doesNotMatch(t[20].slice(0, 28), /\S/);
@@ -97,6 +98,13 @@ test('every clickable thing is a hit region and a click finds it', () => {
   assert.equal(hitAt(hits, 60, chat.y0), undefined, 'the agent area is not Chorus\'s');
   const menu = at('menu');
   assert.equal(hitAt(hits, menu.x0 + 1, 0), 'menu');
+  // a project row: the + at its end starts a chat there, the rest of the row folds it
+  const plus = at('newin:/w/cake-shop');
+  const row = at('project:/w/cake-shop');
+  assert.equal(plus.y0, row.y0);
+  assert.equal(gridText(compose(view()).grid)[plus.y0][plus.x0 + 1], '+');
+  assert.equal(hitAt(hits, plus.x0 + 1, plus.y0), 'newin:/w/cake-shop');
+  assert.equal(hitAt(hits, 4, row.y0), 'project:/w/cake-shop');
 });
 
 test('colors survive the trip: a red cell in the child is red in the frame', async () => {
@@ -275,4 +283,38 @@ test('sidebar overflow: "▲ N more chats" / "▼ N more chats" hints that scrol
   assert.ok(down.hits.some(h => h.id === 'side:up'));
   assert.ok(down.side.some(l => /chat 29/.test(l)), 'the last chat is reachable by scrolling');
   assert.equal(down.sideOffset, top.sideMax);
+});
+
+test('an anchored screen (agy) is drawn with its last line on the last row; cursor moves with it; others stay put', async () => {
+  // agy 1.4.5's first screen as the probe saw it: banner at the top, input box on row 14 of 40, the rest empty
+  const lines = fs.readFileSync(new URL('../../fixtures/agy/1.4.5/startup-top/startup.txt', import.meta.url), 'utf8').split('\n');
+  const input = lines.findIndex(l => /^>\s*$/.test(l));
+  const footer = lines.findIndex(l => l.startsWith('? for shortcuts'));
+  assert.ok(input > 0 && footer > input && footer < 20, 'the fixture has the input box high up');
+  const load = async (anchored: boolean) => {
+    const screen = new VirtualScreen(120, 40);
+    screen.anchorBottom = anchored;
+    await flush(screen, lines.slice(0, 40).join('\r\n') + `\x1b[${input + 1};3H`);
+    return screen;
+  };
+  const v = (screen: VirtualScreen) => compose(view({ cols: 149, rows: 42, screen }));
+
+  const agy = await load(true);
+  assert.equal(agy.shift(), 39 - footer);
+  const { grid, cursor } = v(agy);
+  const t = gridText(grid);
+  const Y = layout(149, 42).contentY;
+  assert.match(t[Y + 39].slice(29), /^\? for shortcuts/, 'the footer is on the last row of the agent area');
+  assert.match(t[Y + 39 - (footer - input)].slice(29), /^>\s*$/, 'the input box right above it');
+  assert.doesNotMatch(t[Y].slice(29), /\S/, 'the empty rows are now at the top');
+  assert.deepEqual(cursor, { x: 29 + 2, y: Y + 39 - (footer - input) });
+
+  const plain = await load(false);
+  assert.equal(plain.shift(), 0);
+  assert.match(gridText(v(plain).grid)[Y + footer].slice(29), /^\? for shortcuts/, 'not anchored: drawn where the agent drew it');
+
+  // a screen already filled to the bottom (Claude, Codex) does not move even when anchored
+  const full = await load(true);
+  await flush(full, '\x1b[40;1Hlast row');
+  assert.equal(full.shift(), 0);
 });

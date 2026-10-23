@@ -625,7 +625,8 @@ export class App extends EventEmitter {
       return;
     }
     if (!this.pane && !this.dialog && !this.alertState && !this.router.menuOpen && host && host.state === 'running' && host.screen.modes().mouse && x >= L.contentX && y >= L.contentY && y < L.contentY + L.contentRows) {
-      host.write(`\x1b[<${b};${x - L.contentX + 1};${y - L.contentY + 1}${press ? 'M' : 'm'}`);
+      const row = y - L.contentY - host.screen.shift(); // an anchored screen (agy) is drawn lower than the agent thinks
+      if (row >= 0) host.write(`\x1b[<${b};${x - L.contentX + 1};${row + 1}${press ? 'M' : 'm'}`);
     }
   }
 
@@ -661,6 +662,7 @@ export class App extends EventEmitter {
     if (id === 'skills') return void this.emit('action', 'skills'), true;
     if (id === 'memory') return void this.emit('action', 'memory'), true;
     if (id.startsWith('crumb:')) return void this.closePane(), true; // a path part before the last one is the chat: back to it
+    if (id.startsWith('newin:')) return void this.emit('action', `new-in:${id.slice(6)}`), true; // the + of a project row
     if (id.startsWith('project:')) {
       const cwd = id.slice(8);
       if (this.folded.has(cwd)) this.folded.delete(cwd);

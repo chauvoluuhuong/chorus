@@ -1,7 +1,0 @@
-{"type":"thread.started","thread_id":"01a14df2-f386-7e61-85e5-373902295c29"}
-{"type":"turn.started"}
-{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Fix typo in README"}}
-{"type":"turn.completed","usage":{"input_tokens":19084,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":8,"reasoning_output_tokens":0}}
-
---stderr--
-Reading additional input from stdin...

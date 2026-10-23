@@ -276,6 +276,32 @@ test('New chat screen: the folder defaults to the project you are in, not to a p
   }
 });
 
+test('sidebar: the + of a project row opens New chat in that project, and the chat is listed under it', async () => {
+  const r = rig();
+  try {
+    const other = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-landing-')));
+    r.c.newThread({ agent: 'claude', title: 'front' });
+    r.c.newThread({ agent: 'codex', title: 'elsewhere', cwd: other });
+    r.c.newThread({ agent: 'claude', title: 'front again' }); // the project in front is the first one again
+    await r.until(() => r.app.hits.some(h => h.id === `newin:${other}`), 'a + on the other project');
+    r.app.click(`newin:${other}`);
+    await r.until(() => has(r.screen(), /Agent\s+claude\s+codex/), 'New chat');
+    assert.match(r.screen()[0], /chorus-landing-\w+ \/ New chat/, 'the path names that project');
+    assert.match(r.screen().join('\n'), /Project\s+\S*chorus-landing-/);
+    r.type('\r');
+    await r.until(() => r.app.entries.length === 4, 'started');
+    const made = r.app.entries[3];
+    assert.equal(made.cwd, other, 'the chat works in that project');
+    assert.equal(r.store.getThread(made.id)?.project, other);
+    const rows = r.app.sideRows();
+    const proj = rows.findIndex(x => x.kind === 'project' && x.cwd === other);
+    const under = rows.slice(proj + 1).findIndex(x => x.kind !== 'chat');
+    assert.ok(rows.slice(proj + 1, proj + 1 + under).some(x => x.kind === 'chat' && x.index === 3), 'listed under that project');
+  } finally {
+    r.close();
+  }
+});
+
 test('New chat screen: click the agent and model, tick skip permissions, type a folder; the folder is validated and becomes the chat project', async () => {
   const r = rig();
   try {

@@ -1,7 +1,0 @@
-{"type":"thread.started","thread_id":"01a1666b-29e4-7330-bacb-5eab3cb6af24"}
-{"type":"turn.started"}
-{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll create the requested Markdown file and verify its contents."}}
-{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -lc \"mkdir -p .chorus/artifacts/probe && cat > .chorus/artifacts/probe/hello.md <<'EOF'\n# Probe artifact\n\nThis is a short probe sentence.\nEOF\ncat .chorus/artifacts/probe/hello.md\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
-{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -lc \"mkdir -p .chorus/artifacts/probe && cat > .chorus/artifacts/probe/hello.md <<'EOF'\n# Probe artifact\n\nThis is a short probe sentence.\nEOF\ncat .chorus/artifacts/probe/hello.md\"","aggregated_output":"# Probe artifact\n\nThis is a short probe sentence.\n","exit_code":0,"status":"completed"}}
-{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"done"}}
-{"type":"turn.completed","usage":{"input_tokens":38093,"cached_input_tokens":26368,"cache_write_input_tokens":0,"output_tokens":110,"reasoning_output_tokens":0}}

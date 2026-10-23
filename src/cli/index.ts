@@ -137,9 +137,12 @@ switch (cmd) {
   case 'trace':
     console.log(traceCmd(openStore(), positional[0] ?? ''));
     break;
-  case 'doctor':
-    console.log(doctorCmd(project));
+  case 'doctor': {
+    // the fast check, then what each CLI needs (docs/doctor.md); the old project/store lines are on the desktop's Doctor page
+    const { doctor } = await import('./doctor.ts');
+    process.exitCode = await doctor(argv.slice(1));
     break;
+  }
   case 'mcp':
     await runMcp(project, flag('thread'), flag('home'));
     break;

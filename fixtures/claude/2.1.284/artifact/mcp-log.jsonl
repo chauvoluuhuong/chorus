@@ -1,6 +1,0 @@
-{"ts":"2026-10-17T05:17:26.198Z","dir":"start","argv":["--log","~/chorus/fixtures/claude/2.1.284/artifact/mcp-log.jsonl","--thread","t_probe_artifact"],"env_CHORUS_THREAD_ID":null,"pid":9593}
-{"ts":"2026-10-17T05:17:26.200Z","dir":"in","msg":{"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{"roots":{"listChanged":true},"elicitation":{"form":{},"url":{}}},"clientInfo":{"name":"claude-code","title":"Claude Code","version":"2.1.284","description":"Anthropic's agentic coding tool","websiteUrl":"https://claude.com/claude-code"}},"jsonrpc":"2.0","id":0}}
-{"ts":"2026-10-17T05:17:26.200Z","dir":"out","msg":{"jsonrpc":"2.0","id":0,"result":{"protocolVersion":"2025-11-25","capabilities":{"tools":{}},"serverInfo":{"name":"chorus-probe","version":"0.0.1"},"instructions":"Chorus capability probe server."}}}
-{"ts":"2026-10-17T05:17:26.204Z","dir":"in","msg":{"jsonrpc":"2.0","method":"notifications/initialized"}}
-{"ts":"2026-10-17T05:17:26.204Z","dir":"in","msg":{"method":"tools/list","jsonrpc":"2.0","id":1}}
-{"ts":"2026-10-17T05:17:26.204Z","dir":"out","msg":{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"probe_get_context","description":"Returns the Chorus thread id for this session and a secret word. Call it when asked for the secret word.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}]}}}

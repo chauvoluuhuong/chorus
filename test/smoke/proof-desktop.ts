@@ -13,7 +13,10 @@ import os from 'node:os';
 import path from 'node:path';
 import WebSocket from 'ws';
 import { activityCmd, artifactsCmd, threadsCmd } from '../../src/cli/commands.ts';
+import { buildHandoff } from '../../src/core/handoff.ts';
 import { Store } from '../../src/core/store.ts';
+// @ts-expect-error: a plain .mjs helper without types
+import { pdf, png } from './sample-files.mjs';
 import { openReport, writeReport } from './report.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
@@ -224,6 +227,13 @@ check('New chat shows the three agents with their versions, model, effort, folde
 check('the sidebar lists the chat recorded in another project (one shared database)', await has('.proj', new RegExp(path.basename(otherProject))) && (await has('.chat-row', /Rate limiter/)));
 await shot('new-chat', 'The window opens on New chat: agent (with version and login), model, effort, project folder, an optional first message, and whether it may skip permission prompts. The sidebar already lists a chat from another project (one shared database)');
 
+log('1b. the + of a project row: New chat in that project');
+await click(`.proj-row .proj-add[data-arg="${otherProject}"]`);
+check('the + of another project opens New chat in that folder; the path and the sidebar name that project', await until(async () => (await js<string>('chorus.S.form?.folder ?? ""')) === otherProject && (await has('#top', new RegExp(path.basename(otherProject)))) && (await js<boolean>(`document.querySelector('.proj-row.here .pname')?.textContent === ${JSON.stringify(path.basename(otherProject))}`)), 15000), await js<string>('chorus.S.form?.folder ?? ""'));
+await shot('new-chat-in-project', 'The + at the end of a project row: New chat with that project filled in, so the chat lands under it. The top bar names the project and its + stays lit; New chat at the top keeps using the project in front');
+await click('[data-act="new"]');
+await until(async () => (await js<string>('chorus.S.form?.folder ?? ""')) === project, 15000);
+
 log('2. Claude with a first message');
 await click('.agent', 'Claude Code');
 await js(`(() => { const s = document.querySelector('#nc-model'); s.value = 'haiku'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
@@ -322,6 +332,64 @@ check('Record shows what get_handoff_context returns for this chat', await until
 await shot('record', 'The Record drawer: exactly what the next agent reads through get_handoff_context');
 await click('[data-act="drawer"][data-arg="record"]');
 
+/* ---------- 5b. dropped files, an approval card with an answer of your own ---------- */
+
+log('5b. drop an image on Claude, copy a PDF into the Codex chat; answer a card with Other…');
+const downloads = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-desk-downloads-')));
+const img = path.join(downloads, 'drop shot.png');
+fs.writeFileSync(img, png(64, 64, [220, 20, 20]));
+const doc = path.join(downloads, 'drop spec.pdf');
+fs.writeFileSync(doc, pdf('The secret word is PINEAPPLE.'));
+// the call the native window makes when a file is dragged on it (desktop/src-tauri/src/main.rs: DragDropEvent → window.chorusDrop)
+async function drop(kind: 'enter' | 'drop', paths: string[], zone: 'path' | 'copy') {
+  const at = await js<{ x: number; y: number }>(`(() => { const r = document.querySelector('#term-slot').getBoundingClientRect(); return { x: r.left + r.width * ${zone === 'path' ? 0.25 : 0.75}, y: r.top + r.height / 2 }; })()`);
+  await js(`chorusDrop(${JSON.stringify({ kind, paths, ...at })})`);
+}
+await drop('enter', [img], 'path');
+check('dragging a file over the agent shows two drop zones, the one under the pointer filled', (await has('.drop-zone.on', /Add the path/)) && (await has('.drop-zone', /Copy into the chat/)));
+await shot('drop-zones', 'A file dragged over the Claude chat: "Add the path" (Claude reads it where it is) or "Copy into the chat" (saved in the chat\'s attachments folder, so no "read this file?" prompt). The zone under the pointer fills');
+await drop('drop', [img], 'path');
+check('dropped on "Add the path": Claude turns the image path into an attached image; nothing is sent yet', await until(async () => /\[Image #1\]/.test(await screen()), 15000), await screen());
+await shot('drop-image-claude', 'The image\'s path went into Claude\'s input the way a terminal sends a dropped file; Claude made it an attachment ([Image #1]). You add your words and press Enter');
+await focusTerm();
+await typeLine('What colour is that image? Reply with one word.');
+const sawRed = await until(async () => {
+  if ((await state()).approvals.some((a: any) => a.id === claudeId)) await click('.banner.ask [data-act="approve"]');
+  return store().getTurns(claudeId).some(t => t.role === 'assistant' && /\bred\b/i.test(t.text));
+}, 150000, 1500);
+check('Claude saw the image: it answers "red"', sawRed, store().getTurns(claudeId).slice(-2).map(t => t.text).join(' | ').slice(0, 300));
+
+await click('.chat-row', /Reply with only/);
+await until(async () => (await view()).id === codexId && /Ask Codex|›/.test(await screen()), 15000);
+await drop('enter', [doc], 'copy');
+await drop('drop', [doc], 'copy');
+const copied = path.join(project, '.chorus', 'threads', codexId, 'attachments', 'drop spec.pdf');
+check('dropped on "Copy into the chat": the PDF is copied into the chat\'s attachments folder and that path is in Codex\'s input', await until(async () => fs.existsSync(copied) && /attachments\/drop\\? spec\.pdf/.test((await screen()).replace(/\n\s*/g, '')), 15000), await screen());
+await shot('drop-pdf-codex', 'A PDF dropped on "Copy into the chat" of the Codex chat: copied into .chorus/threads/<id>/attachments/ in the project, and that path is in Codex\'s input');
+await focusTerm();
+await typeLine('What is the secret word in that PDF? Reply with the word only.');
+check('Codex read the copy: it answers PINEAPPLE', await until(() => store().getTurns(codexId).some(t => t.role === 'assistant' && /PINEAPPLE/.test(t.text)), 150000, 1500), store().getTurns(codexId).slice(-2).map(t => t.text).join(' | ').slice(0, 300));
+check('both drops are recorded with their chats and listed in Activity', store().attachments(claudeId).length === 1 && store().attachments(codexId)[0]?.copied === true && (await js<number>(`fetch('/api/chats/${codexId}/activity').then(r => r.json()).then(a => a.rows.filter(x => x.verb === 'drop').length)`)) === 1);
+
+// a card the agent asks through Chorus (request_approval): the window gives it room, and "Other…" sends an answer of your own
+const rpc = [
+  { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'proof', version: '1' } } },
+  { jsonrpc: '2.0', method: 'notifications/initialized' },
+  { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'request_approval', arguments: { question: 'Ship the cake order page today?', details: 'The calculator works and its tests pass. Shipping today means the checkout button stays disabled until the Stripe webhook is done.', options: ['Ship it today', 'Wait for checkout'] } } },
+].map(m => JSON.stringify(m)).join('\n') + '\n';
+const asked2 = spawnSync(process.execPath, [CLI, 'mcp', '--thread', codexId], { cwd: project, env, input: rpc, encoding: 'utf8', timeout: 20000 });
+const reqId = asked2.stdout.match(/approval card (r_[0-9a-f]+)/)?.[1] ?? '';
+check('the card shows on the Codex chat with the agent\'s options and Other…', !!reqId && (await until(() => has('.banner.card', /Ship the cake order page today/), 15000)) && (await has('.banner.card [data-act="other"]', /Other/)), asked2.stdout.slice(-300));
+await click('.banner.card [data-act="other"]');
+await click('.banner.card .other-input');
+await cdp('Input.insertText', { text: 'Ship it tomorrow after the review' });
+await shot('approval-card-other', 'An approval card Codex asked for through Chorus: who asks, the question, the details, the agent\'s options, Other… for an answer of your own, and a note, each with room around it');
+await key('Enter');
+check('Other… sends your own answer: stored, and typed into Codex as "Other: …"', await until(() => store().getRequest(reqId)?.answer === 'Other: Ship it tomorrow after the review', 15000) && (await until(async () => /Other: Ship it tomorrow after the review/.test((await term()).replace(/\n\s*/g, ' ')), 15000)), JSON.stringify(store().getRequest(reqId)));
+check('the answered card leaves the chat', await until(async () => !(await js<boolean>('!!document.querySelector(".banner.card")')), 10000));
+await click('.chat-row', /Create calc\.js/); // back to the Claude chat: it is the one handed off next
+await until(async () => (await view()).id === claudeId, 5000);
+
 /* ---------- 6. handoff Claude → Codex ---------- */
 
 log('6. hand off the Claude chat to Codex');
@@ -344,6 +412,7 @@ const answered = await until(async () => {
 }, 180000, 1500);
 const reply = store().getTurns(childId).filter(x => x.role === 'assistant').map(x => x.text).join('\n');
 check('its summary names calc.js', answered && /calc\.js/.test(reply), reply.slice(0, 300));
+check('the record the continuing agent reads lists the file the user dropped on the Claude chat', /## Files the user gave\n- .*drop shot\.png/.test(buildHandoff(store(), store().getThread(claudeId)!).text));
 await shot('handoff-summary', 'The continuing Codex chat loaded the record through the Chorus MCP server and sums up the work; it waits for your OK');
 
 /* ---------- 7. Memory, Skills, Doctor ---------- */
@@ -429,9 +498,11 @@ check('the app\'s server has the same chats (the shared database)', resumable.le
       log(`  📷 ${file}`);
     }
     check('the native window can be photographed (window found on screen)', shotOk, `window id "${winId}"`);
-    const servePid = spawnSync('pgrep', ['-f', 'serve --port 0 --exit-with-stdin'], { encoding: 'utf8' }).stdout.trim();
+    // only this app's own server (its child): a Chorus the user has open runs one with the same command line
+    const servePid = Number(spawnSync('pgrep', ['-P', String(app.pid), '-f', 'serve --port 0 --exit-with-stdin'], { encoding: 'utf8' }).stdout.trim().split('\n')[0]);
+    const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
     app.kill('SIGKILL'); // even a hard kill of the app takes its server down (it holds the server's stdin)
-    check('closing the app stops its chorus serve', await until(() => spawnSync('pgrep', ['-f', 'serve --port 0 --exit-with-stdin']).status !== 0, 8000), servePid);
+    check('closing the app stops its chorus serve', servePid > 0 && (await until(() => !alive(servePid), 8000)), String(servePid));
   }
 }
 

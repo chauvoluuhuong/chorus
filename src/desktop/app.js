@@ -8,6 +8,8 @@ const AGENT = { claude: { name: 'Claude Code', letter: 'C' }, codex: { name: 'Co
 const STATE_LABEL = { busy: 'working', idle: 'waiting for you', approval: 'needs approval', starting: 'starting', parked: 'not running', ended: 'ended' };
 const isMac = /Mac/.test(navigator.platform);
 const MOD = isMac ? '⌘' : 'Ctrl+';
+// drawn, not typed: a "+" character sits on the font's baseline and looks off-centre in the circle
+const PLUS = '<svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true"><path d="M5 1v8M1 5h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
 const home = () => (S.info?.home || S.homeGuess || '');
 const tilde = p => (home() && p?.startsWith(home()) ? '~' + p.slice(home().length) : p ?? '');
 const base = p => (p || '').replace(/\/+$/, '').split('/').pop() || '/';
@@ -86,6 +88,7 @@ function onMessage(m) {
     return drawTermOver();
   }
   if (m.t === 'flash') return flash(m.text);
+  if (m.t === 'dropped' && m.id === S.attached) return toast(`Added to the message: ${m.paths.map(base).join(', ')}`);
 }
 
 /** The controller's flashes were written for the terminal app: drop the key hints, keep what happened. */
@@ -121,7 +124,7 @@ function onState(st) {
   showDialogs(st.dialogs);
   renderChrome();
   if (S.view.name === 'chat') renderChatParts();
-  else if (S.view.name === 'approvals' && !$('#view').contains(document.activeElement?.closest('.note-input'))) renderView();
+  else if (S.view.name === 'approvals' && !$('#view').contains(document.activeElement?.closest('.note-input, .other-input'))) renderView();
   else if (S.view.name === 'new' && S.form) renderAgentsOnly();
 }
 
@@ -167,6 +170,26 @@ function refit() {
   if (s !== lastSize && S.attached) send({ t: 'resize', id: S.attached, cols: term.cols, rows: term.rows });
   lastSize = s;
 }
+// agy draws top-down from its cursor and keeps no rows under its footer: its screen is shown anchored to the bottom, like
+// the terminal app does it (docs/phase5.md §8.2). Moving the drawn screen moves xterm's mouse coordinates with it.
+function anchorBottom() {
+  const el = termEl.querySelector('.xterm-screen');
+  if (!el) return;
+  const b = term.buffer.active;
+  let off = 0;
+  if (S.state?.chats.find(c => c.id === S.attached)?.agent === 'agy' && b.viewportY === b.baseY) {
+    let last = b.cursorY;
+    for (let y = term.rows - 1; y > last; y--)
+      if (b.getLine(b.baseY + y)?.translateToString(true).trim()) {
+        last = y;
+        break;
+      }
+    off = term.rows - 1 - last;
+  }
+  const t = off ? `translateY(${(off * el.clientHeight) / term.rows}px)` : '';
+  if (el.style.transform !== t) el.style.transform = t;
+}
+term.onRender(anchorBottom);
 let fitTimer;
 new ResizeObserver(() => {
   clearTimeout(fitTimer);
@@ -208,10 +231,10 @@ function go(view, push = true) {
   S.view = view;
   S.drawerData = null;
   // the address keeps the screen, so a reload comes back to it
-  history.replaceState(null, '', `#/${view.name}${view.id ? `/${view.id}` : view.from ? `/from/${view.from}` : ''}`);
+  history.replaceState(null, '', `#/${view.name}${view.id ? `/${view.id}` : view.from ? `/from/${view.from}` : view.folder ? `/in/${encodeURIComponent(view.folder)}` : ''}`);
   if (view.name !== 'chat') detachTerm();
   if (view.name === 'chat') void api('POST', `/api/chats/${view.id}/select`).catch(() => {});
-  if (view.name === 'new') void openNew(view.from);
+  if (view.name === 'new') void openNew(view.from, view.folder);
   if (view.name === 'memory') void loadMemory();
   if (view.name === 'skills') void loadSkills();
   if (view.name === 'approvals') void loadDecided();
@@ -244,7 +267,9 @@ function renderChrome() {
   for (const [cwd, chats] of chatsByProject()) {
     const folded = S.folded.has(cwd);
     const bang = chats.filter(c => c.state === 'approval').length;
-    tree += `<button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span>${esc(base(cwd))}${bang ? `<span class="bang">!${bang}</span>` : ''}</button>`;
+    // the project in front: the chat you look at is in it, or the New chat form starts there. Its ＋ always shows; others on hover.
+    const here = (v.name === 'chat' && chats.some(c => c.id === v.id)) || (v.name === 'new' && !v.from && (S.form?.folder ?? v.folder) === cwd);
+    tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button></div>`;
     if (folded) continue;
     for (const c of chats) {
       const child = c.parentId && chats.some(p => p.id === c.parentId);
@@ -264,7 +289,7 @@ function renderChrome() {
   $('#side').innerHTML = `
     <div class="brand"><span class="logo"><i></i><i></i><i></i></span><b>Chorus</b><button class="icon-btn" data-act="sidebar" title="Hide the sidebar (${MOD}B)">⇤</button></div>
     <nav class="nav">
-      <button class="new${v.name === 'new' && !v.from ? ' on' : ''}" data-act="new"><span class="plus">+</span>New chat<kbd style="margin-left:auto">${MOD}N</kbd></button>
+      <button class="new${v.name === 'new' && !v.from && !v.folder ? ' on' : ''}" data-act="new"><span class="plus">${PLUS}</span>New chat<kbd style="margin-left:auto">${MOD}N</kbd></button>
       <button class="${on('approvals').trim()}" data-act="approvals"><span class="ico">⚑</span>Approvals${waiting ? `<span class="count">${waiting}</span>` : ''}</button>
       <button class="${on('memory').trim()}" data-act="memory"><span class="ico">◫</span>Memory</button>
       <button class="${on('skills').trim()}" data-act="skills"><span class="ico">✦</span>Skills</button>
@@ -318,7 +343,8 @@ function renderView() {
 
 /* New chat: agent, model, effort, folder, skip permissions, and (here only) a first message */
 
-async function openNew(from) {
+/** `folder`: the ＋ of a project row: the chat starts in that project. Otherwise the project in front (the server decides). */
+async function openNew(from, folder) {
   S.info = null;
   S.form = null;
   renderView();
@@ -329,7 +355,7 @@ async function openNew(from) {
   }
   const src = S.info.from;
   const agent = src ? S.info.agents.find(a => a.id !== src.agent).id : localStorage.getItem('chorus.agent') || 'claude';
-  S.form = { agent, model: 'default', effort: 'default', folder: S.info.folder, skip: src ? src.skip : false, prompt: '', error: '', busy: false };
+  S.form = { agent, model: 'default', effort: 'default', folder: folder ?? S.info.folder, skip: src ? src.skip : false, prompt: '', error: '', busy: false };
   if (S.view.name === 'new') {
     renderChrome();
     renderView();
@@ -706,10 +732,108 @@ function localPrompt(title, lines, initial = '') {
 function optionButtons(a, cls = 'btn') {
   return a.options.map((o, i) => `<button class="${cls}${i === 0 ? ' primary' : ''}" data-act="pick" data-arg="${esc(a.id)}" data-req="${esc(a.request)}" data-value="${esc(o)}">${esc(o)}</button>`).join('');
 }
+/** The agent's options, "Other…" for an answer of your own (sent as "Other: <your words>"), and a note for any of them. */
 function askCard(a) {
+  const req = `data-arg="${esc(a.id)}" data-req="${esc(a.request)}"`;
   return `<div class="ask-q">${esc(a.question)}</div>${a.details ? `<div class="what">${esc(a.details)}</div>` : ''}
-    <div class="acts">${optionButtons(a)}<input type="text" class="note-input" placeholder="Add a note (optional)" aria-label="Note for the agent"></div>`;
+    <div class="acts">${optionButtons(a)}<button class="btn" data-act="other">Other…</button></div>
+    <div class="acts other-row" hidden><input type="text" class="other-input" placeholder="Your own answer" aria-label="Your own answer"><button class="btn primary" data-act="pick-other" ${req}>Send</button></div>
+    <input type="text" class="note-input" placeholder="Add a note (optional)" aria-label="Note for the agent">`;
 }
+
+/* ---------- dropped files (docs/phase5.md §8.3, docs/integrations/file-drop.md) ---------- */
+// A drop works on the agent screen of the chat in front (its path, or a copy into the chat) and on the New chat form (the path
+// goes into the first message). The native window gives full paths (Tauri calls window.chorusDrop); a browser gives the bytes
+// only, so there the file is always copied into the chat. Nothing is sent: the path waits in the agent's input.
+
+const dropEl = document.createElement('div');
+dropEl.className = 'drop-over';
+let dropZone = null;
+let dropKey = '';
+
+function dropTarget() {
+  if (S.view.name === 'chat' && S.attached && S.screen.live && !S.screen.exited) return 'chat';
+  if (S.view.name === 'new' && S.form && !S.info?.from) return 'new';
+  return null;
+}
+/** The drop zones under the pointer; returns the zone the pointer is on (or the only one). */
+function showDrop(x, y, native) {
+  const where = dropTarget();
+  const host = where === 'chat' ? $('#term-slot') : where === 'new' ? $('#view .card.form') : null;
+  if (!host) return hideDrop();
+  const agent = AGENT[S.state?.chats.find(c => c.id === S.attached)?.agent]?.name ?? 'The agent';
+  const zones =
+    where === 'new' ? [['path', 'Add the path to the first message', 'the agent reads the file where it is']]
+    : native ? [['path', 'Add the path', `${agent} reads the file where it is`], ['copy', 'Copy into the chat', 'saved in the chat\'s attachments folder: no "read this file?" prompt']]
+    : [['copy', 'Copy into the chat', 'a browser gives the file, not its path']];
+  const key = where + zones.length;
+  if (dropKey !== key || dropEl.parentElement !== host) {
+    dropEl.innerHTML = zones.map(([z, t, sub]) => `<div class="drop-zone" data-zone="${z}"><b>${esc(t)}</b><span>${esc(sub)}</span></div>`).join('');
+    host.append(dropEl);
+    dropKey = key;
+  }
+  dropEl.hidden = false;
+  const under = document.elementFromPoint(x, y)?.closest('[data-zone]');
+  dropZone = under && dropEl.contains(under) ? under.dataset.zone : zones.length === 1 ? zones[0][0] : null;
+  for (const el of dropEl.querySelectorAll('[data-zone]')) el.classList.toggle('on', el.dataset.zone === dropZone);
+  return dropZone;
+}
+function hideDrop() {
+  dropEl.hidden = true;
+  dropZone = null;
+}
+const escapeLikeTerminal = p => p.replace(/([ \t\\'"()&;$`!*?[\]{}|<>#])/g, '\\$1');
+
+function deliverPaths(paths, copy) {
+  if (dropTarget() === 'new') {
+    const f = S.form;
+    f.prompt += (f.prompt && !/\s$/.test(f.prompt) ? ' ' : '') + paths.map(escapeLikeTerminal).join(' ') + ' ';
+    renderView();
+    const ta = $('#nc-prompt');
+    ta?.focus();
+    ta?.setSelectionRange(ta.value.length, ta.value.length);
+    return;
+  }
+  send({ t: 'drop', id: S.attached, paths, copy });
+  term.focus();
+}
+
+// the native window (Tauri): enter / over / drop / leave with full paths and the pointer in CSS pixels
+window.chorusDrop = ({ kind, paths, x, y }) => {
+  if (kind === 'leave') return hideDrop();
+  const zone = showDrop(x, y, true);
+  if (kind !== 'drop') return;
+  hideDrop();
+  if (zone && paths?.length) deliverPaths(paths, zone === 'copy');
+};
+
+// a browser: the bytes of each file go to the server, which saves them in the chat and puts the path in
+const hasFiles = e => [...(e.dataTransfer?.types ?? [])].includes('Files');
+for (const ev of ['dragenter', 'dragover'])
+  document.addEventListener(ev, e => {
+    if (!hasFiles(e) || !dropTarget()) return;
+    e.preventDefault();
+    showDrop(e.clientX, e.clientY, false);
+  });
+document.addEventListener('dragleave', e => {
+  if (!e.relatedTarget) hideDrop();
+});
+document.addEventListener('drop', async e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  const where = dropTarget();
+  hideDrop();
+  if (where === 'new') return toast('Start the chat, then drop the file on it: a browser does not give a file\'s path');
+  if (where !== 'chat') return;
+  const id = S.attached;
+  for (const f of e.dataTransfer.files) {
+    const r = await fetch(`/api/chats/${encodeURIComponent(id)}/attachments?name=${encodeURIComponent(f.name)}`, { method: 'POST', headers: { 'x-chorus': '1' }, body: f, credentials: 'same-origin' });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return toast(j.error || `could not add ${f.name}`);
+    toast(`Copied into the chat and added to the message: ${f.name}`);
+  }
+  term.focus();
+});
 
 /* ---------- toasts ---------- */
 
@@ -747,6 +871,8 @@ document.addEventListener('click', async e => {
   switch (act) {
     case 'new':
       return go({ name: 'new' });
+    case 'new-in':
+      return go({ name: 'new', folder: arg });
     case 'approvals':
     case 'memory':
     case 'skills':
@@ -769,7 +895,7 @@ document.addEventListener('click', async e => {
       return renderChrome();
     case 'add-project':
       go({ name: 'new' });
-      return openBrowse(S.state?.project ?? '~', dir => S.form && ((S.form.folder = dir), renderView()));
+      return openBrowse(S.state?.project ?? '~', dir => S.form && ((S.form.folder = dir), renderChrome(), renderView()));
     case 'handoff':
       return go({ name: 'new', from: arg });
     case 'approve':
@@ -778,6 +904,22 @@ document.addEventListener('click', async e => {
     case 'pick': {
       const note = el.closest('.item, .banner, .toast')?.querySelector('.note-input')?.value ?? '';
       await api('POST', `/api/chats/${arg}/answer`, { request: el.dataset.req, option: el.dataset.value, note });
+      document.activeElement?.blur(); // the card redraws (and goes) only when nothing in it has the focus
+      return loadDecided();
+    }
+    case 'other': {
+      const row = el.closest('.item, .banner')?.querySelector('.other-row');
+      if (!row) return;
+      row.hidden = false;
+      return row.querySelector('.other-input').focus();
+    }
+    case 'pick-other': {
+      const card = el.closest('.item, .banner');
+      const own = card?.querySelector('.other-input');
+      if (!own?.value.trim()) return own?.focus();
+      const note = card.querySelector('.note-input')?.value ?? '';
+      await api('POST', `/api/chats/${arg}/answer`, { request: el.dataset.req, option: `Other: ${own.value.trim()}`, note });
+      document.activeElement?.blur();
       return loadDecided();
     }
     case 'retry':
@@ -813,11 +955,12 @@ document.addEventListener('click', async e => {
       return renderView();
     case 'nc-folder':
       S.form.folder = arg;
+      renderChrome(); // the sidebar marks the project the form starts in
       return renderView();
     case 'nc-start':
       return startChat();
     case 'browse':
-      return openBrowse(S.form?.folder ?? '~', dir => S.form && ((S.form.folder = dir), renderView()));
+      return openBrowse(S.form?.folder ?? '~', dir => S.form && ((S.form.folder = dir), renderChrome(), renderView()));
     case 'br-up':
       return openBrowse(S.browse.parent);
     case 'br-open':
@@ -972,6 +1115,10 @@ document.addEventListener(
         return startChat();
       }
     }
+    if (e.key === 'Enter' && e.target.classList?.contains('other-input')) {
+      e.preventDefault();
+      return e.target.closest('.other-row').querySelector('[data-act="pick-other"]').click();
+    }
     if (e.key === 'Escape' && S.view.name !== 'chat' && S.history.length && !e.target.closest('input, textarea')) back();
   },
   true,
@@ -996,6 +1143,7 @@ function fromHash() {
   const [name, a, b] = location.hash.replace(/^#\/?/, '').split('/');
   if (name === 'chat' && a) return { name, id: a };
   if (name === 'new' && a === 'from' && b) return { name, from: b };
+  if (name === 'new' && a === 'in' && b) return { name, folder: decodeURIComponent(b) };
   if (['approvals', 'memory', 'skills', 'doctor'].includes(name)) return { name };
   return { name: 'new' };
 }

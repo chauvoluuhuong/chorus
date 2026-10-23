@@ -1,6 +1,0 @@
-{"ts":"2026-10-23T01:40:33.954Z","dir":"start","argv":["--log","~/chorus/fixtures/codex/0.155.0/hello/mcp-log.jsonl","--thread","t_probe_hello"],"env_CHORUS_THREAD_ID":null,"pid":60258}
-{"ts":"2026-10-23T01:40:33.956Z","dir":"in","msg":{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{"experimental":{"codex/auth-change":{}},"elicitation":{"form":{},"url":{}}},"clientInfo":{"name":"codex-mcp-client","title":"Codex","version":"0.155.0"}}}}
-{"ts":"2026-10-23T01:40:33.957Z","dir":"out","msg":{"jsonrpc":"2.0","id":0,"result":{"protocolVersion":"2025-06-18","capabilities":{"tools":{}},"serverInfo":{"name":"chorus-probe","version":"0.0.1"},"instructions":"Chorus capability probe server."}}}
-{"ts":"2026-10-23T01:40:33.957Z","dir":"in","msg":{"jsonrpc":"2.0","method":"notifications/initialized"}}
-{"ts":"2026-10-23T01:40:33.958Z","dir":"in","msg":{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"progressToken":0}}}}
-{"ts":"2026-10-23T01:40:33.958Z","dir":"out","msg":{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"probe_get_context","description":"Returns the Chorus thread id for this session and a secret word. Call it when asked for the secret word.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}]}}}

@@ -1,1 +1,0 @@
-[claude-code:unrecognized_model] {"model":"chorus-no-such-model","query_source":"sdk"}

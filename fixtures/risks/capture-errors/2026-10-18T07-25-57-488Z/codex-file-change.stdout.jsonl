@@ -1,7 +1,0 @@
-{"type":"thread.started","thread_id":"01a14de7-4b38-7cf1-9a2a-a0202251de40"}
-{"type":"turn.started"}
-{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll add `note.txt` with the requested content using a patch."}}
-{"type":"item.started","item":{"id":"item_1","type":"file_change","changes":[{"path":"/private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-risk-err-codex-tc5kWm/note.txt","kind":"add"}],"status":"in_progress"}}
-{"type":"item.completed","item":{"id":"item_1","type":"file_change","changes":[{"path":"/private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-risk-err-codex-tc5kWm/note.txt","kind":"add"}],"status":"completed"}}
-{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"done"}}
-{"type":"turn.completed","usage":{"input_tokens":38153,"cached_input_tokens":18816,"cache_write_input_tokens":0,"output_tokens":66,"reasoning_output_tokens":0}}

@@ -93,6 +93,9 @@ node tools/probe/matrix.mjs <cli> <v1,v2|installed>   # test given CLI versions 
 Phases 1–5 are built and proven with the real CLIs: 1–4 with Claude Code 2.1.302, Codex 0.163.0 and agy 1.4.2; Phase 5 (desktop:
 `chorus serve` + the page in `src/desktop/` + the Tauri shell in `desktop/`, D3 decided) with Claude Code 2.1.306 and Codex 0.163.0,
 43/43 in `docs/proof/phase5/` (`docs/phase5.md`, `docs/roadmap.md`).
+2026-10-22 (`docs/phase5.md` §8): ＋ on each project row (New chat in that project), agy's screen anchored to the bottom, dropped
+files (path like a terminal, or a copy into the chat; recorded for handoff), approval cards with room and Other…; proof:desktop
+53/54. `npm run proof:agy` is stale since UI pass 2 (fails at step 1).
 Phase 4 includes UI pass 2 (P4.10): the CLI app now matches `docs/mockups/chorus-cli.html` (top bar, project-tree sidebar, New chat
 screen with skip-permissions, approvals inbox, shared Memory across projects in `~/.chorus/chorus.db`, Skills screen, window-size
 steps). The e2e proof with screenshots of every step is `docs/proof/phase4/README.md` (`npm run proof`).

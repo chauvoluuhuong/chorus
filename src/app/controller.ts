@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildHandoff, handoffPrompt } from '../core/handoff.ts';
+import { copyInto, dropText } from '../core/drop.ts';
 import { buildInteractive, SKIP_FLAG, type InteractiveOpts, type Launch } from '../core/launch.ts';
 import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, syncSkills, sourceDir } from '../core/skills.ts';
 import type { RequestRow, Store, ThreadRow } from '../core/store.ts';
@@ -433,6 +434,8 @@ export class Controller {
 
   private async onAction(a: string) {
     const cur = this.app.current;
+    // the + at the end of a project row in the sidebar: New chat with that project's folder
+    if (a.startsWith('new-in:')) return this.newChatScreen({ folder: a.slice(7) });
     switch (a) {
       case 'new':
         this.newChatScreen();
@@ -1134,6 +1137,30 @@ export class Controller {
    * Opens an artifact for the user: the served preview link (it reloads while the agent edits) with the system default, or the way
    * this project chose before. When the way fails, the user picks another and it is remembered in <project>/.chorus/open.json.
    */
+  /**
+   * Files dropped on a chat: their paths go into the agent's input like a terminal sends them (never Enter: the user adds words
+   * and sends). `copy`, or a file that only came as bytes (a browser has no path), is copied into the chat's attachments folder
+   * first and that path goes in. Every file is recorded with the chat, so a handoff and Memory list it (docs/phase5.md §8.3).
+   */
+  dropFiles(threadId: string, files: ({ path: string } | { name: string; bytes: Buffer })[], copy = false): { paths: string[] } | { error: string } {
+    const host = this.app.entry(threadId)?.host;
+    if (!host || host.state !== 'running') return { error: 'that chat is not running: open it, then drop the file again' };
+    const out: { path: string; originalPath?: string; copied: boolean; bytes?: number }[] = [];
+    for (const f of files) {
+      if ('path' in f) {
+        const st = fs.statSync(f.path, { throwIfNoEntry: false });
+        if (!st) return { error: `${f.path} does not exist` };
+        // a folder is never copied: its path goes in as it is
+        if (copy && st.isFile()) out.push({ path: copyInto(this.store.attachmentsDir(threadId), f), originalPath: f.path, copied: true, bytes: st.size });
+        else out.push({ path: f.path, copied: false, bytes: st.isFile() ? st.size : undefined });
+      } else out.push({ path: copyInto(this.store.attachmentsDir(threadId), f), copied: true, bytes: f.bytes.length });
+    }
+    if (!out.length) return { paths: [] };
+    for (const a of out) this.store.addAttachment(threadId, a);
+    host.write(dropText(out.map(a => a.path), host.screen.modes().bracketedPaste));
+    return { paths: out.map(a => a.path) };
+  }
+
   async openArtifact(threadId: string, rel: string, via?: OpenConfig['mode']): Promise<void> {
     const url = await this.openPreview(threadId, rel, false);
     const abs = path.join(this.store.artifactsDir(threadId), rel);
@@ -1273,6 +1300,7 @@ export class Controller {
         const n = (this.store.db.prepare('SELECT COUNT(*) AS n FROM artifacts WHERE thread_id=? AND path=?').get(t.id, a.path) as { n: number }).n;
         rows.push({ ...base, ts: a.ts, kind: 'file', verb: 'file', text: `${a.path} v${n}` });
       }
+      for (const a of this.store.attachments(t.id)) rows.push({ ...base, ts: a.created, kind: 'file', verb: 'drop', text: `${path.basename(a.path)}${a.copied ? ' (copied into the chat)' : ''}` });
       if (u?.limitUtilization != null) rows.push({ ...base, ts: this.store.db.prepare('SELECT updated FROM usage WHERE thread_id=?').get(t.id)?.updated as string ?? t.updated, shownTs: t.updated, kind: 'usage', verb: 'usage', text: `5h ${Math.round(u.limitUtilization * 100)}%` });
     }
     rows.sort((x, y) => x.ts.localeCompare(y.ts));

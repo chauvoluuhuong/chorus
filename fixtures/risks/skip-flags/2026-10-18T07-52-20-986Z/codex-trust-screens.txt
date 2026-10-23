@@ -1,8 +1,0 @@
-  Folder access
-  /private/var/folders/hj/b9dgqj_s11738sh6_z2w79bm0000gn/T/chorus-risk-skip-codex-XnI7Xy                              
-  Trust this folder? Codex can read, edit, and run files here, subject to your permission settings. Folder settings
-  can run code automatically, even without a model request. Continue only if you trust these files. Your trust
-  decision will be saved.
-› 1. Trust and continue                                                                                                 
-  2. Back to Agent Command Center
-  enter continue · esc back
