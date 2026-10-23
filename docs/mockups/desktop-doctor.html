@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Doctor mockup</title>
+<!--
+  Mockup of the desktop Doctor screen (docs/doctor.md §6), asked for 2026-10-23: one "Run test" button that runs the short
+  test; the detailed test only when Chorus thinks it is needed (and the user agrees); each agent row expands into its check
+  list; each row suggests the version to install (the newest one Chorus is tested with). Colours and components are the
+  desktop's own (src/desktop/style.css). Pick a scene at the top; the rows' ▾ open and close in every scene.
+-->
+<style>
+:root {
+  --bg: #faf9f5; --side: #f3f1ea; --panel: #ffffff; --hover: #ece9e0; --sel: #e6e2d6; --line: #e5e2d9;
+  --ink: #141413; --ink-2: #3d3d3a; --muted: #6f6c64; --faint: #a09e96;
+  --accent: #0f766e; --accent-ink: #ffffff; --accent-soft: #e2f3f1;
+  --warn: #a8660b; --warn-soft: #fbefd9; --bad: #b13b32; --bad-soft: #f7e1dd; --ok: #2f7d3a; --ok-soft: #e3f1e3;
+  --claude: #c6613f; --claude-soft: #f7e8e1; --codex: #3f6fd1; --codex-soft: #e4ecfa; --agy: #3a8a4b; --agy-soft: #e2f1e5;
+  --shadow: 0 1px 2px rgba(20, 20, 19, 0.06), 0 8px 24px rgba(20, 20, 19, 0.08);
+  --f-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif;
+  --f-serif: 'Iowan Old Style', 'Charter', Georgia, 'Times New Roman', serif;
+  --f-mono: 'SF Mono', ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #262624; --side: #1f1e1c; --panel: #2c2b29; --hover: #353532; --sel: #3b3a36; --line: #3c3b38;
+    --ink: #f5f4ee; --ink-2: #dad8d0; --muted: #a9a69c; --faint: #7d7a72;
+    --accent: #4fc1b6; --accent-ink: #10201e; --accent-soft: #15302e;
+    --warn: #f0b85a; --warn-soft: #3d3020; --bad: #ee8a80; --bad-soft: #452523; --ok: #8ccf7e; --ok-soft: #22331f;
+    --claude: #e08a6b; --claude-soft: #46302a; --codex: #8fb8ff; --codex-soft: #233250; --agy: #9bd38f; --agy-soft: #243824;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: #262624; --side: #1f1e1c; --panel: #2c2b29; --hover: #353532; --sel: #3b3a36; --line: #3c3b38;
+  --ink: #f5f4ee; --ink-2: #dad8d0; --muted: #a9a69c; --faint: #7d7a72;
+  --accent: #4fc1b6; --accent-ink: #10201e; --accent-soft: #15302e;
+  --warn: #f0b85a; --warn-soft: #3d3020; --bad: #ee8a80; --bad-soft: #452523; --ok: #8ccf7e; --ok-soft: #22331f;
+  --claude: #e08a6b; --claude-soft: #46302a; --codex: #8fb8ff; --codex-soft: #233250; --agy: #9bd38f; --agy-soft: #243824;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-sans); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.mono { font-family: var(--f-mono); font-size: 12.5px; }
+.muted { color: var(--muted); }
+.faint { color: var(--faint); }
+
+/* the mockup's own chrome: scene picker and notes */
+.top { position: sticky; top: 0; z-index: 5; background: var(--side); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.top b { font: 600 13px var(--f-sans); margin-right: 6px; }
+.top .sc { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 3px 11px; font-size: 12.5px; }
+.top .sc.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.top .theme { margin-left: auto; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 3px 9px; font-size: 12px; }
+.frame { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 52px); }
+.side { background: var(--side); border-right: 1px solid var(--line); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; }
+.side .brand { display: flex; align-items: center; gap: 8px; padding: 2px 8px 14px; font-weight: 600; }
+.side .logo { display: inline-flex; gap: 2px; align-items: flex-end; height: 14px; }
+.side .logo i { width: 3px; background: var(--accent); border-radius: 2px; display: block; }
+.side .logo i:nth-child(1) { height: 7px; } .side .logo i:nth-child(2) { height: 14px; } .side .logo i:nth-child(3) { height: 10px; }
+.side .nav { border: 0; background: transparent; text-align: left; padding: 7px 10px; border-radius: 8px; color: var(--ink-2); display: flex; gap: 10px; align-items: center; }
+.side .grow { flex: 1; }
+.side .foot { display: flex; justify-content: space-between; align-items: center; padding: 8px 6px 0; border-top: 1px solid var(--line); font-size: 12.5px; }
+.side .foot .doc { border: 0; background: var(--sel); border-radius: 7px; padding: 3px 9px; display: inline-flex; gap: 6px; align-items: center; }
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+main { position: relative; }
+.notes { max-width: 860px; margin: 0 auto; padding: 0 28px 40px; }
+.notes .box { border: 1px dashed var(--line); border-radius: 12px; padding: 12px 16px; color: var(--muted); font-size: 13px; }
+.notes .box b { color: var(--ink-2); }
+.notes .box ul { margin: 6px 0 0; padding-left: 18px; }
+
+/* the desktop's components (src/desktop/style.css) */
+.page { max-width: 860px; margin: 0 auto; padding: 32px 28px 24px; }
+.page h1 { font: 400 30px/1.2 var(--f-serif); margin: 0 0 4px; letter-spacing: -0.01em; }
+.page .lead { color: var(--muted); margin: 0 0 18px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 5px 11px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
+.btn:hover { background: var(--hover); }
+.btn:disabled { opacity: 0.6; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn.big { padding: 8px 18px; font-size: 14px; }
+.link { border: 0; background: none; padding: 0; color: var(--accent); font-size: 13px; }
+.badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; border-radius: 6px; padding: 1px 7px; line-height: 18px; white-space: nowrap; }
+.badge.mini { padding: 0; width: 20px; height: 20px; justify-content: center; font-size: 11px; border-radius: 6px; }
+.badge.claude { background: var(--claude-soft); color: var(--claude); }
+.badge.codex { background: var(--codex-soft); color: var(--codex); }
+.badge.agy { background: var(--agy-soft); color: var(--agy); }
+.badge.ok { background: var(--ok-soft); color: var(--ok); }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+.badge.bad { background: var(--bad-soft); color: var(--bad); }
+.badge.plain { background: var(--hover); color: var(--muted); font-weight: 500; }
+.spin { width: 10px; height: 10px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; display: inline-block; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Doctor */
+.run { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.run .when { color: var(--muted); font-size: 13px; }
+.banner { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; border: 1px solid var(--line); }
+.banner.ok { background: var(--ok-soft); border-color: transparent; }
+.banner.warn { background: var(--warn-soft); border-color: transparent; }
+.banner.bad { background: var(--bad-soft); border-color: transparent; }
+.banner .t { font-weight: 600; }
+.banner .grow { flex: 1; }
+.banner .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.row { border-bottom: 1px solid var(--line); }
+.row:last-child { border-bottom: 0; }
+.row-head { display: flex; gap: 12px; align-items: center; padding: 12px 14px; width: 100%; border: 0; background: transparent; text-align: left; }
+.row-head:hover { background: var(--hover); }
+.row:first-child .row-head { border-radius: 14px 14px 0 0; }
+.row-head .main { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.row-head .name { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row-head .name b { font-weight: 600; }
+.row-head .sub { font-size: 12.5px; color: var(--muted); }
+.row-head .sub .mono { font-size: 12px; }
+.caret { color: var(--muted); transition: transform 0.15s; font-size: 15px; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 7px; border: 1px solid var(--line); }
+.row-head:hover .caret { color: var(--ink); }
+.row.open .caret { transform: rotate(180deg); }
+.row-acts { display: flex; gap: 6px; padding: 0 14px 12px 46px; flex-wrap: wrap; margin-top: -4px; }
+.detail { display: none; padding: 2px 14px 14px 46px; }
+.row.open .detail { display: grid; gap: 12px; }
+.group h4 { margin: 0 0 4px; font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); font-weight: 600; display: flex; gap: 8px; align-items: baseline; }
+.group h4 span { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.check { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; font-size: 13px; padding: 2px 0; align-items: baseline; }
+.check .m.ok { color: var(--ok); } .check .m.bad { color: var(--bad); } .check .m.warn { color: var(--warn); } .check .m.wait { color: var(--faint); }
+.check .why { grid-column: 2 / 4; font-size: 12.5px; color: var(--bad); margin-top: -1px; }
+.check .t { color: var(--faint); font-size: 12px; }
+.cmdline { font-family: var(--f-mono); font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; display: flex; justify-content: space-between; gap: 10px; align-items: center; overflow-wrap: anywhere; }
+.cmdline button { font-family: var(--f-sans); }
+
+/* the popup */
+.scrim { position: absolute; inset: 0; background: rgba(20, 20, 19, 0.35); display: flex; align-items: flex-start; justify-content: center; padding-top: 70px; }
+.dialog { width: min(600px, calc(100% - 32px)); background: var(--panel); border-radius: 14px; box-shadow: var(--shadow); border: 1px solid var(--line); }
+.dialog h2 { font: 400 22px var(--f-serif); margin: 0; padding: 18px 20px 4px; }
+.dialog .body { padding: 6px 6px 0; }
+.dialog .foot { display: flex; gap: 8px; padding: 12px 16px 16px; align-items: center; }
+.dialog .foot .grow { flex: 1; }
+@media (max-width: 720px) { .frame { grid-template-columns: 1fr; } .side { display: none; } .page, .notes { padding-left: 16px; padding-right: 16px; } .row-acts, .detail { padding-left: 14px; } }
+</style>
+</head>
+<body>
+<div class="top" id="top"><b>Doctor mockup</b></div>
+<div class="frame">
+  <aside class="side">
+    <div class="brand"><span class="logo"><i></i><i></i><i></i></span>Chorus</div>
+    <button class="nav">＋ New chat</button>
+    <button class="nav">⚑ Approvals</button>
+    <button class="nav">◎ Memory</button>
+    <button class="nav">✦ Skills</button>
+    <div class="grow"></div>
+    <div class="foot"><span class="faint">C · X · A</span><button class="doc" id="docbtn"><span class="dot ok"></span>Doctor</button></div>
+  </aside>
+  <main id="main"></main>
+</div>
+<script>
+const AG = {
+  claude: { name: 'Claude Code', letter: 'C', bin: '~/.local/bin/claude', method: 'native installer', page: 'docs.claude.com/…/setup' },
+  codex: { name: 'Codex', letter: 'X', bin: '/opt/homebrew/bin/codex', method: 'npm', page: 'github.com/openai/codex' },
+  agy: { name: 'Antigravity CLI', letter: 'A', bin: '~/.local/bin/agy', method: 'Antigravity installer', page: 'antigravity.google/docs/cli' },
+};
+const DETAILED = [
+  'The standing note reaches the model',
+  'A turn runs and is read: session id, reply, usage',
+  'A shell command and its output are read',
+  "The CLI's own transcript is found and read",
+  'The per-session MCP server is reached',
+  'A chat resumes with its context',
+  'The permission prompt is recognised and approved',
+];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+// a row: installed version, suggested (newest tested) version, latest release, status, short-test checks, detailed-test checks
+const ready = (agent, v, extra = {}) => ({ agent, installed: v, suggested: v, latest: v, status: ['ok', 'Ready'], short: [['ok', `Installed at ${AG[agent].bin} (${AG[agent].method})`], ['ok', `Version ${v} is tested with Chorus`], ['ok', 'Signed in']], detailed: { when: '23 Oct, 13:40', list: DETAILED.map(t => ['ok', t]) }, ...extra });
+const SCENES = [
+  {
+    id: 'idle', title: '1 · Doctor page',
+    run: { label: 'Run test', when: 'Last test: today 13:39 · all ready' },
+    rows: [ready('claude', '2.1.309'), ready('codex', '0.163.0', { latest: '0.163.0' }), ready('agy', '1.4.5')],
+    open: [],
+    notes: ['<b>One button.</b> "Run test" runs the short test for every agent: is it installed, is its version one Chorus is tested with, is it signed in. A few seconds, no model calls.',
+      '<b>Each row suggests a version</b>: the newest one Chorus is tested with, next to what is installed and the newest release. "Up to date" when they match.',
+      '<b>▾ opens a row</b> into its check list (scene 3). The "Full test of …" buttons are gone.'],
+  },
+  {
+    id: 'running', title: '2 · Short test running',
+    run: { label: 'Testing…', busy: true, when: 'Checking 3 agents · no model calls' },
+    rows: [ready('claude', '2.1.309', { status: ['ok', 'Ready'] }), { ...ready('codex', '0.163.0'), status: ['plain', 'Checking…', true] }, { ...ready('agy', '1.4.5'), status: ['plain', 'Checking…', true] }],
+    open: [],
+    notes: ['Rows fill in as each agent answers (all three run at once). The button is disabled while it runs.'],
+  },
+  {
+    id: 'ready', title: '3 · All ready, a row opened',
+    run: { label: 'Run test', when: 'Tested just now · 0.4 s' },
+    banner: ['ok', 'All 3 agents work with Chorus.', 'Each one is on a version Chorus is tested with, and signed in.'],
+    rows: [ready('claude', '2.1.309'), ready('codex', '0.163.0'), ready('agy', '1.4.5')],
+    open: ['claude'],
+    notes: ['<b>The check list</b> has two parts: the short test just run, and the last detailed test of this agent (when there was one: here from 13:40, 7 of 7).',
+      'Nothing to ask: the detailed test is not offered when every version is tested.'],
+  },
+  {
+    id: 'needed', title: '4 · New version: detailed test asked',
+    run: { label: 'Run test', when: 'Tested just now · 0.4 s' },
+    banner: ['warn', 'Codex 0.170.0 is new to Chorus.', 'Chorus is tested with Codex up to 0.163.0. A detailed test checks that 0.170.0 works with Chorus: about 2 minutes and a few short model turns on your Codex plan.', [['primary', 'Run detailed test'], ['', 'Not now']]],
+    rows: [ready('claude', '2.1.309'), { agent: 'codex', installed: '0.170.0', suggested: '0.163.0', latest: '0.170.0', status: ['warn', 'New version'], short: [['ok', `Installed at ${AG.codex.bin} (npm)`], ['warn', 'Version 0.170.0 is newer than the tested 0.163.0'], ['ok', 'Signed in']], detailed: null }, ready('agy', '1.4.5')],
+    open: ['codex'],
+    notes: ['<b>When Chorus asks for the detailed test</b>: a version newer (or older) than the tested ones, a CLI that changed since the last test, or a chat that hit an integration error. Only then, and only after the user says yes.',
+      'The suggested version stays 0.163.0 (tested), with the newer 0.170.0 shown as the latest release.'],
+  },
+  {
+    id: 'detailed', title: '5 · Detailed test running',
+    run: { label: 'Testing…', busy: true, when: 'Detailed test of Codex · 3 of 7 · you can keep working' },
+    rows: [ready('claude', '2.1.309'), { agent: 'codex', installed: '0.170.0', suggested: '0.163.0', latest: '0.170.0', status: ['plain', 'Detailed test · 3 of 7', true], short: [['ok', `Installed at ${AG.codex.bin} (npm)`], ['warn', 'Version 0.170.0 is newer than the tested 0.163.0'], ['ok', 'Signed in']], detailed: { when: 'running', list: DETAILED.map((t, i) => [i < 3 ? 'ok' : i === 3 ? 'run' : 'wait', t, i < 3 ? `${[7.7, 6.4, 10.2][i]} s` : '']) } }, ready('agy', '1.4.5')],
+    open: ['codex'],
+    notes: ['The row opens by itself and its list fills in live. Leaving the page is fine: the result stays here, and the Doctor button in the sidebar shows a dot (amber while running, red on a problem).'],
+  },
+  {
+    id: 'failed', title: '6 · Detailed test failed',
+    run: { label: 'Run test', when: 'Detailed test of Codex finished · 1 problem' },
+    banner: ['bad', 'Codex 0.170.0: 1 of 7 checks failed.', 'Chats still start; this part does not work: Chorus cannot find the transcript of an interactive Codex chat, so its activity stays empty. Codex 0.163.0 is tested and works. Installing it is optional.', [['primary', 'Install Codex 0.163.0'], ['', 'Keep 0.170.0'], ['', 'Report issue']]],
+    rows: [ready('claude', '2.1.309'), { agent: 'codex', installed: '0.170.0', suggested: '0.163.0', latest: '0.170.0', status: ['bad', 'Problem'], short: [['ok', `Installed at ${AG.codex.bin} (npm)`], ['warn', 'Version 0.170.0 is newer than the tested 0.163.0'], ['ok', 'Signed in']], detailed: { when: 'today 14:02', list: DETAILED.map((t, i) => (i === 3 ? ['bad', t, '0.1 s', 'No transcript file found for the chat (looked in ~/.codex/sessions for this chat\'s marker)'] : ['ok', t, ''])) } }, ready('agy', '1.4.5')],
+    open: ['codex'],
+    notes: ['<b>Install Codex 0.163.0</b> runs <span class="mono">npm install -g @openai/codex@0.163.0</span> in a terminal pane under the row, then runs the short test again.',
+      '<b>Report issue</b> opens the report (versions, OS, this check list, the failing check\'s log) to read and edit before it goes to github.com/chauvoluuhuong/chorus/issues.'],
+  },
+  {
+    id: 'missing', title: '7 · Not installed, signed out',
+    run: { label: 'Run test', when: 'Tested just now · 0.4 s' },
+    banner: ['warn', '2 agents need you.', 'Chorus works with any one of them; each one more is another agent to hand work to.'],
+    rows: [ready('claude', '2.1.309'), { agent: 'codex', installed: '0.163.0', suggested: '0.163.0', latest: '0.163.0', status: ['warn', 'Signed out'], short: [['ok', `Installed at ${AG.codex.bin} (npm)`], ['ok', 'Version 0.163.0 is tested with Chorus'], ['bad', 'Not signed in', '', 'codex login status: not logged in']], detailed: null, acts: [['primary', 'Sign in']] }, { agent: 'agy', installed: null, suggested: '1.4.5', latest: '1.4.5', status: ['warn', 'Not installed'], short: [['bad', 'Not found on PATH or in ~/.local/bin, /opt/homebrew/bin']], detailed: null, acts: [['primary', 'Install'], ['', 'Open page ↗']], pinless: true }],
+    open: ['agy'],
+    notes: ['<b>Install</b> opens the CLI\'s page in the browser and runs its install command in a terminal pane under the row (the user sees and answers it), pinned to the suggested version when the CLI allows it (Claude Code, Codex). agy can't be pinned: it installs its newest release, and the short test then says whether that version is tested.',
+      '<b>Sign in</b> runs the CLI\'s own login, <span class="mono">codex login</span> here (it opens the browser). agy signs in on its first start.'],
+  },
+  {
+    id: 'popup', title: '8 · Popup on first launch',
+    popup: true,
+    rows: [ready('claude', '2.1.309'), { agent: 'codex', installed: '0.170.0', suggested: '0.163.0', latest: '0.170.0', status: ['warn', 'New version'], short: [], detailed: null }, ready('agy', '1.4.5')],
+    open: [],
+    notes: ['The same rows, in a dialog, after an install or an update. The short test has already run when it opens. If a detailed test is needed it asks here, with the same words as scene 4; otherwise it closes by itself after a few seconds.'],
+  },
+];
+
+let scene = SCENES[0];
+const openRows = new Set();
+
+function chip([kind, text, busy]) {
+  return `<span class="badge ${kind}">${busy ? '<span class="spin"></span>' : kind === 'ok' ? '✔ ' : ''}${esc(text)}</span>`;
+}
+function versionLine(r) {
+  if (!r.installed && r.pinless) return `Installs its newest release · Chorus is tested up to <span class="mono">${esc(r.suggested)}</span> (agy cannot be pinned to a version)`;
+  if (!r.installed) return `Suggested <span class="mono">${esc(r.suggested)}</span> · the newest version Chorus is tested with`;
+  const same = r.installed === r.suggested;
+  const latest = r.latest && r.latest !== r.suggested ? ` · latest release <span class="mono">${esc(r.latest)}</span> <span class="faint">(not tested yet)</span>` : '';
+  return same ? `Suggested <span class="mono">${esc(r.suggested)}</span> · up to date${latest}` : `Suggested <span class="mono">${esc(r.suggested)}</span> (tested)${latest}`;
+}
+function checks(list) {
+  return list.map(([m, t, time = '', why]) => `<div class="check"><span class="m ${m}">${m === 'ok' ? '✔' : m === 'bad' ? '✖' : m === 'warn' ? '⚠' : m === 'run' ? '<span class="spin"></span>' : '○'}</span><span${m === 'wait' ? ' class="faint"' : ''}>${esc(t)}</span><span class="t">${esc(time)}</span>${why ? `<span class="why">${esc(why)}</span>` : ''}</div>`).join('');
+}
+function row(r) {
+  const a = AG[r.agent];
+  const open = openRows.has(r.agent);
+  const detail = `<div class="detail">
+      ${r.short.length ? `<div class="group"><h4>Short test <span>${scene.id === 'running' ? 'running' : 'just now · 0.4 s'}</span></h4>${checks(r.short)}</div>` : ''}
+      <div class="group"><h4>Detailed test <span>${r.detailed ? (r.detailed.when === 'running' ? 'running' : `last run ${esc(r.detailed.when)} · ${r.detailed.list.filter(c => c[0] === 'ok').length} of ${r.detailed.list.length}`) : 'not run for this version'}</span></h4>${r.detailed ? checks(r.detailed.list) : '<div class="faint" style="font-size:13px">Chorus asks for it when a version is new to it.</div>'}</div>
+      ${r.installed && r.installed !== r.suggested ? `<div class="group"><h4>Suggested version</h4><div class="cmdline"><span>npm install -g @openai/codex@${esc(r.suggested)}</span><button class="btn">Install</button></div></div>` : ''}
+      ${!r.installed ? `<div class="group"><h4>Install</h4><div class="cmdline"><span>curl -fsSL https://antigravity.google/cli/install.sh | bash</span><button class="btn">Copy</button></div></div>` : ''}
+    </div>`;
+  const acts = r.acts ? `<div class="row-acts">${r.acts.map(([k, t]) => `<button class="btn ${k}">${esc(t)}</button>`).join('')}</div>` : '';
+  return `<div class="row${open ? ' open' : ''}" data-row="${r.agent}">
+    <button class="row-head" data-toggle="${r.agent}" aria-expanded="${open}">
+      <span class="badge mini ${r.agent}">${a.letter}</span>
+      <span class="main"><span class="name"><b>${esc(a.name)}</b>${r.installed ? `<span class="mono muted">${esc(r.installed)}</span>` : ''}${chip(r.status)}</span><span class="sub">${versionLine(r)}</span></span>
+      <span class="caret">▾</span>
+    </button>${acts}${detail}</div>`;
+}
+function banner(b) {
+  if (!b) return '';
+  const [kind, t, text, acts] = b;
+  return `<div class="banner ${kind}"><div class="grow"><div class="t">${esc(t)}</div><div class="muted" style="font-size:13px">${esc(text)}</div></div>${acts ? `<div class="acts">${acts.map(([k, l]) => `<button class="btn ${k}">${esc(l)}</button>`).join('')}</div>` : ''}</div>`;
+}
+function render() {
+  document.getElementById('top').innerHTML = `<b>Doctor mockup</b>${SCENES.map(s => `<button class="sc${s === scene ? ' on' : ''}" data-scene="${s.id}">${esc(s.title)}</button>`).join('')}<button class="theme" data-theme-toggle>Light / dark</button>`;
+  const dot = { idle: 'ok', running: 'warn', ready: 'ok', needed: 'warn', detailed: 'warn', failed: 'bad', missing: 'warn', popup: 'warn' }[scene.id];
+  document.getElementById('docbtn').innerHTML = `<span class="dot ${dot}"></span>Doctor`;
+  const rows = `<div class="card">${scene.rows.map(row).join('')}</div>`;
+  const page = scene.popup
+    ? `<div class="page" style="opacity:.35"><h1>What should we build?</h1><p class="lead">New chat</p><div class="card" style="height:260px"></div></div>
+       <div class="scrim"><div class="dialog"><h2>Checking your agents</h2><div class="body">${banner(['warn', 'Codex 0.170.0 is new to Chorus.', 'Test that it works? About 2 minutes, a few short model turns on your Codex plan.', [['primary', 'Run detailed test'], ['', 'Not now']]])}${rows}</div><div class="foot"><span class="grow faint" style="font-size:12.5px">Claude Code and Antigravity CLI are ready.</span><button class="btn primary">Continue</button></div></div></div>`
+    : `<div class="page"><h1>Doctor</h1><p class="lead">Your AI coding CLIs: are they installed, on a version Chorus is tested with, and signed in.</p>
+        <div class="run"><button class="btn primary big"${scene.run.busy ? ' disabled' : ''}>${scene.run.busy ? '<span class="spin"></span>' : '▶'} ${esc(scene.run.label)}</button><span class="when">${esc(scene.run.when)}</span></div>
+        ${banner(scene.banner)}${rows}</div>`;
+  document.getElementById('main').innerHTML = `${page}<div class="notes"><div class="box"><b>${esc(scene.title)}</b><ul>${scene.notes.map(n => `<li>${n}</li>`).join('')}</ul></div></div>`;
+}
+document.addEventListener('click', e => {
+  const s = e.target.closest('[data-scene]');
+  if (s) {
+    scene = SCENES.find(x => x.id === s.dataset.scene);
+    openRows.clear();
+    for (const a of scene.open) openRows.add(a);
+    return render();
+  }
+  const t = e.target.closest('[data-toggle]');
+  if (t) {
+    const a = t.dataset.toggle;
+    openRows.has(a) ? openRows.delete(a) : openRows.add(a);
+    return render();
+  }
+  if (e.target.closest('[data-theme-toggle]')) {
+    const r = document.documentElement;
+    const dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    r.dataset.theme = dark ? 'light' : 'dark';
+  }
+});
+const start = SCENES.find(s => s.id === location.hash.slice(1)) ?? SCENES[0];
+scene = start;
+for (const a of scene.open) openRows.add(a);
+render();
+</script>
+</body>
+</html>
