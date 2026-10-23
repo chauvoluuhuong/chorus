@@ -8,7 +8,9 @@ Chorus makes it easy for developers to work across AI coding CLIs (Claude Code `
 Codex `codex`, Google Antigravity `agy`): handoff with shared context, all threads in one place,
 visibility of tool calls / approvals / artifacts, one set of skills for every CLI.
 
-- First product: **`chorus` CLI app** (npm package `@chauvoluuhuong/chorus`). Desktop app later, on the same core.
+- **Priority now: the desktop app** (`chorus serve` + the page in `src/desktop/` + the Tauri shell
+  in `desktop/`). The `chorus` CLI app (npm package `@chauvoluuhuong/chorus`, terminal UI in `src/app/`) runs on
+  the same core and is on hold (rule 7).
 - Goal: $5 lifetime, ~5,000 buyers, mostly in the first 1–3 months after launch. Copies are
   expected and accepted. Build time is not the constraint. See `docs/product.md`.
 
@@ -22,6 +24,10 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 - This repo's npm package is **`@chauvoluuhuong/chorus`**. `chorus-cli` on npm belongs to someone else: never install or publish it.
 - Until the split (`docs/chorus-core.md` §6), the core's parts still live here: `src/core/`, `src/app/approval.ts`,
   `tools/probe/`, `fixtures/`, `docs/integrations/`. Keep new integration code free of store/UI imports so it can move.
+- **Clone both side by side**: `chorus/` and `chorus-core/` in the same folder. Here `fixtures/` and `docs/integrations/` are
+  symlinks to `../chorus-core/`, and `package.json` depends on `file:../chorus-core` (run `npm run build` there first).
+  `fixtures/` is the real captured output of each CLI per version: the evidence for every integration fact, and the data the
+  tests replay (contract tests in chorus-core; the fake agent, approval and screen tests here).
 - Before this repo goes public, its history must not carry core material (`docs/chorus-core.md` §6, step 4b).
 - After install the doctor runs a 1–5 s check with no model calls, and the deeper integration test only for untested CLI
   versions (`docs/doctor.md`). The tested versions and their evidence: `docs/integrations/versions.md`.
@@ -49,8 +55,26 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 | `fixtures/<cli>/<version>/` | Real captured CLI output |
 | `docs/archive/` | v1 material (product concept, UI mockup v3, marketing notes); reference only |
 
-The v1 Tauri/React prototype was removed; it is in git history on `dev`. Work happens on
-`feat/refactor`.
+The v1 Tauri/React prototype was removed; it is in git history. New work branches from `dev`
+(see Workflow below).
+
+## Workflow: every new feature or bug fix
+
+1. **Branch from `dev`.** `git fetch origin && git switch -c feat/<short-name> origin/dev` for a
+   feature, `fix/<short-name>` for a bug fix. Never work directly on `dev` or `main`.
+2. **Do the work** on that branch and commit there. Run `npm test` and `npm run typecheck`; when
+   the change touches an agent integration, also run the matching `npm run smoke*`.
+3. **Prove it.** Capture what the change looks like in the real app:
+   - UI (desktop page, CLI app): a screenshot of the new or fixed screen, or a short video
+     (≤30 s) when the change is a flow or an animation.
+   - No visible UI: the terminal output of the command or test that shows it working.
+   Save proof in `.chorus/proof/<branch-name>/` (gitignored; don't commit videos).
+4. **Merge into `dev`** when tests pass: `git switch dev && git merge --no-ff <branch>`. If `dev`
+   is checked out in another worktree, merge there with `git -C <that path>`, but only if that
+   checkout is clean; otherwise ask. Don't push unless asked.
+5. **Report the merge** in a few lines: what changed and why (one or two sentences), the branch,
+   tests run and their result, and the proof attached (send the screenshot or video to the user,
+   with its path). Name anything not done or not verified.
 
 ## Rules
 
@@ -66,6 +90,12 @@ The v1 Tauri/React prototype was removed; it is in git history on `dev`. Work ha
    (a parent Claude session leaks its session id otherwise).
 6. Review fixtures for personal data before committing (the probe redacts emails, account ids and
    the home path).
+7. **Desktop app first; don't touch the CLI app without asking.** Build every feature and fix for
+   the desktop app (`src/serve/`, `src/desktop/`, `desktop/`). Never change the CLI app
+   (`src/app/`, its screens and `mux`, `test/app/`, `npm run proof`/`smoke:app`) unless the user
+   says so in this session, even when the same change would fit there. Changes to shared code
+   (`src/core/`, `src/mcp/`, `src/cli/`) are fine; if one changes how the CLI app behaves, say so
+   and ask before merging.
 
 ## Commands
 

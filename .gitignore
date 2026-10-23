@@ -15,3 +15,6 @@ Thumbs.db
 # Installer downloads (scripts/release-downloads.mjs), published with the site
 site/dl/
 .firebase/
+
+# written by Chorus whenever an agy chat starts in this folder (local paths, a chat id): never commit it
+.agents/mcp_config.json
