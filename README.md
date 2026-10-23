@@ -4,6 +4,11 @@
 > from one agent to another without losing context, keep every thread in one place, and see what
 > the agents do and make.
 
+**Status:** Phases 1–4 are built and proven with the real CLIs (branch `feat/phase-1`); the desktop app (Phase 5)
+comes after. First product: the **`chorus`** CLI app (npm package `@chauvoluuhuong/chorus`).
+
+**Goal:** $5 lifetime license, ~5,000 buyers. See [docs/product.md](docs/product.md).
+
 ## Run it
 
 Needs Node 22+ and at least one of `claude`, `codex`, `agy` installed and logged in (`chorus doctor` checks).
