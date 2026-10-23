@@ -233,7 +233,7 @@ const SCENES = [
     banner: ['warn', '2 agents need you.', 'Chorus works with any one of them; each one more is another agent to hand work to.'],
     rows: [ready('claude', '2.1.309'), { agent: 'codex', installed: '0.163.0', suggested: '0.163.0', latest: '0.163.0', status: ['warn', 'Signed out'], short: [['ok', `Installed at ${AG.codex.bin} (npm)`], ['ok', 'Version 0.163.0 is tested with Chorus'], ['bad', 'Not signed in', '', 'codex login status: not logged in']], detailed: null, acts: [['primary', 'Sign in']] }, { agent: 'agy', installed: null, suggested: '1.4.5', latest: '1.4.5', status: ['warn', 'Not installed'], short: [['bad', 'Not found on PATH or in ~/.local/bin, /opt/homebrew/bin']], detailed: null, acts: [['primary', 'Install'], ['', 'Open page ↗']], pinless: true }],
     open: ['agy'],
-    notes: ['<b>Install</b> opens the CLI\'s page in the browser and runs its install command in a terminal pane under the row (the user sees and answers it), pinned to the suggested version when the CLI allows it (Claude Code, Codex). agy can't be pinned: it installs its newest release, and the short test then says whether that version is tested.',
+    notes: ['<b>Install</b> opens the CLI\'s page in the browser and runs its install command in a terminal pane under the row (the user sees and answers it), pinned to the suggested version when the CLI allows it (Claude Code, Codex). agy cannot be pinned: it installs its newest release, and the short test then says whether that version is tested.',
       '<b>Sign in</b> runs the CLI\'s own login, <span class="mono">codex login</span> here (it opens the browser). agy signs in on its first start.'],
   },
   {
