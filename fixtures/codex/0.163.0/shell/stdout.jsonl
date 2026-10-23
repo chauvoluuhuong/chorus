@@ -1,6 +1,0 @@
-{"type":"thread.started","thread_id":"01a147ea-9e0e-7301-b1ca-816b28d9cee3"}
-{"type":"turn.started"}
-{"type":"item.started","item":{"id":"item_0","type":"command_execution","command":"/bin/zsh -lc 'echo chorus-probe-$((6*7))'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
-{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"/bin/zsh -lc 'echo chorus-probe-$((6*7))'","aggregated_output":"chorus-probe-42\n","exit_code":0,"status":"completed"}}
-{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"chorus-probe-42"}}
-{"type":"turn.completed","usage":{"input_tokens":37845,"cached_input_tokens":30592,"cache_write_input_tokens":0,"output_tokens":45,"reasoning_output_tokens":0}}

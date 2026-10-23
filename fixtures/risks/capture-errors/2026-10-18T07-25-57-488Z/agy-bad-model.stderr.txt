@@ -1,8 +1,0 @@
-error: invalid model selection (--model "chorus-no-such-model" --effort ""): model chorus-no-such-model is not recognized as a known model or custom model in settings
-Available models:
-  Gemini 3.8 Flash (High)
-  Gemini 3.8 Flash (Medium)
-  Gemini 3.8 Flash (Low)
-  Claude Sonnet 4.6 (Thinking)
-  Claude Opus 4.6 (Thinking)
-  GPT-OSS 120B (Medium)
