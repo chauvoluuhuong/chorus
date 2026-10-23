@@ -41,6 +41,8 @@ const S = {
   decided: [],
   scope: 'all',
   doctor: null,
+  docJobs: {},
+  docAutoClose: null,
   attached: null,
   screen: { live: true, exited: false, waiting: true },
   shownDialogs: new Set(),
@@ -122,6 +124,8 @@ function onState(st) {
     return go({ name: 'new' }, false);
   }
   showDialogs(st.dialogs);
+  // first load: the doctor's popup when this is a first launch or something was updated (docs/doctor.md §6.1)
+  if (first) void loadDoctor().then(d => d.due && openDoctorPopup()).catch(() => {});
   renderChrome();
   if (S.view.name === 'chat') renderChatParts();
   else if (S.view.name === 'approvals' && !$('#view').contains(document.activeElement?.closest('.note-input, .other-input'))) renderView();
@@ -238,7 +242,7 @@ function go(view, push = true) {
   if (view.name === 'memory') void loadMemory();
   if (view.name === 'skills') void loadSkills();
   if (view.name === 'approvals') void loadDecided();
-  if (view.name === 'doctor') void api('GET', '/api/doctor').then(d => ((S.doctor = d.lines), renderView()));
+  if (view.name === 'doctor') void loadDoctor().then(() => renderView());
   renderChrome();
   renderView();
 }
@@ -558,8 +562,109 @@ function skillsHtml() {
     <div class="card list">${k.found.length ? k.found.map(f => `<div class="item skill"><span class="badge mini ${esc(f.agent)}">${esc(AGENT[f.agent]?.letter ?? '·')}</span><div class="grow"><div style="font-weight:600">${esc(f.name)}</div><div class="muted mono">${esc(tilde(f.from))}</div></div><button class="btn" data-act="sk-import" data-arg="${esc(f.dir)}">Import</button></div>`).join('') : '<div class="empty">Nothing new to import.</div>'}</div></div>`;
 }
 
+/* ---------- the doctor (docs/doctor.md §6): popup on first launch and after an update, and the Doctor page ---------- */
+
+const DOC_STEPS = 7;
+async function loadDoctor() {
+  S.doctor = await api('GET', '/api/doctor');
+  return S.doctor;
+}
+
+function doctorRows(d) {
+  return d.fast.agents
+    .map(a => {
+      const job = S.docJobs[a.agent];
+      const running = job && !job.done;
+      const deep = job?.action === 'deep' && job.done ? job : null;
+      let badge = '';
+      let note = '';
+      let acts = '';
+      if (running) {
+        badge = `<span class="badge plain"><span class="spin"></span>${job.action === 'deep' ? `Testing · ${job.results.length} of ${DOC_STEPS}` : job.action === 'login' ? 'Signing in…' : 'Installing…'}</span>`;
+        if (job.action !== 'deep') note = `<span class="mono">${esc(job.command)}</span>`;
+      } else if (deep && deep.ok) {
+        badge = `<span class="badge ok">✔ Works on this Mac</span>`;
+      } else if (deep && !deep.ok) {
+        const f = deep.results.find(r => r.status === 'fail');
+        badge = `<span class="badge bad">✖ Problem</span>`;
+        note = `${esc(f ? `${f.title}: ${f.reason}` : 'a check did not pass')}${a.testedInstall && a.newestTested !== a.version ? `<br>Chorus is tested with ${esc(a.newestTested)}. Optional: <span class="mono">${esc(a.testedInstall)}</span>` : ''}`;
+        acts = `${a.testedInstall && a.newestTested !== a.version ? `<button class="btn" data-act="doc-run" data-arg="${a.agent}:tested">Install ${esc(a.newestTested)}</button>` : ''}<button class="btn" data-act="doc-report">Report issue</button>`;
+      } else if (a.state === 'ready') {
+        badge = `<span class="badge ok">✔ ${a.coverage === 'tested' ? 'Tested' : 'In tested range'}, ready</span>`;
+      } else if (a.state === 'missing') {
+        badge = `<span class="badge warn">Not installed</span>`;
+        note = `<span class="mono">${esc(a.install.command)}</span>${a.install.version ? ` <span class="faint">(${esc(a.install.version)}, the newest tested)</span>` : ''}`;
+        acts = `<button class="btn" data-act="doc-open" data-arg="${a.agent}">Open page ↗</button><button class="btn primary" data-act="doc-run" data-arg="${a.agent}:install">Install</button>`;
+      } else if (a.state === 'needs-login') {
+        badge = `<span class="badge warn">Needs login</span>`;
+        note = a.agent === 'agy' ? 'Run <span class="mono">agy</span> once in a terminal to sign in with Google.' : `<span class="mono">${esc(a.loginCommand.join(' '))}</span>`;
+        acts = a.agent === 'agy' ? '' : `<button class="btn primary" data-act="doc-run" data-arg="${a.agent}:login">Sign in</button>`;
+      } else if (a.state === 'untested') {
+        badge = `<span class="badge warn">New version</span>`;
+        note = `Chorus is tested up to ${esc(a.newestTested ?? 'none')}. Checking that ${esc(a.version)} works takes 1–3 min and a few short model turns on your plan.`;
+        acts = `<button class="btn primary" data-act="doc-run" data-arg="${a.agent}:deep">Test it</button>`;
+      }
+      const results = job?.action === 'deep' && job.results.length ? `<div class="doc-results">${job.results.map(r => `<div><span class="${r.status === 'pass' ? 'ok' : r.status === 'fail' ? 'bad' : 'faint'}">${{ pass: '✔', fail: '✖', skip: '–', blocked: '⚠' }[r.status]}</span> ${esc(r.title)}${r.reason ? ` <span class="faint">(${esc(r.reason)})</span>` : ''}</div>`).join('')}</div>` : '';
+      const out = job && job.action !== 'deep' && job.output ? `<pre class="record doc-out">${esc(job.output.slice(-1500))}</pre>` : '';
+      return `<div class="doc-row"><span class="badge mini ${a.agent}">${AGENT[a.agent].letter}</span><div class="grow"><div><b>${esc(a.name)}</b> <span class="muted mono">${esc(a.version ?? '')}</span> ${badge}</div>${note ? `<div class="muted doc-note">${note}</div>` : ''}${results}${out}</div><div class="doc-acts">${acts}</div></div>`;
+    })
+    .join('');
+}
+
 function doctorHtml() {
-  return `<div class="page"><h1>Doctor</h1><p class="lead">The agents Chorus starts, their versions and logins, and where Chorus keeps its data.</p><div class="card"><pre class="record">${esc((S.doctor ?? ['checking…']).map(tilde).join('\n'))}</pre></div></div>`;
+  const d = S.doctor;
+  if (!d) return `<div class="page"><h1>Doctor</h1><p class="lead">Checking your agents…</p></div>`;
+  return `<div class="page"><h1>Doctor</h1><p class="lead">Your AI CLIs: whether Chorus is tested with their versions, and what each one needs. Checked in ${(d.fast.ms / 1000).toFixed(1)} s, no model calls.</p>
+    <div class="card list" id="doc-rows">${doctorRows(d)}</div>
+    <div class="toolbar"><button class="btn" data-act="doc-recheck">Check again</button>${d.fast.agents.filter(a => a.state !== 'missing').map(a => `<button class="btn" data-act="doc-run" data-arg="${a.agent}:deep">Full test of ${esc(a.name)}</button>`).join('')}</div>
+    <div class="section-title">Chorus</div><div class="card"><pre class="record">${esc((d.lines ?? []).map(tilde).join('\n'))}</pre></div></div>`;
+}
+
+function openDoctorPopup() {
+  if ($('#doctor-pop')) return;
+  const el = document.createElement('div');
+  el.className = 'scrim';
+  el.id = 'doctor-pop';
+  el.innerHTML = `<div class="dialog doc-dialog" role="dialog"><h2>Checking your agents</h2><div class="body" id="doc-pop-rows"></div><div class="foot"><span class="faint grow" id="doc-pop-note"></span><button class="btn primary" data-act="doc-continue">Continue</button></div></div>`;
+  $('#dialogs').append(el);
+  drawDoctor();
+}
+
+function drawDoctor() {
+  const d = S.doctor;
+  if (!d) return;
+  const pop = $('#doc-pop-rows');
+  if (pop) {
+    pop.innerHTML = doctorRows(d);
+    const busy = Object.values(S.docJobs).some(j => !j.done);
+    const allReady = d.fast.agents.every(a => a.state === 'ready') && !busy;
+    $('#doc-pop-note').textContent = allReady ? 'Every agent is on a tested version. Closing…' : busy ? 'You can continue: the test keeps running and its result shows on the Doctor page.' : '';
+    if (allReady && !S.docAutoClose) S.docAutoClose = setTimeout(closeDoctorPopup, 2500);
+  }
+  if (S.view.name === 'doctor') renderView();
+}
+
+function closeDoctorPopup() {
+  $('#doctor-pop')?.remove();
+  void api('POST', '/api/doctor/seen').catch(() => {});
+}
+
+async function pollDoctorJob(agent, id) {
+  const j = await api('GET', `/api/doctor/${id}`).catch(() => null);
+  if (!j) return;
+  S.docJobs[agent] = j;
+  if (j.done && j.action !== 'deep') await loadDoctor();
+  drawDoctor();
+  if (!j.done) setTimeout(() => pollDoctorJob(agent, id), 1000);
+  else toast(j.ok ? `${AGENT[agent].name}: ${j.action === 'deep' ? 'works with Chorus' : 'done'}` : `${AGENT[agent].name}: ${j.action === 'deep' ? 'a check did not pass' : 'the command failed'}`);
+}
+
+async function reportIssue() {
+  const { title, body } = await api('POST', '/api/doctor/issue');
+  const el = document.createElement('div');
+  el.className = 'scrim';
+  el.innerHTML = `<div class="dialog doc-dialog" role="dialog"><h2>Report an issue</h2><div class="body"><p class="muted">This goes to github.com/chauvoluuhuong/chorus/issues. Emails, account ids, keys and your home path are taken out; read it and edit what you like before sending.</p><input type="text" class="dlg-input" id="doc-issue-title" value="${esc(title)}"><textarea class="doc-issue" id="doc-issue-body" spellcheck="false">${esc(body)}</textarea></div><div class="foot"><span class="grow"></span><button class="btn" data-act="doc-issue-cancel">Cancel</button><button class="btn primary" data-act="doc-send">${S.doctor?.gh ? 'Create issue' : 'Open on GitHub'}</button></div></div>`;
+  $('#dialogs').append(el);
 }
 
 /* ---------- a chat ---------- */
@@ -880,6 +985,33 @@ document.addEventListener('click', async e => {
       return go({ name: act });
     case 'chat':
       return go({ name: 'chat', id: arg });
+    case 'doc-continue':
+      clearTimeout(S.docAutoClose);
+      return closeDoctorPopup();
+    case 'doc-open':
+      return void api('POST', '/api/doctor/open', { agent: arg });
+    case 'doc-run': {
+      const [agent, action] = arg.split(':');
+      if (action === 'install' || action === 'tested') void api('POST', '/api/doctor/open', { agent }).catch(() => {});
+      const j = await api('POST', '/api/doctor/run', { agent, action }).catch(err => (toast(err.message), null));
+      if (!j || j.error) return j?.error && toast(j.error);
+      S.docJobs[agent] = j;
+      clearTimeout(S.docAutoClose);
+      drawDoctor();
+      return void pollDoctorJob(agent, j.id);
+    }
+    case 'doc-recheck':
+      S.docJobs = {};
+      return void loadDoctor().then(drawDoctor);
+    case 'doc-report':
+      return void reportIssue();
+    case 'doc-issue-cancel':
+      return el.closest('.scrim')?.remove();
+    case 'doc-send': {
+      const r = await api('POST', '/api/doctor/issue/send', { title: $('#doc-issue-title').value, body: $('#doc-issue-body').value }).catch(err => ({ error: err.message }));
+      el.closest('.scrim')?.remove();
+      return toast(r.error ? `Not sent: ${r.error}` : r.via === 'gh' ? `Issue created: ${r.url}` : 'Opened GitHub; the report is on your clipboard: paste it as the description');
+    }
     case 'back':
       return back();
     case 'sidebar':

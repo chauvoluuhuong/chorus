@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Writes the files the one-command installer (site/install.sh) downloads, into site/dl/ (not in git;
 // Firebase Hosting publishes it with the page):
-//   chorus-cli-<version>.tgz        the chorus command (`npm pack`; package.json "files" picks what goes in)
+//   chorus-cli-<version>.tgz        the chorus command (`npm pack`; package.json "files" picks what goes in), with the
+//                                   private @chauvoluuhuong/chorus-core inside it as a bundled dependency
 //   Chorus-macOS-<version>.zip      Chorus.app from desktop/ (built first when missing)
 // and sets VERSION in site/install.sh to package.json's version. Then `npm run deploy:site` publishes them.
-//   node scripts/release-downloads.mjs [--rebuild-app]
+//   node scripts/release-downloads.mjs [--rebuild-app]     (CHORUS_APP=<path to Chorus.app> to use another build)
 import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -14,7 +15,7 @@ import * as esbuild from 'esbuild';
 const root = path.resolve(import.meta.dirname, '..');
 const { version } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const out = path.join(root, 'site', 'dl');
-const app = path.join(root, 'desktop/src-tauri/target/release/bundle/macos/Chorus.app');
+const app = process.env.CHORUS_APP ?? path.join(root, 'desktop/src-tauri/target/release/bundle/macos/Chorus.app');
 const run = (cmd, args, cwd = root) => execFileSync(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'inherit'] }).toString().trim();
 const sha = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
 
@@ -37,10 +38,22 @@ for (const f of files(path.join(stage, 'src')).filter((f) => f.endsWith('.js') &
 }
 fs.cpSync(path.join(root, 'scripts/fix-pty.mjs'), path.join(stage, 'scripts/fix-pty.mjs'));
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-pkg.bin = { chorus: 'src/cli/index.js', 'chorus-cli': 'src/cli/index.js' };
+pkg.bin = { chorus: 'src/cli/index.js' };
 pkg.scripts = { postinstall: pkg.scripts.postinstall };
 pkg.files = ['src', 'scripts'];
 delete pkg.devDependencies;
+// chorus-core is private (docs/chorus-core.md §5): its built package goes inside the tarball, so the user's npm installs it
+// with Chorus and needs no login. It is built and checked (dist/ only) from the checkout next to this one.
+const coreDir = fs.realpathSync(path.join(root, 'node_modules/@chauvoluuhuong/chorus-core'));
+run('npm', ['run', 'build'], coreDir);
+run('npm', ['run', 'check:pack'], coreDir);
+const corePacked = JSON.parse(run('npm', ['pack', '--json', '--pack-destination', stage], coreDir))[0];
+const coreTo = path.join(stage, 'node_modules/@chauvoluuhuong/chorus-core');
+fs.mkdirSync(coreTo, { recursive: true });
+run('tar', ['-xzf', path.join(stage, corePacked.filename), '-C', coreTo, '--strip-components', '1']);
+fs.rmSync(path.join(stage, corePacked.filename));
+pkg.dependencies['@chauvoluuhuong/chorus-core'] = corePacked.version;
+pkg.bundleDependencies = ['@chauvoluuhuong/chorus-core'];
 fs.writeFileSync(path.join(stage, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
 fs.chmodSync(path.join(stage, 'src/cli/index.js'), 0o755);
 

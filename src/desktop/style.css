@@ -323,3 +323,18 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
   .agents, .row2, .mem { grid-template-columns: 1fr; }
   .drawer { position: absolute; right: 0; top: 0; bottom: 0; width: min(380px, 100%); z-index: 5; }
 }
+
+/* the doctor (docs/doctor.md §6) */
+.doc-dialog { width: min(640px, calc(100vw - 32px)); }
+.doc-row { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.doc-row:last-child { border-bottom: 0; }
+.doc-row .grow { flex: 1; min-width: 0; }
+.doc-note { font-size: 13px; margin-top: 4px; overflow-wrap: anywhere; }
+.doc-acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.doc-results { font-size: 13px; margin-top: 6px; display: grid; gap: 2px; }
+.doc-results .ok { color: var(--ok); }
+.doc-results .bad { color: var(--bad); }
+.doc-out { max-height: 140px; overflow: auto; margin-top: 6px; font-size: 11.5px; }
+.doc-issue { width: 100%; min-height: 260px; margin-top: 8px; font-family: var(--f-mono); font-size: 12px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--bg); color: var(--ink, inherit); }
+.spin { width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; display: inline-block; animation: doc-spin 0.8s linear infinite; }
+@keyframes doc-spin { to { transform: rotate(360deg); } }
