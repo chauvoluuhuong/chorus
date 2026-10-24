@@ -5,8 +5,7 @@
 
 ## 1. What Chorus is for
 
-Make it easy for developers to work across AI coding CLIs. Goal and success definition:
-[product.md](product.md).
+Make it easy for developers to work across AI coding CLIs.
 
 1. **Handoff and shared context between AI CLIs.** Work started in one agent (Claude Code, Codex,
    Antigravity) continues in another without losing what was asked, decided and changed,
@@ -289,5 +288,5 @@ user: Ctrl+Space h → pick codex        (or: chorus handoff --to codex)
 | D1 | Language for core, MCP server and CLI app | **Decided: TypeScript on Node 22+ for Phases 1–3** (adapters, store, MCP server; fastest while the CLI formats are still moving; official MCP SDK; `node:sqlite` built in). **Phase 4: stay on TypeScript** (spike: PTY + virtual screens + sidebar + switching works, see [phase4.md](phase4.md)); packaging is decided by a binary spike in P4.8, with a Rust port of only the thin app layer as the fallback. Keep `node-pty` behind a small interface so a port stays cheap |
 | D2 | Per-session MCP config for agy | **Decided:** workspace `.agents/mcp_config.json`, verified with agy 1.4.0 |
 | D3 | Desktop technology | **Decided: Tauri 2 as a thin shell** (4.9 MB; Electron ~200 MB). It starts `chorus serve` on the user's Node and shows its page; no logic in the shell. See [phase5.md §3](phase5.md#3-decision-d3-tauri-as-a-thin-shell) |
-| D4 | Provider terms (agy subscription orchestration, Claude and Codex account use) | Check before selling; see integration docs |
+| D4 | Provider terms (agy subscription orchestration, Claude and Codex account use) | Check before release; see integration docs |
 | D5 | Command name and menu key | `chorus` (npm package `@chauvoluuhuong/chorus`, renamed 2026-10-23: `chorus-cli` on npm belongs to someone else); menu key **Ctrl+\** and also Ctrl+Space (macOS keeps Ctrl+Space for input-source switching, so the default had to change), configurable with CHORUS_MENU_KEY |

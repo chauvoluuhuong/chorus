@@ -125,7 +125,7 @@ the legacy keys (TD-5).
 - The CLI app and the desktop are separate hosts: running both at once on the same chats would start two agents for one session
   (each resumes a parked chat on its own). Not guarded yet.
 - Windows and Linux shells are not built or tested (TD-6). The Tauri config has the icons for them.
-- No signing/notarisation yet (needed before selling, with D4).
+- No signing/notarisation yet (needed before release, with D4).
 - Desktop notifications for a background approval (the window shows a toast; the OS notification centre is not used).
 
 ## 8. A chat inside a project, agy's input at the bottom, dropped files, approval cards

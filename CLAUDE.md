@@ -11,14 +11,14 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 - **Priority now: the desktop app** (`chorus serve` + the page in `src/desktop/` + the Tauri shell
   in `desktop/`). The `chorus` CLI app (npm package `@chauvoluuhuong/chorus`, terminal UI in `src/app/`) runs on
   the same core and is on hold (rule 7).
-- Goal: $5 lifetime, ~5,000 buyers, mostly in the first 1–3 months after launch. Copies are
-  expected and accepted. Build time is not the constraint. See `docs/product.md`.
+- This repo is public: no business material (pricing, sales goals, competitors, launch or marketing plans) goes in it, in code,
+  docs or commit messages. That belongs in chorus-core.
 
 ## Two repos
 
 | Repo | Visibility, licence | Holds |
 |---|---|---|
-| `chauvoluuhuong/chorus` (this one) | Public from launch. AGPL-3.0-only, with an additional permission to combine it with chorus-core (`LICENSE`, `NOTICE.md`) | The app: store, handoff, memory, MCP tools, desktop, CLI app, installers (curl, Homebrew, npx), landing page. Buyers install from here and file issues and doctor reports here |
+| `chauvoluuhuong/chorus` (this one) | Public from launch. AGPL-3.0-only, with an additional permission to combine it with chorus-core (`LICENSE`, `NOTICE.md`) | The app: store, handoff, memory, MCP tools, desktop, CLI app, installers (curl, Homebrew, npx), landing page. Users install from here and file issues and doctor reports here |
 | `chauvoluuhuong/chorus-core` (private, `git@github.com:chauvoluuhuong/chorus-core.git`, checked out next to this one; branches `dev` and `main`) | Private source, `UNLICENSED`. Only its built bundle is published, to public npm as `@chauvoluuhuong/chorus-core`, so installing Chorus installs it with no login | The CLI integration: adapters, launch flags, transcript discovery, approval detection, the doctor, the probes, the version matrix, fixtures, `docs/integrations/` |
 
 - This repo's npm package is **`@chauvoluuhuong/chorus`**. `chorus-cli` on npm belongs to someone else: never install or publish it.
@@ -37,7 +37,6 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 
 | Path | What |
 |---|---|
-| `docs/product.md` | Goal, value, pricing, competitors, risks |
 | `docs/architecture.md` | **Build plan (5 phases)**, components, data stored, MCP tools, handoff, threads |
 | `docs/roadmap.md` | Progress checklist per phase |
 | `docs/testing.md` | Test layers; what runs in the cloud vs locally |
@@ -54,7 +53,7 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 | `test/` | `contract/` (L1, fixtures), `flow/` + `app/` + `serve/` (L2, fake agent), `smoke/` (L3, real CLIs) |
 | `tools/fake-agent/` | Fake AI CLI for L2 tests |
 | `fixtures/<cli>/<version>/` | Real captured CLI output |
-| `docs/archive/` | v1 material (product concept, UI mockup v3, marketing notes); reference only |
+| `docs/archive/` | v1 material (product concept, UI mockup v3, feature brainstorm); reference only |
 
 The v1 Tauri/React prototype was removed; it is in git history. New work branches from `dev`
 (see Workflow below).
@@ -157,11 +156,11 @@ The risks found before Phase 5 are probed and written down in `docs/risks/`; the
 technical debt TD-2..TD-10 in `docs/roadmap.md` (memory must be injected, not left to agents; errors and file changes are invisible
 to the adapters; transcript matching; kitty keyboard; Windows; plan-limit capture).
 
-1. Technical debt that a buyer would hit first: TD-3 (a failed run looks empty), TD-4 for agy (two agy chats started together; Codex is matched by thread marker since 2026-10-22), TD-2
+1. Technical debt that a user would hit first: TD-3 (a failed run looks empty), TD-4 for agy (two agy chats started together; Codex is matched by thread marker since 2026-10-22), TD-2
    (memory digest at chat start), TD-1 (one global skill library).
-2. Desktop before selling: signing and notarisation of `Chorus.app`, Windows/Linux builds (TD-6), a guard against the CLI app and
+2. Desktop before release: signing and notarisation of `Chorus.app`, Windows/Linux builds (TD-6), a guard against the CLI app and
    the desktop resuming the same chat at once (`docs/phase5.md` §7).
-3. D4 (provider terms) before selling.
+3. D4 (provider terms) before release.
 
 Known gaps: `file_change`, `reasoning`, `turn.failed` Codex events, agy errors/quota and the Claude plan-limit hit are not
 captured by the adapters (fixtures of the first three are in `fixtures/risks/capture-errors/`, TD-3); ctx % in the status line is not built
