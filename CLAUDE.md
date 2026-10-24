@@ -11,14 +11,14 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 - **Priority now: the desktop app** (`chorus serve` + the page in `src/desktop/` + the Tauri shell
   in `desktop/`). The `chorus` CLI app (npm package `@chauvoluuhuong/chorus`, terminal UI in `src/app/`) runs on
   the same core and is on hold (rule 7).
-- Business plan (goal, pricing, competitors, launch, marketing, signing and payments) is **not in this public repo**: it lives in
-  `../chorus-core/docs/business/`. Never write it back here. Build time is not the constraint.
+- This repo is public: no business material (pricing, sales goals, competitors, launch or marketing plans) goes in it, in code,
+  docs or commit messages. That belongs in chorus-core.
 
 ## Two repos
 
 | Repo | Visibility, licence | Holds |
 |---|---|---|
-| `chauvoluuhuong/chorus` (this one) | Public from launch. AGPL-3.0-only, with an additional permission to combine it with chorus-core (`LICENSE`, `NOTICE.md`) | The app: store, handoff, memory, MCP tools, desktop, CLI app, installers (curl, Homebrew, npx), landing page. Buyers install from here and file issues and doctor reports here |
+| `chauvoluuhuong/chorus` (this one) | Public from launch. AGPL-3.0-only, with an additional permission to combine it with chorus-core (`LICENSE`, `NOTICE.md`) | The app: store, handoff, memory, MCP tools, desktop, CLI app, installers (curl, Homebrew, npx), landing page. Users install from here and file issues and doctor reports here |
 | `chauvoluuhuong/chorus-core` (private, `git@github.com:chauvoluuhuong/chorus-core.git`, checked out next to this one; branches `dev` and `main`) | Private source, `UNLICENSED`. Only its built bundle is published, to public npm as `@chauvoluuhuong/chorus-core`, so installing Chorus installs it with no login | The CLI integration: adapters, launch flags, transcript discovery, approval detection, the doctor, the probes, the version matrix, fixtures, `docs/integrations/` |
 
 - This repo's npm package is **`@chauvoluuhuong/chorus`**. `chorus-cli` on npm belongs to someone else: never install or publish it.
@@ -156,7 +156,7 @@ The risks found before Phase 5 are probed and written down in `docs/risks/`; the
 technical debt TD-2..TD-10 in `docs/roadmap.md` (memory must be injected, not left to agents; errors and file changes are invisible
 to the adapters; transcript matching; kitty keyboard; Windows; plan-limit capture).
 
-1. Technical debt that a buyer would hit first: TD-3 (a failed run looks empty), TD-4 for agy (two agy chats started together; Codex is matched by thread marker since 2026-10-22), TD-2
+1. Technical debt that a user would hit first: TD-3 (a failed run looks empty), TD-4 for agy (two agy chats started together; Codex is matched by thread marker since 2026-10-22), TD-2
    (memory digest at chat start), TD-1 (one global skill library).
 2. Desktop before release: signing and notarisation of `Chorus.app`, Windows/Linux builds (TD-6), a guard against the CLI app and
    the desktop resuming the same chat at once (`docs/phase5.md` §7).
