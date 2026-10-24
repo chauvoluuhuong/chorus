@@ -187,7 +187,7 @@ agy workspace file with a Chorus-managed marker, Codex `-c`), never into the use
 - **Session discovery for Codex/agy** (no way to choose the id): match by cwd and creation time; a
   thread started in a shared cwd needs a unique marker (the Chorus thread id in the first prompt works).
 - **Memory**: ≤ 6 live threads (architecture §8), parked threads resume with `--resume`/`resume`.
-- **Provider terms (D4)** still gate selling the product; no change from earlier.
+- **Provider terms (D4)** still gate the release; no change from earlier.
 - **node-pty in a binary** (P4.8): native addon plus a `spawn-helper` that must be executable
   (`scripts/fix-pty.mjs`).
 

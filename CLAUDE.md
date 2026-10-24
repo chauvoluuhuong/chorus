@@ -11,8 +11,8 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 - **Priority now: the desktop app** (`chorus serve` + the page in `src/desktop/` + the Tauri shell
   in `desktop/`). The `chorus` CLI app (npm package `@chauvoluuhuong/chorus`, terminal UI in `src/app/`) runs on
   the same core and is on hold (rule 7).
-- Goal: $5 lifetime, ~5,000 buyers, mostly in the first 1–3 months after launch. Copies are
-  expected and accepted. Build time is not the constraint. See `docs/product.md`.
+- Business plan (goal, pricing, competitors, launch, marketing, signing and payments) is **not in this public repo**: it lives in
+  `../chorus-core/docs/business/`. Never write it back here. Build time is not the constraint.
 
 ## Two repos
 
@@ -37,7 +37,6 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 
 | Path | What |
 |---|---|
-| `docs/product.md` | Goal, value, pricing, competitors, risks |
 | `docs/architecture.md` | **Build plan (5 phases)**, components, data stored, MCP tools, handoff, threads |
 | `docs/roadmap.md` | Progress checklist per phase |
 | `docs/testing.md` | Test layers; what runs in the cloud vs locally |
@@ -54,7 +53,7 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 | `test/` | `contract/` (L1, fixtures), `flow/` + `app/` + `serve/` (L2, fake agent), `smoke/` (L3, real CLIs) |
 | `tools/fake-agent/` | Fake AI CLI for L2 tests |
 | `fixtures/<cli>/<version>/` | Real captured CLI output |
-| `docs/archive/` | v1 material (product concept, UI mockup v3, marketing notes); reference only |
+| `docs/archive/` | v1 material (product concept, UI mockup v3, feature brainstorm); reference only |
 
 The v1 Tauri/React prototype was removed; it is in git history. New work branches from `dev`
 (see Workflow below).
@@ -159,9 +158,9 @@ to the adapters; transcript matching; kitty keyboard; Windows; plan-limit captur
 
 1. Technical debt that a buyer would hit first: TD-3 (a failed run looks empty), TD-4 for agy (two agy chats started together; Codex is matched by thread marker since 2026-10-22), TD-2
    (memory digest at chat start), TD-1 (one global skill library).
-2. Desktop before selling: signing and notarisation of `Chorus.app`, Windows/Linux builds (TD-6), a guard against the CLI app and
+2. Desktop before release: signing and notarisation of `Chorus.app`, Windows/Linux builds (TD-6), a guard against the CLI app and
    the desktop resuming the same chat at once (`docs/phase5.md` §7).
-3. D4 (provider terms) before selling.
+3. D4 (provider terms) before release.
 
 Known gaps: `file_change`, `reasoning`, `turn.failed` Codex events, agy errors/quota and the Claude plan-limit hit are not
 captured by the adapters (fixtures of the first three are in `fixtures/risks/capture-errors/`, TD-3); ctx % in the status line is not built

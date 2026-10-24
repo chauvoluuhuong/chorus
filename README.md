@@ -50,12 +50,10 @@ scattered. Chorus keeps one **thread** of work across agents:
 
 | Doc | What's in it |
 |---|---|
-| [docs/product.md](docs/product.md) | Goal and success, value, pricing, competitors, risks |
 | [docs/architecture.md](docs/architecture.md) | Build plan (5 phases), components, what is stored, MCP tools, handoff |
 | [docs/roadmap.md](docs/roadmap.md) | Progress per phase; each ends with an e2e proof on the real CLIs |
 | [docs/testing.md](docs/testing.md) | Test layers, what runs in the cloud vs on your Mac |
 | [docs/integrations/](docs/integrations/README.md) | Verified facts per CLI: flags, events, paths, token usage, gotchas |
-| [docs/distribution-and-trust.md](docs/distribution-and-trust.md) | Signing, notarization, payments, licensing |
 | [docs/mockups/chorus-cli.html](docs/mockups/chorus-cli.html) | Clickable mockup of the chorus terminal app |
 | [docs/archive/](docs/archive/) | v1 product concept, brainstorm and UI mockup (reference for the desktop app) |
 
