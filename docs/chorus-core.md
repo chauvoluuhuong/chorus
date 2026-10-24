@@ -158,7 +158,7 @@ Two things decide how much this matters:
 - **Copies go stale fast.** The facts move with every CLI release: agy auto-updated between two probe runs, Claude Code went from
   2.1.284 to 2.1.307 between 2026-10-17 and 2026-10-22 (`docs/integrations/`). A copied bundle is a snapshot that starts breaking
   within weeks. What keeps chorus-core working (the daily real-CLI run, the probes, the fixtures, the doctor reports coming in) all
-  stays private. `docs/product.md` already expects copies; this is why they don't hurt much.
+  stays private. Copies are expected; this is why they don't hurt much.
 
 ## 6. Moving it (steps)
 
