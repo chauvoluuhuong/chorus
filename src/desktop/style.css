@@ -376,3 +376,25 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 .spin { width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; display: inline-block; animation: dr-spin 0.8s linear infinite; }
 @keyframes dr-spin { to { transform: rotate(360deg); } }
 @media (max-width: 720px) { .dr-acts, .dr-detail, .dr-out { padding-left: 14px; margin-left: 14px; } }
+
+/* ---------- publisher notifications (cached locally; checked once at desktop startup) ---------- */
+.news-toggle { position: relative; color: var(--muted); }
+.news-toggle svg { display: block; }
+.news-count { background: var(--accent); color: var(--accent-ink); min-width: 17px; padding: 0 5px; border-radius: 9px; font-size: 11px; text-align: center; }
+.news-popover { position: fixed; top: 60px; right: 14px; z-index: 25; width: min(400px, calc(100vw - 28px)); max-height: calc(100vh - 80px); overflow: auto; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+.news-head { display: flex; align-items: center; gap: 10px; padding: 15px 16px 11px; }
+.news-head h2 { flex: 1; font: 400 23px/1.2 var(--f-serif); margin: 0; }
+.news-row { display: block; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--line); padding: 15px 17px; background: var(--panel); color: var(--ink); }
+.news-row:hover { background: var(--hover); }
+.news-row.unread { background: var(--accent-soft); }
+.news-row strong { display: block; font-weight: 500; }
+.news-row small { display: block; color: var(--muted); margin-top: 5px; font-size: 12px; }
+.news-row .dot { display: inline-block; width: 6px; height: 6px; margin-right: 7px; background: var(--accent); vertical-align: middle; }
+.news-empty { padding: 25px 18px; color: var(--muted); font-size: 13px; }
+.news-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 11px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.news-footer span { flex: 1; }
+.news-link { border: 0; background: transparent; color: var(--accent); font: inherit; padding: 0; }
+.news-detail-head { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); }
+.news-detail-head span { flex: 1; }
+.news-content { display: block; width: 100%; height: min(420px, 58vh); border: 0; background: var(--panel); }
+@media (max-width: 800px) { .news-toggle .news-label { display: none; } }

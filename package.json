@@ -1,6 +1,6 @@
 {
   "name": "@chauvoluuhuong/chorus",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "private": true,
   "description": "Work across AI coding CLIs: handoff, threads, skills",
   "license": "AGPL-3.0-only",
@@ -37,7 +37,7 @@
     "serve": "node src/cli/index.ts serve --open",
     "smoke:ask": "node test/smoke/ask.ts",
     "release:downloads": "node scripts/release-downloads.mjs",
-    "deploy:site": "node scripts/build-site.mjs && firebase deploy --only hosting:chorus-cli --project lh-landing-page"
+    "deploy:site": "npm --prefix ../chorus-admin run deploy:site"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

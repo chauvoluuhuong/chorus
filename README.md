@@ -78,3 +78,7 @@ node tools/probe/probe.mjs agy
 
 GNU AGPL version 3 only ([LICENSE](LICENSE)), with an additional permission to combine Chorus with its CLI integration
 library `@chauvoluuhuong/chorus-core`, which has its own licence. See [NOTICE.md](NOTICE.md).
+
+## Website maintenance
+
+The public website remains at [chorus-cli.web.app](https://chorus-cli.web.app). Its source and deployment are maintained in the separate `chorus-admin` repository. Release maintainers clone that repository beside this one; `npm run release:downloads` writes its installer artifacts there and `npm run deploy:site` delegates deployment.
