@@ -10,7 +10,7 @@ install.
 
 1. **One command** installs Chorus: `curl -fsSL https://chorus-cli.web.app/install.sh | bash`, `brew install --cask chorus`, or
    `npx @chauvoluuhuong/chorus-install`. Nothing else to read or run first.
-2. The installer (or the desktop app on first launch) runs the **fast check**: no model calls, **1–5 s** (§2).
+2. The desktop app, on its first launch, runs the **fast check** (never the installer in the terminal; decided 2026-10-26): no model calls, **1–5 s** (§2).
 3. Each CLI ends in one of four states, and only the last two ask anything of the user:
 
 | State | When | What the user sees |
@@ -36,7 +36,7 @@ method, a different login or plan.
 
 | Entry | What happens |
 |---|---|
-| `site/install.sh` (curl), `packages/installer` (`npx`), the Homebrew cask | Last step: `chorus doctor --fast` in the terminal when there is a TTY (`< /dev/tty` in the shell script), then the app opens |
+| `site/install.sh` (curl), `packages/installer` (`npx`), the Homebrew cask | No doctor in the terminal: the installer only opens the app (macOS) or says `chorus desktop` (Linux), and the app runs the check on first launch (`docs/mockups/desktop-first-run.html`) |
 | **Desktop app**, first launch, and after an update of Chorus, chorus-core or an installed CLI | The doctor popup opens with the fast check (§6) |
 | `npm install -g @chauvoluuhuong/chorus` | No postinstall prompt (npm hides output, no TTY). The first `chorus` run with no `~/.chorus/doctor/last.json` runs the fast check |
 | By hand | the desktop's Doctor page, or `chorus doctor` any time; flags in §8 |
