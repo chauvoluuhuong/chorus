@@ -138,6 +138,8 @@ node src/cli/index.ts mux codex agy        # try the app by hand
 npm run risk -- free|cheap|<case>          # risk harness (docs/risks/README.md); `cheap` makes a few real model calls
 node tools/probe/probe.mjs <cli>           # recapture fixtures after a CLI update
 node tools/probe/matrix.mjs <cli> <v1,v2|installed>   # test given CLI versions end to end → docs/integrations/versions.md
+npm run release:fetch                      # the GitHub Release's downloads (built by .github/workflows/release.yml on a new version in main) → ../chorus-admin/site/dl/; then npm run deploy:site
+npm run release:downloads                  # the same downloads built on this Mac instead (Docker + Tauri); --out=<dir> writes elsewhere
 ```
 
 ## Current state and next steps

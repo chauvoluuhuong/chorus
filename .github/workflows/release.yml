@@ -1,0 +1,141 @@
+# Release downloads: builds what `npm run release:downloads` builds by hand and attaches it to the GitHub Release v<version>.
+#   chorus-cli-<v>.tgz, chorus-darwin-arm64-<v>.tar.gz, Chorus-macOS-<v>.zip   macOS arm64 runner (Tauri for the app)
+#   chorus-linux-x64-<v>.tar.gz, chorus-linux-arm64-<v>.tar.gz                  Linux runners of each arch (Docker, Debian 11)
+#   SHA256SUMS                                                                  over all of the above
+# Runs when main gets a package.json version that has no release yet, on a v* tag, or by hand (Actions → Release downloads).
+# Run by hand on another branch, it builds the files as workflow artifacts only and makes no release.
+# The website is not touched: `npm run release:fetch` then `npm run deploy:site` publish it (README, "Website maintenance").
+#
+# Needs the repository secret CHORUS_CORE_DEPLOY_KEY: the private half of a read-only deploy key of chauvoluuhuong/chorus-core.
+# The core is checked out next to this repo (package.json depends on file:../chorus-core) and only its built dist/ goes into
+# the downloads (scripts/release-downloads.mjs runs its check:pack). Nothing here prints or uploads the core's source.
+name: Release downloads
+
+on:
+  push:
+    branches: [main]
+    paths: [package.json]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      core_ref:
+        description: chorus-core branch, tag or commit to bundle (default the CHORUS_CORE_REF variable, else dev)
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CORE_REF: ${{ inputs.core_ref || vars.CHORUS_CORE_REF || 'dev' }}
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      build: ${{ steps.v.outputs.build }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match package.json version $version"; exit 1
+          fi
+          # a push to main that does not change the version (a dependency bump) finds its release already there
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_TYPE" = branch ] && gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v$version is already released: nothing to build"; echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: version
+    if: needs.version.outputs.build == 'true'
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { runner: macos-15, targets: darwin-arm64, app: '--rebuild-app', upload: 'dl/*' }
+          - { runner: ubuntu-24.04, targets: linux-x64, app: '--no-app', upload: 'dl/chorus-linux-x64-*.tar.gz' }
+          - { runner: ubuntu-24.04-arm, targets: linux-arm64, app: '--no-app', upload: 'dl/chorus-linux-arm64-*.tar.gz' }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: chorus
+      - name: Check out chorus-core (private)
+        uses: actions/checkout@v5
+        with:
+          repository: chauvoluuhuong/chorus-core
+          ref: ${{ env.CORE_REF }}
+          ssh-key: ${{ secrets.CHORUS_CORE_DEPLOY_KEY }}
+          path: chorus-core
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install chorus-core
+        working-directory: chorus-core
+        run: npm ci --no-fund --no-audit --loglevel=error
+      - name: Install chorus
+        working-directory: chorus
+        run: npm ci --no-fund --no-audit --loglevel=error
+      - if: matrix.app == '--rebuild-app'
+        uses: dtolnay/rust-toolchain@stable
+      - if: matrix.app == '--rebuild-app'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: chorus/desktop/src-tauri
+      - if: matrix.app == '--rebuild-app'
+        name: Install the Tauri CLI
+        working-directory: chorus/desktop
+        run: npm ci --no-fund --no-audit --loglevel=error
+      - name: Build ${{ matrix.targets }}
+        working-directory: chorus
+        run: node scripts/release-downloads.mjs --out=../dl --targets=${{ matrix.targets }} ${{ matrix.app }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dl-${{ matrix.targets }}
+          path: ${{ matrix.upload }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: [version, build]
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: dl-*
+          path: dl
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dl
+        run: |
+          rm -f SHA256SUMS
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+          ls -la
+      - name: Attach to the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ needs.version.outputs.version }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dl/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            printf '%s\n' "Built by the release workflow from $GITHUB_SHA (chorus-core $CORE_REF)." "" \
+              "Chorus.app is not signed or notarised yet. SHA256SUMS lists the checksum of every file." > notes.md
+            gh release create "$TAG" dl/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Chorus ${TAG#v}" --notes-file notes.md
+          fi
