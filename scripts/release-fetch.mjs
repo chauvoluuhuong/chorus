@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { writeManifest } from './release-manifest.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const version = process.argv[2] ?? JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
@@ -26,4 +27,5 @@ for (const [want, name] of sums) {
 }
 const sh = path.join(siteRoot, 'install.sh');
 fs.writeFileSync(sh, fs.readFileSync(sh, 'utf8').replace(/^VERSION=".*"$/m, `VERSION="${version}"`));
-console.log(`site/install.sh  VERSION=${version}`);
+writeManifest(siteRoot, out, version);
+console.log(`site/install.sh  VERSION=${version} · site/release.json`);
