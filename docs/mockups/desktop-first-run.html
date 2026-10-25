@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>First-run doctor mockup</title>
+<!--
+  Mockup of the first launch of the desktop app (asked for 2026-10-26): the check runs in the app, not in the terminal.
+  1. The doctor screen opens over the app and runs the short check (no model calls, a few seconds).
+  2. It shows each CLI's state and asks whether to run the detailed test.
+  3. On yes, the detailed test runs for every installed, logged-in CLI (Claude Code, Codex, agy).
+  4. Not installed / not logged in / a test problem: a warning row with the tested version to install (link + command).
+     The user can always go on with what works.
+  5. The app opens with the CLIs that work; the others stay visible with their warning.
+  Colours and components are the desktop's own (src/desktop/style.css). Pick a scene at the top, or use the buttons inside.
+-->
+<style>
+:root {
+  --bg: #faf9f5; --side: #f3f1ea; --panel: #ffffff; --hover: #ece9e0; --sel: #e6e2d6; --line: #e5e2d9;
+  --ink: #141413; --ink-2: #3d3d3a; --muted: #6f6c64; --faint: #a09e96;
+  --accent: #0f766e; --accent-ink: #ffffff; --accent-soft: #e2f3f1;
+  --warn: #a8660b; --warn-soft: #fbefd9; --bad: #b13b32; --bad-soft: #f7e1dd; --ok: #2f7d3a; --ok-soft: #e3f1e3;
+  --claude: #c6613f; --claude-soft: #f7e8e1; --codex: #3f6fd1; --codex-soft: #e4ecfa; --agy: #3a8a4b; --agy-soft: #e2f1e5;
+  --shadow: 0 1px 2px rgba(20, 20, 19, 0.06), 0 8px 24px rgba(20, 20, 19, 0.08);
+  --f-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif;
+  --f-serif: 'Iowan Old Style', 'Charter', Georgia, 'Times New Roman', serif;
+  --f-mono: 'SF Mono', ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #262624; --side: #1f1e1c; --panel: #2c2b29; --hover: #353532; --sel: #3b3a36; --line: #3c3b38;
+    --ink: #f5f4ee; --ink-2: #dad8d0; --muted: #a9a69c; --faint: #7d7a72;
+    --accent: #4fc1b6; --accent-ink: #10201e; --accent-soft: #15302e;
+    --warn: #f0b85a; --warn-soft: #3d3020; --bad: #ee8a80; --bad-soft: #452523; --ok: #8ccf7e; --ok-soft: #22331f;
+    --claude: #e08a6b; --claude-soft: #46302a; --codex: #8fb8ff; --codex-soft: #233250; --agy: #9bd38f; --agy-soft: #243824;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: #262624; --side: #1f1e1c; --panel: #2c2b29; --hover: #353532; --sel: #3b3a36; --line: #3c3b38;
+  --ink: #f5f4ee; --ink-2: #dad8d0; --muted: #a9a69c; --faint: #7d7a72;
+  --accent: #4fc1b6; --accent-ink: #10201e; --accent-soft: #15302e;
+  --warn: #f0b85a; --warn-soft: #3d3020; --bad: #ee8a80; --bad-soft: #452523; --ok: #8ccf7e; --ok-soft: #22331f;
+  --claude: #e08a6b; --claude-soft: #46302a; --codex: #8fb8ff; --codex-soft: #233250; --agy: #9bd38f; --agy-soft: #243824;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-sans); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; }
+a { color: var(--accent); }
+.mono { font-family: var(--f-mono); font-size: 12.5px; }
+.muted { color: var(--muted); }
+
+/* mockup chrome */
+.top { position: sticky; top: 0; z-index: 20; background: var(--side); border-bottom: 1px solid var(--line); padding: 10px 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.top b { font-size: 13px; margin-right: 6px; }
+.top .sc { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 3px 11px; font-size: 12.5px; }
+.top .sc.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.top .theme { margin-left: auto; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 3px 9px; font-size: 12px; }
+.note { max-width: 860px; margin: 14px auto 0; padding: 0 16px; color: var(--muted); font-size: 13px; }
+
+/* the app behind */
+.win { position: relative; max-width: 1100px; margin: 14px auto 40px; height: 680px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); display: grid; grid-template-columns: 240px 1fr; background: var(--bg); }
+.side { background: var(--side); border-right: 1px solid var(--line); padding: 14px 12px; display: flex; flex-direction: column; gap: 4px; }
+.brand { display: flex; align-items: center; gap: 8px; padding: 2px 4px 12px; font: 500 21px/1 var(--f-serif); }
+.logo { display: inline-flex; gap: 2px; align-items: flex-end; height: 16px; }
+.logo i { display: block; width: 3.5px; border-radius: 1px; }
+.logo i:nth-child(1) { height: 9px; background: var(--claude); } .logo i:nth-child(2) { height: 16px; background: var(--codex); } .logo i:nth-child(3) { height: 12px; background: var(--agy); }
+.navb { border: 0; background: none; text-align: left; padding: 6px 8px; border-radius: 7px; color: var(--ink-2); display: flex; align-items: center; gap: 8px; }
+.navb:hover { background: var(--hover); }
+.navb.new { background: var(--panel); border: 1px solid var(--line); font-weight: 500; margin-bottom: 8px; }
+.sect { font-size: 11.5px; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; margin: 12px 8px 4px; }
+.foot { margin-top: auto; border-top: 1px solid var(--line); padding-top: 8px; }
+.dotw { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); margin-left: auto; }
+.main { padding: 40px 48px; overflow: auto; }
+.main h1 { font: 500 30px/1.2 var(--f-serif); margin: 0 0 6px; }
+.blur .side, .blur .main { filter: blur(2px); opacity: .55; pointer-events: none; }
+
+/* overlay + doctor sheet */
+.scrim { position: absolute; inset: 0; background: rgba(20, 20, 19, .28); display: grid; place-items: center; padding: 20px; }
+.sheet { width: min(640px, 100%); max-height: 100%; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+.sh-head { padding: 22px 24px 8px; }
+.sh-head h2 { font: 500 23px/1.2 var(--f-serif); margin: 0 0 4px; }
+.sh-head p { margin: 0; color: var(--muted); font-size: 13.5px; }
+.steps { display: flex; gap: 6px; padding: 12px 24px 4px; font-size: 12px; color: var(--faint); }
+.steps span { padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); }
+.steps span.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.steps span.done { color: var(--ok); border-color: transparent; background: var(--ok-soft); }
+.rows { padding: 10px 16px 4px; display: flex; flex-direction: column; gap: 8px; }
+.row { border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; display: grid; grid-template-columns: 30px 1fr auto; gap: 4px 12px; align-items: center; }
+.row.warn { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); background: color-mix(in srgb, var(--warn-soft) 55%, var(--panel)); }
+.av { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+.av.claude { background: var(--claude-soft); color: var(--claude); } .av.codex { background: var(--codex-soft); color: var(--codex); } .av.agy { background: var(--agy-soft); color: var(--agy); }
+.nm { font-weight: 600; } .nm .mono { font-weight: 400; color: var(--muted); margin-left: 6px; }
+.pill { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); } .pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.run { background: var(--accent-soft); color: var(--accent); } .pill.skip { background: var(--hover); color: var(--muted); }
+.detail { grid-column: 2 / 4; font-size: 13px; color: var(--ink-2); display: flex; align-items: center; gap: 12px; }
+.detail > span { flex: 1; }
+.detail .act { flex: none; }
+.detail .why { color: var(--muted); }
+.btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.b { border: 1px solid var(--line); background: var(--panel); border-radius: 7px; padding: 4px 11px; font-size: 12.5px; }
+.b:hover { background: var(--hover); }
+.b.pri { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.b.sm { padding: 2px 8px; font-size: 12px; }
+.bar { height: 5px; border-radius: 3px; background: var(--hover); overflow: hidden; grid-column: 2 / 4; }
+.bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.tests { grid-column: 2 / 4; font-size: 13px; }
+.tests summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+.tests ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 3px 16px; }
+.tests li .why { color: var(--muted); font-size: 12px; margin-left: 18px; }
+.okc { color: var(--ok); } .warnc { color: var(--warn); }
+.ask { margin: 10px 16px 0; padding: 14px 16px; border-radius: 10px; background: var(--accent-soft); display: grid; gap: 4px; }
+.ask b { font-size: 14.5px; }
+.ask p { margin: 0; font-size: 13px; color: var(--ink-2); }
+.sh-foot { display: flex; align-items: center; gap: 8px; padding: 14px 24px 20px; }
+.sh-foot .sp { flex: 1; font-size: 12.5px; color: var(--muted); }
+.spin { display: inline-block; width: 11px; height: 11px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: s 0.8s linear infinite; vertical-align: -1px; margin-right: 4px; }
+@keyframes s { to { transform: rotate(360deg); } }
+
+/* scene 5: the app */
+.pick { display: flex; gap: 10px; margin: 22px 0 14px; flex-wrap: wrap; }
+.agent { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; min-width: 200px; }
+.agent.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.agent.off { opacity: .75; border-style: dashed; }
+.agent small { display: block; color: var(--muted); font-size: 12px; }
+.agent .warnt { color: var(--warn); }
+.composer { border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 14px; color: var(--faint); min-height: 90px; }
+.banner { margin-top: 16px; border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); background: var(--warn-soft); color: var(--ink-2); border-radius: 10px; padding: 10px 12px; font-size: 13px; display: flex; gap: 10px; align-items: center; }
+.banner span { flex: 1; }
+
+@media (max-width: 760px) {
+  .win { grid-template-columns: 0 1fr; height: auto; min-height: 680px; margin: 14px 8px; }
+  .side { display: none; }
+  .main { padding: 24px 16px; }
+}
+</style>
+</head>
+<body>
+<div class="top">
+  <b>First launch</b>
+  <button class="sc" data-s="1">1 · Short check</button>
+  <button class="sc" data-s="2">2 · Result + ask</button>
+  <button class="sc" data-s="2b">2b · Not logged in</button>
+  <button class="sc" data-s="3">3 · Detailed test</button>
+  <button class="sc" data-s="4">4 · Detailed result</button>
+  <button class="sc" data-s="5">5 · Into the app</button>
+  <button class="theme" id="theme">Light / dark</button>
+</div>
+<p class="note" id="note"></p>
+<div class="win" id="win"></div>
+
+<script>
+const TESTED = { claude: '2.1.309', codex: '0.163.0', agy: '1.4.5' };
+const NAME = { claude: 'Claude Code', codex: 'Codex', agy: 'Antigravity (agy)' };
+const LETTER = { claude: 'C', codex: 'X', agy: 'A' };
+// The 13 cases of docs/doctor.md §4.2, in words a user reads
+const CASES = [
+  'Starts a chat with Chorus context', 'Keeps the chat id', 'Shows tool calls live', 'Saves chat history',
+  'Resumes a chat', 'Uses Chorus tools', 'Shows approval requests', 'Approve works', 'Deny works',
+  'Agent asks you through a card', 'Skip-permissions mode', 'Uses shared skills', 'Saves files to the chat folder',
+];
+
+const NOTES = {
+  '1': 'The app opens and the doctor screen comes up over it at once (first launch, or a CLI/Chorus version changed). The short check makes no model calls: versions, login state, tested list. A few seconds.',
+  '2': 'Short check done. Claude is on a tested version. Codex is newer than the tested one, so the detailed test is worth running. agy is not installed: one Install 1.4.5 button (it runs the install in a terminal pane inside the app, or opens the download page when there is no command). Skip to the app (the default), or run the detailed test.',
+  '2b': 'The same screen when a CLI is installed but not logged in: one Log in button, which runs the CLI\'s login in a terminal pane inside the app; the row checks again when it finishes.',
+  '3': 'Detailed test: the 13 tests for every CLI that is installed and logged in (agy is skipped). A progress bar and the test running now. The user can stop, or go on to the app while it runs.',
+  '4': 'Detailed result: only how many tests passed, and one suggested action (install the tested version). "Show the 13 tests" opens the list of what passed and what failed. Report issue is optional, next to Start using Chorus.',
+  '5': 'The app opens with what works. The New chat agent picker shows agy greyed out with its warning, and Codex with a small warning badge. The Doctor button in the sidebar keeps an amber dot until the warnings are gone.',
+};
+
+function row(cli, s) {
+  const head = `<div class="av ${cli}">${LETTER[cli]}</div>
+    <div class="nm">${NAME[cli]}${s.ver ? `<span class="mono">${s.ver}</span>` : ''}</div>
+    <span class="pill ${s.pill}">${s.pillText}</span>`;
+  const detail = s.detail || s.action ? `<div class="detail"><span>${s.detail || ''}</span>${s.action || ''}</div>` : '';
+  const prog = s.progress != null ? `<div class="bar"><i style="width:${s.progress}%"></i></div>` : '';
+  const mark = { p: '<b class="okc">✔</b>', f: '<b class="warnc">✖</b>' };
+  const cases = s.cases ? `<details class="tests"${s.open ? ' open' : ''}><summary>Show the ${CASES.length} tests</summary><ul>${CASES.map((c, i) =>
+    `<li>${mark[s.cases[i]] || '<b class="muted">–</b>'} ${c}${s.why && s.why[i] ? `<div class="why">${s.why[i]}</div>` : ''}</li>`).join('')}</ul></details>` : '';
+  return `<div class="row ${s.warn ? 'warn' : ''}">${head}${detail}${prog}${cases}</div>`;
+}
+
+// One action per warning: the button does the work (runs the install or login in a terminal pane, or opens the download page)
+const act = (label) => `<button class="b pri act">${label}</button>`;
+const notInstalled = (cli) => ({
+  pill: 'warn', pillText: '⚠ Not installed', warn: true, action: act(`Install ${TESTED[cli]}`),
+  detail: `<span class="why">Install the version Chorus is tested with, or add it later.</span>`,
+});
+const notLoggedIn = (cli, ver) => ({
+  ver, pill: 'warn', pillText: '⚠ Not logged in', warn: true, action: act('Log in'),
+  detail: `<span class="why">Log in to use it here, or keep going without it.</span>`,
+});
+
+function steps(n) {
+  const l = ['Short check', 'Detailed test', 'Ready'];
+  return `<div class="steps">${l.map((t, i) => `<span class="${i + 1 < n ? 'done' : i + 1 === n ? 'on' : ''}">${i + 1 < n ? '✔ ' : ''}${t}</span>`).join('')}</div>`;
+}
+
+function sheet(title, sub, step, rows, middle, foot) {
+  return `<div class="scrim"><div class="sheet">
+    <div class="sh-head"><h2>${title}</h2><p>${sub}</p></div>
+    ${steps(step)}
+    <div class="rows">${rows}</div>
+    ${middle || ''}
+    <div class="sh-foot">${foot}</div>
+  </div></div>`;
+}
+
+const p = (n) => Array.from({ length: 13 }, (_, i) => (i < n ? 'p' : ''));
+
+const SCENES = {
+  '1': () => sheet('Checking your agents', 'Chorus looks for Claude Code, Codex and agy on this Mac. No model calls, a few seconds.', 1,
+    row('claude', { ver: '2.1.309', pill: 'ok', pillText: '✔ Found' }) +
+    row('codex', { pill: 'run', pillText: '<span class="spin"></span>Checking' }) +
+    row('agy', { pill: 'run', pillText: '<span class="spin"></span>Checking' }),
+    '', `<span class="sp">Checking 2 of 3…</span><button class="b" disabled>Continue</button>`),
+
+  '2': () => sheet('Your agents', '2 of 3 are ready to use. You can fix the rest now or later from Doctor.', 1,
+    row('claude', { ver: '2.1.309', pill: 'ok', pillText: '✔ Tested, ready', detail: '<span class="why">Logged in · the version Chorus is tested with.</span>' }) +
+    row('codex', { ver: '0.170.0', pill: 'warn', pillText: '⚠ New version', warn: true,
+      detail: `<span class="why">Logged in. Chorus is tested with <b>0.163.0</b>; the detailed test checks that 0.170.0 works too.</span>` }) +
+    row('agy', notInstalled('agy')),
+    '',
+    `<span class="sp">Detailed test: about 3 min, a few short turns on your plans. Also in Doctor.</span><button class="b">Run detailed test</button><button class="b pri">Skip, start using Chorus</button>`),
+
+  '2b': () => sheet('Your agents', '2 of 3 are ready to use. You can fix the rest now or later from Doctor.', 1,
+    row('claude', { ver: '2.1.309', pill: 'ok', pillText: '✔ Tested, ready', detail: '<span class="why">Logged in · the version Chorus is tested with.</span>' }) +
+    row('codex', notLoggedIn('codex', '0.163.0')) +
+    row('agy', { ver: '1.4.5', pill: 'ok', pillText: '✔ Tested, ready', detail: '<span class="why">Signed in · the version Chorus is tested with.</span>' }),
+    '',
+    `<span class="sp">Detailed test: about 3 min, a few short turns on your plans. Also in Doctor.</span><button class="b">Run detailed test</button><button class="b pri">Skip, start using Chorus</button>`),
+
+  '3': () => sheet('Testing your agents', 'Each agent runs the same 13 cases in a temporary folder. Your projects are not touched.', 2,
+    row('claude', { ver: '2.1.309', pill: 'run', pillText: '<span class="spin"></span>8 of 13', progress: 62,
+      detail: '<span class="why">Now: Deny works</span>' }) +
+    row('codex', { ver: '0.170.0', pill: 'run', pillText: '<span class="spin"></span>5 of 13', progress: 38,
+      detail: '<span class="why">Now: Uses Chorus tools</span>' }) +
+    row('agy', { pill: 'skip', pillText: 'Skipped · not installed' }),
+    '', `<span class="sp">≈ 1 min 40 s left · results also go to Doctor</span><button class="b">Stop</button><button class="b pri">Continue to the app</button>`),
+
+  '4': () => sheet('Test results', 'You can start now with what works, and fix the rest any time from Doctor.', 3,
+    row('claude', { ver: '2.1.309', pill: 'ok', pillText: '✔ 13 of 13 passed', cases: p(13) }) +
+    row('codex', { ver: '0.170.0', pill: 'warn', pillText: '⚠ 12 of 13 passed', warn: true,
+      detail: `<span class="why">Install the version Chorus is tested with to fix it.</span>`, action: act('Install 0.163.0'),
+      cases: ['p','p','p','f','p','p','p','p','p','p','p','p','p'],
+      why: { 3: 'Chat history may be empty after a restart' } }) +
+    row('agy', notInstalled('agy')),
+    '', `<span class="sp"></span><button class="b">Report issue</button><button class="b pri">Start using Chorus</button>`),
+
+  '5': () => `
+    <aside class="side">
+      <div class="brand"><span class="logo"><i></i><i></i><i></i></span>Chorus</div>
+      <button class="navb new">＋ New chat</button>
+      <button class="navb">⌕ Search</button><button class="navb">✋ Approvals</button>
+      <div class="sect">Projects</div>
+      <button class="navb">▸ chorus</button>
+      <div class="foot">
+        <button class="navb">◇ Memory</button><button class="navb">✦ Skills</button>
+        <button class="navb">✚ Doctor <span class="dotw" title="2 warnings"></span></button>
+      </div>
+    </aside>
+    <main class="main">
+      <h1>New chat</h1>
+      <div class="muted">Pick an agent. You can hand the chat to another one at any time.</div>
+      <div class="pick">
+        <div class="agent sel"><div class="av claude">C</div><div><b>Claude Code</b><small>2.1.309 · tested</small></div></div>
+        <div class="agent"><div class="av codex">X</div><div><b>Codex</b><small class="warnt">⚠ 0.170.0 · 1 test problem</small></div></div>
+        <div class="agent off"><div class="av agy">A</div><div><b>agy</b><small class="warnt">⚠ Not installed · <a href="#">install 1.4.5</a></small></div></div>
+      </div>
+      <div class="composer">Ask Claude Code anything about chorus…</div>
+      <div class="banner">⚠ <span>Codex 0.170.0 failed 1 test case (chat history after restart). Chorus is tested with 0.163.0.</span>
+        <button class="b">Open Doctor</button><button class="b sm">✕</button></div>
+    </main>`,
+};
+
+function behind() {
+  return `<aside class="side"><div class="brand"><span class="logo"><i></i><i></i><i></i></span>Chorus</div>
+    <button class="navb new">＋ New chat</button><button class="navb">⌕ Search</button><button class="navb">✋ Approvals</button>
+    <div class="sect">Projects</div><div class="foot"><button class="navb">✚ Doctor</button></div></aside>
+    <main class="main"><h1>Welcome to Chorus</h1><div class="muted">One place for every chat with your AI coding CLIs.</div></main>`;
+}
+
+function show(s) {
+  const win = document.getElementById('win');
+  win.className = 'win' + (s === '5' ? '' : ' blur');
+  win.innerHTML = s === '5' ? SCENES[s]() : behind() + SCENES[s]();
+  document.getElementById('note').textContent = NOTES[s];
+  document.querySelectorAll('.sc').forEach((b) => b.classList.toggle('on', b.dataset.s === s));
+  // in-sheet buttons move the flow forward
+  const next = { 'Run detailed test': '3', 'Skip, start using Chorus': '5', 'Continue to the app': '5', 'Start using Chorus': '5' };
+  win.querySelectorAll('button').forEach((b) => { const to = next[b.textContent.trim()]; if (to) b.onclick = () => show(to); });
+  if (s === '1') setTimeout(() => document.querySelector('.sc.on')?.dataset.s === '1' && show('2'), 2500);
+  if (s === '3') setTimeout(() => document.querySelector('.sc.on')?.dataset.s === '3' && show('4'), 4000);
+}
+document.querySelectorAll('.sc').forEach((b) => (b.onclick = () => show(b.dataset.s)));
+document.getElementById('theme').onclick = () => {
+  const r = document.documentElement;
+  const dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  r.dataset.theme = dark ? 'light' : 'dark';
+};
+show('1');
+</script>
+</body>
+</html>

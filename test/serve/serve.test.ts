@@ -355,3 +355,18 @@ test('serve: notification UI uses the launch cache; opening counts once and exte
     assert.equal(calls.length, 2);
   } finally { await r.done(); fs.rmSync(directory, { recursive: true, force: true }); }
 });
+
+test('serve: the doctor screen opens at once on a first launch, and not again once a check was shown', async () => {
+  const r = await rig();
+  const before = process.env.CHORUS_DOCTOR_HOME;
+  process.env.CHORUS_DOCTOR_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-doctor-'));
+  try {
+    assert.deepEqual((await r.api('GET', '/api/doctor/first')).json, { first: true });
+    assert.equal((await r.api('POST', '/api/doctor/seen')).json.ok, true);
+    assert.deepEqual((await r.api('GET', '/api/doctor/first')).json, { first: false });
+  } finally {
+    if (before === undefined) delete process.env.CHORUS_DOCTOR_HOME;
+    else process.env.CHORUS_DOCTOR_HOME = before;
+    await r.done();
+  }
+});
