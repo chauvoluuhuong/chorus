@@ -17,8 +17,8 @@ test('release comparison is numeric and accepts stable versions only', () => {
 });
 test('one manifest request per process; skip persists for that version but a later version is offered', async t => {
   const r = setup(t); let c = r.create(); await Promise.all([c.startup(), c.startup()]); assert.equal(r.calls(), 1);
-  assert.deepEqual(c.snapshot(), { version: '1.0.7', currentVersion: '1.0.6' }); assert.match(c.downloadUrl()!, /Chorus-macOS-1.0.7.zip$/);
-  c.skip(); assert.equal(c.snapshot(), null); assert.equal(c.downloadUrl(), undefined); await c.startup(); assert.equal(r.calls(), 1); c.close();
+  assert.deepEqual(c.snapshot(), { version: '1.0.7', currentVersion: '1.0.6' }); assert.equal(c.updateUrl(), 'https://chorus-cli.web.app/update');
+  c.skip(); assert.equal(c.snapshot(), null); assert.equal(c.updateUrl(), undefined); await c.startup(); assert.equal(r.calls(), 1); c.close();
   c = r.create(); await c.startup(); assert.equal(c.snapshot(), null); c.close();
   r.set(release('1.0.8')); c = r.create(); await c.startup(); assert.equal(c.snapshot()?.version, '1.0.8'); c.close();
 });

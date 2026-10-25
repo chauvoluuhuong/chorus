@@ -40,7 +40,7 @@ async function rig(seed?: (store: Store, project: string) => void, notifications
   });
   c.restore();
   const notificationLinks: string[] = [];
-  const srv = new ChorusServer({ controller: c, token: 'a'.repeat(48), notifications, updates, onUpdateDownload: url => { notificationLinks.push(url); }, onNotificationLink: url => { notificationLinks.push(url); } });
+  const srv = new ChorusServer({ controller: c, token: 'a'.repeat(48), notifications, updates, onUpdateOpen: url => { notificationLinks.push(url); }, onNotificationLink: url => { notificationLinks.push(url); } });
   const url = await srv.start(0);
   const api = async (method: string, p: string, body?: object, headers: Record<string, string> = {}) => {
     const res = await fetch(url + p, { method, headers: { authorization: `Bearer ${srv.token}`, 'x-chorus': '1', 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined, redirect: 'manual' });
@@ -382,11 +382,11 @@ test('serve: release notice uses launch state; download is explicit and skip sup
     await updates.startup();
     for (let i = 0; i < 5; i++) assert.equal((await r.api('GET', '/api/state')).json.update.version, '1.0.7');
     assert.equal(checks, 1); assert.deepEqual(r.notificationLinks, []);
-    assert.equal((await r.api('POST', '/api/updates/download', { url: 'https://evil.example' })).json.ok, true);
-    assert.deepEqual(r.notificationLinks, [url], 'download URL cannot come from the browser');
+    assert.equal((await r.api('POST', '/api/updates/open', { url: 'https://evil.example' })).json.ok, true);
+    assert.deepEqual(r.notificationLinks, ['https://chorus-cli.web.app/update'], 'update destination cannot come from the browser');
     assert.equal((await r.api('POST', '/api/updates/skip', {})).json.ok, true);
     assert.equal((await r.api('GET', '/api/state')).json.update, null);
-    assert.match((await r.api('POST', '/api/updates/download', {})).json.error, /No update/);
+    assert.match((await r.api('POST', '/api/updates/open', {})).json.error, /No update/);
     assert.equal(checks, 1);
   } finally { await r.done(); fs.rmSync(directory, { recursive: true, force: true }); }
 });

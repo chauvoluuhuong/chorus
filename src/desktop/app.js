@@ -1210,7 +1210,7 @@ function renderUpdate(update) {
   if (box.dataset.version === (update?.version ?? '')) return;
   box.dataset.version = update?.version ?? ''; box.hidden = !update;
   if (!update) { box.replaceChildren(); return; }
-  box.innerHTML = `<div><strong>Chorus ${esc(update.version)} is available</strong><p>You have ${esc(update.currentVersion)}. Download the installer, install it, and restart Chorus to update.</p></div><div class="app-update-actions"><button class="btn" data-act="update-skip">Skip this version</button><button class="btn primary" data-act="update-download">Download update</button></div>`;
+  box.innerHTML = `<div><strong>Chorus ${esc(update.version)} is available</strong><p>You have ${esc(update.currentVersion)}. Use the official installer to update Chorus, then restart the app.</p></div><div class="app-update-actions"><button class="btn" data-act="update-skip">Skip this version</button><button class="btn primary" data-act="update-open">Update Chorus</button></div>`;
 }
 
 /* ---------- notifications: all reads are local, with no fetch-again or timer path ---------- */
@@ -1356,9 +1356,9 @@ document.addEventListener('click', async e => {
       return toast(r.error ? `Not sent: ${r.error}` : r.via === 'gh' ? `Issue created: ${r.url}` : 'Opened GitHub; the report is on your clipboard: paste it as the description');
     }
     case 'update-skip': return api('POST', '/api/updates/skip', {});
-    case 'update-download': {
-      const result = await api('POST', '/api/updates/download', {});
-      return toast(result.error || 'Download opened in your browser. Install it, then restart Chorus.');
+    case 'update-open': {
+      const result = await api('POST', '/api/updates/open', {});
+      return toast(result.error || 'Update instructions opened in your browser. Run the installer, then restart Chorus.');
     }
     case 'news-toggle':
       if (!$('#news').hidden) return closeNews();

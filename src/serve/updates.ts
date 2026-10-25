@@ -1,4 +1,4 @@
-// One public release-manifest read at launch. Downloading is always an explicit user action.
+// One public release-manifest read at launch. Opening the full installer instructions is an explicit user action.
 import fs from 'node:fs';
 import path from 'node:path';
 export const RELEASE_MANIFEST = 'https://chorus-cli.web.app/release.json';
@@ -36,11 +36,11 @@ export class UpdateCheck {
       if (!artifact || typeof artifact.url !== 'string' || !/^[a-f0-9]{64}$/.test(artifact.sha256)) return;
       const file = platform === 'darwin' && arch === 'arm64' ? `Chorus-macOS-${data.version}.zip` : platform === 'linux' && ['arm64', 'x64'].includes(arch) ? `chorus-linux-${arch}-${data.version}.tar.gz` : undefined;
       if (!file || artifact.url !== `https://chorus-cli.web.app/dl/${file}` || this.controller.signal.aborted) return;
-      this.release = { version: data.version, url: artifact.url };
+      this.release = { version: data.version, url: 'https://chorus-cli.web.app/update' };
     } catch { /* Quiet until the next process launch. The app must work without this service. */ }
   }
   snapshot() { return this.release ? { currentVersion: this.o.version, version: this.release.version } : null; }
-  downloadUrl() { return this.release?.url; }
+  updateUrl() { return this.release?.url; }
   skip() {
     if (!this.release) return;
     const tmp = this.file + '.' + process.pid + '.tmp';

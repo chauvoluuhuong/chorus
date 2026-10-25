@@ -67,7 +67,7 @@ export interface ServeOpts {
   controller: Controller;
   notifications?: NotificationInbox;
   updates?: UpdateCheck;
-  onUpdateDownload?: (url: string) => void;
+  onUpdateOpen?: (url: string) => void;
   onNotificationLink?: (url: string) => void;
   port?: number;
   /** fixed token (tests); random otherwise */
@@ -307,10 +307,10 @@ export class ChorusServer {
     const c = this.c;
     if (a === 'updates') {
       if (method === 'POST' && id === 'skip' && parts.length === 2) { this.o.updates?.skip(); this.pushState(); return { ok: true }; }
-      if (method === 'POST' && id === 'download' && parts.length === 2) {
-        const url = this.o.updates?.downloadUrl();
+      if (method === 'POST' && id === 'open' && parts.length === 2) {
+        const url = this.o.updates?.updateUrl();
         if (!url) return { error: 'No update is available for this platform' };
-        (this.o.onUpdateDownload ?? openUrl)(url); return { ok: true };
+        (this.o.onUpdateOpen ?? openUrl)(url); return { ok: true };
       }
       return undefined;
     }
