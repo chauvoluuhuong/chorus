@@ -117,6 +117,7 @@ function flash(text) {
 }
 
 function onState(st) {
+  renderUpdate(st.update);
   const first = !S.state;
   const previousNews = S.state?.notifications;
   S.state = st;
@@ -1203,6 +1204,15 @@ document.addEventListener('drop', async e => {
 });
 
 
+/* ---------- app updates: state comes from the single launch check ---------- */
+function renderUpdate(update) {
+  const box = $('#app-update');
+  if (box.dataset.version === (update?.version ?? '')) return;
+  box.dataset.version = update?.version ?? ''; box.hidden = !update;
+  if (!update) { box.replaceChildren(); return; }
+  box.innerHTML = `<div><strong>Chorus ${esc(update.version)} is available</strong><p>You have ${esc(update.currentVersion)}. Use the official installer to update Chorus, then restart the app.</p></div><div class="app-update-actions"><button class="btn" data-act="update-skip">Skip this version</button><button class="btn primary" data-act="update-open">Update Chorus</button></div>`;
+}
+
 /* ---------- notifications: all reads are local, with no fetch-again or timer path ---------- */
 function closeNews() {
   $('#news').hidden = true; S.newsDetail = null; renderChrome();
@@ -1344,6 +1354,11 @@ document.addEventListener('click', async e => {
       const r = await api('POST', '/api/doctor/issue/send', { title: $('#doc-issue-title').value, body: $('#doc-issue-body').value }).catch(err => ({ error: err.message }));
       el.closest('.scrim')?.remove();
       return toast(r.error ? `Not sent: ${r.error}` : r.via === 'gh' ? `Issue created: ${r.url}` : 'Opened GitHub; the report is on your clipboard: paste it as the description');
+    }
+    case 'update-skip': return api('POST', '/api/updates/skip', {});
+    case 'update-open': {
+      const result = await api('POST', '/api/updates/open', {});
+      return toast(result.error || 'Update instructions opened in your browser. Run the installer, then restart Chorus.');
     }
     case 'news-toggle':
       if (!$('#news').hidden) return closeNews();

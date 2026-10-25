@@ -6,11 +6,12 @@ import path from 'node:path';
 export const NOTIFICATION_API = 'https://chorus-api-141661268347.asia-southeast1.run.app';
 export interface NotificationItem { id: string; title: string; html: string; revision: number; publishedAt: string }
 interface Event { id: string; type: 'received' | 'opened' }
+interface Usage { launches: number; activeDays: number; firstDay: string; recentDays: string[] }
 interface Saved {
   installationId: string; installationKey: string; items: NotificationItem[];
-  read: string[]; opened: string[]; received: string[]; pending: Event[]; checkedAt: string | null;
+  read: string[]; opened: string[]; received: string[]; pending: Event[]; checkedAt: string | null; usage?: Usage;
 }
-export interface NotificationOptions { directory: string; version: string; platform?: string; request?: typeof fetch; endpoint?: string }
+export interface NotificationOptions { directory: string; version: string; platform?: string; request?: typeof fetch; endpoint?: string; now?: () => Date }
 function validItem(n: any): n is NotificationItem {
   return !!n && typeof n.id === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(n.id) && typeof n.title === 'string' && n.title.length <= 100 && typeof n.html === 'string' && Buffer.byteLength(n.html) <= 200_000 && Number.isSafeInteger(n.revision) && n.revision > 0 && typeof n.publishedAt === 'string' && Number.isFinite(Date.parse(n.publishedAt));
 }
@@ -45,6 +46,8 @@ export class NotificationInbox {
     if (typeof s.installationId !== 'string' || typeof s.installationKey !== 'string' || !Array.isArray(s.items) || !s.items.every(validItem) || !Array.isArray(s.read) || !Array.isArray(s.opened) || !Array.isArray(s.pending) || s.pending.some((e: any) => !e || typeof e.id !== 'string' || !['received', 'opened'].includes(e.type))) throw new Error('Invalid cache');
     s.received ??= [];
     if (!Array.isArray(s.received)) throw new Error('Invalid receipt cache');
+    const u = s.usage;
+    if (u && (!Number.isSafeInteger(u.launches) || u.launches < 1 || !Number.isSafeInteger(u.activeDays) || u.activeDays < 1 || u.activeDays > u.launches || typeof u.firstDay !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(u.firstDay) || !Array.isArray(u.recentDays) || u.recentDays.length > 90 || u.recentDays.some((d: any) => typeof d !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d)))) throw new Error('Invalid usage cache');
     return s;
   }
   private update(change: (s: Saved) => void) {
@@ -75,9 +78,18 @@ export class NotificationInbox {
   }
   private async checkAtLaunch() {
     this.checking = true;
-    const sent = this.saved.pending.slice(0, 100).map(e => ({ ...e }));
     try {
-      const response = await this.post('/v1/startup', { ...this.credentials(), platform: this.o.platform ?? process.platform, appVersion: this.o.version, events: sent });
+      // Persist before networking, including offline launches. Repeated startup() calls share this entire operation.
+      const now = this.o.now?.() ?? new Date(), day = now.toISOString().slice(0, 10);
+      const since = new Date(now.getTime() - 89 * 86400_000).toISOString().slice(0, 10);
+      this.update(s => {
+        const u = s.usage ?? { launches: 0, activeDays: 0, firstDay: day, recentDays: [] };
+        const isNewDay = !u.recentDays.includes(day);
+        s.usage = { launches: u.launches + 1, activeDays: u.activeDays + Number(isNewDay), firstDay: u.firstDay,
+          recentDays: [...new Set([...u.recentDays, day])].filter(d => d >= since && d <= day).sort().slice(-90) };
+      });
+      const sent = this.saved.pending.slice(0, 100).map(e => ({ ...e }));
+      const response = await this.post('/v1/startup', { ...this.credentials(), platform: this.o.platform ?? process.platform, appVersion: this.o.version, events: sent, usage: this.saved.usage });
       if (!Array.isArray(response.notifications) || response.notifications.length > 50 || !response.notifications.every(validItem) || new Set(response.notifications.map((n: NotificationItem) => n.id)).size !== response.notifications.length || typeof response.checkedAt !== 'string' || !Number.isFinite(Date.parse(response.checkedAt))) throw new Error('Invalid notification feed');
       if (this.controller.signal.aborted) return;
       this.update(s => { this.acknowledge(sent, s); s.items = response.notifications.map((n: NotificationItem) => ({ id: n.id, title: n.title, html: n.html, revision: n.revision, publishedAt: n.publishedAt })); s.checkedAt = response.checkedAt; for (const n of s.items) if (!s.received.includes(n.id)) queue(s, { id: n.id, type: 'received' }); });
