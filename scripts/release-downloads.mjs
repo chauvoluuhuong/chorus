@@ -9,8 +9,10 @@
 //   Chorus-macOS-<version>.zip      Chorus.app from desktop/ (built first when missing)
 //   SHA256SUMS                      checksums of the files above, which install.sh verifies
 // and sets VERSION in site/install.sh to package.json's version. Then `npm run deploy:site` delegates publication to chorus-admin.
-//   node scripts/release-downloads.mjs [--rebuild-app] [--targets darwin-arm64,linux-arm64,linux-x64]
+//   node scripts/release-downloads.mjs [--rebuild-app | --no-app] [--targets=darwin-arm64,linux-arm64,linux-x64] [--out=<dir>]
 //   (CHORUS_APP=<path to Chorus.app> to use another build)
+// --out writes the files into <dir> instead and leaves chorus-admin alone (no install.sh needed): the release workflow
+// (.github/workflows/release.yml) builds each target on its own runner that way, and `npm run release:fetch` brings them to the site.
 import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -19,9 +21,12 @@ import * as esbuild from 'esbuild';
 
 const root = path.resolve(import.meta.dirname, '..');
 const { version } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+const arg = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
+const outArg = arg('out');
 const siteRoot = path.resolve(process.env.CHORUS_SITE_DIR ?? path.join(root, '../chorus-admin/site'));
-if (!fs.existsSync(path.join(siteRoot, 'install.sh'))) throw new Error('Clone chorus-admin next to chorus, or set CHORUS_SITE_DIR to its site directory');
-const out = path.join(siteRoot, 'dl');
+if (!outArg && !fs.existsSync(path.join(siteRoot, 'install.sh'))) throw new Error('Clone chorus-admin next to chorus, set CHORUS_SITE_DIR to its site directory, or pass --out=<dir>');
+const out = outArg ? path.resolve(outArg) : path.join(siteRoot, 'dl');
+const withApp = !process.argv.includes('--no-app');
 const app = process.env.CHORUS_APP ?? path.join(root, 'desktop/src-tauri/target/release/bundle/macos/Chorus.app');
 const run = (cmd, args, cwd = root) => execFileSync(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'inherit'] }).toString().trim();
 const sha = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
@@ -70,7 +75,7 @@ fs.renameSync(path.join(out, packed.filename), tgz);
 
 // ---- the bundles: the same staged package + a Node.js binary + dependencies installed on the target platform ----
 const TARGETS = { 'darwin-arm64': 'darwin-arm64', 'linux-arm64': 'linux-arm64', 'linux-x64': 'linux-x64' };
-const wanted = (process.argv.find((a) => a.startsWith('--targets='))?.slice(10) ?? Object.keys(TARGETS).join(',')).split(',').filter(Boolean);
+const wanted = (arg('targets') ?? Object.keys(TARGETS).join(',')).split(',').filter(Boolean);
 const cache = path.join(root, 'node_modules/.cache/chorus-release');
 fs.mkdirSync(cache, { recursive: true });
 const get = async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return Buffer.from(await r.arrayBuffer()); };
@@ -123,9 +128,11 @@ for (const target of wanted) {
     run('npm', ['install', '--omit=dev', '--no-fund', '--no-audit', '--loglevel=error'], app);
   } else if (os === 'linux') {
     // Debian 11 (glibc 2.31; its package archive, as 11 is no longer on the main mirrors) so the compiled node-pty runs on Ubuntu 20.04+, Debian 11+, Fedora, Arch…; the target's own Node does the npm install
+    // On a Linux host the container's root writes into the mounted folder: give the files back to this user afterwards
     const platform = arch === 'arm64' ? 'linux/arm64' : 'linux/amd64';
-    run('docker', ['run', '--rm', '--platform', platform, '-v', `${ex}:/node:ro`, '-v', `${app}:/app`, '-w', '/app', 'debian:11-slim', 'bash', '-c',
-      "set -e; sed -i 's|deb.debian.org|archive.debian.org|g; /bullseye-updates/d' /etc/apt/sources.list; apt-get -o Acquire::Check-Valid-Until=false update -qq >/dev/null; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 make g++ >/dev/null; export PATH=/node/bin:$PATH; npm install --omit=dev --no-fund --no-audit --loglevel=error"]);
+    const owner = process.getuid ? `${process.getuid()}:${process.getgid()}` : '0:0';
+    run('docker', ['run', '--rm', '--platform', platform, '-e', `OWNER=${owner}`, '-v', `${ex}:/node:ro`, '-v', `${app}:/app`, '-w', '/app', 'debian:11-slim', 'bash', '-c',
+      "set -e; sed -i 's|deb.debian.org|archive.debian.org|g; /bullseye-updates/d' /etc/apt/sources.list; apt-get -o Acquire::Check-Valid-Until=false update -qq >/dev/null; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 make g++ >/dev/null; export PATH=/node/bin:$PATH; npm install --omit=dev --no-fund --no-audit --loglevel=error; chown -R \"$OWNER\" /app"]);
   } else {
     throw new Error(`cannot build ${target} on ${process.platform}-${process.arch}`);
   }
@@ -143,14 +150,18 @@ for (const target of wanted) {
 }
 fs.rmSync(stage, { recursive: true, force: true });
 
-if (process.argv.includes('--rebuild-app') || !fs.existsSync(app)) run('npm', ['run', 'build'], path.join(root, 'desktop'));
 const zip = path.join(out, `Chorus-macOS-${version}.zip`);
-run('ditto', ['-c', '-k', '--keepParent', app, zip]);
+if (withApp) {
+  if (process.argv.includes('--rebuild-app') || !fs.existsSync(app)) run('npm', ['run', 'build'], path.join(root, 'desktop'));
+  run('ditto', ['-c', '-k', '--keepParent', app, zip]);
+}
 
-const sh = path.join(siteRoot, 'install.sh');
-fs.writeFileSync(sh, fs.readFileSync(sh, 'utf8').replace(/^VERSION=".*"$/m, `VERSION="${version}"`));
+if (!outArg) {
+  const sh = path.join(siteRoot, 'install.sh');
+  fs.writeFileSync(sh, fs.readFileSync(sh, 'utf8').replace(/^VERSION=".*"$/m, `VERSION="${version}"`));
+}
 
-const all = [tgz, zip, ...bundles];
+const all = [tgz, ...(withApp ? [zip] : []), ...bundles];
 fs.writeFileSync(path.join(out, 'SHA256SUMS'), all.map((f) => `${sha(f)}  ${path.basename(f)}`).join('\n') + '\n');
 for (const f of all) console.log(`${path.relative(root, f)}  ${(fs.statSync(f).size / 1048576).toFixed(1)} MB  sha256 ${sha(f)}`);
-console.log(`site/install.sh  VERSION=${version}`);
+if (!outArg) console.log(`site/install.sh  VERSION=${version}`);
