@@ -24,7 +24,7 @@ import { defaultOpener } from '../core/opener.ts';
 import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, sourceDir, syncSkills } from '../core/skills.ts';
 import type { AgentId } from '../core/types.ts';
 import { CLIS, type DeepReport } from '@chauvoluuhuong/chorus-core/doctor';
-import { check, ghReady, isDue, issue, lastCheck, lastDeep, latestReleases, markSeen, openUrl, runCommand, runDeep, sendIssue, DOCTOR_DIR } from '../core/doctor.ts';
+import { check, firstLaunch, ghReady, isDue, issue, lastCheck, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, runCommand, runDeep, sendIssue, DOCTOR_DIR } from '../core/doctor.ts';
 
 import type { NotificationInbox } from './notifications.ts';
 
@@ -39,7 +39,7 @@ const VENDOR: Record<string, string> = {
 };
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const DEFAULT_SIZE = { cols: 120, rows: 36 };
-const LITERAL = new Set(['POST skills/import', 'POST doctor/check', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/send']);
+const LITERAL = new Set(['POST skills/import', 'GET doctor/first', 'POST doctor/check', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/send']);
 
 /** The App without a terminal: input and output go nowhere, the Controller drives it as usual. */
 export function headlessIO(): AppIO {
@@ -84,6 +84,8 @@ interface DoctorJob {
   ok?: boolean;
   output: string;
   results: unknown[];
+  /** the finished detailed test (the page reads its results and the failures' reasons) */
+  report?: DeepReport;
   dir?: string;
 }
 
@@ -274,7 +276,10 @@ export class ChorusServer {
     const a = (await check([agent])).agents[0];
     const command = action === 'install' ? a.install?.command : action === 'tested' ? a.testedInstall : action === 'login' ? info.login.join(' ') : undefined;
     if (action !== 'deep' && !command) return { error: `nothing to ${action} for ${info.name}` };
-    if (action === 'login' && agent === 'agy') return { error: 'agy signs in when it starts: run `agy` once in a terminal' };
+    if (action === 'login' && agent === 'agy') {
+      if (!openInTerminal('agy')) return { error: 'agy signs in when it starts: run `agy` once in a terminal' };
+      return { id: '', agent, action, command, done: true, ok: true, output: '', results: [], terminal: true };
+    }
     const job: DoctorJob = { id: crypto.randomBytes(4).toString('hex'), agent, action, command, done: false, output: '', results: [] };
     this.doctorJobs.set(job.id, job);
     void (async () => {
@@ -282,6 +287,7 @@ export class ChorusServer {
         const run = await runDeep(agent, e => e.type === 'scenario-end' && job.results.push(e.result));
         this.deepReports = [...this.deepReports.filter(d => d.agent !== agent), run.report];
         job.ok = run.report.ok;
+        job.report = run.report;
         job.dir = run.dir;
       } else {
         job.ok = (await runCommand(command!, s => (job.output = (job.output + s).slice(-20_000)))) === 0;
@@ -424,6 +430,8 @@ export class ChorusServer {
         const at = saved?.at ?? new Date().toISOString();
         return { lines: c.doctorLines().map(plain), fast, at, due: isDue(fast), gh: ghReady(), latest: await latestReleases(), lastDeep: lastDeep(), jobs: [...this.doctorJobs.values()] };
       }
+      case 'GET doctor/first':
+        return { first: firstLaunch() };
       case 'POST doctor/seen':
         markSeen(await check());
         return { ok: true };

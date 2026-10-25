@@ -90,6 +90,8 @@ interface Seen {
   date: string;
 }
 const seenFile = () => path.join(DOCTOR_DIR(), 'last.json');
+/** No check was ever shown here: the desktop opens the doctor screen at once, before the short check is done. */
+export const firstLaunch = () => !fs.existsSync(seenFile());
 export function isDue(fast: FastReport): boolean {
   const s: Seen | undefined = readJson(seenFile(), undefined);
   if (!s) return true;
@@ -131,7 +133,8 @@ export interface DeepRun {
 
 /** The deeper test for one CLI; evidence in ~/.chorus/doctor/<time>/<agent>/. A pass makes that version Ready here. */
 export async function runDeep(agent: AgentId, onEvent?: (e: DeepEvent) => void, only?: string[]): Promise<DeepRun> {
-  const dir = path.join(DOCTOR_DIR(), new Date().toISOString().replace(/[:.]/g, '-'));
+  // one folder per agent: the desktop tests the agents side by side, and two runs can start in the same millisecond
+  const dir = path.join(DOCTOR_DIR(), `${new Date().toISOString().replace(/[:.]/g, '-')}-${agent}`);
   const report = await deepTest(agent, { dir, tui, onEvent, only });
   writeJson(path.join(dir, 'report.json'), { ...versions(), report });
   if (report.ok && report.version && !only) addKnown(`${agent}@${report.version}`);
@@ -163,6 +166,13 @@ export function sendIssue(title: string, body: string, file: string): { via: 'gh
 export function openUrl(url: string) {
   const cmd = process.platform === 'darwin' ? 'open' : 'xdg-open';
   spawn(cmd, [url], { stdio: 'ignore', detached: true }).unref();
+}
+
+/** agy has no login command: its first start signs in, so it starts in a Terminal window (macOS) where the user can do it. */
+export function openInTerminal(command: string): boolean {
+  if (process.platform !== 'darwin') return false;
+  const script = `tell application "Terminal"\n activate\n do script ${JSON.stringify(command)}\nend tell`;
+  return spawnSync('osascript', ['-e', script], { stdio: 'ignore' }).status === 0;
 }
 
 /** Run an install or login command the user asked for, with its output streamed to `onOutput`. */
