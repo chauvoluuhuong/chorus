@@ -101,8 +101,9 @@ fn start_serve(app: &AppHandle) {
             // the first line of `chorus serve` is "chorus serve: <url with the token>"
             if let Some(url) = line.strip_prefix("chorus serve: ") {
                 found = true;
-                if let (Some(w), Ok(u)) = (app.get_webview_window("main"), Url::parse(url.trim())) {
-                    let _ = w.navigate(u);
+                if let Ok(u) = Url::parse(url.trim()) {
+                    let app = app.clone();
+                    thread::spawn(move || open_page(&app, u));
                 }
             }
         }
@@ -114,6 +115,22 @@ fn start_serve(app: &AppHandle) {
             );
         }
     });
+}
+
+/// Show the served page. `chorus serve` can print its URL before the splash page has finished loading, and a navigation sent that early
+/// is lost when the splash load completes (the window then stays on "Starting chorus serve…"), so repeat it until the window is there.
+fn open_page(app: &AppHandle, target: Url) {
+    let t0 = Instant::now();
+    while t0.elapsed() < Duration::from_secs(20) {
+        if let Some(w) = app.get_webview_window("main") {
+            if w.url().map(|u| u.host_str() == target.host_str() && u.port() == target.port()).unwrap_or(false) {
+                return;
+            }
+            let _ = w.navigate(target.clone());
+        }
+        thread::sleep(Duration::from_millis(400));
+    }
+    show_error(app, "The Chorus window could not open the page `chorus serve` started. Quit Chorus and open it again.");
 }
 
 /// SIGTERM first, so `chorus serve` stops its agents and closes the database; a hard kill only if it does not exit in time.
