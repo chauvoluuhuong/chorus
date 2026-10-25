@@ -12,13 +12,14 @@ import { buildHandoff } from '../../src/core/handoff.ts';
 import { Store } from '../../src/core/store.ts';
 import type { AgentId } from '../../src/core/types.ts';
 import { ChorusServer, headlessApp } from '../../src/serve/server.ts';
+import { NotificationInbox } from '../../src/serve/notifications.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const FAKE = path.join(ROOT, 'tools/fake-agent/fake-tui.mjs');
 const PROMPT = path.join(ROOT, 'fixtures/codex/0.163.0/approval-ask-nohook-enter/prompt-screen.txt');
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-async function rig(seed?: (store: Store, project: string) => void) {
+async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-home-'));
   process.env.CODEX_HOME = home;
   const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-serve-')));
@@ -37,7 +38,8 @@ async function rig(seed?: (store: Store, project: string) => void) {
     },
   });
   c.restore();
-  const srv = new ChorusServer({ controller: c, token: 'a'.repeat(48) });
+  const notificationLinks: string[] = [];
+  const srv = new ChorusServer({ controller: c, token: 'a'.repeat(48), notifications, onNotificationLink: url => { notificationLinks.push(url); } });
   const url = await srv.start(0);
   const api = async (method: string, p: string, body?: object, headers: Record<string, string> = {}) => {
     const res = await fetch(url + p, { method, headers: { authorization: `Bearer ${srv.token}`, 'x-chorus': '1', 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined, redirect: 'manual' });
@@ -57,7 +59,7 @@ async function rig(seed?: (store: Store, project: string) => void) {
     await sleep(300); // the agents' exits arrive before the store closes
     store.close();
   };
-  return { srv, c, store, project, url, api, launches, done };
+  return { srv, c, store, project, url, api, launches, notificationLinks, done };
 }
 
 /** A desktop window: a socket and the terminal it would draw (replayed screen + live bytes). */
@@ -321,4 +323,35 @@ test('serve: a dropped file goes into the agent input like a terminal sends it, 
   } finally {
     await r.done();
   }
+});
+
+
+test('serve: notification UI uses the launch cache; opening counts once and external links stay constrained', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-serve-news-'));
+  const calls: string[] = [];
+  const item = { id: 'news-one', title: 'Workspace tip', html: '<h1>A tip</h1><a href="https://example.org/tip">More</a>', revision: 1, publishedAt: new Date().toISOString() };
+  const request = (async (url: string | URL | Request) => { calls.push(String(url)); return Response.json(String(url).endsWith('/startup') ? { notifications: [item], checkedAt: new Date().toISOString() } : { ok: true }); }) as typeof fetch;
+  const inbox = new NotificationInbox({ directory, version: 'test', request });
+  const r = await rig(undefined, inbox);
+  try {
+    await inbox.startup();
+    assert.equal(calls.length, 1);
+    for (let i = 0; i < 5; i++) {
+      const cached = await r.api('GET', '/api/notifications');
+      assert.equal(cached.json.unread, 1); assert.equal(cached.json.items[0].title, item.title);
+      assert.equal(JSON.stringify(cached.json).includes('installationKey'), false);
+      await r.api('GET', '/api/state');
+    }
+    assert.equal(calls.length, 1, 'UI redraws and local reads do not fetch the cloud feed');
+    const opened = await r.api('POST', '/api/notifications/news-one/open', {});
+    assert.equal(opened.json.item.html, item.html); assert.equal(opened.json.inbox.unread, 0);
+    await inbox.opened(item.id); assert.equal(calls.length, 2);
+    await r.api('POST', '/api/notifications/news-one/open', {}); await inbox.opened(item.id);
+    assert.equal(calls.length, 2, 'reopening does not inflate open events');
+    assert.equal((await r.api('POST', '/api/notifications/link', { id: item.id, url: 'https://example.org/tip' })).json.ok, true);
+    assert.deepEqual(r.notificationLinks, ['https://example.org/tip']);
+    assert.ok((await r.api('POST', '/api/notifications/link', { id: item.id, url: 'https://evil.example/' })).json.error);
+    assert.equal((await r.api('POST', '/api/notifications/missing/open', {})).status, 404);
+    assert.equal(calls.length, 2);
+  } finally { await r.done(); fs.rmSync(directory, { recursive: true, force: true }); }
 });
