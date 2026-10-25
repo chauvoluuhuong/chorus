@@ -55,6 +55,8 @@ const S = {
   screen: { live: true, exited: false, waiting: true },
   shownDialogs: new Set(),
   homeGuess: '',
+  news: null,
+  newsDetail: null,
 };
 
 /* ---------- the socket ---------- */
@@ -116,7 +118,9 @@ function flash(text) {
 
 function onState(st) {
   const first = !S.state;
+  const previousNews = S.state?.notifications;
   S.state = st;
+  if (JSON.stringify(previousNews) !== JSON.stringify(st.notifications) && !$('#news').hidden && !S.newsDetail) void loadNews();
   if (!S.homeGuess) S.homeGuess = st.project.split('/').slice(0, 3).join('/');
   // a request on a chat you are not looking at: a toast with the answer buttons (the CLI app's flash and bell)
   for (const a of st.approvals) {
@@ -322,7 +326,8 @@ function renderChrome() {
     ${$('#app').classList.contains('side-off') ? `<button class="icon-btn" data-act="sidebar" title="Show the sidebar (${MOD}B)">⇥</button>` : ''}
     ${S.history.length ? '<button class="btn" data-act="back" title="Back">‹ Back</button>' : ''}
     <div class="crumbs">${crumbs}</div>
-    ${waiting ? `<button class="btn waiting" data-act="approvals">! ${waiting} waiting</button>` : ''}`;
+    ${waiting ? `<button class="btn waiting" data-act="approvals">! ${waiting} waiting</button>` : ''}
+    <button class="btn news-toggle" data-act="news-toggle" aria-label="Notifications${st?.notifications?.unread ? `, ${st.notifications.unread} unread` : ''}" aria-expanded="${!$('#news').hidden}" aria-controls="news"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span class="news-label">Notifications</span>${st?.notifications?.unread ? `<span class="news-count">${Math.min(st.notifications.unread, 99)}</span>` : ''}</button>`;
 
   // the controller's warning line (limit, quota, context not loaded), with a button for what it suggests
   const notice = plainText(st?.notice ?? '');
@@ -1103,6 +1108,50 @@ document.addEventListener('drop', async e => {
   term.focus();
 });
 
+
+/* ---------- notifications: all reads are local, with no fetch-again or timer path ---------- */
+function closeNews() {
+  $('#news').hidden = true; S.newsDetail = null; renderChrome();
+  document.querySelector('[data-act="news-toggle"]')?.focus();
+}
+async function loadNews() {
+  S.news = await api('GET', '/api/notifications');
+  if (!$('#news').hidden && !S.newsDetail) renderNews();
+}
+function renderNews() {
+  const n = S.news;
+  const status = n?.checking ? 'Checking at app startup…' : n?.offline ? 'Saved messages · check again next launch' : 'Checked when Chorus starts';
+  $('#news').innerHTML = `<div class="news-head"><h2>From Chorus</h2><button class="icon-btn" data-act="news-close" aria-label="Close notifications">×</button></div>
+    ${n?.items?.length ? n.items.map(item => `<button class="news-row${item.read ? '' : ' unread'}" data-act="news-open" data-arg="${esc(item.id)}"><strong>${item.read ? '' : '<span class="dot"></span>'}${esc(item.title)}</strong><small>${esc(new Date(item.publishedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}</small></button>`).join('') : `<div class="news-empty">${n?.checking ? 'Checking for announcements…' : 'No announcements yet.'}</div>`}
+    <div class="news-footer"><span>${esc(status)}</span>${n?.unread ? '<button class="news-link" data-act="news-read-all">Mark all as read</button>' : ''}</div>
+    <div class="news-footer"><span>Installation and notification-open counts</span><button class="news-link" data-act="news-privacy">Privacy</button></div>`;
+}
+async function openNews(id) {
+  const response = await api('POST', `/api/notifications/${encodeURIComponent(id)}/open`, {});
+  if ($('#news').hidden) return;
+  S.newsDetail = response.item; S.news = response.inbox;
+  const box = $('#news'); box.replaceChildren();
+  const head = document.createElement('div'); head.className = 'news-head';
+  const heading = document.createElement('h2'); heading.textContent = 'From Chorus';
+  const close = document.createElement('button'); close.className = 'icon-btn'; close.dataset.act = 'news-close'; close.setAttribute('aria-label', 'Close notifications'); close.textContent = '×'; head.append(heading, close);
+  const backRow = document.createElement('div'); backRow.className = 'news-detail-head';
+  const back = document.createElement('button'); back.className = 'news-link'; back.dataset.act = 'news-back'; back.textContent = '← All notifications'; backRow.append(back);
+  const frame = document.createElement('iframe'); frame.className = 'news-content'; frame.title = response.item.title; frame.id = 'news-frame'; frame.referrerPolicy = 'no-referrer';
+  // Opaque origin; only our nonce-authorized link forwarder can run. Publisher scripts and native APIs remain inaccessible.
+  frame.setAttribute('sandbox', 'allow-scripts');
+  const nonce = crypto.randomUUID().replaceAll('-', '');
+  const bridge = `document.addEventListener('click',function(e){const a=e.target.closest('a[href]');if(!a)return;e.preventDefault();if(e.isTrusted)parent.postMessage({type:'chorus-news-link',url:a.href},'*')})`;
+  frame.srcdoc = `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src https://storage.googleapis.com; base-uri 'none'; form-action 'none'"><style>:root{color-scheme:light dark}body{margin:0;background:light-dark(#fff,#2c2b29);color:light-dark(#141413,#f5f4ee);font:14px/1.5 system-ui,sans-serif;overflow-wrap:anywhere}*{box-sizing:border-box}img{max-width:100%;height:auto}</style><script nonce="${nonce}">${bridge}</script>${response.item.html}`;
+  box.append(head, backRow, frame);
+}
+window.addEventListener('message', event => {
+  const frame = $('#news-frame');
+  if (!frame || event.source !== frame.contentWindow || event.data?.type !== 'chorus-news-link' || typeof event.data.url !== 'string' || !S.newsDetail) return;
+  void api('POST', '/api/notifications/link', { id: S.newsDetail.id, url: event.data.url }).then(r => r.error && toast(r.error));
+});
+document.addEventListener('click', event => { if (!$('#news').hidden && !event.target.closest('#news, [data-act="news-toggle"]')) closeNews(); });
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$('#news').hidden) { event.preventDefault(); event.stopImmediatePropagation(); closeNews(); } }, true);
+
 /* ---------- toasts ---------- */
 
 function toast(text, opts = {}) {
@@ -1185,6 +1234,15 @@ document.addEventListener('click', async e => {
       el.closest('.scrim')?.remove();
       return toast(r.error ? `Not sent: ${r.error}` : r.via === 'gh' ? `Issue created: ${r.url}` : 'Opened GitHub; the report is on your clipboard: paste it as the description');
     }
+    case 'news-toggle':
+      if (!$('#news').hidden) return closeNews();
+      $('#news').hidden = false; S.newsDetail = null; renderChrome();
+      return loadNews();
+    case 'news-close': return closeNews();
+    case 'news-back': S.newsDetail = null; return loadNews();
+    case 'news-open': return openNews(arg);
+    case 'news-read-all': S.news = await api('POST', '/api/notifications/read-all', {}); return renderNews();
+    case 'news-privacy': return api('POST', '/api/notifications/link', { url: 'https://chorus-cli.web.app/privacy' });
     case 'back':
       return back();
     case 'sidebar':

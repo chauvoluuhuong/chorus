@@ -2,6 +2,7 @@
 // chorus: the CLI app (Phase 4) and its plain commands. `chorus mcp` is started by the agents, not by you.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { App } from '../app/app.ts';
 import { AGENTS, Controller } from '../app/controller.ts';
@@ -11,6 +12,8 @@ import type { AgentId } from '../core/types.ts';
 import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, syncSkills } from '../core/skills.ts';
 import { runMcp } from '../mcp/server.ts';
 import { ChorusServer, headlessApp } from '../serve/server.ts';
+import { NotificationInbox } from '../serve/notifications.ts';
+import { versions } from '../core/doctor.ts';
 import { activityCmd, artifactsCmd, doctorCmd, memoryCmd, showCmd, threadsCmd, traceCmd } from './commands.ts';
 
 const argv = process.argv.slice(2);
@@ -186,7 +189,12 @@ switch (cmd) {
         process.exit(0);
       }, 300);
     };
-    const srv = new ChorusServer({ controller: c, port: Number(flag('port') ?? 4318), onQuit: quit });
+    let notifications: NotificationInbox | undefined;
+    if (!fake && process.env.CHORUS_NOTIFICATIONS !== '0') {
+      try { notifications = new NotificationInbox({ directory: path.join(process.env.CHORUS_HOME ?? path.join(os.homedir(), '.chorus'), 'notifications'), version: versions().chorus }); }
+      catch { /* An unreadable cache must not stop the desktop or reset the installation identity. */ }
+    }
+    const srv = new ChorusServer({ controller: c, port: Number(flag('port') ?? 4318), onQuit: quit, notifications });
     await srv.start();
     // the first line is read by the desktop shell: keep its shape
     console.log(`chorus serve: ${srv.openUrl}`);

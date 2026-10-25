@@ -26,6 +26,8 @@ import type { AgentId } from '../core/types.ts';
 import { CLIS, type DeepReport } from '@chauvoluuhuong/chorus-core/doctor';
 import { check, ghReady, isDue, issue, lastCheck, lastDeep, latestReleases, markSeen, openUrl, runCommand, runDeep, sendIssue, DOCTOR_DIR } from '../core/doctor.ts';
 
+import type { NotificationInbox } from './notifications.ts';
+
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const UI_DIR = path.join(ROOT, 'src/desktop');
@@ -62,6 +64,8 @@ export interface Dialog {
 
 export interface ServeOpts {
   controller: Controller;
+  notifications?: NotificationInbox;
+  onNotificationLink?: (url: string) => void;
   port?: number;
   /** fixed token (tests); random otherwise */
   token?: string;
@@ -167,6 +171,7 @@ export class ChorusServer {
     await listen(port).catch(() => listen(0));
     this.url = `http://127.0.0.1:${(this.http.address() as AddressInfo).port}`;
     this.ticker = setInterval(() => this.pushState(), 500);
+    if (this.o.notifications) void this.o.notifications.startup().then(() => this.pushState());
     return this.url;
   }
 
@@ -177,6 +182,7 @@ export class ChorusServer {
 
   close() {
     this.closed = true;
+    this.o.notifications?.close();
     clearInterval(this.ticker);
     for (const cl of this.clients) cl.ws.close();
     this.wss?.close();
@@ -288,6 +294,19 @@ export class ChorusServer {
   private async route(method: string, parts: string[], q: URLSearchParams, b: Record<string, any>): Promise<unknown> {
     const [a, id, sub] = parts;
     const c = this.c;
+    if (a === 'notifications') {
+      const inbox = this.o.notifications;
+      if (method === 'GET' && parts.length === 1) return inbox?.snapshot() ?? { items: [], unread: 0, checkedAt: null, checking: false, offline: false };
+      if (method === 'POST' && id === 'read-all' && parts.length === 2) { inbox?.markAllRead(); this.pushState(); return inbox?.snapshot() ?? { items: [], unread: 0 }; }
+      if (method === 'POST' && id === 'link' && parts.length === 2) {
+        if (typeof b.url !== 'string' || !inbox?.allowsLink(typeof b.id === 'string' ? b.id : undefined, b.url)) return { error: 'This link is not in the notification' };
+        (this.o.onNotificationLink ?? openUrl)(b.url); return { ok: true };
+      }
+      if (method === 'POST' && sub === 'open' && parts.length === 3 && inbox?.content(id)) {
+        void inbox.opened(id).catch(() => {}); this.pushState(); return { item: inbox.content(id), inbox: inbox.snapshot() };
+      }
+      return undefined;
+    }
     const thread = id ? c.store.getThread(id) : undefined;
     // literal routes first ("skills/import"), then the ones with an id ("skills/:id/toggle")
     const literal = `${method} ${parts.join('/')}`;
@@ -474,6 +493,7 @@ export class ChorusServer {
     });
     return {
       project: c.project,
+      notifications: this.o.notifications?.summary() ?? { unread: 0, checkedAt: null, checking: false, offline: false },
       current: this.app.current?.id ?? null,
       chats,
       // when each request appeared (whole seconds), not "seconds waiting": the state must not change every push, or the
