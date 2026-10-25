@@ -82,3 +82,27 @@ library `@chauvoluuhuong/chorus-core`, which has its own licence. See [NOTICE.md
 ## Website maintenance
 
 The public website remains at [chorus-cli.web.app](https://chorus-cli.web.app). Its source and deployment are maintained in the separate `chorus-admin` repository. Release maintainers clone that repository beside this one; `npm run release:downloads` writes its installer artifacts there and `npm run deploy:site` delegates deployment.
+
+### Release downloads (GitHub Actions)
+
+`.github/workflows/release.yml` builds the installer downloads when `main` gets a new `package.json` version (or a `v*` tag
+is pushed, or it is run by hand from the Actions tab) and attaches them to the GitHub Release `v<version>`:
+`chorus-cli-<v>.tgz`, `chorus-darwin-arm64-<v>.tar.gz` and `Chorus-macOS-<v>.zip` on a macOS arm64 runner (Tauri),
+`chorus-linux-x64-<v>.tar.gz` and `chorus-linux-arm64-<v>.tar.gz` on Linux runners of each arch (Docker, Debian 11), and
+`SHA256SUMS`. Run by hand on another branch it only keeps the files as workflow artifacts. It deploys nothing; to publish:
+
+```bash
+npm run release:fetch      # the release's files into ../chorus-admin/site/dl/, checksums verified, VERSION set in install.sh
+npm run deploy:site
+```
+
+`npm run release:downloads` still builds everything on this Mac instead (needs Docker and the Tauri toolchain).
+
+One-time setup, in the repository settings:
+
+- **Secret `CHORUS_CORE_DEPLOY_KEY`** (Settings → Secrets and variables → Actions): the private chorus-core is checked
+  out next to this repo with a read-only deploy key. Make one with `ssh-keygen -t ed25519 -N '' -C chorus-release -f chorus-core-deploy`,
+  add `chorus-core-deploy.pub` to chauvoluuhuong/chorus-core → Settings → Deploy keys (read access only), paste the private
+  `chorus-core-deploy` into the secret here, then delete both files. Only the core's built `dist/` goes into the downloads.
+- **Variable `CHORUS_CORE_REF`** (optional): the chorus-core branch or tag to bundle; `dev` when unset. A manual run can
+  pick another one.

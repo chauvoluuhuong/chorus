@@ -37,7 +37,8 @@
     "serve": "node src/cli/index.ts serve --open",
     "smoke:ask": "node test/smoke/ask.ts",
     "release:downloads": "node scripts/release-downloads.mjs",
-    "deploy:site": "npm --prefix ../chorus-admin run deploy:site"
+    "deploy:site": "npm --prefix ../chorus-admin run deploy:site",
+    "release:fetch": "node scripts/release-fetch.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

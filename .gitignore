@@ -4,6 +4,8 @@ node_modules/
 # Build output
 dist/
 target/
+# the desktop window's splash page (desktop/src-tauri/tauri.conf.json frontendDist) is source, not build output
+!desktop/dist/
 
 # Chorus local state (threads, artifacts, run captures)
 .chorus/
