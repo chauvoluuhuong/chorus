@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Writes the files the one-command installer (site/install.sh) downloads, into site/dl/ (not in git;
+// Writes installer downloads into ../chorus-admin/site/dl/ (or CHORUS_SITE_DIR/dl), not in git;
 // Firebase Hosting publishes it with the page):
 //   chorus-cli-<version>.tgz        the chorus command (`npm pack`; package.json "files" picks what goes in), with the
 //                                   private @chauvoluuhuong/chorus-core inside it as a bundled dependency
@@ -8,7 +8,7 @@
 //                                   The Linux ones are built in Docker (Debian 11, glibc 2.31); needs a running Docker.
 //   Chorus-macOS-<version>.zip      Chorus.app from desktop/ (built first when missing)
 //   SHA256SUMS                      checksums of the files above, which install.sh verifies
-// and sets VERSION in site/install.sh to package.json's version. Then `npm run deploy:site` publishes them.
+// and sets VERSION in site/install.sh to package.json's version. Then `npm run deploy:site` delegates publication to chorus-admin.
 //   node scripts/release-downloads.mjs [--rebuild-app] [--targets darwin-arm64,linux-arm64,linux-x64]
 //   (CHORUS_APP=<path to Chorus.app> to use another build)
 import { execFileSync } from 'node:child_process';
@@ -19,7 +19,9 @@ import * as esbuild from 'esbuild';
 
 const root = path.resolve(import.meta.dirname, '..');
 const { version } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-const out = path.join(root, 'site', 'dl');
+const siteRoot = path.resolve(process.env.CHORUS_SITE_DIR ?? path.join(root, '../chorus-admin/site'));
+if (!fs.existsSync(path.join(siteRoot, 'install.sh'))) throw new Error('Clone chorus-admin next to chorus, or set CHORUS_SITE_DIR to its site directory');
+const out = path.join(siteRoot, 'dl');
 const app = process.env.CHORUS_APP ?? path.join(root, 'desktop/src-tauri/target/release/bundle/macos/Chorus.app');
 const run = (cmd, args, cwd = root) => execFileSync(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'inherit'] }).toString().trim();
 const sha = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
@@ -145,7 +147,7 @@ if (process.argv.includes('--rebuild-app') || !fs.existsSync(app)) run('npm', ['
 const zip = path.join(out, `Chorus-macOS-${version}.zip`);
 run('ditto', ['-c', '-k', '--keepParent', app, zip]);
 
-const sh = path.join(root, 'site', 'install.sh');
+const sh = path.join(siteRoot, 'install.sh');
 fs.writeFileSync(sh, fs.readFileSync(sh, 'utf8').replace(/^VERSION=".*"$/m, `VERSION="${version}"`));
 
 const all = [tgz, zip, ...bundles];

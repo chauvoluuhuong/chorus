@@ -18,7 +18,7 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 
 | Repo | Visibility, licence | Holds |
 |---|---|---|
-| `chauvoluuhuong/chorus` (this one) | Public from launch. AGPL-3.0-only, with an additional permission to combine it with chorus-core (`LICENSE`, `NOTICE.md`) | The app: store, handoff, memory, MCP tools, desktop, CLI app, installers (curl, Homebrew, npx), landing page. Users install from here and file issues and doctor reports here |
+| `chauvoluuhuong/chorus` (this one) | Public from launch. AGPL-3.0-only, with an additional permission to combine it with chorus-core (`LICENSE`, `NOTICE.md`) | The app: store, handoff, memory, MCP tools, desktop, CLI app, installers (curl, Homebrew, npx). Landing page and web admin now live in the private sibling chorus-admin repo. Users install from here and file issues and doctor reports here |
 | `chauvoluuhuong/chorus-core` (private, `git@github.com:chauvoluuhuong/chorus-core.git`, checked out next to this one; branches `dev` and `main`) | Private source, `UNLICENSED`. Only its built bundle is published, to public npm as `@chauvoluuhuong/chorus-core`, so installing Chorus installs it with no login | The CLI integration: adapters, launch flags, transcript discovery, approval detection, the doctor, the probes, the version matrix, fixtures, `docs/integrations/` |
 
 - This repo's npm package is **`@chauvoluuhuong/chorus`**. `chorus-cli` on npm belongs to someone else: never install or publish it.
@@ -165,3 +165,7 @@ to the adapters; transcript matching; kitty keyboard; Windows; plan-limit captur
 Known gaps: `file_change`, `reasoning`, `turn.failed` Codex events, agy errors/quota and the Claude plan-limit hit are not
 captured by the adapters (fixtures of the first three are in `fixtures/risks/capture-errors/`, TD-3); ctx % in the status line is not built
 (TD-11); the hand pointer (OSC 22) is not probed.
+
+## Website ownership
+
+The landing page, translations, static installer, and Firebase Hosting configuration now live in `../chorus-admin` (`chauvoluuhuong/chorus-admin`, private). The existing public domain `https://chorus-cli.web.app` is preserved. `npm run deploy:site` delegates to that repo; `scripts/release-downloads.mjs` writes release files to its ignored `site/dl/` folder. Clone it as a sibling or set `CHORUS_SITE_DIR` for release output. Do not recreate or delete the existing Firebase Hosting site.
