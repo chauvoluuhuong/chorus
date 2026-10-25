@@ -27,7 +27,7 @@ export class NotificationInbox {
   private controller = new AbortController();
   private checking = false;
   private offline = false;
-  private sending = new Map<string, Promise<void>>();
+  private delivery: Promise<void> | undefined;
   constructor(o: NotificationOptions) {
     this.o = o; this.file = path.join(o.directory, 'inbox.json');
     fs.mkdirSync(o.directory, { recursive: true, mode: 0o700 });
@@ -90,12 +90,14 @@ export class NotificationInbox {
     if (!this.content(id)) return;
     this.update(s => { s.read.push(id); if (!s.opened.includes(id)) { s.opened.push(id); queue(s, { id, type: 'opened' }); } });
     // If startup is still running, retain this event for the next launch. Never create an unregistered identity via /events.
-    if (this.checking || !this.saved.pending.length || !this.saved.checkedAt) return;
-    if (this.sending.has(id)) return this.sending.get(id); // Repeated clicks on this message share their in-flight delivery.
+    if (this.checking || !this.saved.checkedAt) return;
+    // One delivery at a time: opening two messages quickly must not send the first one's events twice.
+    while (this.delivery) await this.delivery;
+    if (!this.saved.pending.some(e => e.id === id)) return;
     const sent = [...this.saved.pending].sort((a, b) => Number(b.id === id) - Number(a.id === id)).slice(0, 100).map(e => ({ ...e }));
     const delivery = (async () => { try { await this.post('/v1/events', { ...this.credentials(), events: sent }); if (!this.controller.signal.aborted) this.update(s => this.acknowledge(sent, s)); } catch { /* Retain events until next launch or an explicit open. */ } })();
-    this.sending.set(id, delivery);
-    try { await delivery; } finally { this.sending.delete(id); }
+    this.delivery = delivery;
+    try { await delivery; } finally { this.delivery = undefined; }
   }
   allowsLink(id: string | undefined, value: string): boolean {
     if (value === 'https://chorus-cli.web.app/privacy') return true;

@@ -75,3 +75,12 @@ test('a corrupt cache is preserved, rather than silently registering a second in
   const file = path.join(directory, 'inbox.json'); fs.writeFileSync(file, '{broken');
   assert.throws(() => new NotificationInbox({ directory, version: '1' }), /preserving/); assert.equal(fs.readFileSync(file, 'utf8'), '{broken');
 });
+test('opening two messages at once sends each opened event once', async t => {
+  const second = { ...item, id: 'notice-two', title: 'Another tip' };
+  let release!: () => void; const gate = new Promise<void>(r => { release = r; });
+  const r = setup(t, async url => { if (url.endsWith('/events')) await gate; return url.endsWith('/startup') ? { notifications: [item, second], checkedAt: new Date().toISOString() } : { ok: true }; });
+  const inbox = r.create(); await inbox.startup(); inbox.markAllRead();
+  const both = Promise.all([inbox.opened(item.id), inbox.opened(second.id)]); setTimeout(release, 20); await both;
+  const sent = r.calls.filter(c => c.url.endsWith('/events')).flatMap(c => c.body.events.filter((e: any) => e.type === 'opened').map((e: any) => e.id));
+  assert.deepEqual(sent.sort(), [item.id, second.id].sort()); inbox.close();
+});

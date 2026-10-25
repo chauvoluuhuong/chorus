@@ -1127,7 +1127,8 @@ function renderNews() {
     <div class="news-footer"><span>Installation and notification-open counts</span><button class="news-link" data-act="news-privacy">Privacy</button></div>`;
 }
 async function openNews(id) {
-  const response = await api('POST', `/api/notifications/${encodeURIComponent(id)}/open`, {});
+  const response = await api('POST', `/api/notifications/${encodeURIComponent(id)}/open`, {}).catch(() => null);
+  if (!response?.item) { toast('This message is no longer available'); return loadNews(); }
   if ($('#news').hidden) return;
   S.newsDetail = response.item; S.news = response.inbox;
   const box = $('#news'); box.replaceChildren();
