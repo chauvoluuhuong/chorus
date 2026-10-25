@@ -152,5 +152,12 @@ fs.writeFileSync(sh, fs.readFileSync(sh, 'utf8').replace(/^VERSION=".*"$/m, `VER
 
 const all = [tgz, zip, ...bundles];
 fs.writeFileSync(path.join(out, 'SHA256SUMS'), all.map((f) => `${sha(f)}  ${path.basename(f)}`).join('\n') + '\n');
+// The public manifest is deployed with the exact archives/checksums, so clients need no GitHub/API polling.
+const downloads = {};
+for (const target of ['darwin-arm64', 'linux-arm64', 'linux-x64']) {
+  const artifact = target === 'darwin-arm64' ? zip : bundles.find(f => path.basename(f) === `chorus-${target}-${version}.tar.gz`);
+  if (artifact) downloads[target] = { url: `https://chorus-cli.web.app/dl/${path.basename(artifact)}`, sha256: sha(artifact) };
+}
+fs.writeFileSync(path.join(siteRoot, 'release.json'), JSON.stringify({ version, downloads }, null, 2) + '\n');
 for (const f of all) console.log(`${path.relative(root, f)}  ${(fs.statSync(f).size / 1048576).toFixed(1)} MB  sha256 ${sha(f)}`);
 console.log(`site/install.sh  VERSION=${version}`);

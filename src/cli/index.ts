@@ -13,6 +13,7 @@ import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnab
 import { runMcp } from '../mcp/server.ts';
 import { ChorusServer, headlessApp } from '../serve/server.ts';
 import { NotificationInbox } from '../serve/notifications.ts';
+import { UpdateCheck } from '../serve/updates.ts';
 import { versions } from '../core/doctor.ts';
 import { activityCmd, artifactsCmd, doctorCmd, memoryCmd, showCmd, threadsCmd, traceCmd } from './commands.ts';
 
@@ -194,7 +195,12 @@ switch (cmd) {
       try { notifications = new NotificationInbox({ directory: path.join(process.env.CHORUS_HOME ?? path.join(os.homedir(), '.chorus'), 'notifications'), version: versions().chorus }); }
       catch { /* An unreadable cache must not stop the desktop or reset the installation identity. */ }
     }
-    const srv = new ChorusServer({ controller: c, port: Number(flag('port') ?? 4318), onQuit: quit, notifications });
+    let updates: UpdateCheck | undefined;
+    if (!fake && process.env.CHORUS_UPDATES !== '0') {
+      try { updates = new UpdateCheck({ directory: path.join(process.env.CHORUS_HOME ?? path.join(os.homedir(), '.chorus'), 'updates'), version: versions().chorus }); }
+      catch { /* Keep the app available if update preferences cannot be read. */ }
+    }
+    const srv = new ChorusServer({ controller: c, port: Number(flag('port') ?? 4318), onQuit: quit, notifications, updates });
     await srv.start();
     // the first line is read by the desktop shell: keep its shape
     console.log(`chorus serve: ${srv.openUrl}`);
