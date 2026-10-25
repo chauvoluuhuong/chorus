@@ -27,6 +27,7 @@ import { CLIS, type DeepReport } from '@chauvoluuhuong/chorus-core/doctor';
 import { check, firstLaunch, ghReady, isDue, issue, lastCheck, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, runCommand, runDeep, sendIssue, DOCTOR_DIR } from '../core/doctor.ts';
 
 import type { NotificationInbox } from './notifications.ts';
+import type { UpdateCheck } from './updates.ts';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(import.meta.dirname, '../..');
@@ -65,6 +66,8 @@ export interface Dialog {
 export interface ServeOpts {
   controller: Controller;
   notifications?: NotificationInbox;
+  updates?: UpdateCheck;
+  onUpdateDownload?: (url: string) => void;
   onNotificationLink?: (url: string) => void;
   port?: number;
   /** fixed token (tests); random otherwise */
@@ -174,6 +177,7 @@ export class ChorusServer {
     this.url = `http://127.0.0.1:${(this.http.address() as AddressInfo).port}`;
     this.ticker = setInterval(() => this.pushState(), 500);
     if (this.o.notifications) void this.o.notifications.startup().then(() => this.pushState());
+    if (this.o.updates) void this.o.updates.startup().then(() => this.pushState());
     return this.url;
   }
 
@@ -185,6 +189,7 @@ export class ChorusServer {
   close() {
     this.closed = true;
     this.o.notifications?.close();
+    this.o.updates?.close();
     clearInterval(this.ticker);
     for (const cl of this.clients) cl.ws.close();
     this.wss?.close();
@@ -300,6 +305,15 @@ export class ChorusServer {
   private async route(method: string, parts: string[], q: URLSearchParams, b: Record<string, any>): Promise<unknown> {
     const [a, id, sub] = parts;
     const c = this.c;
+    if (a === 'updates') {
+      if (method === 'POST' && id === 'skip' && parts.length === 2) { this.o.updates?.skip(); this.pushState(); return { ok: true }; }
+      if (method === 'POST' && id === 'download' && parts.length === 2) {
+        const url = this.o.updates?.downloadUrl();
+        if (!url) return { error: 'No update is available for this platform' };
+        (this.o.onUpdateDownload ?? openUrl)(url); return { ok: true };
+      }
+      return undefined;
+    }
     if (a === 'notifications') {
       const inbox = this.o.notifications;
       if (method === 'GET' && parts.length === 1) return inbox?.snapshot() ?? { items: [], unread: 0, checkedAt: null, checking: false, offline: false };
@@ -501,6 +515,7 @@ export class ChorusServer {
     });
     return {
       project: c.project,
+      update: this.o.updates?.snapshot() ?? null,
       notifications: this.o.notifications?.summary() ?? { unread: 0, checkedAt: null, checking: false, offline: false },
       current: this.app.current?.id ?? null,
       chats,

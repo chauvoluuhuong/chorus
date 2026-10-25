@@ -13,13 +13,14 @@ import { Store } from '../../src/core/store.ts';
 import type { AgentId } from '../../src/core/types.ts';
 import { ChorusServer, headlessApp } from '../../src/serve/server.ts';
 import { NotificationInbox } from '../../src/serve/notifications.ts';
+import { UpdateCheck } from '../../src/serve/updates.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const FAKE = path.join(ROOT, 'tools/fake-agent/fake-tui.mjs');
 const PROMPT = path.join(ROOT, 'fixtures/codex/0.163.0/approval-ask-nohook-enter/prompt-screen.txt');
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox) {
+async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-home-'));
   process.env.CODEX_HOME = home;
   const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-serve-')));
@@ -39,7 +40,7 @@ async function rig(seed?: (store: Store, project: string) => void, notifications
   });
   c.restore();
   const notificationLinks: string[] = [];
-  const srv = new ChorusServer({ controller: c, token: 'a'.repeat(48), notifications, onNotificationLink: url => { notificationLinks.push(url); } });
+  const srv = new ChorusServer({ controller: c, token: 'a'.repeat(48), notifications, updates, onUpdateDownload: url => { notificationLinks.push(url); }, onNotificationLink: url => { notificationLinks.push(url); } });
   const url = await srv.start(0);
   const api = async (method: string, p: string, body?: object, headers: Record<string, string> = {}) => {
     const res = await fetch(url + p, { method, headers: { authorization: `Bearer ${srv.token}`, 'x-chorus': '1', 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined, redirect: 'manual' });
@@ -369,4 +370,23 @@ test('serve: the doctor screen opens at once on a first launch, and not again on
     else process.env.CHORUS_DOCTOR_HOME = before;
     await r.done();
   }
+});
+
+test('serve: release notice uses launch state; download is explicit and skip suppresses it without another check', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-update-http-'));
+  let checks = 0;
+  const url = 'https://chorus-cli.web.app/dl/Chorus-macOS-1.0.7.zip';
+  const updates = new UpdateCheck({ directory, version: '1.0.6', platform: 'darwin', arch: 'arm64', request: (async () => { checks++; return Response.json({ version: '1.0.7', downloads: { 'darwin-arm64': { url, sha256: 'a'.repeat(64) } } }); }) as typeof fetch });
+  const r = await rig(undefined, undefined, updates);
+  try {
+    await updates.startup();
+    for (let i = 0; i < 5; i++) assert.equal((await r.api('GET', '/api/state')).json.update.version, '1.0.7');
+    assert.equal(checks, 1); assert.deepEqual(r.notificationLinks, []);
+    assert.equal((await r.api('POST', '/api/updates/download', { url: 'https://evil.example' })).json.ok, true);
+    assert.deepEqual(r.notificationLinks, [url], 'download URL cannot come from the browser');
+    assert.equal((await r.api('POST', '/api/updates/skip', {})).json.ok, true);
+    assert.equal((await r.api('GET', '/api/state')).json.update, null);
+    assert.match((await r.api('POST', '/api/updates/download', {})).json.error, /No update/);
+    assert.equal(checks, 1);
+  } finally { await r.done(); fs.rmSync(directory, { recursive: true, force: true }); }
 });

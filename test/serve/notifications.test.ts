@@ -84,3 +84,29 @@ test('opening two messages at once sends each opened event once', async t => {
   const sent = r.calls.filter(c => c.url.endsWith('/events')).flatMap(c => c.body.events.filter((e: any) => e.type === 'opened').map((e: any) => e.id));
   assert.deepEqual(sent.sort(), [item.id, second.id].sort()); inbox.close();
 });
+
+test('usage counts once per process, combines same-day launches, and reports offline launches on the next startup', async t => {
+  let offline = false, now = new Date('2026-10-26T10:00:00Z');
+  const r = setup(t, () => { if (offline) throw new Error('offline'); return feed(); });
+  const create = () => new NotificationInbox({ directory: r.directory, version: '1', request: (async (url, options) => {
+    const body = JSON.parse(String(options?.body)); r.calls.push({ url: String(url), body }); if (offline) throw new Error('offline'); return Response.json(feed());
+  }) as typeof fetch, now: () => now });
+  let inbox = create(); await Promise.all([inbox.startup(), inbox.startup()]);
+  assert.deepEqual(r.calls[0].body.usage, { launches: 1, activeDays: 1, firstDay: '2026-10-26', recentDays: ['2026-10-26'] });
+  await inbox.opened(item.id); assert.equal(r.calls[1].body.usage, undefined, 'open requests never report extra launches'); inbox.close();
+  offline = true; inbox = create(); await inbox.startup(); await inbox.startup(); inbox.close();
+  now = new Date('2026-10-27T10:00:00Z'); inbox = create(); await inbox.startup(); inbox.close();
+  offline = false; inbox = create(); await inbox.startup();
+  assert.deepEqual(r.calls.at(-1)?.body.usage, { launches: 4, activeDays: 2, firstDay: '2026-10-26', recentDays: ['2026-10-26', '2026-10-27'] });
+  assert.equal(JSON.stringify(inbox.snapshot()).includes('usage'), false); inbox.close();
+});
+
+test('usage upgrades an existing cache without replacing identity and bounds recent history to 90 UTC days', async t => {
+  const r = setup(t); let now = new Date('2026-01-01T10:00:00Z');
+  const file = path.join(r.directory, 'inbox.json'); const before = r.create(); before.close();
+  const identity = JSON.parse(fs.readFileSync(file, 'utf8')).installationId;
+  const request = (async (_url, options) => { const body = JSON.parse(String(options?.body)); r.calls.push({ url: '', body }); return Response.json(feed()); }) as typeof fetch;
+  for (let day = 0; day < 100; day++) { now = new Date(Date.UTC(2026, 0, 1 + day)); const inbox = new NotificationInbox({ directory: r.directory, version: '1', request, now: () => now }); await inbox.startup(); inbox.close(); }
+  const sent = r.calls.at(-1)?.body;
+  assert.equal(sent.installationId, identity); assert.equal(sent.usage.launches, 100); assert.equal(sent.usage.activeDays, 100); assert.equal(sent.usage.recentDays.length, 90); assert.equal(sent.usage.firstDay, '2026-01-01');
+});
