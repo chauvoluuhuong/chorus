@@ -1,6 +1,6 @@
 {
   "name": "@chauvoluuhuong/chorus",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "private": true,
   "description": "Work across AI coding CLIs: handoff, threads, skills",
   "license": "AGPL-3.0-only",
