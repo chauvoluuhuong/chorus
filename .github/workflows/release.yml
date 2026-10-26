@@ -1,6 +1,7 @@
 # Release downloads: builds what `npm run release:downloads` builds by hand and attaches it to the GitHub Release v<version>.
 #   chorus-cli-<v>.tgz, chorus-darwin-arm64-<v>.tar.gz, Chorus-macOS-<v>.zip   macOS arm64 runner (Tauri for the app)
-#   chorus-linux-x64-<v>.tar.gz, chorus-linux-arm64-<v>.tar.gz                  Linux runners of each arch (Docker, Debian 11)
+#   chorus-linux-x64-<v>.tar.gz, chorus-linux-arm64-<v>.tar.gz                  Linux runners of each arch (Docker: Debian 11 for the
+#                                                                               command, Ubuntu 22.04 for the window, desktop/chorus-desktop)
 #   SHA256SUMS                                                                  over all of the above
 # Runs when main gets a package.json version that has no release yet, on a v* tag, or by hand (Actions → Release downloads).
 # Run by hand on another branch, it builds the files as workflow artifacts only and makes no release.
@@ -88,6 +89,13 @@ jobs:
       - name: Install chorus
         working-directory: chorus
         run: npm ci --no-fund --no-audit --loglevel=error
+      # the Linux window's Rust toolchain and build folder (scripts/release-downloads.mjs linuxDesktop), after npm ci empties node_modules
+      - if: startsWith(matrix.targets, 'linux')
+        uses: actions/cache@v4
+        with:
+          path: chorus/node_modules/.cache/chorus-release/desktop-${{ matrix.targets }}
+          key: desktop-${{ matrix.targets }}-${{ hashFiles('chorus/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: desktop-${{ matrix.targets }}-
       - if: matrix.app == '--rebuild-app'
         uses: dtolnay/rust-toolchain@stable
       - if: matrix.app == '--rebuild-app'

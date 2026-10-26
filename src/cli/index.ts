@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// chorus: the CLI app (Phase 4) and its plain commands. `chorus mcp` is started by the agents, not by you.
-import { spawn } from 'node:child_process';
+// chorus: opens the desktop app; `chorus-cli` (or `chorus app`) the CLI app (Phase 4). Plus the plain commands; `chorus mcp` is
+// started by the agents, not by you.
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -18,6 +19,10 @@ import { saveRemoteTested, versions } from '../core/doctor.ts';
 import { activityCmd, artifactsCmd, doctorCmd, memoryCmd, showCmd, threadsCmd, traceCmd } from './commands.ts';
 
 const argv = process.argv.slice(2);
+// the name it was started by: the npm bin link (argv[1]), or CHORUS_INVOKED_AS from the installer's launcher (bin/chorus), whose
+// argv[1] is the bundled index.js. Removed so the agents and servers started from here do not inherit it.
+const invokedAs = process.env.CHORUS_INVOKED_AS || path.basename(process.argv[1] ?? '');
+delete process.env.CHORUS_INVOKED_AS;
 const flag = (name: string) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 ? argv[i + 1] : undefined;
@@ -56,7 +61,7 @@ async function app(start: (c: Controller) => Promise<void> | void, opts: { newCh
   const c = new Controller({ project, store, app: ui, models: models() });
   c.restore();
   await start(c);
-  // `chorus` alone opens New chat (the first screen); new/run/handoff go straight to a chat
+  // `chorus-cli` alone opens New chat (the first screen); new/run/handoff go straight to a chat
   if (opts.newChat && !ui.current?.host) c.newChatScreen();
   wantSize();
   ui.start();
@@ -65,9 +70,29 @@ async function app(start: (c: Controller) => Promise<void> | void, opts: { newCh
   process.exit(0);
 }
 
-const cmd = argv[0];
+/** A screen to open a window on: always on macOS; on Linux an X11 or Wayland session (not over plain SSH or on a server). */
+const hasDisplay = () => process.platform !== 'linux' || !!(process.env.DISPLAY || process.env.WAYLAND_DISPLAY);
+
+/** The native window on Linux: CHORUS_DESKTOP_APP, the installer's package (desktop/ next to bin/), else this checkout's build. */
+function linuxDesktopBin(repo: string) {
+  return [process.env.CHORUS_DESKTOP_APP, path.resolve(import.meta.dirname, '../../../desktop/chorus-desktop'), path.join(repo, 'desktop/src-tauri/target/release/chorus-desktop')]
+    .find((p): p is string => !!p && fs.existsSync(p) && fs.statSync(p).isFile());
+}
+
+/** Shared libraries the window needs that this Linux lacks (WebKitGTK, mostly), from `ldd`; [] when all are there. */
+function missingLibs(bin: string) {
+  try {
+    return execFileSync('ldd', [bin], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').filter(l => l.includes('not found')).map(l => l.trim().split(' ')[0]);
+  } catch {
+    return []; // no ldd: try to start it anyway
+  }
+}
+
+const WEBKIT_HINT = 'Install WebKitGTK 4.1 for the Chorus window: Ubuntu/Debian `sudo apt install libwebkit2gtk-4.1-0`, Fedora `sudo dnf install webkit2gtk4.1`, Arch `sudo pacman -S webkit2gtk-4.1`.';
+
+const cmd = argv[0] ?? (invokedAs.startsWith('chorus-cli') ? 'app' : hasDisplay() ? 'desktop' : 'app');
+if (argv[0] === undefined && cmd === 'app' && !invokedAs.startsWith('chorus-cli')) console.error('no display here: opening Chorus in this terminal (chorus-cli)');
 switch (cmd) {
-  case undefined:
   case 'app':
     await app(() => {}, { newChat: true });
     break;
@@ -217,21 +242,31 @@ switch (cmd) {
   }
   case 'desktop': {
     // the native window (desktop/, Tauri). It starts `chorus serve` itself; this checkout's CLI when started from here.
-    // No app built yet: the same page in the browser.
+    // No app built yet, or this Linux lacks its libraries: the same page in the browser.
     const repo = path.resolve(import.meta.dirname, '../..');
+    // the window runs `chorus serve` with this very CLI, wherever it is installed
+    const serveCmd = `${JSON.stringify(process.execPath)} ${JSON.stringify(import.meta.filename)}`;
     // an installed app (npm run install:global) opens like any Mac app and starts the global `chorus serve`
     const installed = [process.env.CHORUS_DESKTOP_APP, '/Applications/Chorus.app', path.join(process.env.HOME ?? '', 'Applications/Chorus.app')].find((p): p is string => !!p && fs.existsSync(p));
     const appDir = path.join(repo, 'desktop/src-tauri/target/release/bundle/macos/Chorus.app');
+    const linuxBin = process.platform === 'linux' ? linuxDesktopBin(repo) : undefined;
+    const missing = linuxBin ? missingLibs(linuxBin) : [];
     if (process.platform === 'darwin' && installed) {
       spawn('open', [installed], { stdio: 'ignore', detached: true }).unref();
       console.log(`opened ${installed}`);
     } else if (process.platform === 'darwin' && fs.existsSync(appDir)) {
       const bin = path.join(appDir, 'Contents/MacOS', fs.readdirSync(path.join(appDir, 'Contents/MacOS'))[0]);
-      const env = { ...process.env, CHORUS_SERVE_CMD: `${JSON.stringify(process.execPath)} ${JSON.stringify(import.meta.filename)}` };
+      const env = { ...process.env, CHORUS_SERVE_CMD: serveCmd };
       spawn(bin, [], { stdio: 'ignore', detached: true, env }).unref();
       console.log(`opened ${appDir}`);
+    } else if (linuxBin && hasDisplay() && !missing.length) {
+      // one window: a second start brings the open one to the front (single-instance plugin in desktop/)
+      spawn(linuxBin, [], { stdio: 'ignore', detached: true, env: { ...process.env, CHORUS_SERVE_CMD: serveCmd } }).unref();
+      console.log('opened Chorus');
     } else {
-      console.log(process.platform === 'darwin' ? 'no desktop app installed (npm run install:global builds and installs it): opening the page in the browser' : 'opening Chorus in your browser');
+      if (process.platform === 'darwin') console.log('no desktop app installed (npm run install:global builds and installs it): opening the page in the browser');
+      else if (linuxBin && missing.length) console.log(`The Chorus window needs ${missing.join(', ')}. ${WEBKIT_HINT}\nUntil then: opening Chorus in your browser`);
+      else console.log('opening Chorus in your browser');
       spawn(process.execPath, [import.meta.filename, 'serve', '--open', ...argv.slice(1)], { stdio: 'inherit' }).on('exit', code => process.exit(code ?? 0));
       await new Promise(() => {});
     }
@@ -247,6 +282,6 @@ switch (cmd) {
     break;
   }
   default:
-    console.error('usage: chorus [new|run|handoff|serve|desktop|threads|show|memory|artifacts|activity|trace|doctor|skills|mcp|mux] …');
+    console.error('usage: chorus [desktop|app|new|run|handoff|serve|threads|show|memory|artifacts|activity|trace|doctor|skills|mcp|mux] …  (chorus = the desktop app, chorus-cli = the CLI app)');
     process.exit(2);
 }
