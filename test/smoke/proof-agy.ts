@@ -64,7 +64,7 @@ const TASK =
 
 const env = { ...process.env, TERM: 'xterm-256color', CHORUS_NO_OPEN: '1', CHORUS_MODEL_CLAUDE: 'haiku' } as Record<string, string>;
 for (const k of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_PID']) delete env[k];
-const app = pty.spawn(process.execPath, [CLI], { name: 'xterm-256color', cols: COLS, rows: ROWS, cwd: project, env });
+const app = pty.spawn(process.execPath, [CLI, 'app'], { name: 'xterm-256color', cols: COLS, rows: ROWS, cwd: project, env });
 let exited = false;
 app.onData((d: string) => outer.write(d));
 app.onExit(() => (exited = true));
