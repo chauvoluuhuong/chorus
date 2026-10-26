@@ -59,6 +59,21 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 The v1 Tauri/React prototype was removed; it is in git history. New work branches from `dev`
 (see Workflow below).
 
+## Finish the work; don't hand it back
+
+The user wants finished work, not a list of things left for them. This overrides any habit of ending with "open items".
+
+- **Plan first, ask once.** Before starting, work out everything the task needs from the user (decisions, accounts, keys,
+  approvals for risky steps) and ask for all of it in one go, up front.
+- **Then finish it yourself**: build, test, prove, merge into `dev`, and everything that follows from it (the release PR,
+  the docs, the other repos the change needs). Don't stop to ask for the next obvious step; don't end with "want me to…?"
+- **Stop and ask only** when something changes the agreed plan, or the step is very risky or can't be undone (a production
+  deploy, merging into `main`, a publish, deleting data, spending the user's money or quota beyond what was agreed).
+- **What only the user can do** (store a credential, sign in with their password, approve a payment): say so once, give the
+  exact command, and keep doing everything else around it.
+- The closing report names what is still not done only when it truly is: blocked on the user, or waiting for their yes to a
+  risky step. Never list work you could have done yourself.
+
 ## Workflow: every new feature or bug fix
 
 Applies to **all three repos** (this one, `../chorus-core` and `../chorus-admin`, see "Working across the repos"). GitHub is the source of truth: finish
@@ -85,8 +100,9 @@ every task with the work pushed and merged, never left only on this machine.
    tests run and their result, and the proof attached (send the screenshot or video to the user,
    with its path). Name anything not done or not verified.
    Then close with a short checklist as a workflow: the steps in order (ticked when done and
-   verified), what is still open (not rebuilt, not tested, not deployed, follow-ups), and the risks
-   if any ("none found" when there are none). "Pushed" and "merged into dev" are part of done, not open items.
+   verified), what is blocked on the user or waiting for their yes (see "Finish the work" above: never
+   work you could do yourself), and the risks if any ("none found" when there are none). "Pushed" and
+   "merged into dev" are part of done, not open items.
 
 ### Working across the repos
 
