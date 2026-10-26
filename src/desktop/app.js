@@ -17,9 +17,21 @@ const base = p => (p || '').replace(/\/+$/, '').split('/').pop() || '/';
 async function api(method, url, body) {
   const r = await fetch(url, { method, headers: { 'x-chorus': '1', 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+  if (!r.ok) {
+    pageError(`${method} ${url.split('?')[0]}: ${j.error || `HTTP ${r.status}`}`);
+    throw new Error(j.error || `HTTP ${r.status}`);
+  }
   return j;
 }
+
+/** The newest errors this page saw: they go in an issue report (Report on the Doctor page). */
+const pageErrors = [];
+function pageError(text) {
+  pageErrors.push(`${new Date().toISOString()} ${text}`);
+  if (pageErrors.length > 30) pageErrors.shift();
+}
+window.addEventListener('error', e => pageError(`${e.message} (${String(e.filename).split('/').pop()}:${e.lineno})`));
+window.addEventListener('unhandledrejection', e => pageError(`unhandled: ${e.reason?.message ?? e.reason}`));
 
 /* ---------- app state ---------- */
 
@@ -778,7 +790,7 @@ function drRunLine() {
     else if (Date.now() - new Date(d.at).getTime() < 60_000) when = `Tested just now · ${(d.fast.ms / 1000).toFixed(1)} s`;
     else when = `Last test: ${drWhen(d.at)} · ${need ? `${need} need${need > 1 ? '' : 's'} you` : 'all ready'}`;
   }
-  return `<div class="dr-run"><button class="btn primary dr-big" data-act="doc-test"${busy ? ' disabled' : ''}>${busy ? '<span class="spin"></span> Testing…' : '▶ Run test'}</button><span class="dr-when">${esc(when)}</span></div>`;
+  return `<div class="dr-run"><button class="btn primary dr-big" data-act="doc-test"${busy ? ' disabled' : ''}>${busy ? '<span class="spin"></span> Testing…' : '▶ Run test'}</button><span class="dr-when">${esc(when)}</span><span class="grow"></span><button class="btn" data-act="doc-report" title="Send a report to the Chorus issues on GitHub; no test needed">Report issue</button></div>`;
 }
 
 function doctorHtml() {
@@ -882,7 +894,7 @@ function drawFirstRun() {
     check: `<span class="grow faint">Checking…</span><button class="btn" disabled>Continue</button>`,
     short: `<span class="grow faint">${testable.length ? `Detailed test: about 2 min per agent, a few short turns on your plans. Also in Doctor.` : 'Install or log in to an agent to use Chorus.'}</span>${testable.length ? '<button class="btn" data-act="fr-deep">Run detailed test</button>' : ''}<button class="btn primary" data-act="doc-continue">Skip, start using Chorus</button>`,
     deep: `<span class="grow faint">${left} running · the results also go to Doctor</span><button class="btn primary" data-act="doc-continue">Continue to the app</button>`,
-    done: `<span class="grow"></span>${failed ? '<button class="btn" data-act="doc-report">Report issue</button>' : ''}<button class="btn primary" data-act="doc-continue">Start using Chorus</button>`,
+    done: `<span class="grow"></span><button class="btn" data-act="doc-report">Report issue</button><button class="btn primary" data-act="doc-continue">Start using Chorus</button>`,
   }[fr.phase];
 }
 
@@ -922,12 +934,38 @@ async function pollDoctorJob(agent, id) {
   if (!j.done) setTimeout(() => pollDoctorJob(agent, id), 1000);
 }
 
+/** Report issue (the Doctor page, the failed-test banner, the first-launch screen): works without a test run. The server adds a
+ *  fresh short check, the detailed tests on file and what the app can tell; the user picks the kind, says what happened, and
+ *  reads and edits everything before it is sent. Every report is filed as a user report with the lowest priority. */
 async function reportIssue() {
-  const { title, body } = await api('POST', '/api/doctor/issue');
+  if ($('#doc-report-pop')) return;
   const el = document.createElement('div');
   el.className = 'scrim';
-  el.innerHTML = `<div class="dialog dr-dialog" role="dialog"><h2>Report an issue</h2><div class="body"><p class="muted">This goes to github.com/chauvoluuhuong/chorus/issues. Emails, account ids, keys and your home path are taken out; read it and edit what you like before sending.</p><input type="text" class="dlg-input" id="doc-issue-title" value="${esc(title)}"><textarea class="dr-issue" id="doc-issue-body" spellcheck="false">${esc(body)}</textarea></div><div class="foot"><span class="grow"></span><button class="btn" data-act="doc-issue-cancel">Cancel</button><button class="btn primary" data-act="doc-send">${S.doctor?.gh ? 'Create issue' : 'Open on GitHub'}</button></div></div>`;
+  el.id = 'doc-report-pop';
+  el.innerHTML = `<div class="dialog dr-dialog" role="dialog"><h2>Report an issue</h2><div class="body"><p class="muted"><span class="spin"></span> Collecting what Chorus knows about this machine…</p></div></div>`;
   $('#dialogs').append(el);
+  const client = {
+    window: window.__TAURI_INTERNALS__ || window.__TAURI__ ? 'native' : 'browser',
+    agent: navigator.userAgent,
+    screen: `${screen.width}×${screen.height}@${devicePixelRatio}`,
+    size: `${innerWidth}×${innerHeight}`,
+    language: navigator.language,
+    view: S.view.name,
+  };
+  const r = await api('POST', '/api/doctor/issue', { client, errors: pageErrors }).catch(err => ({ error: err.message }));
+  if (r.error) {
+    el.remove();
+    return toast(`Could not build the report: ${r.error}`);
+  }
+  const kinds = r.kinds.map(k => `<option value="${esc(k.id)}"${k.id === r.kind ? ' selected' : ''}>${esc(k.name)}</option>`).join('');
+  el.querySelector('.dialog').innerHTML = `<h2>Report an issue</h2><div class="body">
+      <p class="muted">This goes to github.com/chauvoluuhuong/chorus/issues. Emails, account ids, keys and your home path are taken out; read it and edit what you like before sending.</p>
+      <label class="dr-label">Type<select class="dlg-input" id="doc-issue-kind">${kinds}</select></label>
+      <label class="dr-label">Title<input type="text" class="dlg-input" id="doc-issue-title" value="${esc(r.title)}" placeholder="In a few words: what went wrong or what you need"></label>
+      <label class="dr-label">What happened<textarea class="dr-issue short" id="doc-issue-what" placeholder="What you did, what you expected, what you saw instead"></textarea></label>
+      <details class="dr-attach"><summary>Attached: the doctor's report and this machine (${r.details.split('\n').length} lines)</summary><textarea class="dr-issue" id="doc-issue-body" spellcheck="false">${esc(r.details)}</textarea></details>
+    </div><div class="foot"><span class="grow faint">Filed as a user report</span><button class="btn" data-act="doc-issue-cancel">Cancel</button><button class="btn primary" data-act="doc-send">${S.doctor?.gh ? 'Create issue' : 'Open on GitHub'}</button></div>`;
+  $('#doc-issue-title').focus();
 }
 
 /* ---------- a chat ---------- */
@@ -1351,7 +1389,7 @@ document.addEventListener('click', async e => {
     case 'doc-issue-cancel':
       return el.closest('.scrim')?.remove();
     case 'doc-send': {
-      const r = await api('POST', '/api/doctor/issue/send', { title: $('#doc-issue-title').value, body: $('#doc-issue-body').value }).catch(err => ({ error: err.message }));
+      const r = await api('POST', '/api/doctor/issue/send', { kind: $('#doc-issue-kind').value, summary: $('#doc-issue-title').value, what: $('#doc-issue-what').value, details: $('#doc-issue-body').value }).catch(err => ({ error: err.message }));
       el.closest('.scrim')?.remove();
       return toast(r.error ? `Not sent: ${r.error}` : r.via === 'gh' ? `Issue created: ${r.url}` : 'Opened GitHub; the report is on your clipboard: paste it as the description');
     }

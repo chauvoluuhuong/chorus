@@ -184,7 +184,8 @@ const SCENES = [
     open: [],
     notes: ['<b>One button.</b> "Run test" runs the short test for every agent: is it installed, is its version one Chorus is tested with, is it signed in. A few seconds, no model calls.',
       '<b>Each row suggests a version</b>: the newest one Chorus is tested with, next to what is installed and the newest release. "Up to date" when they match.',
-      '<b>▾ opens a row</b> into its check list (scene 3). The "Full test of …" buttons are gone.'],
+      '<b>▾ opens a row</b> into its check list (scene 3). The "Full test of …" buttons are gone.',
+      '<b>Report issue</b> (2026-10-26) sends a typed report any time, with no test run (docs/doctor.md §7.1).'],
   },
   {
     id: 'running', title: '2 · Short test running',
@@ -292,7 +293,7 @@ function render() {
     ? `<div class="page" style="opacity:.35"><h1>What should we build?</h1><p class="lead">New chat</p><div class="card" style="height:260px"></div></div>
        <div class="scrim"><div class="dialog"><h2>Checking your agents</h2><div class="body">${banner(['warn', 'Codex 0.170.0 is new to Chorus.', 'Test that it works? About 2 minutes, a few short model turns on your Codex plan.', [['primary', 'Run detailed test'], ['', 'Not now']]])}${rows}</div><div class="foot"><span class="grow faint" style="font-size:12.5px">Claude Code and Antigravity CLI are ready.</span><button class="btn primary">Continue</button></div></div></div>`
     : `<div class="page"><h1>Doctor</h1><p class="lead">Your AI coding CLIs: are they installed, on a version Chorus is tested with, and signed in.</p>
-        <div class="run"><button class="btn primary big"${scene.run.busy ? ' disabled' : ''}>${scene.run.busy ? '<span class="spin"></span>' : '▶'} ${esc(scene.run.label)}</button><span class="when">${esc(scene.run.when)}</span></div>
+        <div class="run"><button class="btn primary big"${scene.run.busy ? ' disabled' : ''}>${scene.run.busy ? '<span class="spin"></span>' : '▶'} ${esc(scene.run.label)}</button><span class="when">${esc(scene.run.when)}</span><span style="flex:1"></span><button class="btn">Report issue</button></div>
         ${banner(scene.banner)}${rows}</div>`;
   document.getElementById('main').innerHTML = `${page}<div class="notes"><div class="box"><b>${esc(scene.title)}</b><ul>${scene.notes.map(n => `<li>${n}</li>`).join('')}</ul></div></div>`;
 }

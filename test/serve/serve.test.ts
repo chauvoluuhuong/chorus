@@ -372,6 +372,23 @@ test('serve: the doctor screen opens at once on a first launch, and not again on
   }
 });
 
+test('serve: Report issue works before any test run, with the issue types to pick from', async () => {
+  const r = await rig();
+  const before = process.env.CHORUS_DOCTOR_HOME;
+  process.env.CHORUS_DOCTOR_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-doctor-'));
+  try {
+    const rep = (await r.api('POST', '/api/doctor/issue', { client: { window: 'browser' }, errors: ['boom'] })).json;
+    assert.deepEqual(rep.kinds.map((k: { id: string }) => k.id), ['bug', 'cli', 'feature', 'question', 'other']);
+    assert.ok(rep.details.includes('window browser') && rep.details.includes('page: boom'));
+    // an unknown type is refused before anything is sent
+    assert.equal((await r.api('POST', '/api/doctor/issue/send', { kind: 'urgent', details: '' })).json.error, 'kind and details');
+  } finally {
+    if (before === undefined) delete process.env.CHORUS_DOCTOR_HOME;
+    else process.env.CHORUS_DOCTOR_HOME = before;
+    await r.done();
+  }
+});
+
 test('serve: release notice uses launch state; download is explicit and skip suppresses it without another check', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-update-http-'));
   let checks = 0;
