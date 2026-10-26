@@ -207,7 +207,8 @@ and `docs/ci-cd.md` before changing it; the facts below are a pointer, those fil
   archives). Run them after **every** release, in this order, and don't call a release done before step 7:
 
   1. Chorus `package.json` version bumped on a `release/<v>` branch → merged into `dev` → `dev` into `main` by PR (it needs a
-     review: the user merges it with admin override, or says to use `--admin`). This starts `release.yml`.
+     review: merge it with `gh pr merge <n> --merge --admin`, standing approval from the user for every release). This starts
+     `release.yml`.
   2. `gh run list --workflow release.yml --limit 1` until it is `completed success`; `gh release view v<v>` lists the 5 files
      and `SHA256SUMS`.
   3. In this repo (a clean checkout of `main` at that release; `node_modules` present): `npm run release:fetch` → downloads the
