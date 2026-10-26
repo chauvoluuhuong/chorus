@@ -8,7 +8,7 @@ Decided 2026-10-23:
   with chorus-core (`NOTICE.md`). Installing (installers, release downloads) and issues, doctor reports included, live there.
 - chorus-core is **private**: its source, the probes, fixtures, the doctor suite and `docs/integrations/` are not published.
 - Installing Chorus installs chorus-core with it, with no extra step and no login (§5).
-- Merging `dev` into `main` in chorus-core builds and releases a new version on its own (§7).
+- Merging `dev` into `main` in chorus-core is meant to build and release a new version on its own (§7; not built yet).
 
 ## 1. Why
 
@@ -178,8 +178,10 @@ place.
 
 ## 7. Releases: GitHub workflows
 
-Yes: merging `dev` into `main` in chorus-core builds, checks and publishes a new version, then opens the bump PR in Chorus. Neither
-repo has workflows yet (no `.github/` here).
+Planned: merging `dev` into `main` in chorus-core builds, checks and publishes a new version, then opens the bump PR in Chorus.
+**Not built yet** (2026-10-26): chorus-core's only workflow is `matrix.yml` (the CLI version matrix, `docs/integrations/versions.md`
+§5), there is no `release.yml`, and `@chauvoluuhuong/chorus-core` is not on npm; Chorus's release build packs the core from
+`../chorus-core` (`scripts/release-downloads.mjs`). A `dev` → `main` merge in chorus-core publishes nothing today.
 
 ```
 chorus-core (private)                                         chorus (public)
