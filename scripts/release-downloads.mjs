@@ -5,11 +5,13 @@
 //                                   private @chauvoluuhuong/chorus-core inside it as a bundled dependency
 //   chorus-<os>-<arch>-<version>.tar.gz   the chorus command with its own Node.js and node-pty already built (macOS arm64,
 //                                   Linux arm64 and x64): what site/install.sh installs, so the user needs no Node, npm or compiler.
-//                                   The Linux ones are built in Docker (Debian 11, glibc 2.31); needs a running Docker.
+//                                   The Linux ones are built in Docker (Debian 11, glibc 2.31); needs a running Docker. They also carry
+//                                   the native window (desktop/chorus-desktop, the Tauri shell built in Ubuntu 22.04 for WebKitGTK 4.1),
+//                                   unless --no-desktop.
 //   Chorus-macOS-<version>.zip      Chorus.app from desktop/ (built first when missing)
 //   SHA256SUMS                      checksums of the files above, which install.sh verifies
 // and sets VERSION in site/install.sh to package.json's version. Then `npm run deploy:site` delegates publication to chorus-admin.
-//   node scripts/release-downloads.mjs [--rebuild-app | --no-app] [--targets=darwin-arm64,linux-arm64,linux-x64] [--out=<dir>]
+//   node scripts/release-downloads.mjs [--rebuild-app | --no-app] [--no-desktop] [--targets=darwin-arm64,linux-arm64,linux-x64] [--out=<dir>]
 //   (CHORUS_APP=<path to Chorus.app> to use another build)
 // --out writes the files into <dir> instead and leaves chorus-admin alone (no install.sh needed): the release workflow
 // (.github/workflows/release.yml) builds each target on its own runner that way, and `npm run release:fetch` brings them to the site.
@@ -51,7 +53,7 @@ for (const f of files(path.join(stage, 'src')).filter((f) => f.endsWith('.js') &
 }
 fs.cpSync(path.join(root, 'scripts/fix-pty.mjs'), path.join(stage, 'scripts/fix-pty.mjs'));
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-pkg.bin = { chorus: 'src/cli/index.js' };
+pkg.bin = { chorus: 'src/cli/index.js', 'chorus-cli': 'src/cli/index.js' };
 pkg.scripts = { postinstall: pkg.scripts.postinstall };
 pkg.files = ['src', 'scripts'];
 delete pkg.devDependencies;
@@ -93,9 +95,31 @@ async function nodeTarball(target) {
   }
   return file;
 }
-// bin/chorus finds its own folder through symlinks (the command is linked into ~/.local/bin), then runs the Node inside it
+// The Linux window: the Tauri shell (desktop/) built in Ubuntu 22.04, the oldest with WebKitGTK 4.1 (glibc 2.35), for one arch.
+// The Rust toolchain and the build folder are kept in the cache, so a second build only compiles what changed.
+function linuxDesktop(arch) {
+  const platform = arch === 'arm64' ? 'linux/arm64' : 'linux/amd64';
+  const dir = path.join(cache, `desktop-linux-${arch}`);
+  const outDir = path.join(dir, 'out');
+  fs.mkdirSync(outDir, { recursive: true });
+  const owner = process.getuid ? `${process.getuid()}:${process.getgid()}` : '0:0';
+  console.log(`desktop linux-${arch}: building the window (Tauri) in Ubuntu 22.04…`);
+  run('docker', ['run', '--rm', '--platform', platform, '-e', `OWNER=${owner}`, '-v', `${path.join(root, 'desktop')}:/src:ro`, '-v', `${dir}:/cache`, 'ubuntu:22.04', 'bash', '-c',
+    'set -e; export DEBIAN_FRONTEND=noninteractive; apt-get update -qq >/dev/null; apt-get install -y -qq curl ca-certificates build-essential pkg-config libwebkit2gtk-4.1-dev libssl-dev librsvg2-dev libdbus-1-dev >/dev/null; ' +
+    'export CARGO_HOME=/cache/cargo RUSTUP_HOME=/cache/rustup CARGO_TARGET_DIR=/cache/target; [ -x /cache/cargo/bin/cargo ] || curl -sSf https://sh.rustup.rs | sh -s -- -y -q --profile minimal --no-modify-path; ' +
+    'mkdir /work && tar -C /src --exclude=./src-tauri/target --exclude=./node_modules -cf - . | tar -C /work -xf -; cd /work/src-tauri; ' +
+    // tauri/custom-protocol: the page is served from the binary (what `tauri build` turns on), not from a dev server
+    '/cache/cargo/bin/cargo build --release --locked --quiet --features tauri/custom-protocol; cp /cache/target/release/chorus-desktop /cache/out/; chown -R "$OWNER" /cache']);
+  return path.join(outDir, 'chorus-desktop');
+}
+const withDesktop = !process.argv.includes('--no-desktop');
+
+// bin/chorus finds its own folder through symlinks (the command is linked into ~/.local/bin), then runs the Node inside it.
+// The name it was started by (chorus or chorus-cli, both links to it) goes along: `chorus` opens the desktop app, `chorus-cli` the CLI app.
 const LAUNCHER = `#!/bin/sh
 # Chorus: runs the bundled Node.js on the bundled app. Nothing here depends on a Node.js installed on this computer.
+CHORUS_INVOKED_AS="$(basename "$0")"
+export CHORUS_INVOKED_AS
 self="$0"
 while [ -h "$self" ]; do
   dir="$(cd "$(dirname "$self")" && pwd)"
@@ -144,6 +168,13 @@ for (const target of wanted) {
   for (const d of ['src', 'deps', 'scripts', 'third_party', 'typings']) fs.rmSync(path.join(nm, 'node-pty', d), { recursive: true, force: true });
   fs.rmSync(path.join(nm, 'node-pty/build/Release/obj.target'), { recursive: true, force: true });
   fs.rmSync(path.join(nm, '.package-lock.json'), { force: true });
+  // the native window and its icon (for the menu entry install.sh writes)
+  if (os === 'linux' && withDesktop) {
+    fs.mkdirSync(path.join(top, 'desktop'));
+    fs.copyFileSync(linuxDesktop(arch), path.join(top, 'desktop/chorus-desktop'));
+    fs.chmodSync(path.join(top, 'desktop/chorus-desktop'), 0o755);
+    fs.copyFileSync(path.join(root, 'desktop/src-tauri/icons/128x128@2x.png'), path.join(top, 'desktop/chorus.png'));
+  }
   const file = path.join(out, `chorus-${target}-${version}.tar.gz`);
   run('tar', ['--no-xattrs', '-czf', file, '-C', work, 'chorus']); // no macOS extended attributes: GNU tar warns about each one
   fs.rmSync(work, { recursive: true, force: true });

@@ -11,10 +11,11 @@ Open a **real terminal** (Terminal.app, iTerm), go to the project you want to wo
 
 ```bash
 cd ~/path/to/your/project
-node /Users/huong/chorus/src/cli/index.ts          # the home screen: agents, threads, n = new thread
+node /Users/huong/chorus/src/cli/index.ts app      # the CLI app's home screen: agents, threads, n = new thread
 ```
 
-Shorter: run `npm link` once in this repo (it installs a global `chorus` command), then just `chorus` in any project.
+Shorter: run `npm link` once in this repo (it installs the global `chorus` and `chorus-cli` commands): `chorus` opens the
+desktop app, `chorus-cli` the CLI app in this terminal (also what `chorus` opens on Linux with no display, as over SSH).
 Other ways in:
 
 ```bash
@@ -88,7 +89,8 @@ The public website remains at [chorus-cli.web.app](https://chorus-cli.web.app). 
 `.github/workflows/release.yml` builds the installer downloads when `main` gets a new `package.json` version (or a `v*` tag
 is pushed, or it is run by hand from the Actions tab) and attaches them to the GitHub Release `v<version>`:
 `chorus-cli-<v>.tgz`, `chorus-darwin-arm64-<v>.tar.gz` and `Chorus-macOS-<v>.zip` on a macOS arm64 runner (Tauri),
-`chorus-linux-x64-<v>.tar.gz` and `chorus-linux-arm64-<v>.tar.gz` on Linux runners of each arch (Docker, Debian 11), and
+`chorus-linux-x64-<v>.tar.gz` and `chorus-linux-arm64-<v>.tar.gz` on Linux runners of each arch (Docker: Debian 11 for the command,
+Ubuntu 22.04 for the window `desktop/chorus-desktop`), and
 `SHA256SUMS`. Run by hand on another branch it only keeps the files as workflow artifacts. It deploys nothing; to publish:
 
 ```bash

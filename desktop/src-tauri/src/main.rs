@@ -26,7 +26,7 @@ fn log_file() -> PathBuf {
 /// `chorus serve` through the user's login shell, so it finds `chorus`, `node` and the agents on the PATH their terminal has
 /// (an app opened from the Finder gets a bare PATH). CHORUS_SERVE_CMD replaces `chorus` (development: `node …/src/cli/index.ts`).
 fn serve_command() -> Command {
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| if cfg!(target_os = "macos") { "/bin/zsh" } else { "/bin/sh" }.into());
     // the installer's own copy (~/.chorus/current, with its Node inside) first, so the app needs nothing on the PATH; else `chorus`
     let bundled = home().join(".chorus/current/bin/chorus");
     let cli = std::env::var("CHORUS_SERVE_CMD").unwrap_or_else(|_| if bundled.exists() { format!("'{}'", bundled.display()) } else { "chorus".into() });
@@ -167,7 +167,18 @@ fn forward_drop(app: &AppHandle, label: &str, d: &DragDropEvent) {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Linux: one window per user. `chorus` run again brings it to the front instead of a second window with a second `chorus serve`
+    // (macOS does this itself: `open` focuses the running app).
+    #[cfg(target_os = "linux")]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.unminimize();
+            let _ = w.show();
+            let _ = w.set_focus();
+        }
+    }));
+    builder
         .manage(Serve(Mutex::new(None)))
         .setup(|app| {
             start_serve(app.handle());

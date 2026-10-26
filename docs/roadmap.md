@@ -85,7 +85,8 @@ Plan and results: [phase5.md](phase5.md). D3 decided: Tauri as a thin shell. E2E
 - [x] **agy's input at the bottom:** agy's screen is shown anchored to its last row (terminal app and desktop); probed on 1.4.5, moving the cursor alone is not enough ([phase5.md §8.2](phase5.md))
 - [x] **Dropped files:** drop inserts the path like a terminal; "Copy into the chat" (or no path, in a browser) copies into the chat's attachments; recorded with the chat for handoff, Memory and Activity. Probed on all three agents ([integrations/file-drop.md](integrations/file-drop.md), [phase5.md §8.3](phase5.md))
 - [x] **Approval cards:** room around each part, and Other… for an answer of your own ([phase5.md §8.4](phase5.md))
-- [ ] Not done: signing/notarisation, Windows and Linux builds (TD-6), a guard against the CLI app and the desktop hosting the same chat at once, OS notifications
+- [x] Linux window (2026-10-26): the Tauri shell in the Linux packages (x64, arm64), menu entry, opened after install; `chorus` opens the desktop app on every platform, `chorus-cli` the CLI app
+- [ ] Not done: signing/notarisation, Windows build (TD-6), a guard against the CLI app and the desktop hosting the same chat at once, OS notifications
 
 ## Technical debt
 

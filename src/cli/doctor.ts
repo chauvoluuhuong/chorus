@@ -94,7 +94,7 @@ export async function doctor(argv: string[]): Promise<number> {
     fast = await check();
     markSeen(fast);
     const ready = fast.agents.filter(a => a.state === 'ready').length;
-    console.log(`\n${ready ? green('✔') : yellow('⚠')} ${ready} of ${fast.agents.length} CLIs ready.${ready ? ' Continue with `chorus desktop` (or `chorus` in this terminal).' : ''}\n`);
+    console.log(`\n${ready ? green('✔') : yellow('⚠')} ${ready} of ${fast.agents.length} CLIs ready.${ready ? ' Continue with `chorus` (the app) or `chorus-cli` (in this terminal).' : ''}\n`);
     return ready ? 0 : 1;
   } finally {
     rl?.close();
