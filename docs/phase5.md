@@ -95,7 +95,8 @@ The address keeps the screen (`#/chat/<id>`), so a reload or a restarted server 
 ```bash
 chorus serve [--port N] [--open]     # the local API and the page; prints "chorus serve: <url>"; --fake-agents for UI work
 npm run install:global               # chorus on the PATH (npm link) + Chorus.app built and copied to /Applications (--no-app: CLI only)
-chorus desktop                       # the installed app, else this checkout's build, else the page in the browser
+chorus                               # = chorus desktop: the installed app, else this checkout's build, else the page in the browser
+chorus-cli                           # the CLI app instead (= chorus app; also what chorus opens on Linux with no display)
 cd desktop && npm install && npm run build   # only builds desktop/src-tauri/target/release/bundle/macos/Chorus.app
 npm run proof:desktop                # Phase 5 e2e proof with screenshots (real Claude + Codex, ~10 min)
 ```
@@ -124,7 +125,10 @@ the legacy keys (TD-5).
 - One window at a time: the last window's size wins for every agent; two windows on one chat see the same screen.
 - The CLI app and the desktop are separate hosts: running both at once on the same chats would start two agents for one session
   (each resumes a parked chat on its own). Not guarded yet.
-- Windows and Linux shells are not built or tested (TD-6). The Tauri config has the icons for them.
+- Linux (2026-10-26): the same shell, built in Ubuntu 22.04 (WebKitGTK 4.1, glibc 2.35) by `scripts/release-downloads.mjs` and
+  shipped in the Linux packages as `desktop/chorus-desktop`; install.sh adds a menu entry and opens it. One window per user
+  (single-instance plugin). Missing WebKitGTK (found with `ldd`) falls back to the browser, no display to the CLI app.
+- The Windows shell is not built or tested (TD-6). The Tauri config has the icons for it.
 - No signing/notarisation yet (needed before release, with D4).
 - Desktop notifications for a background approval (the window shows a toast; the OS notification centre is not used).
 

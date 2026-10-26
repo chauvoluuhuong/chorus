@@ -48,7 +48,7 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 | `docs/risks/` | Risk harness results: one page per risk (finding, fix when needed, trigger). Runner `tools/risk/`, evidence `fixtures/risks/` |
 | `tools/probe/` | Capability probes: `probe.mjs` (headless scenarios), `pty-probe.mjs` (interactive), `skills-probe.mjs`; the version matrix `matrix.mjs` with pinned installs `clis.mjs` |
 | `src/core/` | Adapters (`adapters/`), store, handoff, skills sync, launch, capture (TypeScript, Node 22+, no build step: `node file.ts`) |
-| `src/mcp/`, `src/cli/` | The `chorus mcp` server and the `chorus` entry point |
+| `src/mcp/`, `src/cli/` | The `chorus mcp` server and the `chorus` entry point (`chorus` alone opens the desktop app, `chorus-cli` the CLI app) |
 | `src/serve/`, `src/desktop/` | `chorus serve` (local API + agent screens over WebSocket) and the desktop page it serves (`docs/phase5.md`) |
 | `desktop/` | The native window: a thin Tauri shell that starts `chorus serve` (`npm run build` inside) |
 | `test/` | `contract/` (L1, fixtures), `flow/` + `app/` + `serve/` (L2, fake agent), `smoke/` (L3, real CLIs) |
@@ -149,7 +149,8 @@ npm run proof                              # Phase 4 e2e with screenshots → do
 npm run proof:agy                          # the same with agy (docs/proof/phase4-agy/, 30/30); agy has a small plan quota, don't repeat it often
 npm run proof:desktop                      # Phase 5 e2e: the desktop page in Chrome + the native app, real Claude + Codex → docs/proof/phase5/
 node src/cli/index.ts serve --open         # the desktop page in your browser (--fake-agents for UI work without model calls)
-node src/cli/index.ts desktop              # the native window (installed app, else this checkout's build, else the browser)
+node src/cli/index.ts desktop              # the native window (installed app, else this checkout's build, else the browser); `chorus` alone does this
+node src/cli/index.ts app                  # the CLI app (`chorus-cli`)
 npm run install:global                     # `chorus` on the PATH (npm link) + Chorus.app built and copied to /Applications
 node src/cli/index.ts mux codex agy        # try the app by hand
 npm run risk -- free|cheap|<case>          # risk harness (docs/risks/README.md); `cheap` makes a few real model calls
@@ -177,7 +178,7 @@ to the adapters; transcript matching; kitty keyboard; Windows; plan-limit captur
 
 1. Technical debt that a user would hit first: TD-3 (a failed run looks empty), TD-4 for agy (two agy chats started together; Codex is matched by thread marker since 2026-10-22), TD-2
    (memory digest at chat start), TD-1 (one global skill library).
-2. Desktop before release: signing and notarisation of `Chorus.app`, Windows/Linux builds (TD-6), a guard against the CLI app and
+2. Desktop before release: signing and notarisation of `Chorus.app`, the Windows build (TD-6; Linux has the window since 1.0.11), a guard against the CLI app and
    the desktop resuming the same chat at once (`docs/phase5.md` §7).
 3. D4 (provider terms) before release.
 
