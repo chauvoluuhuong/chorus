@@ -80,7 +80,7 @@ every task with the work pushed and merged, never left only on this machine.
 4. **Merge into `dev` and push it** when tests pass: `git switch dev && git merge --no-ff <branch>` then `git push origin dev` (and
    push the branch too). If `dev` is checked out in another worktree, merge there with `git -C <that path>`, but only if that
    checkout is clean; otherwise ask. `main` is the release line: merge `dev` into `main` only when the user asks for a release
-   (in chorus-core that publishes a new version).
+   (in chorus-core it is meant to publish a new version; that release workflow is not built yet, `docs/chorus-core.md` §7).
 5. **Report the merge** in a few lines: what changed and why (one or two sentences), the branch,
    tests run and their result, and the proof attached (send the screenshot or video to the user,
    with its path). Name anything not done or not verified.
