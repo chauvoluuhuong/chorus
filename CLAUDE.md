@@ -200,6 +200,78 @@ and `docs/ci-cd.md` before changing it; the facts below are a pointer, those fil
   ignored `site/dl/` into chorus-admin. Then in chorus-admin: `npm run backup:downloads` (copies the archives to its private
   release bucket; CI restores them from there and fails without it), commit the generated metadata, merge through `dev` to `main`,
   and CI deploys. `npm run deploy:site` here still delegates to chorus-admin for a manual deploy, but CI on `main` is the normal path.
+- **The install command follows the website, not the GitHub Release.** `curl https://chorus-cli.web.app/install.sh | sh` reads
+  `install.sh` and `release.json` from chorus-admin, so until the manual steps below are done a new release installs the previous
+  version. Backing up needs the owner's Mac: CI cannot write to the release bucket on purpose (so a workflow can't replace the
+  archives). Run them after **every** release, in this order, and don't call a release done before step 7:
+
+  1. Chorus `package.json` version bumped on a `release/<v>` branch → merged into `dev` → `dev` into `main` by PR (it needs a
+     review: the user merges it with admin override, or says to use `--admin`). This starts `release.yml`.
+  2. `gh run list --workflow release.yml --limit 1` until it is `completed success`; `gh release view v<v>` lists the 5 files
+     and `SHA256SUMS`.
+  3. In this repo (a clean checkout of `main` at that release; `node_modules` present): `npm run release:fetch` → downloads the
+     release into `../chorus-admin/site/dl/`, checks every file against `SHA256SUMS`, sets `VERSION` in `site/install.sh` and
+     writes `site/release.json`.
+  4. In `../chorus-admin` (on `dev`, clean): `npm run backup:downloads`, `npm test`, `npm run check:site`.
+  5. Commit only the two generated files on `release/<v>`, merge into `dev`, push, open the PR `dev` → `main` and merge it (no
+     review needed there). This is the production deploy.
+  6. `gh run watch` the `CI and deploy` run on `main`.
+  7. Verify what users get: `curl -s https://chorus-cli.web.app/release.json` shows the new `version`, the `install.sh` line
+     `VERSION=` matches, and `curl -sI` on each `downloads.*.url` answers 200. If only the workflow's "Verify production" step is
+     red, the CDN served the old `release.json` for a moment: compare the live file with `site/release.json` before treating it
+     as a failure.
+
+  The same steps as one script, run from the Chorus checkout (version as the argument; it stops at the first failing step and
+  never uses `git add -A`):
+
+  ```bash
+  #!/usr/bin/env bash
+  # usage: save as release-website.sh, run at the root of a clean chorus checkout:  V=1.0.9 bash release-website.sh
+  set -euo pipefail
+  V="${V:?set V to the released version, e.g. V=1.0.9}"
+  ADMIN="${ADMIN:-../chorus-admin}"
+
+  # 2. the GitHub Release is built
+  until [ "$(gh run list --workflow release.yml --limit 1 --json conclusion -q '.[0].conclusion')" = success ]; do sleep 20; done
+  gh release view "v$V" --repo chauvoluuhuong/chorus --json assets -q '.assets[].name'
+
+  # 3. downloads, checksums, install.sh VERSION, release.json
+  npm run release:fetch -- "$V"
+
+  # 4. back up the archives, then the admin checks
+  cd "$ADMIN"
+  git fetch -q origin && git switch -q dev && git merge --ff-only -q origin/dev
+  git status --porcelain | grep -v -e 'site/install.sh' -e 'site/release.json' && { echo "admin checkout not clean"; exit 1; } || true
+  npm run backup:downloads
+  npm test
+  npm run check:site
+
+  # 5. commit the two generated files, dev, PR to main, merge = production deploy
+  git switch -q -c "release/$V"
+  git add site/install.sh site/release.json
+  git commit -q -m "Release $V metadata"
+  git switch -q dev && git merge --no-ff -q "release/$V" -m "Merge release/$V"
+  git push -q origin dev "release/$V"
+  PR=$(gh pr create --base main --head dev --title "Release $V" --body "Website metadata for Chorus $V. Merging deploys production." | tail -1)
+  gh pr merge "$PR" --merge
+
+  # 6. wait for the deploy
+  sleep 10
+  gh run watch "$(gh run list --branch main --limit 1 --json databaseId -q '.[0].databaseId')" --exit-status || echo "workflow red: compare the live file in step 7"
+
+  # 7. verify what users get
+  live=$(curl -s "https://chorus-cli.web.app/release.json?x=$RANDOM")
+  [ "$(printf '%s' "$live" | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).version')" = "$V" ] || { echo "live release.json is not $V"; exit 1; }
+  curl -s https://chorus-cli.web.app/install.sh | grep -m1 "^VERSION=\"$V\"" || { echo "install.sh is not $V"; exit 1; }
+  printf '%s' "$live" | node -pe 'Object.values(JSON.parse(require("fs").readFileSync(0,"utf8")).downloads).map(d=>d.url).join("\n")' | while read -r u; do
+    echo "$(curl -s -o /dev/null -w '%{http_code}' -I "$u") $u"
+  done
+  echo "Release $V is live: curl -fsSL https://chorus-cli.web.app/install.sh | sh"
+  ```
+
+  Things that went wrong before: the installed app stayed on the old version because only `release.yml` had run; a checkout on
+  another branch (another session switched it) changes what `release:fetch` and `git` act on, so use a separate worktree
+  (`git worktree add ../chorus-release origin/main`) when another session is working here.
 - The public domain `https://chorus-cli.web.app` and every installer/download URL must stay unchanged; never recreate or delete
   its Firebase Hosting site. Cloud project ids, the admin login and the backend's rules live in chorus-admin's docs; don't copy
   them here (this repo goes public).

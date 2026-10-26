@@ -24,7 +24,7 @@ import { defaultOpener } from '../core/opener.ts';
 import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, sourceDir, syncSkills } from '../core/skills.ts';
 import type { AgentId } from '../core/types.ts';
 import { CLIS, type DeepReport } from '@chauvoluuhuong/chorus-core/doctor';
-import { check, firstLaunch, ghReady, isDue, issue, lastCheck, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, runCommand, runDeep, sendIssue, DOCTOR_DIR } from '../core/doctor.ts';
+import { check, composeIssue, firstLaunch, ghReady, host, isDue, isIssueKind, ISSUE_KINDS, lastCheck, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, reportDetails, runCommand, runDeep, sendIssue, DOCTOR_DIR } from '../core/doctor.ts';
 
 import type { NotificationInbox } from './notifications.ts';
 import type { UpdateCheck } from './updates.ts';
@@ -111,6 +111,11 @@ export class ChorusServer {
   /** install, sign-in and deeper-test runs the doctor popup started; polled by the page */
   private doctorJobs = new Map<string, DoctorJob>();
   private deepReports: DeepReport[] = [];
+  /** the newest failed requests, for the issue report (Report on the Doctor page) */
+  private errors: string[] = [];
+  private noteError(where: string, e: unknown) {
+    this.errors = [...this.errors, `${new Date().toISOString()} ${where}: ${String((e as Error)?.message ?? e)}`].slice(-30);
+  }
 
   constructor(o: ServeOpts) {
     this.o = o;
@@ -161,7 +166,7 @@ export class ChorusServer {
   }
 
   async start(port = this.o.port ?? 0): Promise<string> {
-    this.http = http.createServer((req, res) => void this.handle(req, res).catch(e => send(res, 500, { error: String((e as Error)?.message ?? e) })));
+    this.http = http.createServer((req, res) => void this.handle(req, res).catch(e => (this.noteError(`${req.method} ${req.url?.split('?')[0]}`, e), send(res, 500, { error: String((e as Error)?.message ?? e) }))));
     this.wss = new WebSocketServer({ noServer: true });
     this.http.on('upgrade', (req, sock, head) => {
       if (!this.allowed(req) || !this.sameOrigin(req)) return sock.destroy();
@@ -444,7 +449,7 @@ export class ChorusServer {
         if (!saved) await Promise.race([this.o.notifications?.startup(), new Promise(r => setTimeout(r, 3000))]);
         const fast = saved?.report ?? (await check());
         const at = saved?.at ?? new Date().toISOString();
-        return { lines: c.doctorLines().map(plain), fast, at, due: isDue(fast), gh: ghReady(), latest: await latestReleases(), lastDeep: lastDeep(), jobs: [...this.doctorJobs.values()] };
+        return { lines: c.doctorLines().map(plain), chorus: host(), fast, at, due: isDue(fast), gh: ghReady(), latest: await latestReleases(), lastDeep: lastDeep(), jobs: [...this.doctorJobs.values()] };
       }
       case 'GET doctor/first':
         return { first: firstLaunch() };
@@ -461,11 +466,19 @@ export class ChorusServer {
         return this.doctorRun(b.agent as AgentId, b.action);
       case 'GET doctor/:id':
         return this.doctorJobs.get(id) ?? { error: 'no such job' };
-      case 'POST doctor/issue':
-        return issue(await check(), this.deepReports);
+      case 'POST doctor/issue': {
+        // Report on the Doctor page, with or without a test run: the doctor's report plus what the app can tell
+        const threads = c.store.listThreads();
+        const chats = threads.map(t => ({ agent: t.agent, state: t.state, cli_version: t.cli_version }));
+        const errors = [...this.errors, ...(Array.isArray(b.errors) ? b.errors.filter((e: unknown) => typeof e === 'string').slice(-30).map((e: string) => `page: ${e}`) : [])];
+        const client = b.client && typeof b.client === 'object' ? b.client : undefined;
+        const r = await reportDetails({ deep: this.deepReports, chats, projects: new Set(threads.map(t => t.project ?? t.cwd)).size, client, errors, update: this.o.updates?.snapshot() ?? null });
+        return { ...r, kinds: Object.entries(ISSUE_KINDS).map(([id, k]) => ({ id, name: k.name })) };
+      }
       case 'POST doctor/issue/send': {
-        if (typeof b.title !== 'string' || typeof b.body !== 'string') return { error: 'title and body' };
-        return sendIssue(b.title, b.body, path.join(DOCTOR_DIR(), 'issue.md'));
+        if (!isIssueKind(b.kind) || typeof b.details !== 'string') return { error: 'kind and details' };
+        const it = composeIssue({ kind: b.kind, summary: String(b.summary ?? ''), what: String(b.what ?? ''), details: b.details });
+        return { ...sendIssue(it.title, it.body, path.join(DOCTOR_DIR(), 'issue.md')), title: it.title, labels: it.labels };
       }
       case 'POST dialogs/:id':
         return { ok: this.answer(id, b.value) };

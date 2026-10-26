@@ -382,6 +382,28 @@ On yes:
 
 `chorus doctor --report` re-offers the report for the last failed run without running the suite again.
 
+The Doctor page shows which Chorus runs under its title (version, core version, how it was installed, and a newer release when the
+launch check found one); the doctor popup shows the version in its corner (2026-10-26).
+
+### 7.1 Report issue in the desktop, any time (2026-10-26)
+
+The Doctor page has a **Report issue** button next to Run test (also on the failed-test banner and the first-launch screen's last
+step); it needs no test run. The dialog asks for:
+
+- **Type**: Bug, An agent does not work with Chorus (picked by default when a detailed test failed), Feature request, Question,
+  Other.
+- **Title** and **What happened**, in the user's words.
+- **Attached** (collapsed, editable): a fresh short check (no model calls), each agent's newest detailed test on file with the
+  evidence of failed cases, and what the app can tell without prompts, code or file names: OS, CPU, memory, locale and time zone,
+  Chorus and core versions and install method, native window or browser with its size, CLI binaries and whether they update
+  themselves, newest releases, versions that passed here, the backend's tested list, chat counts per agent, state and CLI version,
+  the number of projects, and the newest errors of the server and the page. All of it goes through `redact()`.
+
+The issue is titled `[<type>] <title>` and its body starts with `<!-- chorus-report kind=<type> -->`. A user without access to the
+repo can't set labels, so `.github/workflows/issue-labels.yml` puts them on when the issue opens: the type's labels (`bug`,
+`bug` + `cli-compat`, `enhancement`, `question`) plus **`user report`** and **`priority: low`**: a report from the app has the lowest
+priority. Sending is as above (`gh issue create`, else the new-issue page with the body on the clipboard).
+
 ## 8. Flags
 
 | Flag | Meaning |

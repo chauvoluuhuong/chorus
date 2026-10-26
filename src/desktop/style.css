@@ -329,6 +329,8 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 
 /* the doctor (docs/doctor.md §6; looks: docs/mockups/desktop-doctor.html) */
 .btn.dr-big { padding: 8px 18px; font-size: 14px; }
+.fr-ver { float: right; font-family: var(--f-sans); font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 6px; }
+.dr-app { display: flex; align-items: center; gap: 10px; margin: -6px 0 14px; font-size: 13px; }
 .dr-run { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
 .dr-when { color: var(--muted); font-size: 13px; }
 .dr-banner { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; }
@@ -395,6 +397,13 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 .fr-row .dr-out { margin: 4px 0 0; }
 .fr .foot .grow { font-size: 12.5px; }
 @media (max-width: 560px) { .fr-tests { grid-template-columns: 1fr; } }
+.dialog .foot .grow, .dr-run .grow { flex: 1; }
+.dialog .foot .grow { align-self: center; font-size: 12.5px; }
+.dr-label { display: block; font-size: 13px; color: var(--ink-2, var(--ink)); margin-top: 10px; }
+.dr-label .dlg-input, .dr-label .dr-issue { display: block; margin-top: 4px; }
+.dr-attach { margin-top: 12px; font-size: 13px; }
+.dr-attach summary { cursor: pointer; color: var(--muted, inherit); }
+.dr-issue.short { min-height: 90px; font-family: inherit; font-size: 13px; }
 .dr-issue { width: 100%; min-height: 260px; margin-top: 8px; font-family: var(--f-mono); font-size: 12px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--bg); color: var(--ink); }
 .dr-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: 1px; }
 .dr-dot.ok { background: var(--ok); }
