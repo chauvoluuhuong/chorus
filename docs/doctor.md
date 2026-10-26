@@ -382,6 +382,9 @@ On yes:
 
 `chorus doctor --report` re-offers the report for the last failed run without running the suite again.
 
+The Doctor page shows which Chorus runs under its title (version, core version, how it was installed, and a newer release when the
+launch check found one); the doctor popup shows the version in its corner (2026-10-26).
+
 ### 7.1 Report issue in the desktop, any time (2026-10-26)
 
 The Doctor page has a **Report issue** button next to Run test (also on the failed-test banner and the first-launch screen's last

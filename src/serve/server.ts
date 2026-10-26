@@ -24,7 +24,7 @@ import { defaultOpener } from '../core/opener.ts';
 import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, sourceDir, syncSkills } from '../core/skills.ts';
 import type { AgentId } from '../core/types.ts';
 import { CLIS, type DeepReport } from '@chauvoluuhuong/chorus-core/doctor';
-import { check, composeIssue, firstLaunch, ghReady, isDue, isIssueKind, ISSUE_KINDS, lastCheck, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, reportDetails, runCommand, runDeep, sendIssue, DOCTOR_DIR } from '../core/doctor.ts';
+import { check, composeIssue, firstLaunch, ghReady, host, isDue, isIssueKind, ISSUE_KINDS, lastCheck, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, reportDetails, runCommand, runDeep, sendIssue, DOCTOR_DIR } from '../core/doctor.ts';
 
 import type { NotificationInbox } from './notifications.ts';
 import type { UpdateCheck } from './updates.ts';
@@ -449,7 +449,7 @@ export class ChorusServer {
         if (!saved) await Promise.race([this.o.notifications?.startup(), new Promise(r => setTimeout(r, 3000))]);
         const fast = saved?.report ?? (await check());
         const at = saved?.at ?? new Date().toISOString();
-        return { lines: c.doctorLines().map(plain), fast, at, due: isDue(fast), gh: ghReady(), latest: await latestReleases(), lastDeep: lastDeep(), jobs: [...this.doctorJobs.values()] };
+        return { lines: c.doctorLines().map(plain), chorus: host(), fast, at, due: isDue(fast), gh: ghReady(), latest: await latestReleases(), lastDeep: lastDeep(), jobs: [...this.doctorJobs.values()] };
       }
       case 'GET doctor/first':
         return { first: firstLaunch() };

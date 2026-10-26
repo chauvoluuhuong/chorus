@@ -264,6 +264,7 @@ test('serve: a chat from an earlier run is parked and resumes when the window op
     const folders = (await r.api('GET', `/api/folders?dir=${encodeURIComponent(path.dirname(r.project))}`)).json;
     assert.ok(folders.folders.includes(path.basename(r.project)));
     assert.ok((await r.api('GET', '/api/doctor')).json.lines.some((l: string) => /^claude/.test(l)));
+    assert.match((await r.api('GET', '/api/doctor')).json.chorus.app, /^chorus \d+\.\d+\.\d+/);
     v.ws.close();
   } finally {
     await r.done();
