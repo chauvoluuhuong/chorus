@@ -110,3 +110,12 @@ test('usage upgrades an existing cache without replacing identity and bounds rec
   const sent = r.calls.at(-1)?.body;
   assert.equal(sent.installationId, identity); assert.equal(sent.usage.launches, 100); assert.equal(sent.usage.activeDays, 100); assert.equal(sent.usage.recentDays.length, 90); assert.equal(sent.usage.firstDay, '2026-01-01');
 });
+test('the versions the matrix tested after this build are handed to the doctor; a malformed list is ignored', async t => {
+  const got: unknown[] = [];
+  for (const tested of [{ claude: [], codex: ['0.164.0'], agy: ['1.4.8'] }, { codex: ['../x'] }, undefined]) {
+    const r = setup(t, url => (url.endsWith('/startup') ? { ...feed(), ...(tested ? { tested } : {}) } : { ok: true }));
+    const inbox = new NotificationInbox({ directory: r.directory, version: 'v', platform: 'darwin', request: (async (u: any, o: any) => Response.json({ ...feed(), ...(tested ? { tested } : {}) })) as typeof fetch, endpoint: 'https://notifications.invalid', onTested: x => got.push(x) });
+    await inbox.startup(); inbox.close();
+  }
+  assert.deepEqual(got, [{ claude: [], codex: ['0.164.0'], agy: ['1.4.8'] }]);
+});
