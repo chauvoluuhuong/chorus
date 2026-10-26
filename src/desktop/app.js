@@ -793,11 +793,19 @@ function drRunLine() {
   return `<div class="dr-run"><button class="btn primary dr-big" data-act="doc-test"${busy ? ' disabled' : ''}>${busy ? '<span class="spin"></span> Testing…' : '▶ Run test'}</button><span class="dr-when">${esc(when)}</span><span class="grow"></span><button class="btn" data-act="doc-report" title="Send a report to the Chorus issues on GitHub; no test needed">Report issue</button></div>`;
 }
 
+/** Which Chorus this is: its version, the core's, how it was installed, and a newer release when the launch check found one. */
+function drAppLine() {
+  const c = S.doctor?.chorus;
+  if (!c) return '';
+  const update = S.state?.update;
+  return `<div class="dr-app"><b>${esc(c.app.replace(/^chorus/, 'Chorus'))}</b><span class="muted">core ${esc(c.core)} · ${esc(c.install)}</span>${update ? `<button class="btn" data-act="update-open">Chorus ${esc(update.version)} is available</button>` : ''}</div>`;
+}
+
 function doctorHtml() {
   const d = S.doctor;
   if (!d) return `<div class="page"><h1>Doctor</h1><p class="lead">Checking your agents…</p></div>`;
   return `<div class="page"><h1>Doctor</h1><p class="lead">Your AI coding CLIs: are they installed, on a version Chorus is tested with, and signed in.</p>
-    ${drRunLine()}${drBanner()}<div class="card" id="dr-rows">${d.fast.agents.map(drRow).join('')}</div></div>`;
+    ${drAppLine()}${drRunLine()}${drBanner()}<div class="card" id="dr-rows">${d.fast.agents.map(drRow).join('')}</div></div>`;
 }
 
 /* The first-launch doctor screen (docs/mockups/desktop-first-run.html): the short check, then the choice between the app (the
@@ -884,7 +892,7 @@ function drawFirstRun() {
     deep: ['Testing your agents', 'Each agent runs the same tests in a temporary folder. Your projects are not touched.'],
     done: ['Test results', 'You can start now with what works, and fix the rest any time from Doctor.'],
   }[fr.phase];
-  $('#fr-title').textContent = title;
+  $('#fr-title').innerHTML = `${esc(title)}${S.doctor?.chorus ? `<span class="fr-ver">${esc(S.doctor.chorus.app.replace(/^chorus/, 'Chorus'))} · core ${esc(S.doctor.chorus.core)}</span>` : ''}`;
   $('#fr-lead').textContent = lead;
   const step = { check: 0, short: 0, deep: 1, done: 2 }[fr.phase];
   $('#fr-steps').innerHTML = ['Short check', 'Detailed test', 'Ready'].map((t, i) => `<span class="${i < step || (fr.phase === 'short' && i === 0) ? 'done' : i === step ? 'on' : ''}">${i < step || (fr.phase === 'short' && i === 0) ? '✔ ' : ''}${t}</span>`).join('');

@@ -329,6 +329,8 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 
 /* the doctor (docs/doctor.md §6; looks: docs/mockups/desktop-doctor.html) */
 .btn.dr-big { padding: 8px 18px; font-size: 14px; }
+.fr-ver { float: right; font-family: var(--f-sans); font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 6px; }
+.dr-app { display: flex; align-items: center; gap: 10px; margin: -6px 0 14px; font-size: 13px; }
 .dr-run { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
 .dr-when { color: var(--muted); font-size: 13px; }
 .dr-banner { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; }
