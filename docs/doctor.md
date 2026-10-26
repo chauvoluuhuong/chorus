@@ -101,7 +101,7 @@ Install commands (each to verify on a clean macOS user per rule 1, then recorded
 |---|---|---|---|---|
 | Claude Code | https://docs.claude.com/en/docs/claude-code/setup | `curl -fsSL https://claude.ai/install.sh \| bash` | npm: `npm install -g @anthropic-ai/claude-code@<v>`; native: `curl -fsSL https://claude.ai/install.sh \| bash -s <v>` | npm pin ✅ (`docs/integrations/versions.md`); native pin 📄 |
 | Codex | https://github.com/openai/codex | `npm install -g @openai/codex` | `npm install -g @openai/codex@<v>` | ✅ (`docs/integrations/versions.md`); Homebrew can't pin |
-| agy | Antigravity download page | ❓ | ❓ agy updates itself; no way to pin is known | ❓ |
+| agy | https://antigravity.google/docs/cli | `curl -fsSL https://antigravity.google/cli/install.sh \| bash` | versioned builds exist (GitHub releases of `google-antigravity/antigravity-cli`), but an installed agy replaces itself with the newest release unless started with `AGY_CLI_DISABLE_AUTO_UPDATE=1`, so the doctor doesn't pin it for users; the matrix does (`docs/integrations/antigravity-agy.md` §9) | releases and the switch ✅ (2026-10-26); install script 📄 |
 
 ### 3.2 Untested version that fails: offer a tested one
 
