@@ -440,6 +440,8 @@ export class ChorusServer {
         // the short test for the popup and the Doctor page (docs/doctor.md §6, docs/mockups/desktop-doctor.html). GET shows
         // the last one when there is one (?fresh=1 runs it); POST doctor/check is the "Run test" button.
         const saved = method === 'GET' && !q.get('fresh') ? lastCheck() : undefined;
+        // a new check waits briefly for this launch's backend answer, which may add versions tested after this build
+        if (!saved) await Promise.race([this.o.notifications?.startup(), new Promise(r => setTimeout(r, 3000))]);
         const fast = saved?.report ?? (await check());
         const at = saved?.at ?? new Date().toISOString();
         return { lines: c.doctorLines().map(plain), fast, at, due: isDue(fast), gh: ghReady(), latest: await latestReleases(), lastDeep: lastDeep(), jobs: [...this.doctorJobs.values()] };

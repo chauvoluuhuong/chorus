@@ -11,7 +11,20 @@ interface Saved {
   installationId: string; installationKey: string; items: NotificationItem[];
   read: string[]; opened: string[]; received: string[]; pending: Event[]; checkedAt: string | null; usage?: Usage;
 }
-export interface NotificationOptions { directory: string; version: string; platform?: string; request?: typeof fetch; endpoint?: string; now?: () => Date }
+export type TestedVersions = Partial<Record<'claude' | 'codex' | 'agy', string[]>>;
+export interface NotificationOptions { directory: string; version: string; platform?: string; request?: typeof fetch; endpoint?: string; now?: () => Date; onTested?: (tested: TestedVersions) => void }
+/** The startup response's `tested` (CLI versions the version matrix tested after this build); undefined when absent or malformed. */
+export function testedOf(t: any): TestedVersions | undefined {
+  if (!t || typeof t !== 'object' || Array.isArray(t)) return undefined;
+  const out: TestedVersions = {};
+  for (const cli of ['claude', 'codex', 'agy'] as const) {
+    const list = t[cli];
+    if (list === undefined) continue;
+    if (!Array.isArray(list) || list.length > 500 || !list.every((v: unknown) => typeof v === 'string' && /^\d+\.\d+\.\d+[\w.-]{0,20}$/.test(v))) return undefined;
+    out[cli] = list;
+  }
+  return out;
+}
 function validItem(n: any): n is NotificationItem {
   return !!n && typeof n.id === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(n.id) && typeof n.title === 'string' && n.title.length <= 100 && typeof n.html === 'string' && Buffer.byteLength(n.html) <= 200_000 && Number.isSafeInteger(n.revision) && n.revision > 0 && typeof n.publishedAt === 'string' && Number.isFinite(Date.parse(n.publishedAt));
 }
@@ -92,6 +105,8 @@ export class NotificationInbox {
       const response = await this.post('/v1/startup', { ...this.credentials(), platform: this.o.platform ?? process.platform, appVersion: this.o.version, events: sent, usage: this.saved.usage });
       if (!Array.isArray(response.notifications) || response.notifications.length > 50 || !response.notifications.every(validItem) || new Set(response.notifications.map((n: NotificationItem) => n.id)).size !== response.notifications.length || typeof response.checkedAt !== 'string' || !Number.isFinite(Date.parse(response.checkedAt))) throw new Error('Invalid notification feed');
       if (this.controller.signal.aborted) return;
+      const tested = testedOf(response.tested);
+      if (tested && this.o.onTested) try { this.o.onTested(tested); } catch { /* the doctor's own list still applies */ }
       this.update(s => { this.acknowledge(sent, s); s.items = response.notifications.map((n: NotificationItem) => ({ id: n.id, title: n.title, html: n.html, revision: n.revision, publishedAt: n.publishedAt })); s.checkedAt = response.checkedAt; for (const n of s.items) if (!s.received.includes(n.id)) queue(s, { id: n.id, type: 'received' }); });
       this.offline = false;
     } catch { this.offline = true; }

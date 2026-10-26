@@ -14,7 +14,7 @@ import { runMcp } from '../mcp/server.ts';
 import { ChorusServer, headlessApp } from '../serve/server.ts';
 import { NotificationInbox } from '../serve/notifications.ts';
 import { UpdateCheck } from '../serve/updates.ts';
-import { versions } from '../core/doctor.ts';
+import { saveRemoteTested, versions } from '../core/doctor.ts';
 import { activityCmd, artifactsCmd, doctorCmd, memoryCmd, showCmd, threadsCmd, traceCmd } from './commands.ts';
 
 const argv = process.argv.slice(2);
@@ -192,7 +192,7 @@ switch (cmd) {
     };
     let notifications: NotificationInbox | undefined;
     if (!fake && process.env.CHORUS_NOTIFICATIONS !== '0') {
-      try { notifications = new NotificationInbox({ directory: path.join(process.env.CHORUS_HOME ?? path.join(os.homedir(), '.chorus'), 'notifications'), version: versions().chorus }); }
+      try { notifications = new NotificationInbox({ directory: path.join(process.env.CHORUS_HOME ?? path.join(os.homedir(), '.chorus'), 'notifications'), version: versions().chorus, onTested: saveRemoteTested }); }
       catch { /* An unreadable cache must not stop the desktop or reset the installation identity. */ }
     }
     let updates: UpdateCheck | undefined;
