@@ -675,8 +675,8 @@ function drShort(a) {
   if (a.state === 'missing') return [['bad', 'Not found on PATH or in ~/.local/bin, /opt/homebrew/bin']];
   const out = [['ok', `Installed at ${tilde(a.bin)} (${DR_METHOD[a.method] ?? a.method})`]];
   if (a.coverage === 'tested') out.push(['ok', `Version ${a.version} is tested with Chorus`]);
-  else if (a.coverage === 'in-range') out.push(['ok', `Version ${a.version} is between versions Chorus is tested with`]);
-  else out.push(['warn', `Version ${a.version ?? '?'} is ${a.newestTested && cmpV(a.version ?? '0', a.newestTested) < 0 ? 'older than the tested' : 'newer than the tested'} ${a.newestTested ?? 'versions'}`]);
+  else if (a.coverage === 'same-minor') out.push(['ok', `Version ${a.version} is a patch of ${a.version.split('.').slice(0, 2).join('.')}, which Chorus is tested with`]);
+  else out.push(['warn', a.version ? `Version ${a.version}: no ${a.version.split('.').slice(0, 2).join('.')} version is tested with Chorus yet (newest tested ${a.newestTested ?? 'none'})` : 'Version unknown']);
   if (a.login === 'yes') out.push(['ok', 'Signed in']);
   else if (a.login === 'no') out.push(['bad', 'Not signed in', '', a.agent === 'agy' ? 'agy signs in on its first start: run agy once in a terminal' : `${a.loginCommand.join(' ')} signs in`]);
   else out.push(['warn', 'Sign-in could not be checked']);
