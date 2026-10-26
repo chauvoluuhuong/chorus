@@ -14,12 +14,13 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 - This repo is public: no business material (pricing, sales goals, competitors, launch or marketing plans) goes in it, in code,
   docs or commit messages. That belongs in chorus-core.
 
-## Two repos
+## Three repos
 
 | Repo | Visibility, licence | Holds |
 |---|---|---|
-| `chauvoluuhuong/chorus` (this one) | Public from launch. AGPL-3.0-only, with an additional permission to combine it with chorus-core (`LICENSE`, `NOTICE.md`) | The app: store, handoff, memory, MCP tools, desktop, CLI app, installers (curl, Homebrew, npx). Landing page and web admin now live in the private sibling chorus-admin repo. Users install from here and file issues and doctor reports here |
+| `chauvoluuhuong/chorus` (this one) | Public from launch. AGPL-3.0-only, with an additional permission to combine it with chorus-core (`LICENSE`, `NOTICE.md`) | The app: store, handoff, memory, MCP tools, desktop, CLI app, installers (curl, Homebrew, npx), the release build. Users install from here and file issues and doctor reports here |
 | `chauvoluuhuong/chorus-core` (private, `git@github.com:chauvoluuhuong/chorus-core.git`, checked out next to this one; branches `dev` and `main`) | Private source, `UNLICENSED`. Only its built bundle is published, to public npm as `@chauvoluuhuong/chorus-core`, so installing Chorus installs it with no login | The CLI integration: adapters, launch flags, transcript discovery, approval detection, the doctor, the probes, the version matrix, fixtures, `docs/integrations/` |
+| `chauvoluuhuong/chorus-admin` (private, `git@github.com:chauvoluuhuong/chorus-admin.git`, checked out next to this one; branches `dev` and `main`) | Private. The migrated site keeps its AGPL terms; new admin/backend code is `UNLICENSED` | The landing page and its Vietnamese page, `install.sh`, `release.json` and the installer downloads at `https://chorus-cli.web.app`; the notification admin (`/admin/`); the backend API the desktop app calls once per launch (notifications, approximate counts). Has its own CI/CD (see "chorus-admin" below) |
 
 - This repo's npm package is **`@chauvoluuhuong/chorus`**. `chorus-cli` on npm belongs to someone else: never install or publish it.
 - The split is done (`docs/chorus-core.md` §6): CLI integration code (adapters, launch flags, the doctor and its install commands,
@@ -58,9 +59,24 @@ visibility of tool calls / approvals / artifacts, one set of skills for every CL
 The v1 Tauri/React prototype was removed; it is in git history. New work branches from `dev`
 (see Workflow below).
 
+## Finish the work; don't hand it back
+
+The user wants finished work, not a list of things left for them. This overrides any habit of ending with "open items".
+
+- **Plan first, ask once.** Before starting, work out everything the task needs from the user (decisions, accounts, keys,
+  approvals for risky steps) and ask for all of it in one go, up front.
+- **Then finish it yourself**: build, test, prove, merge into `dev`, and everything that follows from it (the release PR,
+  the docs, the other repos the change needs). Don't stop to ask for the next obvious step; don't end with "want me to…?"
+- **Stop and ask only** when something changes the agreed plan, or the step is very risky or can't be undone (a production
+  deploy, merging into `main`, a publish, deleting data, spending the user's money or quota beyond what was agreed).
+- **What only the user can do** (store a credential, sign in with their password, approve a payment): say so once, give the
+  exact command, and keep doing everything else around it.
+- The closing report names what is still not done only when it truly is: blocked on the user, or waiting for their yes to a
+  risky step. Never list work you could have done yourself.
+
 ## Workflow: every new feature or bug fix
 
-Applies to **both repos** (this one and `../chorus-core`, see "Working across the two repos"). GitHub is the source of truth: finish
+Applies to **all three repos** (this one, `../chorus-core` and `../chorus-admin`, see "Working across the repos"). GitHub is the source of truth: finish
 every task with the work pushed and merged, never left only on this machine.
 
 1. **Start from the remote.** `git fetch origin`. Local `dev` must equal `origin/dev`: if it is behind, `git merge --ff-only
@@ -79,18 +95,19 @@ every task with the work pushed and merged, never left only on this machine.
 4. **Merge into `dev` and push it** when tests pass: `git switch dev && git merge --no-ff <branch>` then `git push origin dev` (and
    push the branch too). If `dev` is checked out in another worktree, merge there with `git -C <that path>`, but only if that
    checkout is clean; otherwise ask. `main` is the release line: merge `dev` into `main` only when the user asks for a release
-   (in chorus-core that publishes a new version).
+   (in chorus-core it is meant to publish a new version; that release workflow is not built yet, `docs/chorus-core.md` §7).
 5. **Report the merge** in a few lines: what changed and why (one or two sentences), the branch,
    tests run and their result, and the proof attached (send the screenshot or video to the user,
    with its path). Name anything not done or not verified.
    Then close with a short checklist as a workflow: the steps in order (ticked when done and
-   verified), what is still open (not rebuilt, not tested, not deployed, follow-ups), and the risks
-   if any ("none found" when there are none). "Pushed" and "merged into dev" are part of done, not open items.
+   verified), what is blocked on the user or waiting for their yes (see "Finish the work" above: never
+   work you could do yourself), and the risks if any ("none found" when there are none). "Pushed" and
+   "merged into dev" are part of done, not open items.
 
-### Working across the two repos
+### Working across the repos
 
-- Both checkouts sit side by side (`chorus/` and `chorus-core/`) and a session may edit both. `gh` is logged in as
-  `chauvoluuhuong` (SSH remotes), so pushing either repo works.
+- The checkouts sit side by side (`chorus/`, `chorus-core/`, `chorus-admin/`) and a session may edit any of them. `gh` is logged
+  in as `chauvoluuhuong` (SSH remotes), so pushing each repo works.
 - A change that needs both goes **core first**: workflow above in `../chorus-core` (its own `npm test`, `npm run typecheck`,
   branch from `dev`, push, merge into `dev`, push), then `cd ../chorus-core && npm run build` so this repo sees it (`package.json`
   depends on `file:../chorus-core`), then the workflow here. Say in the report which commit of each repo belongs together.
@@ -168,6 +185,25 @@ Known gaps: `file_change`, `reasoning`, `turn.failed` Codex events, agy errors/q
 captured by the adapters (fixtures of the first three are in `fixtures/risks/capture-errors/`, TD-3); ctx % in the status line is not built
 (TD-11); the hand pointer (OSC 22) is not probed.
 
-## Website ownership
+## chorus-admin: website, admin, backend, and their CI/CD
 
-The landing page, translations, static installer, and Firebase Hosting configuration now live in `../chorus-admin` (`chauvoluuhuong/chorus-admin`, private). The existing public domain `https://chorus-cli.web.app` is preserved. `npm run deploy:site` delegates to that repo; `scripts/release-downloads.mjs` writes release files to its ignored `site/dl/` folder. Clone it as a sibling or set `CHORUS_SITE_DIR` for release output. Do not recreate or delete the existing Firebase Hosting site.
+Clone it next to this repo (`../chorus-admin`) or set `CHORUS_SITE_DIR` to its `site/` folder. Read its `AGENTS.md`, `README.md`
+and `docs/ci-cd.md` before changing it; the facts below are a pointer, those files are the source of truth.
+
+- **CI/CD is set up there (GitHub Actions, `.github/workflows/ci-cd.yml`).** PRs and pushes to `dev`/`main` run validation only
+  (tests, site/admin build, release metadata, generated pages match sources). **A push or merge to `main` deploys production**:
+  Firestore indexes, the Cloud Run API, then the website, and verifies the live pages and installer URLs. Auth is keyless
+  (Workload Identity Federation, `main` only). So merging chorus-admin `dev` into `main` is a production deploy: do it only when
+  the user asks, same as a release here.
+- **Releasing a new app version** touches both repos: this repo's `.github/workflows/release.yml` builds the downloads on a new
+  version in `main`; `npm run release:fetch` (or `release:downloads` on this Mac) writes `release.json`, `install.sh` and the
+  ignored `site/dl/` into chorus-admin. Then in chorus-admin: `npm run backup:downloads` (copies the archives to its private
+  release bucket; CI restores them from there and fails without it), commit the generated metadata, merge through `dev` to `main`,
+  and CI deploys. `npm run deploy:site` here still delegates to chorus-admin for a manual deploy, but CI on `main` is the normal path.
+- The public domain `https://chorus-cli.web.app` and every installer/download URL must stay unchanged; never recreate or delete
+  its Firebase Hosting site. Cloud project ids, the admin login and the backend's rules live in chorus-admin's docs; don't copy
+  them here (this repo goes public).
+- The desktop app's side of the backend (one request per launch, user-triggered open events, no polling, no prompts, code, paths
+  or fingerprints sent) is specified in chorus-admin's `docs/client-contract.md`. A change to that call here must match it.
+- Workflow there follows its `AGENTS.md` (branches, `npm test` and `npm run check:site` before a deploy, never commit installer
+  archives or credentials), plus steps 1–5 above: branch from `dev`, push, merge into `dev`.

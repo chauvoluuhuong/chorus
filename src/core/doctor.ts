@@ -47,13 +47,22 @@ export function host(): Host {
 
 /** agent@version entries that passed the deeper test on this machine: Ready from then on (docs/doctor.md §2.1). */
 export const known = (): string[] => readJson(path.join(DOCTOR_DIR(), 'known.json'), []);
+/** Versions the version matrix tested after this build, per CLI, from the backend at launch (chorus-admin
+ *  docs/client-contract.md); the doctor counts them like its built-in list. */
+export const remoteTested = (): Partial<Record<AgentId, string[]>> => readJson(path.join(DOCTOR_DIR(), 'tested.json'), {});
+export function saveRemoteTested(tested: Partial<Record<AgentId, string[]>>) {
+  if (JSON.stringify(tested) === JSON.stringify(remoteTested())) return;
+  writeJson(path.join(DOCTOR_DIR(), 'tested.json'), tested);
+  // the last short check was judged against the old list: the next look at the doctor runs it again
+  fs.rmSync(path.join(DOCTOR_DIR(), 'fast.json'), { force: true });
+}
 function addKnown(entry: string) {
   writeJson(path.join(DOCTOR_DIR(), 'known.json'), [...new Set([...known(), entry])]);
 }
 
 /** The short test; the last one is kept with its time, so the Doctor page shows it without running it again. */
 export async function check(agents?: AgentId[]): Promise<FastReport> {
-  const r = await fastCheck({ agents, known: known() });
+  const r = await fastCheck({ agents, known: known(), tested: remoteTested() });
   if (!agents) writeJson(path.join(DOCTOR_DIR(), 'fast.json'), { at: new Date().toISOString(), report: r });
   return r;
 }
