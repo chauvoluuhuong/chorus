@@ -18,7 +18,7 @@ install.
 | **Ready** | installed, logged in, and the version is one we tested (§2.1) | `✔ Claude Code 2.1.306: tested, ready`. Then **Continue**. No test runs |
 | **Missing** | not on `PATH` | the CLI's page opens in the browser, the install command is shown, and on **Install** Chorus runs it (§3) |
 | **Needs login** | installed, not logged in | on **Log in** Chorus runs the CLI's login command (§3) |
-| **Untested version** | installed and logged in, version not in the tested list | the deeper integration test runs for that CLI only (§4, about 1–3 min). Pass: `✔ works`, Continue. Fail: offer to install a tested version (§3.2, optional) and to send an issue report (§7) |
+| **Untested version** | installed and logged in, its major.minor has no tested version (§2.1) | the detailed test is **suggested**, never started on its own: **Run detailed test** or **Not now** (§4, about 1–3 min, model turns on the user's plan). Not now keeps the CLI usable. Pass: `✔ works`, Continue. Fail: offer to install a tested version (§3.2, optional) and to send an issue report (§7) |
 
 So a buyer on tested versions is through in a few seconds; the model turns of the integration test are spent only where a CLI version
 is new to us.
@@ -66,8 +66,11 @@ chorus-core release can add versions without a Chorus release.
 | Installed version | Treated as |
 |---|---|
 | exactly a tested version | tested: Ready |
-| between two tested versions with no known break between them (the list marks breaks) | tested: Ready |
-| newer than the newest tested, older than the oldest, or across a known break | untested: deeper test |
+| another patch of a tested major.minor (Claude 2.1.310 when 2.1.309 is tested), no known break between them (the list marks breaks) | tested: Ready |
+| a major.minor with no tested version (Codex 0.164.0 when 0.163.0 is the newest, or 0.158.0 between 0.155 and 0.160), or across a known break | untested: the detailed test is suggested |
+
+Decided 2026-10-26: the flow is unchanged, only the comparison is by major.minor. CLIs that ship mostly patch releases (Claude Code
+2.1.x) stay Ready across them; Codex bumps the minor on each release, so most new Codex versions get the suggestion.
 
 A deeper test that passes on this machine is remembered in `~/.chorus/doctor/last.json`, so the same version is Ready next time
 here. (It doesn't add the version to the tested list for anyone else: that needs the evidence run in the core repo.)
