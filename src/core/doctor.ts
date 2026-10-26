@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import { AGENTS, buildIssue, deepTest, fastCheck, latestRelease, type DeepEvent, type DeepReport, type FastReport, type Host, type TuiHost } from '@chauvoluuhuong/chorus-core/doctor';
+import { AGENTS, buildIssue, deepTest, fastCheck, latestRelease, redact, type DeepEvent, type DeepReport, type FastReport, type Host, type TuiHost } from '@chauvoluuhuong/chorus-core/doctor';
 import { nodePtyFactory } from '../app/pty.ts';
 import { VirtualScreen } from '../app/screen.ts';
 import type { AgentId } from './types.ts';
@@ -152,6 +152,86 @@ export async function runDeep(agent: AgentId, onEvent?: (e: DeepEvent) => void, 
 
 export function issue(fast: FastReport, deep: DeepReport[]) {
   return buildIssue(fast, deep, host());
+}
+
+/** What the user says the report is about. Every report from the app is a user report with the lowest priority; the labels are
+ *  put on by .github/workflows/issue-labels.yml from the marker in the body (a user without access to the repo can't set them). */
+export const ISSUE_KINDS = {
+  bug: { name: 'Bug', labels: ['bug'] },
+  cli: { name: 'An agent does not work with Chorus', labels: ['bug', 'cli-compat'] },
+  feature: { name: 'Feature request', labels: ['enhancement'] },
+  question: { name: 'Question', labels: ['question'] },
+  other: { name: 'Other', labels: [] },
+} as const;
+export type IssueKind = keyof typeof ISSUE_KINDS;
+export const USER_LABELS = ['user report', 'priority: low'];
+export const isIssueKind = (k: unknown): k is IssueKind => typeof k === 'string' && Object.hasOwn(ISSUE_KINDS, k);
+
+/** What the app knows besides the doctor's own report: filled in by the server (chats, errors) and the page (window, errors). */
+export interface ReportContext {
+  /** this session's detailed tests; the newest one on disk counts for an agent not tested this session */
+  deep?: DeepReport[];
+  chats?: { agent: string; state: string; cli_version: string | null }[];
+  projects?: number;
+  /** the page: native window or browser, user agent, screen and window size, language */
+  client?: Record<string, unknown>;
+  /** the newest errors the server and the page saw */
+  errors?: string[];
+  update?: { currentVersion: string; version: string } | null;
+}
+
+const gb = (n: number) => `${(n / 2 ** 30).toFixed(1)} GB`;
+const count = (xs: string[]) => Object.entries(xs.reduce<Record<string, number>>((m, x) => ((m[x] = (m[x] ?? 0) + 1), m), {})).map(([k, n]) => `${k} ${n}`).join(', ') || 'none';
+
+/** The report the dialog shows: the doctor's (a fresh short check, the detailed tests on file) and everything else the app can
+ *  tell without the user's prompts, code or file names. The user reads and edits it before it is sent. */
+export async function reportDetails(ctx: ReportContext = {}): Promise<{ title: string; details: string; kind: IssueKind }> {
+  const fast = await check();
+  const onDisk = lastDeep();
+  const deep = [...(ctx.deep ?? [])];
+  for (const a of AGENTS) if (!deep.some(d => d.agent === a) && onDisk[a]) deep.push(onDisk[a]!);
+  const base = issue(fast, deep);
+  const cpus = os.cpus();
+  const c = ctx.client ?? {};
+  const latest = await latestReleases().catch(() => ({}) as Partial<Record<AgentId, string>>);
+  const last = lastCheck();
+  const lines = [
+    base.body,
+    '### This machine and app',
+    '',
+    `- OS: ${os.type()} ${os.release()} (${os.platform()} ${os.arch()}), ${cpus[0]?.model ?? '?'} × ${cpus.length}, ${gb(os.totalmem())} RAM (${gb(os.freemem())} free)`,
+    `- Locale: ${Intl.DateTimeFormat().resolvedOptions().locale}, time zone ${Intl.DateTimeFormat().resolvedOptions().timeZone}, LANG ${process.env.LANG ?? '?'}`,
+    `- Chorus: ${host().app}, core ${host().core}, ${host().install}; server up ${Math.round(process.uptime() / 60)} min${ctx.update ? `; update ${ctx.update.version} is available` : ''}`,
+    ...(Object.keys(c).length ? [`- Desktop: ${Object.entries(c).map(([k, v]) => `${k} ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ')}`] : []),
+    `- CLI binaries: ${fast.agents.map(a => `${a.agent} ${a.bin ?? '–'}${a.updatesItself ? ` (updates itself: ${a.updatesItself})` : ''}`).join('; ')}`,
+    `- Newest releases: ${Object.entries(latest).map(([a, v]) => `${a} ${v ?? '?'}`).join(', ') || '?'}`,
+    `- Detailed tests on file: ${deep.map(d => `${d.agent} ${d.version ?? '?'} ${d.ok ? 'passed' : 'failed'}${'at' in d ? ` (${String((d as { at: string }).at).slice(0, 16)})` : ''}`).join(', ') || 'none'}`,
+    `- Passed here before: ${known().join(', ') || 'none'}; tested after this build: ${JSON.stringify(remoteTested())}`,
+    `- Last short check shown: ${last?.at ?? 'never'}`,
+    ...(ctx.chats ? [`- Chats: ${ctx.chats.length} (${count(ctx.chats.map(t => t.agent))}; ${count(ctx.chats.map(t => t.state))}); CLI versions used: ${count(ctx.chats.map(t => `${t.agent} ${t.cli_version ?? '?'}`))}`] : []),
+    ...(ctx.projects !== undefined ? [`- Projects: ${ctx.projects}`] : []),
+    '',
+  ];
+  if (ctx.errors?.length) lines.push('<details><summary>Recent errors</summary>', '', '```', ...ctx.errors.slice(-30).map(e => e.slice(0, 500)), '```', '</details>', '');
+  const failed = deep.some(d => !d.ok);
+  return { title: base.title === 'doctor: report' ? '' : base.title, details: redact(lines.join('\n')).slice(0, 60_000), kind: failed ? 'cli' : 'bug' };
+}
+
+/** The issue as it is sent: the kind and what the user wrote first, then the details they read. */
+export function composeIssue(o: { kind: IssueKind; summary: string; what: string; details: string }): { title: string; body: string; labels: string[] } {
+  const k = ISSUE_KINDS[o.kind];
+  const summary = o.summary.trim().replace(/\s+/g, ' ').slice(0, 200) || 'report from the app';
+  const body = [
+    `<!-- chorus-report kind=${o.kind} -->`,
+    `**Type:** ${k.name} · sent from the Chorus app (user report)`,
+    '',
+    '### What happened',
+    '',
+    o.what.trim() || '_Not filled in._',
+    '',
+    o.details,
+  ].join('\n');
+  return { title: `[${k.name}] ${summary}`, body: redact(body).slice(0, 65_000), labels: [...k.labels, ...USER_LABELS] };
 }
 
 const hasGh = () => spawnSync('gh', ['auth', 'status'], { stdio: 'ignore' }).status === 0;

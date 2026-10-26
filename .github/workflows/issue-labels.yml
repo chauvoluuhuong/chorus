@@ -1,0 +1,36 @@
+# Labels for the issues the app sends (Report issue on the Doctor page, src/core/doctor.ts composeIssue): the body starts with
+# <!-- chorus-report kind=<kind> -->. A user without access to this repo can't set labels, so this puts them on: the kind's
+# labels plus "user report" and "priority: low" (every report from the app has the lowest priority).
+name: issue labels
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label a report from the app
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          BODY: ${{ github.event.issue.body }}
+        run: |
+          kind=$(printf '%s' "$BODY" | head -c 200 | grep -oE '<!-- chorus-report kind=[a-z]+ -->' | head -1 | sed -E 's/.*kind=([a-z]+).*/\1/' || true)
+          [ -n "$kind" ] || { echo "not a report from the app"; exit 0; }
+          case "$kind" in
+            bug) labels="bug" ;;
+            cli) labels="bug,cli-compat" ;;
+            feature) labels="enhancement" ;;
+            question) labels="question" ;;
+            *) labels="" ;;
+          esac
+          gh label create "user report" --color c5def5 --description "Sent by a user from the Chorus app" 2>/dev/null || true
+          gh label create "priority: low" --color ededed --description "Lowest priority" 2>/dev/null || true
+          gh label create "cli-compat" --color fbca04 --description "An agent CLI version does not work with Chorus" 2>/dev/null || true
+          gh issue edit "$NUMBER" --add-label "user report,priority: low${labels:+,$labels}"
