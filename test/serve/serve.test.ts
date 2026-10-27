@@ -412,6 +412,51 @@ test('serve: one agent status for every screen; a login in the Doctor shows on t
   }
 });
 
+test('serve: the window coming back checks again quietly, at most once every 10 s; the Report uses the same check', async () => {
+  let claude: AgentCheck['state'] = 'needs-login';
+  let checks = 0;
+  const r = await rig(undefined, undefined, undefined, {
+    check: async () => (checks++, await sleep(100), fastReport([agentCheck('claude', claude), agentCheck('codex', 'ready'), agentCheck('agy', 'missing', 'unknown')])),
+  });
+  const v = await viewer(r.url, r.srv.token);
+  const before = process.env.CHORUS_DOCTOR_HOME;
+  process.env.CHORUS_DOCTOR_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-doctor-'));
+  try {
+    await v.until(() => v.state()?.doctor?.agents && !v.state().doctor.checking, 'the check at start');
+    // right after the check at start a focus does nothing
+    assert.equal((await r.api('POST', '/api/doctor/refresh')).json.ran, false);
+    assert.equal(checks, 1);
+    // the user logs in in a terminal and comes back later: one quiet check, the status stays (no "Checking…") until it is done
+    claude = 'ready';
+    const at = v.state().doctor.at;
+    (r.srv as any).agentCheck.at = new Date(Date.now() - 11_000).toISOString();
+    const seen: boolean[] = [];
+    const watch = setInterval(() => seen.push(!!v.state().doctor.checking), 10);
+    assert.equal((await r.api('POST', '/api/doctor/refresh')).json.ran, true);
+    assert.equal((await r.api('POST', '/api/doctor/refresh')).json.ran, false, 'a second window, or focus and visibility together');
+    await v.until(() => v.state().doctor.agents[0].state === 'ready', 'the login shows without Check again');
+    clearInterval(watch);
+    assert.equal(checks, 2);
+    assert.ok(!seen.includes(true), 'statuses never went to Checking…');
+    assert.notEqual(v.state().doctor.at, at);
+    // Check again is still there and still shows Checking…
+    claude = 'needs-login';
+    const again = r.api('POST', '/api/doctor/check');
+    await v.until(() => v.state().doctor.checking, 'Check again shows Checking…');
+    assert.equal((await again).json.fast.agents[0].state, 'needs-login');
+    // the Report runs the one check, which every screen gets too
+    claude = 'ready';
+    await r.api('POST', '/api/doctor/issue', {});
+    assert.equal(checks, 4);
+    await v.until(() => v.state().doctor.agents[0].state === 'ready', 'the Report check reached the screens');
+    v.ws.close();
+  } finally {
+    if (before === undefined) delete process.env.CHORUS_DOCTOR_HOME;
+    else process.env.CHORUS_DOCTOR_HOME = before;
+    await r.done();
+  }
+});
+
 test('serve: Report issue works before any test run, with the issue types to pick from', async () => {
   const r = await rig();
   const before = process.env.CHORUS_DOCTOR_HOME;

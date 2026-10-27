@@ -52,22 +52,17 @@ export const known = (): string[] => readJson(path.join(DOCTOR_DIR(), 'known.jso
 export const remoteTested = (): Partial<Record<AgentId, string[]>> => readJson(path.join(DOCTOR_DIR(), 'tested.json'), {});
 export function saveRemoteTested(tested: Partial<Record<AgentId, string[]>>) {
   if (JSON.stringify(tested) === JSON.stringify(remoteTested())) return;
+  // the desktop server checks again when the list changes (src/serve/server.ts, start)
   writeJson(path.join(DOCTOR_DIR(), 'tested.json'), tested);
-  // the last short check was judged against the old list: the next look at the doctor runs it again
-  fs.rmSync(path.join(DOCTOR_DIR(), 'fast.json'), { force: true });
 }
 function addKnown(entry: string) {
   writeJson(path.join(DOCTOR_DIR(), 'known.json'), [...new Set([...known(), entry])]);
 }
 
-/** The short test; the last one is kept with its time, so the Doctor page shows it without running it again. */
+/** The short test. Nothing is kept on disk: in the desktop the server runs it and holds the one answer every screen reads
+ *  (ChorusServer.checkAgents); `chorus doctor` runs it each time. */
 export async function check(agents?: AgentId[]): Promise<FastReport> {
-  const r = await fastCheck({ agents, known: known(), tested: remoteTested() });
-  if (!agents) writeJson(path.join(DOCTOR_DIR(), 'fast.json'), { at: new Date().toISOString(), report: r });
-  return r;
-}
-export function lastCheck(): { at: string; report: FastReport } | undefined {
-  return readJson(path.join(DOCTOR_DIR(), 'fast.json'), undefined);
+  return fastCheck({ agents, known: known(), tested: remoteTested() });
 }
 
 /** Each agent's newest detailed test, from the report folders (survives a restart). */
@@ -175,6 +170,8 @@ export interface ReportContext {
   projects?: number;
   /** the page: native window or browser, user agent, screen and window size, language */
   client?: Record<string, unknown>;
+  /** the short check to report: the desktop passes the server's (one check for every screen); a new one otherwise */
+  fast?: FastReport;
   /** the newest errors the server and the page saw */
   errors?: string[];
   update?: { currentVersion: string; version: string } | null;
@@ -186,7 +183,7 @@ const count = (xs: string[]) => Object.entries(xs.reduce<Record<string, number>>
 /** The report the dialog shows: the doctor's (a fresh short check, the detailed tests on file) and everything else the app can
  *  tell without the user's prompts, code or file names. The user reads and edits it before it is sent. */
 export async function reportDetails(ctx: ReportContext = {}): Promise<{ title: string; details: string; kind: IssueKind }> {
-  const fast = await check();
+  const fast = ctx.fast ?? (await check());
   const onDisk = lastDeep();
   const deep = [...(ctx.deep ?? [])];
   for (const a of AGENTS) if (!deep.some(d => d.agent === a) && onDisk[a]) deep.push(onDisk[a]!);
@@ -194,7 +191,6 @@ export async function reportDetails(ctx: ReportContext = {}): Promise<{ title: s
   const cpus = os.cpus();
   const c = ctx.client ?? {};
   const latest = await latestReleases().catch(() => ({}) as Partial<Record<AgentId, string>>);
-  const last = lastCheck();
   const lines = [
     base.body,
     '### This machine and app',
@@ -207,7 +203,6 @@ export async function reportDetails(ctx: ReportContext = {}): Promise<{ title: s
     `- Newest releases: ${Object.entries(latest).map(([a, v]) => `${a} ${v ?? '?'}`).join(', ') || '?'}`,
     `- Detailed tests on file: ${deep.map(d => `${d.agent} ${d.version ?? '?'} ${d.ok ? 'passed' : 'failed'}${'at' in d ? ` (${String((d as { at: string }).at).slice(0, 16)})` : ''}`).join(', ') || 'none'}`,
     `- Passed here before: ${known().join(', ') || 'none'}; tested after this build: ${JSON.stringify(remoteTested())}`,
-    `- Last short check shown: ${last?.at ?? 'never'}`,
     ...(ctx.chats ? [`- Chats: ${ctx.chats.length} (${count(ctx.chats.map(t => t.agent))}; ${count(ctx.chats.map(t => t.state))}); CLI versions used: ${count(ctx.chats.map(t => `${t.agent} ${t.cli_version ?? '?'}`))}`] : []),
     ...(ctx.projects !== undefined ? [`- Projects: ${ctx.projects}`] : []),
     '',
