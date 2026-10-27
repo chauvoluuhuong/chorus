@@ -23,8 +23,8 @@ import { SKIP_FLAG } from '../core/launch.ts';
 import { defaultOpener } from '../core/opener.ts';
 import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, sourceDir, syncSkills } from '../core/skills.ts';
 import type { AgentId } from '../core/types.ts';
-import { CLIS, type DeepReport } from '@chauvoluuhuong/chorus-core/doctor';
-import { check, composeIssue, firstLaunch, ghReady, host, isDue, isIssueKind, ISSUE_KINDS, lastCheck, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, reportDetails, runCommand, runDeep, sendIssue, DOCTOR_DIR } from '../core/doctor.ts';
+import { CLIS, type AgentCheck, type DeepReport, type FastReport } from '@chauvoluuhuong/chorus-core/doctor';
+import { check, composeIssue, firstLaunch, ghReady, host, isDue, isIssueKind, ISSUE_KINDS, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, reportDetails, runCommand, runDeep, sendIssue, DOCTOR_DIR } from '../core/doctor.ts';
 
 import type { NotificationInbox } from './notifications.ts';
 import type { UpdateCheck } from './updates.ts';
@@ -74,6 +74,9 @@ export interface ServeOpts {
   token?: string;
   /** called when the last client asks the server to stop (the desktop window closing) */
   onQuit?: () => void;
+  /** the doctor's short check and the install/login command runner (tests); the real ones otherwise */
+  check?: () => Promise<FastReport>;
+  runCommand?: typeof runCommand;
 }
 
 const plain = (l: RichLine): string => (typeof l === 'string' ? l : l.map(s => s[0]).join(''));
@@ -111,6 +114,11 @@ export class ChorusServer {
   /** install, sign-in and deeper-test runs the doctor popup started; polled by the page */
   private doctorJobs = new Map<string, DoctorJob>();
   private deepReports: DeepReport[] = [];
+  /** The doctor's short check: the one answer to "is each agent installed, tested, logged in" for every screen (the sidebar,
+   *  New chat, the Doctor page and the first-launch screen). Runs at start, on Run test and Check again, and after an install,
+   *  a login or a detailed test; each answer goes to every window with the state. */
+  private agentCheck: { at: string; report: FastReport } | undefined;
+  private checking: Promise<{ at: string; report: FastReport }> | undefined;
   /** the newest failed requests, for the issue report (Report on the Doctor page) */
   private errors: string[] = [];
   private noteError(where: string, e: unknown) {
@@ -183,7 +191,27 @@ export class ChorusServer {
     this.ticker = setInterval(() => this.pushState(), 500);
     if (this.o.notifications) void this.o.notifications.startup().then(() => this.pushState());
     if (this.o.updates) void this.o.updates.startup().then(() => this.pushState());
+    void this.checkAgents().catch(e => this.noteError('doctor check', e));
     return this.url;
+  }
+
+  /** Runs the short check (one at a time: a second ask waits for the running one) and pushes the answer to every window. */
+  checkAgents(): Promise<{ at: string; report: FastReport }> {
+    this.checking ??= (async () => {
+      // the first check waits briefly for this launch's backend answer, which may add versions tested after this build
+      if (!this.agentCheck) await Promise.race([this.o.notifications?.startup(), new Promise(r => setTimeout(r, 3000))]);
+      const report = await (this.o.check ?? (() => check()))();
+      return (this.agentCheck = { at: new Date().toISOString(), report });
+    })().finally(() => {
+      this.checking = undefined;
+      this.pushState();
+    });
+    this.pushState();
+    return this.checking;
+  }
+
+  private agentNow(agent: AgentId): AgentCheck | undefined {
+    return this.agentCheck?.report.agents.find(a => a.agent === agent);
   }
 
   /** The address to open: the token goes in once, then lives in a cookie. */
@@ -283,7 +311,7 @@ export class ChorusServer {
   private async doctorRun(agent: AgentId, action: string): Promise<unknown> {
     const info = CLIS[agent];
     if (!info) return { error: 'unknown agent' };
-    const a = (await check([agent])).agents[0];
+    const a = this.agentNow(agent) ?? (await check([agent])).agents[0];
     const command = action === 'install' ? a.install?.command : action === 'tested' ? a.testedInstall : action === 'login' ? info.login.join(' ') : undefined;
     if (action !== 'deep' && !command) return { error: `nothing to ${action} for ${info.name}` };
     if (action === 'login' && agent === 'agy') {
@@ -300,8 +328,10 @@ export class ChorusServer {
         job.report = run.report;
         job.dir = run.dir;
       } else {
-        job.ok = (await runCommand(command!, s => (job.output = (job.output + s).slice(-20_000)))) === 0;
+        job.ok = (await (this.o.runCommand ?? runCommand)(command!, s => (job.output = (job.output + s).slice(-20_000)))) === 0;
       }
+      // what the install, login or test changed is on every screen (also when the Doctor is closed by now) before the job ends
+      await this.checkAgents().catch(e => this.noteError('doctor check', e));
       job.done = true;
     })();
     return job;
@@ -443,18 +473,14 @@ export class ChorusServer {
       case 'GET doctor':
       case 'POST doctor/check': {
         // the short test for the popup and the Doctor page (docs/doctor.md §6, docs/mockups/desktop-doctor.html). GET shows
-        // the last one when there is one (?fresh=1 runs it); POST doctor/check is the "Run test" button.
-        const saved = method === 'GET' && !q.get('fresh') ? lastCheck() : undefined;
-        // a new check waits briefly for this launch's backend answer, which may add versions tested after this build
-        if (!saved) await Promise.race([this.o.notifications?.startup(), new Promise(r => setTimeout(r, 3000))]);
-        const fast = saved?.report ?? (await check());
-        const at = saved?.at ?? new Date().toISOString();
+        // the newest one (waiting for the one at start; ?fresh=1 runs one); POST doctor/check is "Run test" and "Check again".
+        const { report: fast, at } = method === 'GET' && !q.get('fresh') && this.agentCheck ? this.agentCheck : await this.checkAgents();
         return { lines: c.doctorLines().map(plain), chorus: host(), fast, at, due: isDue(fast), gh: ghReady(), latest: await latestReleases(), lastDeep: lastDeep(), jobs: [...this.doctorJobs.values()] };
       }
       case 'GET doctor/first':
         return { first: firstLaunch() };
       case 'POST doctor/seen':
-        markSeen(await check());
+        markSeen((this.agentCheck ?? (await this.checkAgents())).report);
         return { ok: true };
       case 'POST doctor/open': {
         const a = b.agent as AgentId;
@@ -539,7 +565,8 @@ export class ChorusServer {
       approvals: c.approvalItems('all').map(({ waiting, ...x }) => ({ ...x, since: Math.round(Date.now() / 1000 - waiting) })),
       notice: this.app.notice,
       dialogs: [...this.dialogs.values()].map(x => x.d),
-      agents: Object.fromEntries(AGENTS.map(a => [a, c.agentInfo.get(a) ?? null])),
+      // the doctor's short check, the one status of the agents (null until the first one is done)
+      doctor: this.agentCheck ? { at: this.agentCheck.at, ms: this.agentCheck.report.ms, checking: !!this.checking, agents: this.agentCheck.report.agents } : this.checking ? { checking: true, agents: null } : null,
     };
   }
 
@@ -570,7 +597,7 @@ export class ChorusServer {
       from: src ? { id: src.id, title: src.title, agent: src.agent, skip: !!src.skip_permissions } : null,
       agents: AGENTS.map(a => {
         const models = c.modelList(a);
-        return { id: a, info: c.agentInfo.get(a) ?? null, quota: quota[a] ?? null, skipFlag: SKIP_FLAG[a], models, efforts: Object.fromEntries(models.map(m => [m, effortsFor(a, m)])) };
+        return { id: a, quota: quota[a] ?? null, skipFlag: SKIP_FLAG[a], models, efforts: Object.fromEntries(models.map(m => [m, effortsFor(a, m)])) };
       }),
     };
   }
