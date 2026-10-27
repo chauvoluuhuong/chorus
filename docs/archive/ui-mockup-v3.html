@@ -216,7 +216,6 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
 .plus-n { color: var(--ok); } .minus-n { color: var(--bad); }
 .st-ok { color: var(--ok); } .st-bad { color: var(--bad); } .st-wait { color: var(--warn); font-weight: 500; }
 .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; display: inline-block; }
-@keyframes spin { to { transform: rotate(360deg); } }
 .tool-detail { padding: 0 12px 12px 40px; display: flex; flex-direction: column; gap: 8px; }
 .diff { font-family: var(--f-mono); font-size: 12px; border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; line-height: 1.6; }
 .diff div { padding: 0 10px; white-space: pre; }
@@ -568,6 +567,54 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
   .stats { grid-template-columns: repeat(2, 1fr); }
   .tiers { grid-template-columns: 1fr; }
 }
+
+/* ---------- Doctor (UC-13, added 2026-10-28; matches the desktop app 1.0.12) ---------- */
+.scn-note { font-size: 13px; color: var(--ink-2); background: var(--surface); border: 1px dashed var(--faint); border-radius: 10px; padding: 8px 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.scn-note b { font-weight: 600; }
+.scn-note:empty { display: none; }
+.sb-doctor { display: flex; align-items: center; gap: 10px; padding: 6px 8px; margin-top: auto; font-size: 12px; color: var(--muted); border-radius: 8px; }
+.sb-doctor .am { display: inline-flex; align-items: center; gap: 3px; }
+.sb-doctor .ok { color: var(--ok); } .sb-doctor .no { color: var(--warn); }
+.sb-doctor button { margin-left: auto; border: 0; background: none; display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 12.5px; padding: 4px 8px; border-radius: 6px; }
+.sb-doctor button:hover, .sb-doctor button.on { background: var(--hover); }
+.sb-doctor + .sb-foot { margin-top: 0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+.dr-rows { display: flex; flex-direction: column; gap: 10px; }
+.dr-row { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.dr-row.warn { border-color: var(--warn); }
+.dr-top { display: flex; align-items: center; gap: 10px; }
+.dr-top .v { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.dr-top .grow { flex: 1; }
+.st { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+.st.ok { background: var(--ok-soft); color: var(--ok); } .st.warn { background: var(--warn-soft); color: var(--warn); } .st.bad { background: var(--bad-soft); color: var(--bad); } .st.plain { background: var(--hover); color: var(--ink-2); }
+.dspin { width: 11px; height: 11px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; display: inline-block; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.dr-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+.dr-line span { flex: 1; min-width: 200px; }
+.dr-out { margin: 0; background: var(--term-bg); color: var(--term-fg); font-family: var(--f-mono); font-size: 12px; border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; }
+.dr-more { align-self: flex-start; border: 0; background: none; color: var(--muted); font-size: 12.5px; padding: 0; }
+.dr-more:hover { color: var(--ink); }
+.dr-detail { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+.dr-group h4 { margin: 0 0 4px; font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); font-weight: 600; display: flex; gap: 8px; align-items: center; }
+.dr-group h4 span { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.dr-group h4 .btn { margin-left: auto; text-transform: none; letter-spacing: 0; }
+.dr-check { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; font-size: 13px; padding: 2px 0; }
+.dr-check .t { color: var(--faint); font-family: var(--f-mono); font-size: 12px; }
+.dr-bar { height: 5px; border-radius: 3px; background: var(--hover); overflow: hidden; }
+.dr-bar i { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+.dr-run { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.dr-run .when { color: var(--muted); font-size: 13px; flex: 1; }
+.dr-app { display: flex; gap: 10px; align-items: baseline; font-size: 13px; color: var(--muted); }
+.dr-app b { color: var(--ink); }
+.term-win { position: absolute; right: 28px; bottom: 28px; width: min(560px, calc(100% - 56px)); background: var(--term-bg); border: 1px solid var(--term-line); border-radius: 12px; box-shadow: var(--shadow); z-index: 45; overflow: hidden; }
+.term-win .bar { height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 12px; background: #2a2926; color: var(--term-dim); font-size: 12px; }
+.term-win .bar i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.term-win pre { margin: 0; padding: 14px; color: var(--term-fg); font-family: var(--f-mono); font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; }
+.term-win .foot { padding: 0 14px 14px; display: flex; justify-content: flex-end; }
+.app.dimmed .sidebar, .app.dimmed .main { opacity: .45; }
+.dr-steps { display: flex; gap: 8px; font-size: 12px; color: var(--faint); }
+.dr-steps span.on { color: var(--ink); font-weight: 600; } .dr-steps span.done { color: var(--ok); }
 </style>
 </head>
 <body>
@@ -575,11 +622,13 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
 <div class="page">
   <header class="intro">
     <h1>Chorus desktop app · Mockup v3</h1>
+    <p><b>Updated 2026-10-28:</b> the UC-13 Doctor scenarios (first launch, a login in a terminal seen when you come back, the 30 s re-check while an agent waits, Check again, Log in and Install from Doctor, a detailed test per agent, Report) and the sidebar's agent marks and Doctor button match the desktop app 1.0.12. The other scenarios are the v1 concept: the shipped app runs each agent in its own screen (docs/phase5.md).</p>
     <p>100% Native AI CLI experience (Claude Code, Antigravity, Codex). Features direct inline approvals (y/n), 1-click context handoff via MCP confirmation, native-style artifact review with diff & fullscreen, 2-tier Shared Memory, and Workspace Tools vs Agent Bridge audit trail.</p>
   </header>
   
   <!-- Interactive Scenarios Bar -->
   <div class="scenarios" id="scenarios" role="group" aria-label="Explore scenarios"></div>
+  <div class="scn-note" id="scn-note" aria-live="polite"></div>
   
   <!-- Window Container -->
   <section class="window" id="window" aria-label="Chorus app window">
@@ -659,8 +708,24 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     { id: 'memory', label: 'Shared Memory (Tier 1 & Tier 2)', uc: 'UC-10' },
     { id: 'skills', label: 'Skills Studio (live search)', uc: 'UC-09' },
     { id: 'activity', label: 'Activity (Workspace Tools vs Agent Bridge)', uc: 'UC-11' },
-    { id: 'mention', label: '@-Mentions & /-Skills', uc: 'UC-12' }
+    { id: 'mention', label: '@-Mentions & /-Skills', uc: 'UC-12' },
+    { id: 'doc_first', label: 'Doctor: first launch, not logged in', uc: 'UC-13' },
+    { id: 'doc_terminal', label: 'Logged in from a terminal → back to Chorus', uc: 'UC-13' },
+    { id: 'doc_wait', label: 'Chorus on another screen: 30 s re-check', uc: 'UC-13' },
+    { id: 'doc_check', label: 'Check again', uc: 'UC-13' },
+    { id: 'doc_login', label: 'Log in / Install from Doctor', uc: 'UC-13' },
+    { id: 'doc_test1', label: 'Test one agent (detailed test)', uc: 'UC-13' },
+    { id: 'doc_report', label: 'Report issue (same check)', uc: 'UC-13' }
   ];
+  const SCN_NOTE = {
+    doc_first: '<b>First launch.</b> The server runs one short check at start; this screen, the sidebar marks, New chat and the Doctor dot all read it. Try <b>Log in</b> or <b>Check again</b>.',
+    doc_terminal: '<b>Logged in from a terminal.</b> Chorus is in the background and does nothing while you are away. Click <b>Switch back to Chorus</b>.',
+    doc_wait: '',
+    doc_check: '<b>Check again</b> stays for when the window never lost focus. It shows Checking… because you asked. (In this mock the login already happened.)',
+    doc_login: '<b>Log in or Install from Doctor.</b> The server checks again before the job ends, so the sidebar and New chat are right the moment it is done.',
+    doc_test1: '<b>Each agent on its own.</b> Open <b>Show details</b> and press <b>Run detailed test</b> / <b>Test again</b> for just that CLI; the others keep working.',
+    doc_report: '<b>Report issue</b> runs the same check, quietly, so the report never disagrees with the screens. Nothing is saved on disk.'
+  };
 
   // Global State
   const S = {
@@ -741,6 +806,36 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     S.slashMenu = false;
     S.skipPermissions = false;
     S.bell = false;
+    drReset();
+    S.scnNote = SCN_NOTE[id] || '';
+
+    if (id.startsWith('doc_')) {
+      const D = S.dr;
+      S.screen = 'home';
+      if (id === 'doc_first') { D.popup = true; D.open.claude = true; }
+      if (id === 'doc_terminal') { D.terminal = true; }
+      if (id === 'doc_check') { S.view = 'doctor'; D.loggedOutside = true; }
+      if (id === 'doc_login') { S.view = 'doctor'; }
+      if (id === 'doc_test1') { S.view = 'doctor'; D.agents.claude.st = 'ready'; D.open.claude = true; }
+      if (id === 'doc_report') { S.view = 'doctor'; D.report = true; }
+      if (id === 'doc_wait') {
+        S.view = 'doctor';
+        // the page asks every 30 s while an agent waits and the window is visible (shortened to 5 s here), for 10 min at most
+        let left = 5, n = 0;
+        const note = () => (S.scnNote = S.dr.agents.claude.st === 'ready'
+          ? '<b>Loop stopped</b>: every agent that can be Ready is Ready (only Not installed is left, which the loop also covers until 10 min).'
+          : `<b>Chorus is visible on your second screen</b>; you log in on the first one and never click Chorus. Re-check ${n ? `#${n} done, ` : ''}next in <b>${left} s</b> (30 s in the app) · stops when all are Ready, the window is hidden, or after 10 min.`);
+        note();
+        every(1000, () => {
+          if (S.view !== 'doctor' || S.scenario !== 'doc_wait' || S.dr.agents.claude.st === 'ready') return;
+          left--;
+          if (left <= 0) { n++; left = 5; if (n === 2) drCheck(true, () => { S.dr.agents.claude.st = 'ready'; note(); later(50, () => toast('Re-check found the login: Claude Code is Ready')); }); }
+          note();
+          render();
+        });
+      }
+      return render();
+    }
 
     if (id === 'home') {
       S.screen = 'home';
@@ -813,6 +908,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
         ${recents.map(([t, a, on]) => `<button class="recent ${on ? 'on' : ''}" type="button" data-open-chat="t_cake"><span>${t}</span>${mark(a, 'xs')}</button>`).join('')}
       </div>
 
+      ${drSideHTML()}
       <div class="sb-foot">
         <button class="nav" style="width:auto;flex:1" type="button" data-toast="Settings & CLI config">${ic('gear')}Settings</button>
         <div class="theme-pill" title="Theme Mode">
@@ -1650,6 +1746,184 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
     </div>`;
   }
 
+  /* ---------- Doctor (UC-13, added 2026-10-28) ----------
+     Matches the desktop app 1.0.12 (src/desktop/app.js, docs/doctor.md §6.5.1): one short check on the server is the only status
+     of the agents, read by the sidebar marks, New chat, the Doctor button's dot, the first-launch screen and the Doctor page. */
+  const DR_TESTS = ["Starts a chat with Chorus's note", "Reads the agent's replies", 'Shows commands and their output', 'Saves chat history', 'Uses Chorus tools', 'Resumes a chat', 'Shows approval requests'];
+  let drTimers = [];
+  const later = (ms, fn) => drTimers.push(setTimeout(fn, ms));
+  const every = (ms, fn) => drTimers.push(setInterval(fn, ms));
+  function drReset() {
+    drTimers.forEach((t) => { clearTimeout(t); clearInterval(t); });
+    drTimers = [];
+    S.dr = {
+      agents: {
+        claude: { v: '2.1.306', st: 'needs-login', deep: null },
+        codex: { v: '0.163.0', st: 'ready', deep: { pass: 7, when: '26 Oct, 14:02' } },
+        agy: { v: null, st: 'missing', deep: null }
+      },
+      checking: false, popup: false, terminal: false, report: false, open: {}, job: {}, note: '', at: 'just now · 1.7 s', loop: null
+    };
+  }
+  drReset();
+  const drOrder = ['claude', 'codex', 'agy'];
+  const drName = (k) => (k === 'agy' ? 'Antigravity CLI' : AG[k].name);
+
+  /** One agent's status, the same on every screen (agentStatus in the app). `jobs` false: the sidebar and New chat. */
+  function drStatus(k, jobs = true) {
+    const a = S.dr.agents[k];
+    const job = jobs ? S.dr.job[k] : null;
+    const s = (kind, label, line = '', acts = [], busy = false) => ({ kind, label, line, acts, busy });
+    if (job && job.kind === 'login') return s('plain', 'Logging in…', '', [], true);
+    if (job && job.kind === 'install') return s('plain', 'Installing…', '', [], true);
+    if (S.dr.checking) return s('plain', 'Checking…', '', [], true);
+    if (a.st === 'missing') return s('warn', 'Not installed', 'Installs its newest release, or add it later.', [['Install', `install:${k}`, true], ['Open page ↗', 'toast:Opens the CLI page in the browser']]);
+    if (a.st === 'needs-login') return s('warn', 'Not logged in', 'Log in to use it here. Logged in from a terminal? It shows when you come back to Chorus, or Check again.', [['Log in', `login:${k}`, true], ['Check again', 'check']]);
+    if (job && job.kind === 'deep') return s('plain', `Detailed test · ${job.step} of 7`, `Now: ${DR_TESTS[job.step] || 'finishing'}`, [], true);
+    if (a.st === 'untested') return s('warn', 'New version', `Chorus is tested with an earlier version; the detailed test checks that ${a.v} works too.`, jobs ? [['Run detailed test', `deep:${k}`]] : []);
+    return s('ok', 'Ready', 'Logged in · a version Chorus is tested with.');
+  }
+  const drPill = (st) => `<span class="st ${st.kind}">${st.busy ? '<span class="dspin"></span>' : st.kind === 'ok' ? '✔' : '⚠'} ${esc(st.label)}</span>`;
+  const drMark = (k) => { const st = drStatus(k, false); return st.kind === 'plain' ? '…' : st.kind === 'ok' ? '<span class="ok">✓</span>' : '<span class="no">✗</span>'; };
+  const drDot = () => { const ks = drOrder.map((k) => drStatus(k)); return ks.some((s) => s.kind === 'bad') ? 'bad' : ks.some((s) => s.kind !== 'ok') ? 'warn' : 'ok'; };
+  const drTestable = (k) => ['ready', 'untested'].includes(S.dr.agents[k].st);
+
+  function drSideHTML() {
+    return `<div class="sb-doctor">${drOrder.map((k) => `<span class="am" title="${esc(drName(k))} · ${esc(drStatus(k, false).label)}">${mark(k, 'xs')}${drMark(k)}</span>`).join('')}
+      <button type="button" class="${S.view === 'doctor' ? 'on' : ''}" data-view="doctor"><span class="dot ${drDot()}"></span>Doctor</button></div>`;
+  }
+
+  function drRowHTML(k) {
+    const a = S.dr.agents[k];
+    const st = drStatus(k);
+    const job = S.dr.job[k];
+    const open = S.dr.open[k];
+    const acts = st.acts.map(([label, act, primary]) => `<button class="btn sm ${primary ? 'btn-dark' : ''}" type="button" data-dr="${act}">${esc(label)}</button>`).join('');
+    const bar = job && job.kind === 'deep' ? `<div class="dr-bar"><i style="width:${Math.round((job.step / 7) * 100)}%"></i></div>` : '';
+    const out = job && job.out ? `<pre class="dr-out">${esc(job.out)}</pre>` : '';
+    const deep = job && job.kind === 'deep'
+      ? DR_TESTS.map((t, i) => [i < job.step ? '✔' : i === job.step ? '◌' : '·', t, i < job.step ? `${(8 + i * 3) % 19 + 4} s` : ''])
+      : a.deep ? DR_TESTS.map((t, i) => ['✔', t, `${(8 + i * 3) % 19 + 4} s`]) : null;
+    const testBtn = drTestable(k) && !job ? `<button class="btn sm" type="button" data-dr="deep:${k}">${a.deep ? 'Test again' : 'Run detailed test'}</button>` : '';
+    const detail = open ? `<div class="dr-detail">
+        <div class="dr-group"><h4>Short test <span>${esc(S.dr.checking ? 'running' : S.dr.at)}</span></h4>
+          ${[['Installed', a.v ? `${a.v} · native installer` : 'not found on PATH'], ['Tested version', a.v ? 'yes' : '–'], ['Logged in', a.st === 'needs-login' ? 'no' : a.v ? 'yes' : '–']].map(([t, v]) => `<div class="dr-check"><span>${v === 'no' || v === 'not found on PATH' ? '⚠' : '✔'}</span><span>${t}</span><span class="t">${esc(v)}</span></div>`).join('')}</div>
+        <div class="dr-group"><h4>Detailed test <span>${job && job.kind === 'deep' ? 'running · you can keep working' : a.deep ? `last run ${a.deep.when} · ${a.deep.pass} of 7` : 'not run for this version'}</span>${testBtn}</h4>
+          ${deep ? deep.map(([m, t, s]) => `<div class="dr-check"><span>${m}</span><span>${esc(t)}</span><span class="t">${s}</span></div>`).join('') : '<div style="color:var(--faint);font-size:13px">Each agent can be tested on its own: about 2 min, a few short turns on its plan.</div>'}</div>
+      </div>` : '';
+    return `<div class="dr-row ${st.kind === 'warn' || st.kind === 'bad' ? 'warn' : ''}">
+      <div class="dr-top">${mark(k)}<b>${esc(drName(k))}</b><span class="v">${esc(a.v || '')}</span><span class="grow"></span>${drPill(st)}</div>
+      ${st.line || acts ? `<div class="dr-line"><span>${esc(st.line)}</span>${acts}</div>` : ''}${bar}${out}
+      ${a.st !== 'missing' || open ? `<button class="dr-more" type="button" data-dr="open:${k}" aria-expanded="${!!open}">${open ? '▾ Hide' : '▸ Show'} details</button>${detail}` : ''}
+    </div>`;
+  }
+  const drRowsHTML = () => `<div class="dr-rows">${drOrder.map(drRowHTML).join('')}</div>`;
+
+  function doctorHTML() {
+    const busy = S.dr.checking || Object.values(S.dr.job).some((j) => j.kind === 'deep');
+    const need = drOrder.filter((k) => S.dr.agents[k].st !== 'ready').length;
+    return `<div class="main">${topbarHTML('')}
+      <div class="pg"><div class="pg-inner">
+        <div class="pg-title"><div><h2>Doctor</h2><p>Your AI coding CLIs: are they installed, on a version Chorus is tested with, and logged in.</p></div></div>
+        <div class="dr-app"><b>Chorus 1.0.12</b><span>core 1.0.0 · installer</span></div>
+        <div class="dr-run"><button class="btn btn-dark" type="button" data-dr="check" ${busy ? 'disabled' : ''}>${S.dr.checking ? '<span class="dspin"></span> Testing…' : '▶ Run test'}</button>
+          <span class="when">${S.dr.checking ? 'Checking 3 agents · no model calls' : `Last test: ${esc(S.dr.at)} · ${need ? `${need} need${need > 1 ? '' : 's'} you` : 'all ready'}`}</span>
+          <button class="btn" type="button" data-dr="report">Report issue</button></div>
+        ${drRowsHTML()}
+      </div></div>
+    </div>`;
+  }
+
+  function drPopupHTML() {
+    if (!S.dr.popup) return '';
+    const ready = drOrder.filter((k) => drStatus(k).kind === 'ok').length;
+    return `<div class="scrim"><div class="modal wide" role="dialog" aria-label="Your agents">
+      <div class="modal-head"><div><h3>${S.dr.checking ? 'Checking your agents' : 'Your agents'}</h3><p>${S.dr.checking ? 'Chorus looks for Claude Code, Codex and Antigravity on this computer. No model calls, a few seconds.' : `${ready} of 3 ready to use. You can fix the rest now or later from Doctor.`}</p></div><span style="font-size:12px;color:var(--faint)">Chorus 1.0.12 · core 1.0.0</span></div>
+      <div class="dr-steps" style="margin:12px 0"><span class="done">✔ Short check</span><span>Detailed test</span><span>Ready</span></div>
+      ${drRowsHTML()}
+      <div style="display:flex;gap:8px;align-items:center;margin-top:14px"><span style="flex:1;color:var(--faint);font-size:12.5px">Detailed test: about 2 min per agent. Also in Doctor, one agent at a time.</span>
+        <button class="btn" type="button" data-dr="deepall">Run detailed test</button><button class="btn btn-accent" type="button" data-dr="close">Skip, start using Chorus</button></div>
+    </div></div>`;
+  }
+
+  function drTerminalHTML() {
+    if (!S.dr.terminal) return '';
+    return `<div class="term-win" role="dialog" aria-label="Terminal">
+      <div class="bar"><i style="background:#E36A5C"></i><i style="background:#E0B84A"></i><i style="background:#6CC070"></i><span style="flex:1;text-align:center">Terminal — zsh</span></div>
+      <pre>~ % claude auth login
+Opening the browser to sign in…
+<span style="color:var(--term-green)">✔ Logged in</span>
+~ % </pre>
+      <div class="foot"><button class="btn btn-accent" type="button" data-dr="focus">Switch back to Chorus</button></div>
+    </div>`;
+  }
+
+  function drReportHTML() {
+    if (!S.dr.report) return '';
+    const line = (k) => { const a = S.dr.agents[k]; return `${k.padEnd(6)} ${a.v || '–'} · ${a.st}`; };
+    return `<div class="scrim"><div class="modal wide" role="dialog" aria-label="Report an issue">
+      <div class="modal-head"><div><h3>Report an issue</h3><p>A short check runs now, quietly: the same one every screen shows.</p></div></div>
+      <label style="display:grid;gap:6px;margin-top:12px;font-size:12.5px;color:var(--muted)">Type<select style="height:34px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:0 8px"><option>An agent does not work with Chorus</option><option>Bug</option><option>Feature request</option><option>Question</option><option>Other</option></select></label>
+      <pre class="dr-out" style="margin-top:12px">### Agents (short check, just now)
+${drOrder.map(line).join('\n')}
+### This machine and app
+Chorus 1.0.12, core 1.0.0, installer …</pre>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn" type="button" data-dr="close">Cancel</button><button class="btn btn-dark" type="button" data-dr="sent">Send to GitHub</button></div>
+    </div></div>`;
+  }
+
+  /** The server's short check: shown (Checking… everywhere) when the user asked, quiet (statuses stay) on focus and in the loop. */
+  function drCheck(quiet, then) {
+    if (!quiet) S.dr.checking = true;
+    render();
+    later(quiet ? 700 : 1300, () => {
+      S.dr.checking = false;
+      S.dr.at = 'just now · 0.2 s';
+      then && then();
+      render();
+    });
+  }
+
+  function drAct(act) {
+    const [what, k] = act.split(':');
+    const D = S.dr;
+    if (what === 'open') { D.open[k] = !D.open[k]; return render(); }
+    if (what === 'toast') return toast(act.slice(6));
+    if (what === 'close') { D.popup = false; D.report = false; return render(); }
+    if (what === 'report') { D.report = true; return drCheck(true); }
+    if (what === 'sent') { D.report = false; render(); return toast('Sent: a low-priority user report on GitHub'); }
+    if (what === 'check') return drCheck(false, () => { if (D.loggedOutside) D.agents.claude.st = 'ready'; });
+    if (what === 'focus') {
+      D.terminal = false;
+      D.loggedOutside = true;
+      S.scnNote = '<b>Window focus</b> → <code>POST /api/doctor/refresh</code>: a quiet check. The marks stay as they are until the new answer replaces them. No Check again needed.';
+      render();
+      return drCheck(true, () => { D.agents.claude.st = 'ready'; later(50, () => toast('Claude Code is Ready on every screen')); });
+    }
+    if (what === 'login' || what === 'install') {
+      D.job[k] = { kind: what, out: what === 'login' ? `$ claude auth login\nOpening the browser to sign in…` : `$ npm install -g @google/antigravity-cli\n…` };
+      render();
+      return later(1800, () => {
+        D.job[k].out += what === 'login' ? '\n✔ Logged in' : '\nadded 1 package';
+        render();
+        // the server checks before the job ends: the sidebar and New chat are already right when "done" shows
+        later(600, () => drCheck(true, () => { D.agents[k].st = 'ready'; if (what === 'install') D.agents[k].v = '1.4.7'; delete D.job[k]; later(50, () => toast(`${drName(k)}: done`)); }));
+      });
+    }
+    if (what === 'deep' || what === 'deepall') {
+      const ks = what === 'deep' ? [k] : drOrder.filter(drTestable);
+      ks.forEach((x) => { D.job[x] = { kind: 'deep', step: 0 }; D.open[x] = true; });
+      render();
+      const id = setInterval(() => {
+        let left = 0;
+        ks.forEach((x) => { const j = D.job[x]; if (!j) return; j.step++; if (j.step >= 7) { delete D.job[x]; D.agents[x].deep = { pass: 7, when: 'today' }; D.agents[x].st = 'ready'; toast(`${drName(x)}: works with Chorus`); } else left++; });
+        render();
+        if (!left) clearInterval(id);
+      }, 650);
+      drTimers.push(id);
+    }
+  }
+
   /* ---------- Main Render Function ---------- */
   function render() {
     // Render top scenario selector
@@ -1664,10 +1938,12 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
     if (S.view === 'skills') mainView = skillsHTML();
     else if (S.view === 'memory') mainView = memoryHTML();
     else if (S.view === 'activity') mainView = activityHTML();
+    else if (S.view === 'doctor') mainView = doctorHTML();
     else mainView = S.screen === 'home' ? homeHTML() : threadHTML();
 
     const appClass = S.artifact && S.artFullscreen ? 'app art-full' : 'app';
-    $('#root').innerHTML = `<div class="${appClass}">${sidebarHTML()}${mainView}${artifactPanelHTML()}</div>`;
+    $('#root').innerHTML = `<div class="${appClass}${S.dr.terminal ? ' dimmed' : ''}">${sidebarHTML()}${mainView}${artifactPanelHTML()}</div>${drPopupHTML()}${drReportHTML()}${drTerminalHTML()}`;
+    $('#scn-note').innerHTML = S.scnNote || '';
     
     // Auto-scroll thread if applicable
     const t = $('#thread');
@@ -1735,6 +2011,7 @@ Files: app/order/page.tsx, components/OrderForm.tsx, prisma/schema.prisma</div>
       S.artifact = null;
       return render();
     }
+    if (d.dr) return drAct(d.dr);
     if (d.view) {
       S.view = d.view;
       S.screen = 'thread';

@@ -655,10 +655,23 @@ async function runShortTest() {
  *  the state. The server runs at most one every 10 s, so focus and visibility firing together cost one check. */
 function recheckOnFocus() {
   if (document.visibilityState !== 'visible') return;
+  waitSince = Date.now();
   api('POST', '/api/doctor/refresh').catch(() => {});
 }
 window.addEventListener('focus', recheckOnFocus);
 document.addEventListener('visibilitychange', recheckOnFocus);
+
+/** While an agent waits for the user (not installed, not logged in, a new version) and the window is visible, the server checks
+ *  again every 30 s: a login on another screen shows even when Chorus never lost focus. It stops when all are Ready, the window is
+ *  hidden, or after 10 min (the window coming back starts the 10 min again). */
+const WAIT_EVERY = 30_000;
+const WAIT_FOR = 10 * 60_000;
+let waitSince = Date.now();
+setInterval(() => {
+  const waiting = (drAgents() ?? []).some(a => a.state !== 'ready');
+  if (!waiting || document.visibilityState !== 'visible' || Date.now() - waitSince > WAIT_FOR) return;
+  api('POST', '/api/doctor/refresh', { waiting: true }).catch(() => {});
+}, WAIT_EVERY);
 
 const drJob = (agent, action) => (S.docJobs[agent]?.action === action || (!action && S.docJobs[agent]) ? S.docJobs[agent] : null);
 const drRunning = agent => !!S.docJobs[agent] && !S.docJobs[agent].done;
@@ -760,13 +773,17 @@ function drDetailed(a) {
   return [head, r.results.map(drResult)];
 }
 
+/** Each agent can be tested on its own, any time it is installed and logged in (about 2 min, a few short turns on its plan). */
+const drTestButton = a =>
+  frTestable(a) && !drRunning(a.agent) ? `<button class="btn dr-test1" data-act="doc-run" data-arg="${a.agent}:deep">${drJob(a.agent, 'deep') || S.doctor?.lastDeep?.[a.agent] ? 'Test again' : 'Run detailed test'}</button>` : '';
+
 /** An agent's details behind "Show details": the short test's checks, the detailed test, the suggested version, the install. */
 function drDetail(a) {
   const deep = drDetailed(a);
   return `<div class="dr-detail">
       <div class="dr-sub">${drVersionLine(a)}</div>
       <div class="dr-group"><h4>Short test <span>${esc(drChecking() ? 'running' : drWhenShort())}</span></h4>${drChecking() ? '' : drChecks(drShort(a))}</div>
-      <div class="dr-group"><h4>Detailed test <span>${deep ? esc(deep[0]) : 'not run for this version'}</span></h4>${deep ? drChecks(deep[1]) : '<div class="faint" style="font-size:13px">Chorus asks for it when a version is new to it.</div>'}</div>
+      <div class="dr-group"><h4>Detailed test <span>${deep ? esc(deep[0]) : 'not run for this version'}</span>${drTestButton(a)}</h4>${deep ? drChecks(deep[1]) : '<div class="faint" style="font-size:13px">Chorus asks for it when a version is new to it.</div>'}</div>
       ${a.state !== 'missing' && a.testedInstall && a.version !== a.newestTested ? `<div class="dr-group"><h4>Suggested version</h4><div class="dr-cmd"><span>${esc(a.testedInstall)}</span><button class="btn" data-act="doc-run" data-arg="${a.agent}:tested">Install</button></div></div>` : ''}
       ${a.state === 'missing' && a.install ? `<div class="dr-group"><h4>Install</h4><div class="dr-cmd"><span>${esc(a.install.command)}</span><button class="btn" data-act="doc-copy" data-arg="${esc(a.install.command)}">Copy</button></div></div>` : ''}
     </div>`;

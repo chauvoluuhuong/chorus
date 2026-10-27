@@ -220,10 +220,12 @@ export class ChorusServer {
     return this.checking;
   }
 
-  /** The window came back to the front: a quiet check, so a login or an install done in a terminal shows without Check again.
-   *  At most one every 10 s, however many windows ask; none before the check at start. */
-  refreshAgents(): boolean {
+  /** The window came back to the front, or (`waiting`) the page's 30 s loop while an agent waits for the user: a quiet check,
+   *  so a login or an install done in a terminal shows without Check again. At most one every 10 s, however many windows ask;
+   *  none before the check at start; the loop's asks run only while some agent is not Ready. */
+  refreshAgents(o: { waiting?: boolean } = {}): boolean {
     if (this.checking || !this.agentCheck || Date.now() - Date.parse(this.agentCheck.at) < 10_000) return false;
+    if (o.waiting && this.agentCheck.report.agents.every(a => a.state === 'ready')) return false;
     void this.checkAgents({ quiet: true }).catch(e => this.noteError('doctor check', e));
     return true;
   }
@@ -496,7 +498,7 @@ export class ChorusServer {
         return { lines: c.doctorLines().map(plain), chorus: host(), fast, at, due: isDue(fast), gh: ghReady(), latest: await latestReleases(), lastDeep: lastDeep(), jobs: [...this.doctorJobs.values()] };
       }
       case 'POST doctor/refresh':
-        return { ran: this.refreshAgents() };
+        return { ran: this.refreshAgents({ waiting: b.waiting === true }) };
       case 'GET doctor/first':
         return { first: firstLaunch() };
       case 'POST doctor/seen':
