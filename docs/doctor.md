@@ -346,6 +346,15 @@ clipboard; zip shown in Finder), and **Cancel**. Nothing is sent before one of t
 
 These sit behind the local API's existing token (`docs/phase5.md` §2).
 
+### 6.5.1 One status for every screen (2026-10-27)
+
+The server's short check is the only answer to "is this agent installed, tested, logged in". `chorus serve` runs it at start,
+on Run test and Check again, and after an install, a login or a detailed test (before that job ends), and pushes it with the
+state (`state.doctor`). The sidebar, the New chat cards, the Doctor button's dot, the first-launch screen and the Doctor page
+all read it through one function (`agentStatus` in `src/desktop/app.js`), and the first-launch screen and the Doctor page draw the
+same rows. Words: "Not logged in" and "Log in" everywhere. A login done outside Chorus (in a terminal) is seen at the next check:
+every "Not logged in" says "Check again to update"; Chorus does not check by itself when the window comes back.
+
 ### 6.6 Before building
 
 The popup, its row states, the Doctor page and the report dialog go into a mockup first (`docs/mockups/`, the desktop's look),
