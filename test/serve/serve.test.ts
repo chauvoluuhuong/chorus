@@ -439,6 +439,14 @@ test('serve: the window coming back checks again quietly, at most once every 10 
     assert.equal(checks, 2);
     assert.ok(!seen.includes(true), 'statuses never went to Checking…');
     assert.notEqual(v.state().doctor.at, at);
+    // the page's 30 s loop: it runs only while an agent waits for the user (agy is not installed here)
+    (r.srv as any).agentCheck.at = new Date(Date.now() - 11_000).toISOString();
+    assert.equal((await r.api('POST', '/api/doctor/refresh', { waiting: true })).json.ran, true);
+    await v.until(() => checks === 3 && !(r.srv as any).checking, 'the loop check');
+    (r.srv as any).agentCheck.report.agents.forEach((a: AgentCheck) => (a.state = 'ready'));
+    (r.srv as any).agentCheck.at = new Date(Date.now() - 11_000).toISOString();
+    assert.equal((await r.api('POST', '/api/doctor/refresh', { waiting: true })).json.ran, false, 'all Ready: the loop stops');
+    assert.equal(checks, 3);
     // Check again is still there and still shows Checking…
     claude = 'needs-login';
     const again = r.api('POST', '/api/doctor/check');
@@ -447,7 +455,7 @@ test('serve: the window coming back checks again quietly, at most once every 10 
     // the Report runs the one check, which every screen gets too
     claude = 'ready';
     await r.api('POST', '/api/doctor/issue', {});
-    assert.equal(checks, 4);
+    assert.equal(checks, 5);
     await v.until(() => v.state().doctor.agents[0].state === 'ready', 'the Report check reached the screens');
     v.ws.close();
   } finally {

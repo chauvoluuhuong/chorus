@@ -355,7 +355,12 @@ all read it through one function (`agentStatus` in `src/desktop/app.js`), and th
 same rows. Words: "Not logged in" and "Log in" everywhere. A login done outside Chorus (in a terminal) is seen at the next check:
 every "Not logged in" says so; Chorus also checks again, quietly (the statuses stay until the answer), when the window comes
 back to the front (`focus` or `visibilitychange`, `POST /api/doctor/refresh`, at most one every 10 s). Check again stays for a
-login while the window kept focus. Nothing of the check is kept on disk any more (`fast.json` and `lastCheck()` are gone): the
+login while the window kept focus. While an agent waits for the user (Not installed, Not logged in, New version) and the
+window is visible, the page also asks every 30 s (`{ waiting: true }`; the server runs it only while some agent is not Ready),
+for at most 10 min after the window last came to the front: a login on another screen shows even when Chorus never lost focus.
+One short check costs about 0.1 s warm (1.7 s cold) and starts each CLI's version and login check, so it never loops when
+everything is Ready or the window is hidden. Each agent's "Show details" has its own **Run detailed test** / **Test again**,
+so one CLI can be tested without the others (they run side by side). Nothing of the check is kept on disk any more (`fast.json` and `lastCheck()` are gone): the
 server's answer is the one the Report uses too, and `chorus doctor` runs its own each time.
 
 ### 6.6 Before building
