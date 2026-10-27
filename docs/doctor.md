@@ -353,7 +353,10 @@ on Run test and Check again, and after an install, a login or a detailed test (b
 state (`state.doctor`). The sidebar, the New chat cards, the Doctor button's dot, the first-launch screen and the Doctor page
 all read it through one function (`agentStatus` in `src/desktop/app.js`), and the first-launch screen and the Doctor page draw the
 same rows. Words: "Not logged in" and "Log in" everywhere. A login done outside Chorus (in a terminal) is seen at the next check:
-every "Not logged in" says "Check again to update"; Chorus does not check by itself when the window comes back.
+every "Not logged in" says so; Chorus also checks again, quietly (the statuses stay until the answer), when the window comes
+back to the front (`focus` or `visibilitychange`, `POST /api/doctor/refresh`, at most one every 10 s). Check again stays for a
+login while the window kept focus. Nothing of the check is kept on disk any more (`fast.json` and `lastCheck()` are gone): the
+server's answer is the one the Report uses too, and `chorus doctor` runs its own each time.
 
 ### 6.6 Before building
 

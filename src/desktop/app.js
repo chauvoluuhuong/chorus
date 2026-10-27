@@ -599,7 +599,7 @@ function skillsHtml() {
 // One doctor. The server's short check, pushed with the state (S.state.doctor), is the only status of the agents: the sidebar,
 // the New chat cards, the Doctor button's dot, the first-launch screen and the Doctor page all read it through agentStatus, and
 // the first-launch screen and the Doctor page draw the same rows (doctorRow). Startup, Run test, Check again, an install, a
-// login and a detailed test all end in a new check on the server, which every window gets.
+// login, a detailed test and the window coming back to the front all end in a new check on the server, which every window gets.
 
 const DR_STEPS = 7;
 const DR_METHOD = { native: 'native installer', npm: 'npm', brew: 'Homebrew', other: 'installed by hand' };
@@ -615,8 +615,9 @@ const DR_EFFECT = {
 };
 const FR_TESTS = { envelope: "Starts a chat with Chorus's note", hello: "Reads the agent's replies", shell: 'Shows commands and their output', transcript: 'Saves chat history', mcp: 'Uses Chorus tools', resume: 'Resumes a chat', approval: 'Shows approval requests' };
 const FR_IDS = Object.keys(FR_TESTS);
-/** A login outside Chorus (in a terminal) is not seen until the next check: every "Not logged in" says how to update it. */
-const LOGIN_HINT = 'Logged in from a terminal? Check again to update.';
+/** A login outside Chorus (in a terminal) shows when the window comes back to the front (recheckOnFocus); Check again stays for
+ *  when it does not, or the window never lost focus. */
+const LOGIN_HINT = 'Logged in from a terminal? It shows when you come back to Chorus, or Check again.';
 
 /** The agents as the server's last short check saw them; null until the first one is done. */
 const drAgents = () => S.state?.doctor?.agents ?? null;
@@ -649,6 +650,15 @@ async function runShortTest() {
   S.docRan = true;
   drawDoctor();
 }
+
+/** The window came back (switched to, unhidden): the server checks again quietly, the statuses stay until the answer comes with
+ *  the state. The server runs at most one every 10 s, so focus and visibility firing together cost one check. */
+function recheckOnFocus() {
+  if (document.visibilityState !== 'visible') return;
+  api('POST', '/api/doctor/refresh').catch(() => {});
+}
+window.addEventListener('focus', recheckOnFocus);
+document.addEventListener('visibilitychange', recheckOnFocus);
 
 const drJob = (agent, action) => (S.docJobs[agent]?.action === action || (!action && S.docJobs[agent]) ? S.docJobs[agent] : null);
 const drRunning = agent => !!S.docJobs[agent] && !S.docJobs[agent].done;
