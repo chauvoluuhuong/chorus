@@ -61,7 +61,7 @@ scattered. Chorus keeps one **thread** of work across agents:
 ## Repository layout
 
 ```
-CLAUDE.md        start here: context, rules and next steps for AI coding sessions
+AGENTS.md        start here: context, rules and next steps for AI coding sessions (CLAUDE.md imports it)
 docs/            architecture, roadmap, testing, per-CLI integration docs
 tools/probe/     capability probe: runs a real CLI through fixed scenarios, records fixtures
 fixtures/        captured real CLI output, per CLI and version (used by contract tests)
