@@ -66,7 +66,7 @@ export function save(ctx: Ctx, name: string, data: string | object) {
 
 import { spawn } from 'node:child_process';
 export interface RunOut { stdout: string; stderr: string; code: number | null; timedOut: boolean; ms: number }
-/** Run a CLI with stdin closed and a clean env (CLAUDE.md rule 5). */
+/** Run a CLI with stdin closed and a clean env (rule 5 in the README). */
 export function runCli(bin: string, args: string[], cwd: string, timeoutMs = 240_000): Promise<RunOut> {
   const t0 = Date.now();
   return new Promise(resolve => {

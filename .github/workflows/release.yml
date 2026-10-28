@@ -3,7 +3,7 @@
 #   chorus-linux-x64-<v>.tar.gz, chorus-linux-arm64-<v>.tar.gz                  Linux runners of each arch (Docker: Debian 11 for the
 #                                                                               command, Ubuntu 22.04 for the window, desktop/chorus-desktop)
 #   SHA256SUMS                                                                  over all of the above
-# Two channels, both by tag (AGENTS.md, "Releases"; the build-app-workflow skill):
+# Two channels, both by tag (README "Releases"; the build-app-workflow skill):
 #   preview      a vX.Y.Z-preview.N tag, pushed after each dev → main merge. The version comes from the tag and is stamped into
 #                the build only. Makes the prerelease of that tag and replaces the one rolling prerelease "preview" with the same
 #                files, VERSION and SHA256SUMS: `install.sh --preview` installs from there.

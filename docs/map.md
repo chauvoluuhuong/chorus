@@ -1,6 +1,6 @@
 # Docs map
 
-Read in this order: [`AGENTS.md`](../AGENTS.md) (decisions, workflow, rules) → this file → the docs of the area you are
+Read in this order: [`README.md`](../README.md) (install, flow, rules) → this file → the docs of the area you are
 touching → its plan and failures. Every fact has one home; other files link to it instead of repeating it.
 
 | Folder / file | What's inside | The skill's name for it |
