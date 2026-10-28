@@ -62,7 +62,6 @@ const S = {
   docNotNow: new Set(),
   docKept: new Set(),
   docRan: false,
-  docChecking: false,
   attached: null,
   screen: { live: true, exited: false, waiting: true },
   shownDialogs: new Set(),
@@ -132,6 +131,7 @@ function onState(st) {
   renderUpdate(st.update);
   const first = !S.state;
   const previousNews = S.state?.notifications;
+  const doctorChanged = JSON.stringify(S.state?.doctor) !== JSON.stringify(st.doctor);
   S.state = st;
   if (JSON.stringify(previousNews) !== JSON.stringify(st.notifications) && !$('#news').hidden && !S.newsDetail) void loadNews();
   if (!S.homeGuess) S.homeGuess = st.project.split('/').slice(0, 3).join('/');
@@ -152,7 +152,8 @@ function onState(st) {
   // first load: the doctor's popup when this is a first launch or something was updated (docs/doctor.md §6.1)
   if (first) void firstDoctor();
   renderChrome();
-  renderDoctorDot();
+  if (doctorChanged) drawDoctor();
+  else renderDoctorDot();
   if (S.view.name === 'chat') renderChatParts();
   else if (S.view.name === 'approvals' && !$('#view').contains(document.activeElement?.closest('.note-input, .other-input'))) renderView();
   else if (S.view.name === 'new' && S.form) renderAgentsOnly();
@@ -310,12 +311,13 @@ function renderChrome() {
     }
   }
   if (!tree) tree = '<div class="faint" style="padding:8px 18px;font-size:13px">No chats yet.</div>';
-  const agents = st?.agents ?? {};
+  // each agent as the doctor's last check saw it; a click opens Doctor
   const agentFoot = Object.keys(AGENT)
     .map(a => {
-      const i = agents[a];
-      const mark = !i ? '…' : i.ok ? '✓' : '✗';
-      return `<span title="${esc(AGENT[a].name)} ${esc(i?.version ?? '')} ${esc(i?.login ?? (i ? 'not installed' : 'checking'))}"><span class="badge mini ${a}">${AGENT[a].letter}</span> ${mark}</span>`;
+      const i = drAgent(a) ?? { agent: a };
+      const st = agentStatus(i, false);
+      const hint = i.state === 'needs-login' ? ' · logged in already? Check again in Doctor' : '';
+      return `<span class="foot-agent" data-act="doctor" title="${esc(`${AGENT[a].name} ${i.version ?? ''} · ${st.label}${hint}`)}"><span class="badge mini ${a}">${AGENT[a].letter}</span> ${agentMark(i, st)}</span>`;
     })
     .join(' ');
   $('#side').innerHTML = `
@@ -401,8 +403,9 @@ function agentCards() {
   return S.info.agents
     .filter(a => !S.info.from || a.id !== S.info.from.agent || true)
     .map(a => {
-      const live = S.state?.agents?.[a.id] ?? a.info;
-      const sub = !live ? '<span class="sub">checking…</span>' : !live.version ? '<span class="sub bad">not installed</span>' : `<span class="sub${live.ok ? '' : ' bad'}">${esc(live.version)} · ${esc(live.login ?? '')}</span>`;
+      const live = drAgent(a.id) ?? { agent: a.id };
+      const st = agentStatus(live, false);
+      const sub = st.kind === 'plain' ? '<span class="sub">checking…</span>' : live.state === 'missing' ? '<span class="sub bad">Not installed</span>' : live.state === 'needs-login' ? `<span class="sub bad">${esc(live.version ?? '')} · Not logged in</span><span class="sub">Logged in already? Check again in Doctor</span>` : `<span class="sub">${esc(live.version ?? '')} · ${esc(live.login === 'yes' ? 'Logged in' : st.label)}</span>`;
       const q = a.quota ? `<span class="sub ${a.quota.level === 'err' ? 'bad' : a.quota.level === 'warn' ? 'warn' : ''}">plan ${esc(a.quota.text)}</span>` : '';
       const same = S.info.from && a.id === S.info.from.agent;
       return `<button class="agent${f.agent === a.id ? ' on' : ''}" data-act="nc-agent" data-arg="${a.id}"><span class="name"><span class="badge mini ${a.id}">${AGENT[a.id].letter}</span>${AGENT[a.id].name}${same ? ' <span class="faint" style="font-weight:400">(same agent)</span>' : ''}</span>${sub}${q}</button>`;
@@ -593,6 +596,10 @@ function skillsHtml() {
 }
 
 /* ---------- the doctor (docs/doctor.md §6; looks and words: docs/mockups/desktop-doctor.html) ---------- */
+// One doctor. The server's short check, pushed with the state (S.state.doctor), is the only status of the agents: the sidebar,
+// the New chat cards, the Doctor button's dot, the first-launch screen and the Doctor page all read it through agentStatus, and
+// the first-launch screen and the Doctor page draw the same rows (doctorRow). Startup, Run test, Check again, an install, a
+// login, a detailed test and the window coming back to the front all end in a new check on the server, which every window gets.
 
 const DR_STEPS = 7;
 const DR_METHOD = { native: 'native installer', npm: 'npm', brew: 'Homebrew', other: 'installed by hand' };
@@ -606,37 +613,65 @@ const DR_EFFECT = {
   resume: 'a chat cannot be continued after Chorus restarts',
   approval: "Chorus cannot see the agent's permission prompts, so they do not reach Approvals",
 };
+const FR_TESTS = { envelope: "Starts a chat with Chorus's note", hello: "Reads the agent's replies", shell: 'Shows commands and their output', transcript: 'Saves chat history', mcp: 'Uses Chorus tools', resume: 'Resumes a chat', approval: 'Shows approval requests' };
+const FR_IDS = Object.keys(FR_TESTS);
+/** A login outside Chorus (in a terminal) shows when the window comes back to the front (recheckOnFocus); Check again stays for
+ *  when it does not, or the window never lost focus. */
+const LOGIN_HINT = 'Logged in from a terminal? It shows when you come back to Chorus, or Check again.';
 
-/** On a first launch the doctor screen opens at once and fills in when the short check is done; after an update of Chorus or a
- *  CLI it opens with the result (docs/doctor.md §6.1). */
+/** The agents as the server's last short check saw them; null until the first one is done. */
+const drAgents = () => S.state?.doctor?.agents ?? null;
+const drChecking = () => !!S.state?.doctor?.checking;
+const drAgent = agent => drAgents()?.find(a => a.agent === agent);
+
+/** On a first launch the doctor screen opens at once and fills in when the check the server runs at start is done; after an
+ *  update of Chorus or a CLI it opens with the result (docs/doctor.md §6.1). */
 async function firstDoctor() {
   try {
     const { first } = await api('GET', '/api/doctor/first');
-    if (first) openDoctorPopup('check');
-    const d = await loadDoctor(true);
-    if (first || d.due) openDoctorPopup('short');
+    if (first) openDoctorPopup();
+    const d = await loadDoctor();
+    if (first || d.due) openDoctorPopup();
     else renderDoctorDot();
   } catch {
     /* the app works without the doctor */
   }
 }
 
-async function loadDoctor(fresh = false) {
-  S.doctor = await api('GET', `/api/doctor${fresh ? '?fresh=1' : ''}`);
+/** What the Doctor shows besides the agents' status: Chorus's version, the latest releases, the detailed tests on file. */
+async function loadDoctor() {
+  S.doctor = await api('GET', '/api/doctor');
   return S.doctor;
 }
 
+/** Run test and Check again: a new short check on the server; its answer reaches every screen with the state. */
 async function runShortTest() {
-  S.docChecking = true;
+  S.doctor = await api('POST', '/api/doctor/check');
+  S.docRan = true;
   drawDoctor();
-  try {
-    S.doctor = await api('POST', '/api/doctor/check');
-    S.docRan = true;
-  } finally {
-    S.docChecking = false;
-    drawDoctor();
-  }
 }
+
+/** The window came back (switched to, unhidden): the server checks again quietly, the statuses stay until the answer comes with
+ *  the state. The server runs at most one every 10 s, so focus and visibility firing together cost one check. */
+function recheckOnFocus() {
+  if (document.visibilityState !== 'visible') return;
+  waitSince = Date.now();
+  api('POST', '/api/doctor/refresh').catch(() => {});
+}
+window.addEventListener('focus', recheckOnFocus);
+document.addEventListener('visibilitychange', recheckOnFocus);
+
+/** While an agent waits for the user (not installed, not logged in, a new version) and the window is visible, the server checks
+ *  again every 30 s: a login on another screen shows even when Chorus never lost focus. It stops when all are Ready, the window is
+ *  hidden, or after 10 min (the window coming back starts the 10 min again). */
+const WAIT_EVERY = 30_000;
+const WAIT_FOR = 10 * 60_000;
+let waitSince = Date.now();
+setInterval(() => {
+  const waiting = (drAgents() ?? []).some(a => a.state !== 'ready');
+  if (!waiting || document.visibilityState !== 'visible' || Date.now() - waitSince > WAIT_FOR) return;
+  api('POST', '/api/doctor/refresh', { waiting: true }).catch(() => {});
+}, WAIT_EVERY);
 
 const drJob = (agent, action) => (S.docJobs[agent]?.action === action || (!action && S.docJobs[agent]) ? S.docJobs[agent] : null);
 const drRunning = agent => !!S.docJobs[agent] && !S.docJobs[agent].done;
@@ -645,7 +680,41 @@ const drFailed = a => {
   const j = drJob(a.agent, 'deep');
   return j && j.done && !j.ok ? j : null;
 };
-const drName = agent => S.doctor?.fast.agents.find(a => a.agent === agent)?.name ?? AGENT[agent]?.name ?? agent;
+const drName = agent => drAgent(agent)?.name ?? AGENT[agent]?.name ?? agent;
+
+/** One agent's status, the same on every screen: { kind, label, line, acts, busy }. `jobs` false leaves out the install, login
+ *  and detailed test running from the Doctor (the sidebar and New chat say only what the agent is). */
+function agentStatus(a, jobs = true) {
+  const s = (kind, label, line = '', acts = [], busy = false) => ({ kind, label, line, acts, busy });
+  const job = jobs ? S.docJobs[a?.agent] : null;
+  const deep = jobs ? drJob(a?.agent, 'deep') : null;
+  if (job && !job.done && job.action !== 'deep') return s('plain', job.action === 'login' ? 'Logging in…' : 'Installing…', '', [], true);
+  if (!a?.state || drChecking()) return s('plain', 'Checking…', '', [], true);
+  if (a.state === 'missing') {
+    const line = a.install?.version ? 'Install the version Chorus is tested with, or add it later.' : `Installs its newest release (Chorus is tested with ${a.newestTested ?? 'other versions'}), or add it later.`;
+    return s('warn', 'Not installed', line, [[`Install${a.install?.version ? ' ' + a.install.version : ''}`, 'doc-run', `${a.agent}:install`, true], ['Open page ↗', 'doc-open', a.agent]]);
+  }
+  if (a.state === 'needs-login') {
+    if (job?.terminal) return s('warn', 'Not logged in', 'Log in in the Terminal window, then check again.', [['Check again', 'doc-recheck', a.agent, true]]);
+    return s('warn', 'Not logged in', `Log in to use it here. ${LOGIN_HINT}`, [['Log in', 'doc-run', `${a.agent}:login`, true], ['Check again', 'doc-recheck', a.agent]]);
+  }
+  if (deep && !deep.done) return s('plain', `Detailed test · ${deep.results.length} of ${DR_STEPS}`, `Now: ${FR_TESTS[FR_IDS[deep.results.length]] ?? 'finishing'}`, [], true);
+  if (deep?.done) {
+    const rs = deep.report?.results ?? [];
+    const pass = rs.filter(r => r.status === 'pass' || r.status === 'skip').length;
+    if (pass === rs.length) return s('ok', `${pass} of ${rs.length} passed`, 'Works with Chorus.');
+    const blocked = rs.find(r => r.status === 'blocked');
+    if (blocked) return s('warn', `${pass} of ${rs.length} passed`, blocked.reason ?? 'Stopped: log in again, or the plan limit was reached.');
+    if (a.testedInstall && a.version !== a.newestTested) return s('bad', `${pass} of ${rs.length} passed`, 'Install the version Chorus is tested with to fix it.', [[`Install ${a.newestTested}`, 'doc-run', `${a.agent}:tested`, true]]);
+    return s('bad', `${pass} of ${rs.length} passed`, 'Chats still start; the failed part does not work yet.');
+  }
+  if (a.state === 'untested') return s('warn', 'New version', `Chorus is tested with ${a.newestTested ?? 'other versions'}; the detailed test checks that ${a.version} works too.`, jobs ? [['Run detailed test', 'doc-run', `${a.agent}:deep`]] : []);
+  return s('ok', 'Ready', a.login === 'yes' ? 'Logged in · a version Chorus is tested with.' : 'A version Chorus is tested with.');
+}
+
+const agentPill = st => `<span class="badge ${st.kind}">${st.busy ? '<span class="spin"></span>' : st.kind === 'ok' ? '✔ ' : st.kind === 'warn' || st.kind === 'bad' ? '⚠ ' : ''}${esc(st.label)}</span>`;
+/** The sidebar's mark: ✗ only when the agent cannot be used (not installed, not logged in, a failed test). */
+const agentMark = (a, st) => (st.kind === 'plain' ? '…' : st.kind === 'bad' || a.state === 'missing' || a.state === 'needs-login' ? '✗' : '✓');
 
 function drWhen(iso) {
   const d = new Date(iso);
@@ -653,22 +722,8 @@ function drWhen(iso) {
   return d.toDateString() === new Date().toDateString() ? `today ${t}` : `${d.getDate()} ${d.toLocaleString('en', { month: 'short' })}, ${t}`;
 }
 
-function drChip(a) {
-  const job = S.docJobs[a.agent];
-  let c;
-  if (S.docChecking) c = ['plain', 'Checking…', true];
-  else if (job && !job.done) c = ['plain', job.action === 'deep' ? `Detailed test · ${job.results.length} of ${DR_STEPS}` : job.action === 'login' ? 'Signing in…' : 'Installing…', true];
-  else if (drFailed(a)) c = ['bad', 'Problem'];
-  else if (a.state === 'missing') c = ['warn', 'Not installed'];
-  else if (a.state === 'needs-login') c = ['warn', 'Signed out'];
-  else if (a.state === 'untested') c = ['warn', 'New version'];
-  else c = ['ok', 'Ready'];
-  const [kind, text, busy] = c;
-  return `<span class="badge ${kind}">${busy ? '<span class="spin"></span>' : kind === 'ok' ? '✔ ' : ''}${esc(text)}</span>`;
-}
-
 function drVersionLine(a) {
-  const latest = S.doctor.latest?.[a.agent];
+  const latest = S.doctor?.latest?.[a.agent];
   const suggested = a.newestTested;
   if (!suggested) return 'Chorus has no tested version of it yet';
   if (a.state === 'missing' && !a.install?.version) return `Installs its newest release · Chorus is tested up to <span class="mono">${esc(suggested)}</span> (${esc(a.agent)} cannot be pinned to a version)`;
@@ -689,9 +744,9 @@ function drShort(a) {
   if (a.coverage === 'tested') out.push(['ok', `Version ${a.version} is tested with Chorus`]);
   else if (a.coverage === 'same-minor') out.push(['ok', `Version ${a.version} is a patch of ${a.version.split('.').slice(0, 2).join('.')}, which Chorus is tested with`]);
   else out.push(['warn', a.version ? `Version ${a.version}: no ${a.version.split('.').slice(0, 2).join('.')} version is tested with Chorus yet (newest tested ${a.newestTested ?? 'none'})` : 'Version unknown']);
-  if (a.login === 'yes') out.push(['ok', 'Signed in']);
-  else if (a.login === 'no') out.push(['bad', 'Not signed in', '', a.agent === 'agy' ? 'agy signs in on its first start: run agy once in a terminal' : `${a.loginCommand.join(' ')} signs in`]);
-  else out.push(['warn', 'Sign-in could not be checked']);
+  if (a.login === 'yes') out.push(['ok', 'Logged in']);
+  else if (a.login === 'no') out.push(['bad', 'Not logged in', '', a.agent === 'agy' ? 'agy logs in on its first start: run agy once in a terminal' : `${a.loginCommand.join(' ')} logs in`]);
+  else out.push(['warn', 'Login could not be checked']);
   return out;
 }
 
@@ -711,48 +766,60 @@ function drDetailed(a) {
     const list = DR_TITLES.map((t, i) => (job.results[i] ? drResult(job.results[i]) : i === job.results.length ? ['run', t] : ['wait', t]));
     return ['running', list];
   }
-  const r = job?.done ? { ...job.report, at: new Date().toISOString() } : S.doctor.lastDeep?.[a.agent];
+  const r = job?.done ? { ...job.report, at: new Date().toISOString() } : S.doctor?.lastDeep?.[a.agent];
   if (!r?.results) return null;
   const pass = r.results.filter(x => x.status === 'pass').length;
   const head = `last run ${drWhen(r.at)} · ${pass} of ${r.results.length}${r.version && r.version !== a.version ? ` on ${r.version}` : ''}`;
   return [head, r.results.map(drResult)];
 }
 
-function drRow(a) {
-  const open = S.docOpen.has(a.agent);
-  const job = S.docJobs[a.agent];
+/** Each agent can be tested on its own, any time it is installed and logged in (about 2 min, a few short turns on its plan). */
+const drTestButton = a =>
+  frTestable(a) && !drRunning(a.agent) ? `<button class="btn dr-test1" data-act="doc-run" data-arg="${a.agent}:deep">${drJob(a.agent, 'deep') || S.doctor?.lastDeep?.[a.agent] ? 'Test again' : 'Run detailed test'}</button>` : '';
+
+/** An agent's details behind "Show details": the short test's checks, the detailed test, the suggested version, the install. */
+function drDetail(a) {
   const deep = drDetailed(a);
-  let acts = '';
-  if (!drRunning(a.agent) && a.state === 'missing') acts = `<button class="btn primary" data-act="doc-run" data-arg="${a.agent}:install">Install</button><button class="btn" data-act="doc-open" data-arg="${a.agent}">Open page ↗</button>`;
-  else if (!drRunning(a.agent) && a.state === 'needs-login' && a.agent !== 'agy') acts = `<button class="btn primary" data-act="doc-run" data-arg="${a.agent}:login">Sign in</button>`;
-  const out = job && job.action !== 'deep' && job.output ? `<pre class="record dr-out">${esc(job.output.slice(-1500))}</pre>` : '';
-  const shortWhen = S.docChecking ? 'running' : drWhenShort();
-  const detail = `<div class="dr-detail">
-      <div class="dr-group"><h4>Short test <span>${esc(shortWhen)}</span></h4>${S.docChecking ? '' : drChecks(drShort(a))}</div>
-      <div class="dr-group"><h4>Detailed test <span>${deep ? esc(deep[0]) : 'not run for this version'}</span></h4>${deep ? drChecks(deep[1]) : '<div class="faint" style="font-size:13px">Chorus asks for it when a version is new to it.</div>'}</div>
+  return `<div class="dr-detail">
+      <div class="dr-sub">${drVersionLine(a)}</div>
+      <div class="dr-group"><h4>Short test <span>${esc(drChecking() ? 'running' : drWhenShort())}</span></h4>${drChecking() ? '' : drChecks(drShort(a))}</div>
+      <div class="dr-group"><h4>Detailed test <span>${deep ? esc(deep[0]) : 'not run for this version'}</span>${drTestButton(a)}</h4>${deep ? drChecks(deep[1]) : '<div class="faint" style="font-size:13px">Chorus asks for it when a version is new to it.</div>'}</div>
       ${a.state !== 'missing' && a.testedInstall && a.version !== a.newestTested ? `<div class="dr-group"><h4>Suggested version</h4><div class="dr-cmd"><span>${esc(a.testedInstall)}</span><button class="btn" data-act="doc-run" data-arg="${a.agent}:tested">Install</button></div></div>` : ''}
-      ${a.state === 'missing' ? `<div class="dr-group"><h4>Install</h4><div class="dr-cmd"><span>${esc(a.install.command)}</span><button class="btn" data-act="doc-copy" data-arg="${esc(a.install.command)}">Copy</button></div></div>` : ''}
+      ${a.state === 'missing' && a.install ? `<div class="dr-group"><h4>Install</h4><div class="dr-cmd"><span>${esc(a.install.command)}</span><button class="btn" data-act="doc-copy" data-arg="${esc(a.install.command)}">Copy</button></div></div>` : ''}
     </div>`;
-  return `<div class="dr-row${open ? ' open' : ''}">
-    <button class="dr-head" data-act="doc-toggle" data-arg="${a.agent}" aria-expanded="${open}">
-      <span class="badge mini ${a.agent}">${AGENT[a.agent].letter}</span>
-      <span class="dr-main"><span class="dr-name"><b>${esc(a.name)}</b>${a.version ? `<span class="mono muted">${esc(a.version)}</span>` : ''}${drChip(a)}</span><span class="dr-sub">${drVersionLine(a)}</span></span>
-      <span class="dr-caret">▾</span>
-    </button>${acts ? `<div class="dr-acts">${acts}</div>` : ''}${out}${detail}</div>`;
 }
 
+/** One agent on the first-launch screen and the Doctor page: its status, one line, its actions, the output of a running install
+ *  or login, and its details. */
+function doctorRow(a) {
+  const st = agentStatus(a);
+  const job = S.docJobs[a.agent];
+  const deep = drJob(a.agent, 'deep');
+  const open = S.docOpen.has(a.agent);
+  const acts = st.acts.map(([label, act, arg, primary]) => `<button class="btn${primary ? ' primary' : ''}" data-act="${act}" data-arg="${esc(arg)}">${esc(label)}</button>`).join('');
+  const bar = deep && !deep.done ? `<div class="fr-bar"><i style="width:${Math.round((deep.results.length / DR_STEPS) * 100)}%"></i></div>` : '';
+  const busy = job && !job.done && job.action !== 'deep';
+  const out = busy || (job?.done && !job.ok && job.action !== 'deep' && job.output) ? `<pre class="record dr-out">${esc((job.output || 'Starting…').slice(-1500))}</pre>` : '';
+  const more = a.state ? `<button class="fr-more" data-act="doc-toggle" data-arg="${a.agent}" aria-expanded="${open}">${open ? '▾ Hide' : '▸ Show'} details</button>${open ? drDetail(a) : ''}` : '';
+  return `<div class="fr-row${st.kind === 'warn' || st.kind === 'bad' ? ' warn' : ''}"><span class="badge mini ${a.agent}">${AGENT[a.agent].letter}</span>
+    <span class="fr-name"><b>${esc(a.name)}</b>${a.version ? `<span class="mono muted">${esc(a.version)}</span>` : ''}</span>${agentPill(st)}
+    ${st.line || acts ? `<div class="fr-line"><span>${esc(st.line)}</span>${acts}</div>` : ''}${bar}${out}${more}</div>`;
+}
+
+/** The rows of every agent; before the first check is done, each one is "Checking…". */
+const doctorRows = () => `<div class="fr-rows">${(drAgents() ?? Object.keys(AGENT).map(agent => ({ agent, name: AGENT[agent].name }))).map(doctorRow).join('')}</div>`;
+
 function drWhenShort() {
-  const d = S.doctor;
-  if (!d) return '';
+  const d = S.state?.doctor;
+  if (!d?.at) return '';
   const fresh = Date.now() - new Date(d.at).getTime() < 60_000;
-  return fresh ? `just now · ${(d.fast.ms / 1000).toFixed(1)} s` : drWhen(d.at);
+  return fresh ? `just now · ${(d.ms / 1000).toFixed(1)} s` : drWhen(d.at);
 }
 
 /** The one banner that matters most now: a failed detailed test, a version that needs one, agents that need the user, all fine. */
-function drBanner(popup = false) {
-  const d = S.doctor;
-  if (!d || S.docChecking || drDeepRunning()) return '';
-  const agents = d.fast.agents;
+function drBanner() {
+  const agents = drAgents();
+  if (!agents || drChecking() || drDeepRunning()) return '';
   const failed = agents.map(a => [a, drFailed(a)]).find(([a, j]) => j && !S.docKept.has(a.agent));
   if (failed) {
     const [a, j] = failed;
@@ -764,30 +831,28 @@ function drBanner(popup = false) {
   }
   const fresh = agents.find(a => a.state === 'untested' && !S.docNotNow.has(a.agent) && !drJob(a.agent, 'deep'));
   if (fresh) {
-    const text = popup
-      ? `Test that it works? About 2 minutes, a few short model turns on your ${fresh.name} plan.`
-      : `Chorus is tested with ${fresh.newestTested && fresh.version && cmpV(fresh.version, fresh.newestTested) < 0 ? `newer versions of ${fresh.name} (up to ${fresh.newestTested})` : `${fresh.name} up to ${fresh.newestTested ?? 'no version yet'}`}. A detailed test checks that ${fresh.version} works with Chorus: about 2 minutes and a few short model turns on your ${fresh.name} plan.`;
+    const text = `Chorus is tested with ${fresh.newestTested && fresh.version && cmpV(fresh.version, fresh.newestTested) < 0 ? `newer versions of ${fresh.name} (up to ${fresh.newestTested})` : `${fresh.name} up to ${fresh.newestTested ?? 'no version yet'}`}. A detailed test checks that ${fresh.version} works with Chorus: about 2 minutes and a few short model turns on your ${fresh.name} plan.`;
     return drBannerHtml('warn', `${fresh.name} ${fresh.version} is new to Chorus.`, text, `<button class="btn primary" data-act="doc-run" data-arg="${fresh.agent}:deep">Run detailed test</button><button class="btn" data-act="doc-notnow" data-arg="${fresh.agent}">Not now</button>`);
   }
   const need = agents.filter(a => a.state === 'missing' || a.state === 'needs-login').length;
-  if (need && !popup) return drBannerHtml('warn', `${need} agent${need > 1 ? 's' : ''} need${need > 1 ? '' : 's'} you.`, 'Chorus works with any one of them; each one more is another agent to hand work to.');
-  if (S.docRan && agents.every(a => a.state === 'ready') && !popup) return drBannerHtml('ok', `All ${agents.length} agents work with Chorus.`, 'Each one is on a version Chorus is tested with, and signed in.');
+  if (need) return drBannerHtml('warn', `${need} agent${need > 1 ? 's' : ''} need${need > 1 ? '' : 's'} you.`, 'Chorus works with any one of them; each one more is another agent to hand work to.');
+  if (S.docRan && agents.every(a => a.state === 'ready')) return drBannerHtml('ok', `All ${agents.length} agents work with Chorus.`, 'Each one is on a version Chorus is tested with, and logged in.');
   return '';
 }
 const drBannerHtml = (kind, t, text, acts = '') => `<div class="dr-banner ${kind}"><div class="grow"><div class="dr-bt">${esc(t)}</div><div class="muted" style="font-size:13px">${esc(text)}</div></div>${acts ? `<div class="dr-bacts">${acts}</div>` : ''}</div>`;
 
 function drRunLine() {
-  const d = S.doctor;
+  const d = S.state?.doctor;
   const deep = drDeepRunning();
-  const busy = S.docChecking || !!deep;
+  const busy = drChecking() || !!deep;
   let when = '';
-  if (S.docChecking) when = `Checking ${d?.fast.agents.length ?? 3} agents · no model calls`;
+  if (drChecking()) when = `Checking ${Object.keys(AGENT).length} agents · no model calls`;
   else if (deep) when = `Detailed test of ${drName(deep.agent)} · ${deep.results.length} of ${DR_STEPS} · you can keep working`;
-  else if (d) {
+  else if (d?.at) {
     const done = Object.values(S.docJobs).filter(j => j.action === 'deep' && j.done).at(-1);
-    const need = d.fast.agents.filter(a => a.state !== 'ready').length;
+    const need = d.agents.filter(a => a.state !== 'ready').length;
     if (done && !S.docRan) when = `Detailed test of ${drName(done.agent)} finished · ${done.ok ? 'all passed' : `${done.report.results.filter(r => r.status === 'fail').length} problem`}`;
-    else if (Date.now() - new Date(d.at).getTime() < 60_000) when = `Tested just now · ${(d.fast.ms / 1000).toFixed(1)} s`;
+    else if (Date.now() - new Date(d.at).getTime() < 60_000) when = `Tested just now · ${(d.ms / 1000).toFixed(1)} s`;
     else when = `Last test: ${drWhen(d.at)} · ${need ? `${need} need${need > 1 ? '' : 's'} you` : 'all ready'}`;
   }
   return `<div class="dr-run"><button class="btn primary dr-big" data-act="doc-test"${busy ? ' disabled' : ''}>${busy ? '<span class="spin"></span> Testing…' : '▶ Run test'}</button><span class="dr-when">${esc(when)}</span><span class="grow"></span><button class="btn" data-act="doc-report" title="Send a report to the Chorus issues on GitHub; no test needed">Report issue</button></div>`;
@@ -802,20 +867,15 @@ function drAppLine() {
 }
 
 function doctorHtml() {
-  const d = S.doctor;
-  if (!d) return `<div class="page"><h1>Doctor</h1><p class="lead">Checking your agents…</p></div>`;
-  return `<div class="page"><h1>Doctor</h1><p class="lead">Your AI coding CLIs: are they installed, on a version Chorus is tested with, and signed in.</p>
-    ${drAppLine()}${drRunLine()}${drBanner()}<div class="card" id="dr-rows">${d.fast.agents.map(drRow).join('')}</div></div>`;
+  return `<div class="page"><h1>Doctor</h1><p class="lead">Your AI coding CLIs: are they installed, on a version Chorus is tested with, and logged in.</p>
+    ${drAppLine()}${drRunLine()}${drBanner()}${doctorRows()}</div>`;
 }
 
 /* The first-launch doctor screen (docs/mockups/desktop-first-run.html): the short check, then the choice between the app (the
-   default) and the detailed test of every agent that is installed and signed in, then how many tests each one passed. A missing
-   or signed-out agent, or one that failed a test, shows one warning with one action; the user goes on with what works. */
-const FR_TESTS = { envelope: "Starts a chat with Chorus's note", hello: "Reads the agent's replies", shell: 'Shows commands and their output', transcript: 'Saves chat history', mcp: 'Uses Chorus tools', resume: 'Resumes a chat', approval: 'Shows approval requests' };
-const FR_IDS = Object.keys(FR_TESTS);
-
-function openDoctorPopup(phase = 'short') {
-  S.fr = { phase, open: new Set() };
+   default) and the detailed test of every agent that is installed and logged in, then how many tests each one passed. Its rows
+   are the Doctor page's (doctorRow); the user goes on with what works. */
+function openDoctorPopup() {
+  S.fr = { phase: 'short' };
   if ($('#doctor-pop')) return drawDoctor();
   const el = document.createElement('div');
   el.className = 'scrim';
@@ -825,87 +885,38 @@ function openDoctorPopup(phase = 'short') {
   drawDoctor();
 }
 
-/** Installed and signed in (or sign-in unknown): the detailed test can run for it. */
+/** Installed and logged in (or login unknown): the detailed test can run for it. */
 const frTestable = a => a.state !== 'missing' && a.state !== 'needs-login';
-const frDeepJob = a => drJob(a.agent, 'deep');
-
-function frPill(kind, text, busy = false) {
-  return `<span class="badge ${kind}">${busy ? '<span class="spin"></span>' : kind === 'ok' ? '✔ ' : kind === 'warn' ? '⚠ ' : ''}${esc(text)}</span>`;
-}
-
-/** One agent: its status, one line, at most one action, and (after the detailed test) its tests behind "Show the n tests". */
-function frRow(a) {
-  const job = S.docJobs[a.agent];
-  const busy = job && !job.done && job.action !== 'deep';
-  const deep = frDeepJob(a);
-  let pill, line = '', act = '', tests = '', warn = false, bar = '';
-  if (S.fr.phase === 'check' || (S.docChecking && !deep)) pill = frPill('plain', 'Checking', true);
-  else if (busy) pill = frPill('plain', job.action === 'login' ? 'Signing in…' : 'Installing…', true);
-  else if (a.state === 'missing') {
-    const pinned = a.install?.version ? 'Install the version Chorus is tested with, or add it later.' : `Installs its newest release (Chorus is tested with ${a.newestTested ?? 'other versions'}), or add it later.`;
-    [pill, warn, line] = [frPill('warn', 'Not installed'), true, pinned];
-    act = `<button class="btn primary" data-act="doc-run" data-arg="${a.agent}:install">Install${a.install?.version ? ' ' + esc(a.install.version) : ''}</button>`;
-  } else if (a.state === 'needs-login') {
-    [pill, warn, line] = [frPill('warn', 'Not logged in'), true, 'Log in to use it here, or keep going without it.'];
-    act = job?.terminal ? `<button class="btn" data-act="doc-recheck" data-arg="${a.agent}">Check again</button>` : `<button class="btn primary" data-act="doc-run" data-arg="${a.agent}:login">Log in</button>`;
-    if (job?.terminal) line = 'Sign in in the Terminal window, then check again.';
-  } else if (deep && !deep.done) {
-    const n = deep.results.length;
-    pill = frPill('plain', `${n} of ${FR_IDS.length}`, true);
-    line = `Now: ${FR_TESTS[FR_IDS[n]] ?? 'finishing'}`;
-    bar = `<div class="fr-bar"><i style="width:${Math.round((n / FR_IDS.length) * 100)}%"></i></div>`;
-  } else if (deep?.done) {
-    const rs = deep.report?.results ?? [];
-    const pass = rs.filter(r => r.status === 'pass' || r.status === 'skip').length;
-    const blocked = rs.find(r => r.status === 'blocked');
-    if (pass === rs.length) pill = frPill('ok', `${pass} of ${rs.length} passed`);
-    else {
-      [pill, warn] = [frPill('warn', `${pass} of ${rs.length} passed`), true];
-      if (blocked) line = blocked.reason ?? 'Stopped: log in again, or the plan limit was reached.';
-      else if (a.testedInstall && a.version !== a.newestTested) {
-        line = 'Install the version Chorus is tested with to fix it.';
-        act = `<button class="btn primary" data-act="doc-run" data-arg="${a.agent}:tested">Install ${esc(a.newestTested)}</button>`;
-      } else line = 'Chats still start; the failed part does not work yet.';
-    }
-    const open = S.fr.open.has(a.agent);
-    tests = `<button class="fr-more" data-act="fr-tests" data-arg="${a.agent}">${open ? '▾ Hide' : '▸ Show'} the ${rs.length} tests</button>${open ? `<ul class="fr-tests">${rs.map(r => `<li><b class="${r.status === 'pass' || r.status === 'skip' ? 'ok' : 'warn'}">${r.status === 'pass' || r.status === 'skip' ? '✔' : '✖'}</b> ${esc(FR_TESTS[r.id] ?? r.title)}${r.status === 'fail' || r.status === 'blocked' ? `<div class="faint">${esc(DR_EFFECT[r.id] ?? r.reason ?? '')}</div>` : ''}</li>`).join('')}</ul>` : ''}`;
-  } else if (a.state === 'untested') [pill, warn, line] = [frPill('warn', 'New version'), true, `Chorus is tested with ${a.newestTested ?? 'other versions'}; the detailed test checks that ${a.version} works too.`];
-  else [pill, line] = [frPill('ok', 'Ready'), a.login === 'yes' ? 'Logged in · a version Chorus is tested with.' : 'A version Chorus is tested with.'];
-  const out = busy || (job && job.done && !job.ok && job.action !== 'deep' && job.output) ? `<pre class="record dr-out">${esc((job.output || 'Starting…').slice(-1200))}</pre>` : '';
-  return `<div class="fr-row${warn ? ' warn' : ''}"><span class="badge mini ${a.agent}">${AGENT[a.agent].letter}</span>
-    <span class="fr-name"><b>${esc(a.name)}</b>${a.version ? `<span class="mono muted">${esc(a.version)}</span>` : ''}</span>${pill}
-    ${line || act ? `<div class="fr-line"><span>${esc(line)}</span>${act}</div>` : ''}${bar}${tests}${out}</div>`;
-}
 
 function drawFirstRun() {
-  const d = S.doctor;
+  const agents = drAgents();
   const fr = S.fr;
-  const agents = fr.phase === 'check' || !d ? Object.keys(AGENT).map(agent => ({ agent, name: AGENT[agent].name, state: 'checking' })) : d.fast.agents;
-  const deepJobs = agents.map(frDeepJob).filter(Boolean);
+  const deepJobs = (agents ?? []).map(a => drJob(a.agent, 'deep')).filter(Boolean);
   if (fr.phase === 'deep' && deepJobs.length && deepJobs.every(j => j.done)) fr.phase = 'done';
-  const testable = agents.filter(frTestable);
-  const ready = d ? agents.filter(a => a.state === 'ready' || a.state === 'untested') : [];
-  const failed = deepJobs.some(j => j.done && !j.ok);
+  const phase = !agents ? 'check' : fr.phase;
+  const testable = (agents ?? []).filter(frTestable);
+  const ready = (agents ?? []).filter(a => a.state === 'ready' || a.state === 'untested');
   const [title, lead] = {
     check: ['Checking your agents', 'Chorus looks for Claude Code, Codex and Antigravity on this computer. No model calls, a few seconds.'],
-    short: ['Your agents', `${ready.length} of ${agents.length} ready to use. You can fix the rest now or later from Doctor.`],
+    short: ['Your agents', `${ready.length} of ${agents?.length} ready to use. You can fix the rest now or later from Doctor.`],
     deep: ['Testing your agents', 'Each agent runs the same tests in a temporary folder. Your projects are not touched.'],
     done: ['Test results', 'You can start now with what works, and fix the rest any time from Doctor.'],
-  }[fr.phase];
+  }[phase];
   $('#fr-title').innerHTML = `${esc(title)}${S.doctor?.chorus ? `<span class="fr-ver">${esc(S.doctor.chorus.app.replace(/^chorus/, 'Chorus'))} · core ${esc(S.doctor.chorus.core)}</span>` : ''}`;
   $('#fr-lead').textContent = lead;
-  const step = { check: 0, short: 0, deep: 1, done: 2 }[fr.phase];
-  $('#fr-steps').innerHTML = ['Short check', 'Detailed test', 'Ready'].map((t, i) => `<span class="${i < step || (fr.phase === 'short' && i === 0) ? 'done' : i === step ? 'on' : ''}">${i < step || (fr.phase === 'short' && i === 0) ? '✔ ' : ''}${t}</span>`).join('');
-  $('#dr-pop-body').innerHTML = `<div class="fr-rows">${agents.map(a => (a.state === 'checking' ? `<div class="fr-row"><span class="badge mini ${a.agent}">${AGENT[a.agent].letter}</span><span class="fr-name"><b>${esc(a.name)}</b></span>${frPill('plain', 'Checking', true)}</div>` : frRow(a))).join('')}</div>`;
+  const step = { check: 0, short: 0, deep: 1, done: 2 }[phase];
+  $('#fr-steps').innerHTML = ['Short check', 'Detailed test', 'Ready'].map((t, i) => `<span class="${i < step || (phase === 'short' && i === 0) ? 'done' : i === step ? 'on' : ''}">${i < step || (phase === 'short' && i === 0) ? '✔ ' : ''}${t}</span>`).join('');
+  $('#dr-pop-body').innerHTML = doctorRows();
   const left = deepJobs.filter(j => !j.done).length;
   $('#fr-foot').innerHTML = {
     check: `<span class="grow faint">Checking…</span><button class="btn" disabled>Continue</button>`,
     short: `<span class="grow faint">${testable.length ? `Detailed test: about 2 min per agent, a few short turns on your plans. Also in Doctor.` : 'Install or log in to an agent to use Chorus.'}</span>${testable.length ? '<button class="btn" data-act="fr-deep">Run detailed test</button>' : ''}<button class="btn primary" data-act="doc-continue">Skip, start using Chorus</button>`,
     deep: `<span class="grow faint">${left} running · the results also go to Doctor</span><button class="btn primary" data-act="doc-continue">Continue to the app</button>`,
     done: `<span class="grow"></span><button class="btn" data-act="doc-report">Report issue</button><button class="btn primary" data-act="doc-continue">Start using Chorus</button>`,
-  }[fr.phase];
+  }[phase];
 }
 
+/** Redraws every screen that shows the doctor: the first-launch screen, the Doctor page and the Doctor button's dot. */
 function drawDoctor() {
   if ($('#doctor-pop') && S.fr) drawFirstRun();
   if (S.view.name === 'doctor') renderView();
@@ -914,11 +925,12 @@ function drawDoctor() {
 
 /** The Doctor button's dot: red on a problem, amber while testing or when an agent needs the user, green when all are ready. */
 function renderDoctorDot() {
-  const btn = document.querySelector('[data-act="doctor"]');
-  const d = S.doctor;
-  if (!btn || !d) return;
-  const bad = d.fast.agents.some(a => drFailed(a));
-  const warn = Object.values(S.docJobs).some(j => !j.done) || d.fast.agents.some(a => a.state !== 'ready');
+  const btn = document.querySelector('.side-foot button[data-act="doctor"]');
+  const agents = drAgents();
+  if (!btn || !agents) return;
+  const st = agents.map(a => agentStatus(a));
+  const bad = st.some(s => s.kind === 'bad');
+  const warn = Object.values(S.docJobs).some(j => !j.done) || agents.some(a => a.state !== 'ready');
   btn.innerHTML = `<span class="dr-dot ${bad ? 'bad' : warn ? 'warn' : 'ok'}"></span>Doctor`;
 }
 
@@ -928,13 +940,13 @@ function closeDoctorPopup() {
   void api('POST', '/api/doctor/seen').catch(() => {});
 }
 
+/** Follows an install, login or detailed test for its output; the server checks the agents again before the job ends, so its
+ *  result is already on every screen when it is done. */
 async function pollDoctorJob(agent, id) {
   const j = await api('GET', `/api/doctor/${id}`).catch(() => null);
   if (!j) return;
   S.docJobs[agent] = j;
   if (j.done) {
-    // a passed detailed test makes the version Ready here; an install or sign-in is checked again
-    if (j.ok || j.action !== 'deep') await loadDoctor(true);
     if (j.ok && j.action !== 'deep') delete S.docJobs[agent];
     toast(`${drName(agent)}: ${j.action === 'deep' ? (j.ok ? 'works with Chorus' : 'a check did not pass') : j.ok ? 'done' : 'the command failed'}`);
   }
@@ -1354,11 +1366,10 @@ document.addEventListener('click', async e => {
       return void runShortTest();
     case 'doc-recheck':
       delete S.docJobs[arg];
-      await loadDoctor(true);
-      return drawDoctor();
+      return void runShortTest();
     case 'fr-deep': {
       S.fr.phase = 'deep';
-      for (const a of S.doctor.fast.agents.filter(frTestable)) {
+      for (const a of (drAgents() ?? []).filter(frTestable)) {
         const j = await api('POST', '/api/doctor/run', { agent: a.agent, action: 'deep' }).catch(err => ({ error: err.message }));
         if (j.error) { toast(j.error); continue; }
         S.docJobs[a.agent] = j;
@@ -1366,9 +1377,6 @@ document.addEventListener('click', async e => {
       }
       return drawDoctor();
     }
-    case 'fr-tests':
-      S.fr.open.has(arg) ? S.fr.open.delete(arg) : S.fr.open.add(arg);
-      return drawDoctor();
     case 'doc-toggle':
       S.docOpen.has(arg) ? S.docOpen.delete(arg) : S.docOpen.add(arg);
       return drawDoctor();

@@ -3,9 +3,13 @@
 #   chorus-linux-x64-<v>.tar.gz, chorus-linux-arm64-<v>.tar.gz                  Linux runners of each arch (Docker: Debian 11 for the
 #                                                                               command, Ubuntu 22.04 for the window, desktop/chorus-desktop)
 #   SHA256SUMS                                                                  over all of the above
-# Runs when main gets a package.json version that has no release yet, on a v* tag, or by hand (Actions → Release downloads).
-# Run by hand on another branch, it builds the files as workflow artifacts only and makes no release.
-# The website is not touched: `npm run release:fetch` then `npm run deploy:site` publish it (README, "Website maintenance").
+# Two channels (CLAUDE.md, "Releases"):
+#   preview      every push to main (docs-only changes skipped). Version: the next patch after the newest production tag plus
+#                -preview.<run number> (1.0.13-preview.42), stamped into the build only; nothing is committed. The files replace
+#                the one rolling prerelease "preview", with VERSION and SHA256SUMS: `install.sh --preview` installs from there.
+#   production   a vX.Y.Z tag, which must equal package.json's version. Makes the GitHub Release vX.Y.Z (the latest one). The
+#                website is not touched here: `npm run release:fetch` and the chorus-admin steps publish it.
+# Run by hand on main it builds a preview; on another branch, the files as workflow artifacts only and no release.
 #
 # Needs the repository secret CHORUS_CORE_DEPLOY_KEY: the private half of a read-only deploy key of chauvoluuhuong/chorus-core.
 # The core is checked out next to this repo (package.json depends on file:../chorus-core) and only its built dist/ goes into
@@ -15,8 +19,8 @@ name: Release downloads
 on:
   push:
     branches: [main]
-    paths: [package.json]
-    tags: ['v*']
+    paths-ignore: ['docs/**', '**/*.md']
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
   workflow_dispatch:
     inputs:
       core_ref:
@@ -38,28 +42,28 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.v.outputs.version }}
-      build: ${{ steps.v.outputs.build }}
+      channel: ${{ steps.v.outputs.channel }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - id: v
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          version=$(node -p "require('./package.json').version")
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match package.json version $version"; exit 1
-          fi
-          # a push to main that does not change the version (a dependency bump) finds its release already there
-          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_TYPE" = branch ] && gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "v$version is already released: nothing to build"; echo "build=false" >> "$GITHUB_OUTPUT"
+          pkg=$(node -p "require('./package.json').version")
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            [ "$GITHUB_REF_NAME" = "v$pkg" ] || { echo "::error::tag $GITHUB_REF_NAME does not match package.json version $pkg"; exit 1; }
+            echo "version=$pkg" >> "$GITHUB_OUTPUT"; echo "channel=production" >> "$GITHUB_OUTPUT"
           else
-            echo "build=true" >> "$GITHUB_OUTPUT"
+            # the next patch after the newest production tag; a preview never needs a commit to main
+            last=$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+            IFS=. read -r ma mi pa <<< "${last#v}"
+            v="$ma.$mi.$((pa + 1))-preview.$GITHUB_RUN_NUMBER"
+            echo "newest production $last → preview $v"
+            echo "version=$v" >> "$GITHUB_OUTPUT"; echo "channel=preview" >> "$GITHUB_OUTPUT"
           fi
 
   build:
     needs: version
-    if: needs.version.outputs.build == 'true'
     strategy:
       fail-fast: true
       matrix:
@@ -106,6 +110,9 @@ jobs:
         name: Install the Tauri CLI
         working-directory: chorus/desktop
         run: npm ci --no-fund --no-audit --loglevel=error
+      - name: Stamp ${{ needs.version.outputs.version }}
+        working-directory: chorus
+        run: npm version "${{ needs.version.outputs.version }}" --no-git-tag-version --allow-same-version
       - name: Build ${{ matrix.targets }}
         working-directory: chorus
         run: node scripts/release-downloads.mjs --out=../dl --targets=${{ matrix.targets }} ${{ matrix.app }}
@@ -118,7 +125,7 @@ jobs:
 
   release:
     needs: [version, build]
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    if: github.ref == 'refs/heads/main' || needs.version.outputs.channel == 'production'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -136,6 +143,7 @@ jobs:
           cat SHA256SUMS
           ls -la
       - name: Attach to the GitHub Release
+        if: needs.version.outputs.channel == 'production'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ needs.version.outputs.version }}
@@ -145,5 +153,17 @@ jobs:
           else
             printf '%s\n' "Built by the release workflow from $GITHUB_SHA (chorus-core $CORE_REF)." "" \
               "Chorus.app is not signed or notarised yet. SHA256SUMS lists the checksum of every file." > notes.md
-            gh release create "$TAG" dl/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Chorus ${TAG#v}" --notes-file notes.md
+            gh release create "$TAG" dl/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Chorus ${TAG#v}" --notes-file notes.md --latest
           fi
+      - name: Replace the rolling preview
+        if: needs.version.outputs.channel == 'preview'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ needs.version.outputs.version }}
+        run: |
+          echo "$V" > dl/VERSION
+          gh release delete preview --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes 2>/dev/null || true
+          printf '%s\n' "Preview $V, built from $GITHUB_SHA (chorus-core $CORE_REF). Replaced on every push to main." "" \
+            "Install: curl -fsSL https://chorus-cli.web.app/install.sh | bash -s -- --preview" "" \
+            "Not for everyday use: production releases are the vX.Y.Z releases. Chorus.app is not signed or notarised yet." > notes.md
+          gh release create preview dl/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Chorus $V (preview)" --notes-file notes.md --prerelease --latest=false

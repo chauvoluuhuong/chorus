@@ -94,8 +94,10 @@ every task with the work pushed and merged, never left only on this machine.
    Save proof in `.chorus/proof/<branch-name>/` (gitignored; don't commit videos).
 4. **Merge into `dev` and push it** when tests pass: `git switch dev && git merge --no-ff <branch>` then `git push origin dev` (and
    push the branch too). If `dev` is checked out in another worktree, merge there with `git -C <that path>`, but only if that
-   checkout is clean; otherwise ask. `main` is the release line: merge `dev` into `main` only when the user asks for a release
-   (in chorus-core it is meant to publish a new version; that release workflow is not built yet, `docs/chorus-core.md` §7).
+   checkout is clean; otherwise ask. `main` is the preview line here: merging `dev` into `main` (PR, `gh pr merge <n> --merge
+   --admin`) builds a preview, never a production version (see "Releases" below); do it when the user asks for a preview or a
+   release. Production is a `vX.Y.Z` tag. (In chorus-core `main` is meant to publish a new version; that release workflow is
+   not built yet, `docs/chorus-core.md` §7.)
 5. **Report the merge** in a few lines: what changed and why (one or two sentences), the branch,
    tests run and their result, and the proof attached (send the screenshot or video to the user,
    with its path). Name anything not done or not verified.
@@ -156,7 +158,7 @@ node src/cli/index.ts mux codex agy        # try the app by hand
 npm run risk -- free|cheap|<case>          # risk harness (docs/risks/README.md); `cheap` makes a few real model calls
 node tools/probe/probe.mjs <cli>           # recapture fixtures after a CLI update
 node tools/probe/matrix.mjs <cli> <v1,v2|installed>   # test given CLI versions end to end → docs/integrations/versions.md
-npm run release:fetch                      # the GitHub Release's downloads (built by .github/workflows/release.yml on a new version in main) → ../chorus-admin/site/dl/; then npm run deploy:site
+npm run release:fetch                      # the GitHub Release's downloads (built by .github/workflows/release.yml on a vX.Y.Z tag) → ../chorus-admin/site/dl/; then npm run deploy:site
 npm run release:downloads                  # the same downloads built on this Mac instead (Docker + Tauri); --out=<dir> writes elsewhere
 ```
 
@@ -196,8 +198,17 @@ and `docs/ci-cd.md` before changing it; the facts below are a pointer, those fil
   Firestore indexes, the Cloud Run API, then the website, and verifies the live pages and installer URLs. Auth is keyless
   (Workload Identity Federation, `main` only). So merging chorus-admin `dev` into `main` is a production deploy: do it only when
   the user asks, same as a release here.
-- **Releasing a new app version** touches both repos: this repo's `.github/workflows/release.yml` builds the downloads on a new
-  version in `main`; `npm run release:fetch` (or `release:downloads` on this Mac) writes `release.json`, `install.sh` and the
+- **Releases: two channels** (`.github/workflows/release.yml`).
+  - **Preview**: every push to `main` (docs-only changes skipped) builds `<next patch after the newest vX.Y.Z tag>-preview.<run
+    number>`, e.g. `1.0.13-preview.42`, stamped into the build only (nothing is committed), and replaces the one rolling GitHub
+    prerelease `preview` (the files, `VERSION`, `SHA256SUMS`). Users install it with
+    `curl -fsSL https://chorus-cli.web.app/install.sh | bash -s -- --preview` (or `CHORUS_CHANNEL=preview`); the plain command
+    goes back to production. The website, `release.json` and the backup bucket are not touched. A preview build still offers the
+    production release of its version, or a later one, in the app (`src/serve/updates.ts`).
+  - **Production**: the user says "release X" (standing approval: do the whole list below, then report). Tag `vX` builds the
+    GitHub Release `vX` (marked latest); the tag must equal `package.json`'s version.
+- **Releasing a production version** touches both repos: this repo's `.github/workflows/release.yml` builds the downloads on a
+  `vX.Y.Z` tag; `npm run release:fetch` (or `release:downloads` on this Mac) writes `release.json`, `install.sh` and the
   ignored `site/dl/` into chorus-admin. Then in chorus-admin: `npm run backup:downloads` (copies the archives to its private
   release bucket; CI restores them from there and fails without it), commit the generated metadata, merge through `dev` to `main`,
   and CI deploys. `npm run deploy:site` here still delegates to chorus-admin for a manual deploy, but CI on `main` is the normal path.
@@ -207,9 +218,11 @@ and `docs/ci-cd.md` before changing it; the facts below are a pointer, those fil
   archives). Run them after **every** release, in this order, and don't call a release done before step 7:
 
   1. Chorus `package.json` version bumped on a `release/<v>` branch → merged into `dev` → `dev` into `main` by PR (it needs a
-     review: the user merges it with admin override, or says to use `--admin`). This starts `release.yml`.
-  2. `gh run list --workflow release.yml --limit 1` until it is `completed success`; `gh release view v<v>` lists the 5 files
-     and `SHA256SUMS`.
+     review: merge it with `gh pr merge <n> --merge --admin`, standing approval from the user for every release; this push also
+     builds a preview). Then tag that commit: `git tag v<v> origin/main && git push origin v<v>`. The tag starts the production
+     build in `release.yml`.
+  2. `gh run list --workflow release.yml --branch v<v> --limit 1` until it is `completed success`; `gh release view v<v>` lists
+     the 5 files and `SHA256SUMS`.
   3. In this repo (a clean checkout of `main` at that release; `node_modules` present): `npm run release:fetch` → downloads the
      release into `../chorus-admin/site/dl/`, checks every file against `SHA256SUMS`, sets `VERSION` in `site/install.sh` and
      writes `site/release.json`.
@@ -232,8 +245,12 @@ and `docs/ci-cd.md` before changing it; the facts below are a pointer, those fil
   V="${V:?set V to the released version, e.g. V=1.0.9}"
   ADMIN="${ADMIN:-../chorus-admin}"
 
+  # 1. (done before: package.json bumped and merged into main) tag it; the tag builds the production release
+  git fetch -q origin && git tag "v$V" origin/main && git push -q origin "v$V"
+
   # 2. the GitHub Release is built
-  until [ "$(gh run list --workflow release.yml --limit 1 --json conclusion -q '.[0].conclusion')" = success ]; do sleep 20; done
+  sleep 15
+  until [ "$(gh run list --workflow release.yml --branch "v$V" --limit 1 --json conclusion -q '.[0].conclusion')" = success ]; do sleep 20; done
   gh release view "v$V" --repo chauvoluuhuong/chorus --json assets -q '.assets[].name'
 
   # 3. downloads, checksums, install.sh VERSION, release.json
@@ -270,7 +287,8 @@ and `docs/ci-cd.md` before changing it; the facts below are a pointer, those fil
   echo "Release $V is live: curl -fsSL https://chorus-cli.web.app/install.sh | sh"
   ```
 
-  Things that went wrong before: the installed app stayed on the old version because only `release.yml` had run; a checkout on
+  Things that went wrong before: the installed app stayed on the old version because only `release.yml` had run (a preview
+  never changes the website either: only the steps above do); a checkout on
   another branch (another session switched it) changes what `release:fetch` and `git` act on, so use a separate worktree
   (`git worktree add ../chorus-release origin/main`) when another session is working here.
 - The public domain `https://chorus-cli.web.app` and every installer/download URL must stay unchanged; never recreate or delete
