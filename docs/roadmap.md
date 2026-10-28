@@ -2,7 +2,7 @@
 
 The plan and the reasoning behind each phase are in [architecture.md §2](architecture.md#2-build-plan).
 This file tracks progress. A phase is done only when its e2e proof passes with the real CLIs.
-There is no fixed deadline. Next concrete steps are listed in [CLAUDE.md](../CLAUDE.md).
+There is no fixed deadline. Next concrete steps are listed in [AGENTS.md](../AGENTS.md).
 
 ## Phase 1 · Context capture
 
