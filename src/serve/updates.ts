@@ -3,10 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 export const RELEASE_MANIFEST = 'https://chorus-cli.web.app/release.json';
 const versionParts = (v: unknown): number[] | undefined => typeof v === 'string' && /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(v) && v.split('.').every(n => Number.isSafeInteger(Number(n))) ? v.split('.').map(Number) : undefined;
+/** A preview build (`install.sh --preview`) is 1.0.13-preview.N: it counts as before 1.0.13, so the production release of that
+ *  version, or any later one, is offered to it. */
+const PREVIEW = /^(.+)-preview\.\d+$/;
 export function newerVersion(candidate: unknown, current: string): boolean {
-  const a = versionParts(candidate), b = versionParts(current); if (!a || !b) return false;
+  const preview = PREVIEW.exec(current);
+  const a = versionParts(candidate), b = versionParts(preview ? preview[1] : current); if (!a || !b) return false;
   for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i];
-  return false;
+  return !!preview;
 }
 export interface UpdateOptions { directory: string; version: string; platform?: string; arch?: string; request?: typeof fetch }
 export class UpdateCheck {

@@ -14,6 +14,9 @@ function setup(t: any) {
 test('release comparison is numeric and accepts stable versions only', () => {
   assert.equal(newerVersion('1.0.10', '1.0.9'), true); assert.equal(newerVersion('2.0.0', '1.99.99'), true);
   for (const v of ['1.0.6', '1.0.5', '1.0.7-beta', '1.2', '01.0.7', 'bad']) assert.equal(newerVersion(v, '1.0.6'), false);
+  // a preview of 1.0.13 is offered 1.0.13 and later, never 1.0.12 or another preview
+  assert.equal(newerVersion('1.0.13', '1.0.13-preview.42'), true); assert.equal(newerVersion('1.1.0', '1.0.13-preview.42'), true);
+  for (const v of ['1.0.12', '1.0.13-preview.43']) assert.equal(newerVersion(v, '1.0.13-preview.42'), false);
 });
 test('one manifest request per process; skip persists for that version but a later version is offered', async t => {
   const r = setup(t); let c = r.create(); await Promise.all([c.startup(), c.startup()]); assert.equal(r.calls(), 1);
