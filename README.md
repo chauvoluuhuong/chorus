@@ -4,12 +4,14 @@
 > from one agent to another without losing context, keep every thread in one place, and see what
 > the agents do and make.
 
+**Website: [chorus-cli.web.app](https://chorus-cli.web.app/)**
+
 Chorus is a desktop app (macOS and Linux) with the `chorus` command. The window runs `chorus serve` and shows every
 thread, tool call, approval and artifact; the agents themselves stay the real CLIs.
 
 ## Install
 
-Needs at least one of `claude`, `codex`, `agy` installed and logged in (`chorus doctor` checks).
+The website ([chorus-cli.web.app](https://chorus-cli.web.app/)) has the downloads and the install script. Needs at least one of `claude`, `codex`, `agy` installed and logged in (`chorus doctor` checks).
 
 ```bash
 curl -fsSL https://chorus-cli.web.app/install.sh | sh                        # production
