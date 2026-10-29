@@ -622,7 +622,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
 .o-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 24px; font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 12px; color: #bcbcbc; }
 .o-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .o-legend i { display: inline-block; width: 22px; border-top: 3px dashed; }
-.office { position: relative; width: 660px; height: 534px; margin: 0 auto; font-family: 'Press Start 2P', monospace; }
+.office { position: relative; margin: 0 auto; font-family: 'Press Start 2P', monospace; }
 .o-room { position: absolute; box-sizing: border-box; border: 4px solid #fcfcfc; box-shadow: 0 0 0 4px #000, inset 0 0 0 4px #000;
   background-color: #1c1c4c; background-image: conic-gradient(#28285c 25%, transparent 0 50%, #28285c 0 75%, transparent 0); background-size: 32px 32px; }
 .o-room.you { background-color: #4c1414; background-image: conic-gradient(#5c2020 25%, transparent 0 50%, #5c2020 0 75%, transparent 0); }
@@ -631,23 +631,23 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
 .o-lines { position: absolute; left: 0; top: 0; z-index: 1; pointer-events: none; overflow: visible; }
 .o-line { fill: none; stroke-width: 3; stroke-dasharray: 6 6; stroke-linecap: square; }
 .o-lbl { font-family: 'Press Start 2P', monospace; font-size: 7px; paint-order: stroke; stroke: #000; stroke-width: 3px; }
-.o-desk { position: absolute; z-index: 2; width: 140px; height: 228px; box-sizing: border-box; padding: 6px 0 0; margin: 0; display: flex; flex-direction: column; align-items: center; gap: 5px;
+.o-desk { position: absolute; z-index: 2; width: 116px; height: 172px; box-sizing: border-box; padding: 6px 0 0; margin: 0; display: flex; flex-direction: column; align-items: center; gap: 5px;
   cursor: pointer; border: 3px solid transparent; border-radius: 0; background: none; color: #fcfcfc; font: inherit; }
 .o-desk:hover, .o-desk:focus-visible { border: 3px dashed #7c7c7c; outline: none; }
 .o-desk.sel { border: 3px dashed #f8d838; background: rgba(248, 216, 56, 0.08); }
 .o-name { display: flex; align-items: center; gap: 6px; font-size: 9px; }
 .o-badge { width: 15px; height: 15px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; font-family: 'Press Start 2P', monospace; font-size: 8px; color: #000; border: 2px solid #000; box-shadow: 0 0 0 2px #fcfcfc; }
-.o-title { font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 11.5px; line-height: 14px; height: 28px; max-width: 128px; text-align: center; overflow: hidden; }
-.o-seat { position: relative; height: 75px; }
+.o-title { font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 11px; line-height: 13px; height: 26px; max-width: 106px; text-align: center; overflow: hidden; }
+.o-seat { position: relative; height: 47px; }
 .o-z { position: absolute; right: -14px; top: -4px; font-size: 9px; color: #bcbcbc; }
-.o-mon { position: relative; margin-top: -16px; width: 122px; height: 30px; box-sizing: border-box; background: #000; border: 3px solid #bcbcbc; box-shadow: 0 0 0 2px #000;
-  font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 10px; line-height: 12px; padding: 3px 4px; overflow: hidden; white-space: nowrap; text-align: left; }
+.o-mon { position: relative; margin-top: -8px; width: 102px; height: 26px; box-sizing: border-box; background: #000; border: 3px solid #bcbcbc; box-shadow: 0 0 0 2px #000;
+  font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 9.5px; line-height: 12px; padding: 2px 4px; overflow: hidden; white-space: nowrap; text-align: left; }
 .o-type { display: inline-block; overflow: hidden; vertical-align: top; width: calc(var(--n) * 1ch); }
-.o-table { width: 132px; height: 12px; background: #ac7c00; border: 3px solid #000; box-shadow: inset 0 -4px 0 #7c4c00; }
+.o-table { width: 108px; height: 10px; background: #ac7c00; border: 3px solid #000; box-shadow: inset 0 -4px 0 #7c4c00; }
 .o-word { font-size: 8px; }
 .o-hp { display: flex; align-items: center; gap: 2px; font-size: 7px; color: #bcbcbc; }
 .o-hp b { width: 5px; height: 7px; background: #3c3c3c; display: block; }
-.o-detail { margin: 28px auto 0; width: 660px; box-sizing: border-box; border: 4px solid #fcfcfc; box-shadow: 0 0 0 4px #000; padding: 14px 16px; display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 16px;
+.o-detail { margin: 0 auto; max-width: 660px; box-sizing: border-box; border: 4px solid #fcfcfc; box-shadow: 0 0 0 4px #000; padding: 14px 16px; display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 16px;
   font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 12.5px; line-height: 1.6; }
 .o-detail h3 { margin: 0 0 4px; font-family: 'Press Start 2P', monospace; font-size: 11px; line-height: 1.6; font-weight: 400; }
 .o-detail .k { color: #8c8c8c; display: inline-block; width: 8ch; }
@@ -656,6 +656,37 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
 .o-acts button { font-family: 'Press Start 2P', monospace; font-size: 9px; padding: 8px 10px; border: 3px solid #fcfcfc; background: #000; color: #fcfcfc; border-radius: 0; cursor: pointer; }
 .o-acts button.ok { background: #f8d838; color: #000; border-color: #000; box-shadow: 0 0 0 2px #f8d838; }
 .o-acts button.no { background: #e83838; border-color: #000; box-shadow: 0 0 0 2px #e83838; }
+.o-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 22px; font-family: 'Press Start 2P', monospace; font-size: 9px; }
+.o-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.o-crumbs button { font: inherit; color: #f8d838; background: none; border: 0; padding: 6px 0; cursor: pointer; text-decoration: underline; text-underline-offset: 4px; }
+.o-crumbs span { color: #fcfcfc; }
+.o-crumbs .o-sep { color: #7c7c7c; }
+.o-switch { display: inline-flex; border: 3px solid #fcfcfc; }
+.o-switch button { font: inherit; padding: 8px 12px; border: 0; background: #000; color: #fcfcfc; cursor: pointer; border-radius: 0; }
+.o-switch button[aria-pressed="true"] { background: #f8d838; color: #000; }
+.o-sum { font-family: 'Press Start 2P', monospace; font-size: 9px; line-height: 1.8; margin-bottom: 16px; color: #fcfcfc; }
+.o-teams { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; }
+.o-team { display: flex; flex-direction: column; gap: 10px; text-align: left; padding: 14px; background: #1c1c4c; color: #fcfcfc; border: 4px solid #fcfcfc; box-shadow: 0 0 0 4px #000; border-radius: 0; cursor: pointer; font: inherit; }
+.o-team:hover, .o-team:focus-visible { border-color: #f8d838; outline: none; }
+.o-team.new { align-items: center; justify-content: center; background: #000; border-style: dashed; color: #f8d838; font-family: 'Press Start 2P', monospace; font-size: 9px; min-height: 150px; }
+.o-team-name { font-family: 'Press Start 2P', monospace; font-size: 10px; color: #f8d838; line-height: 1.6; }
+.o-team-goal { font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 12px; color: #bcbcbc; }
+.o-team-crew { display: flex; gap: 10px; }
+.o-mini { position: relative; display: inline-block; }
+.o-mini .o-badge { position: absolute; right: -6px; top: -4px; width: 12px; height: 12px; font-size: 6px; }
+.o-team-count { font-family: 'Press Start 2P', monospace; font-size: 7px; line-height: 1.8; }
+.o-kanban { display: grid; grid-template-columns: repeat(3, minmax(190px, 1fr)); gap: 14px; }
+.o-col { border: 3px solid #fcfcfc; padding: 10px; display: flex; flex-direction: column; gap: 10px; min-height: 260px; background: #0c0c24; }
+.o-col h3 { margin: 0 0 4px; display: flex; align-items: center; gap: 8px; font-family: 'Press Start 2P', monospace; font-size: 8px; font-weight: 400; }
+.o-col h3 .n { margin-left: auto; color: #fcfcfc; }
+.o-card { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 10px; background: #000; color: #fcfcfc; border: 3px solid #5c5c7c; border-radius: 0; cursor: pointer; font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 11.5px; }
+.o-card:hover, .o-card:focus-visible { border-color: #f8d838; outline: none; }
+.o-card-top { display: flex; align-items: center; gap: 10px; }
+.o-card-top b { display: block; font-family: 'Press Start 2P', monospace; font-size: 8px; font-weight: 400; margin-bottom: 4px; }
+.o-card-now { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
+.o-card-rel { font-size: 11px; color: #f8d838; }
+.o-empty { color: #5c5c7c; font-family: 'Press Start 2P', monospace; font-size: 8px; padding: 8px 2px; }
+@media (max-width: 760px) { .o-kanban { grid-template-columns: minmax(0, 1fr); } }
 @media (prefers-reduced-motion: no-preference) {
   .o-bot.working { animation: o-bob 0.5s steps(2) infinite; }
   .o-bot.approval { animation: o-shake 0.35s steps(2) infinite; }
@@ -765,7 +796,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     { id: 'skills', label: 'Skills Studio (live search)', uc: 'UC-09' },
     { id: 'activity', label: 'Activity (Workspace Tools vs Agent Bridge)', uc: 'UC-11' },
     { id: 'mention', label: '@-Mentions & /-Skills', uc: 'UC-12' },
-    { id: 'office', label: 'Office: agents at work (8-bit)', uc: 'UC-14' },
+    { id: 'office', label: 'Teams: overview → Kanban / Office → member (8-bit)', uc: 'UC-14' },
     { id: 'doc_first', label: 'Doctor: first launch, not logged in', uc: 'UC-13' },
     { id: 'doc_terminal', label: 'Logged in from a terminal → back to Chorus', uc: 'UC-13' },
     { id: 'doc_wait', label: 'Chorus on another screen: 30 s re-check', uc: 'UC-13' },
@@ -933,7 +964,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
       S.memTab = 'handoffs';
     } else if (id === 'office') {
       S.view = 'office';
-      S.officeSel = 0;
+      S.tm = { team: null, mode: 'kanban', member: null };
     } else if (id === 'activity') {
       S.view = 'activity';
       S.actFilter = 'all';
@@ -962,7 +993,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
       ${navItem('skills', 'skills', 'Skills')}
       ${navItem('memory', 'memory', 'Shared memory')}
       ${navItem('activity', 'activity', 'Activity log')}
-      ${navItem('office', 'office', 'Office')}
+      ${navItem('office', 'office', 'Teams')}
       
       <div class="sb-label">Recent chats</div>
       <div class="recents">
@@ -1986,123 +2017,175 @@ Chorus 1.0.12, core 1.0.0, installer …</pre>
   }
 
   /* ---------- Main Render Function ---------- */
-  /* ---------- Office (8-bit) ----------
-     Every recent chat is an agent at a desk. Nothing new: state from S.notifs (approvals) and EVENTS (activity),
-     the handoff from Shared memory, the quota bar from AG usage. */
+  /* ---------- Teams (8-bit): overview → team (Kanban | Office) → member ----------
+     Every recent chat is an agent, a member of one team. State from S.notifs (approvals) and EVENTS (activity),
+     the handoff from Shared memory, the quota bar from AG usage. Kanban and Office are two views of the same members. */
   const O_COLOR = { claude: '#f87858', codex: '#00c8a8', agy: '#3c8cfc' };
   const O_ST = {
-    working: { c: '#f8d838', icon: '▶', word: 'WORKING' },
-    approval: { c: '#e83838', icon: '!', word: 'NEEDS OK' },
-    idle: { c: '#7c7c7c', icon: 'z', word: 'IDLE' }
+    approval: { c: '#e83838', icon: '!', word: 'NEEDS OK', col: 'NEEDS YOUR OK' },
+    working: { c: '#f8d838', icon: '▶', word: 'WORKING', col: 'WORKING' },
+    idle: { c: '#7c7c7c', icon: 'z', word: 'IDLE', col: 'IDLE' }
   };
-  // the desks: the sidebar's recent chats; Codex continues Cake order page after the handoff (Shared memory)
+  // the sidebar's recent chats; Codex continues Cake order page after the handoff (Shared memory)
   const O_DESKS = [
-    { chat: 'Cake order page', agent: 'claude', events: ['e4', 'e5', 'e6', 'e7', 'e8', 'e9'], cx: 82, top: 26 },
-    { chat: 'Cake order page', agent: 'codex', events: ['e1', 'e2', 'e3'], from: 0, cx: 240, top: 26 },
-    { chat: 'Fix contact form', agent: 'codex', events: [], cx: 398, top: 26 },
-    { chat: 'Holiday landing page', agent: 'agy', events: [], cx: 82, top: 290 },
-    { chat: 'Menu colors', agent: 'claude', events: [], cx: 240, top: 290 }
+    { chat: 'Cake order page', agent: 'claude', events: ['e4', 'e5', 'e6', 'e7', 'e8', 'e9'] },
+    { chat: 'Cake order page', agent: 'codex', events: ['e1', 'e2', 'e3'], from: 0 },
+    { chat: 'Fix contact form', agent: 'codex', events: [] },
+    { chat: 'Holiday landing page', agent: 'agy', events: [] },
+    { chat: 'Menu colors', agent: 'claude', events: [] }
   ];
-  const O_YOU = { x: 500, y: 0, w: 160, h: 534, cx: 580, top: 150 };
+  const TEAMS = [
+    { id: 'cake', name: 'Cake shop crew', goal: 'Customers order a birthday cake online and pick it up.', members: [0, 1, 4] },
+    { id: 'web', name: 'Website crew', goal: 'The contact form and the holiday landing page.', members: [2, 3] }
+  ];
   // 12×14 sprites. K black, W white, R red, Y yellow, B agent color, A antenna (status color), H hair, S skin
   const ROBOT = ['.....KK.....', '.....AA.....', '.....KK.....', '..KKKKKKKK..', '..KWWWWWWK..', '..KWKWWKWK..', '..KWWWWWWK..',
     '..KWWRRWWK..', '...KKKKKK...', '.KKBBBBBBKK.', '.KBBBBBBBBK.', '.KBBYYYYBBK.', '.KBBBBBBBBK.', '..KK....KK..'];
   const HUMAN = ['...HHHHHH...', '..HHHHHHHH..', '..HSSSSSSH..', '..SSKSSKSS..', '..SSSSSSSS..', '...SSRRSS...', '....SSSS....',
     '..RRRWWRRR..', '.RRRRWWRRRR.', '.RRRRWWRRRR.', '.SRRRRRRRRS.', '..RRRRRRRR..', '..KKK..KKK..', '..KKK..KKK..'];
-  function oSprite(map, pal, cls) {
+  function oSprite(map, pal, cls, w = 40) {
     let r = '';
     map.forEach((row, y) => [...row].forEach((ch, x) => {
       if (pal[ch]) r += `<rect x="${x}" y="${y}" width="1" height="1" fill="${pal[ch]}"${ch === 'A' ? ' class="ant"' : ''}/>`;
     }));
-    return `<svg class="o-bot ${cls}" viewBox="0 0 12 14" width="64" height="75" shape-rendering="crispEdges" aria-hidden="true">${r}</svg>`;
+    return `<svg class="o-bot ${cls}" viewBox="0 0 12 14" width="${w}" height="${Math.round(w * 14 / 12)}" shape-rendering="crispEdges" aria-hidden="true">${r}</svg>`;
   }
+  const oPal = (a) => ({ K: '#000', W: '#fcfcfc', R: '#e83838', Y: '#f8d838', B: O_COLOR[a.agent], A: O_ST[a.state].c });
+  const oBadge = (st) => `<span class="o-badge" style="background:${st.c}">${st.icon}</span>`;
   function oDesks() {
-    return O_DESKS.map((d) => {
+    return O_DESKS.map((d, i) => {
       const ap = S.notifs.find((n) => n.agent === d.agent && n.chat === d.chat) || null;
       const evs = d.events.map((id) => EVENTS.find((e) => e.id === id));
       let state = 'idle', screen = 'zzz';
       if (ap && ap.status === 'pending') { state = 'approval'; screen = ap.cmd; }
       else if (ap && ap.status === 'allowed') { state = 'working'; screen = '> ' + ap.cmd; }
       else if (evs.length && evs[0] === EVENTS[0]) { state = 'working'; screen = '> ' + evs[0].name.replace('agent-bridge: ', ''); }
-      return { ...d, ap, evs, state, screen };
+      return { ...d, i, ap, evs, state, screen, team: TEAMS.find((t) => t.members.includes(i)) };
     });
   }
   function oQuota(k) {
     const u = AG[k].usage.limit;
-    if (u == null) return `<div class="o-hp">QUOTA OK</div>`;
+    if (u == null) return `<span class="o-hp">QUOTA OK</span>`;
     const c = u >= 70 ? '#e83838' : u >= 40 ? '#f8d838' : '#fcfcfc';
-    return `<div class="o-hp">5H ${Array.from({ length: 10 }, (_, i) => `<b${i < Math.round(u / 10) ? ` style="background:${c}"` : ''}></b>`).join('')} ${u}%</div>`;
+    return `<span class="o-hp">5H ${Array.from({ length: 10 }, (_, i) => `<b${i < Math.round(u / 10) ? ` style="background:${c}"` : ''}></b>`).join('')} ${u}%</span>`;
+  }
+  const oCounts = (list) => Object.keys(O_ST).map((k) => {
+    const n = list.filter((a) => a.state === k).length;
+    return n ? `<span style="color:${O_ST[k].c}">${n} ${O_ST[k].word}</span>` : '';
+  }).filter(Boolean).join(' · ');
+
+  // level 1: every team
+  function oOverview(D) {
+    const cards = TEAMS.map((t) => {
+      const m = t.members.map((i) => D[i]);
+      return `<button class="o-team" type="button" data-tm-team="${t.id}">
+        <span class="o-team-name">${esc(t.name.toUpperCase())}</span>
+        <span class="o-team-goal">${esc(t.goal)}</span>
+        <span class="o-team-crew">${m.map((a) => `<span class="o-mini" title="${esc(AG[a.agent].name + ' · ' + a.chat)}">${oSprite(ROBOT, oPal(a), a.state, 28)}${oBadge(O_ST[a.state])}</span>`).join('')}</span>
+        <span class="o-team-count">${m.length} MEMBERS · ${oCounts(m)}</span>
+      </button>`;
+    }).join('');
+    return `<div class="o-sum">ALL TEAMS · ${D.length} AGENTS · ${oCounts(D)}</div>
+      <div class="o-teams">${cards}<button class="o-team new" type="button" data-toast="New team: pick its agents and its goal">＋ NEW TEAM</button></div>`;
   }
 
-  function officeHTML() {
-    const D = oDesks();
-    const sel = Math.min(S.officeSel || 0, D.length - 1);
+  // level 2a: the team as a kanban, one column per state
+  function oKanban(D, team) {
+    const m = team.members.map((i) => D[i]);
+    return `<div class="o-kanban">${Object.entries(O_ST).map(([k, st]) => {
+      const cards = m.filter((a) => a.state === k);
+      return `<section class="o-col" aria-label="${st.col}">
+        <h3 style="color:${st.c}">${oBadge(st)}${st.col}<span class="n">${cards.length}</span></h3>
+        ${cards.map((a) => `<button type="button" class="o-card" data-tm-member="${a.i}">
+          <span class="o-card-top">${oSprite(ROBOT, oPal(a), a.state, 28)}<span><b style="color:${O_COLOR[a.agent]}">${AG[a.agent].cli.toUpperCase()}</b>${esc(a.chat)}</span></span>
+          <span class="o-card-now" style="color:${st.c}">${esc(a.screen)}</span>
+          ${a.from != null ? `<span class="o-card-rel">◀ handoff from ${AG[D[a.from].agent].name}</span>` : ''}
+          ${D.some((b) => b.from === a.i) ? `<span class="o-card-rel">handoff ▶ ${AG[D.find((b) => b.from === a.i).agent].name}</span>` : ''}
+          ${a.state === 'approval' ? `<span class="o-card-rel" style="color:#e83838">! waits for you</span>` : ''}
+          ${oQuota(a.agent)}
+        </button>`).join('') || '<div class="o-empty">NOBODY</div>'}
+      </section>`;
+    }).join('')}</div>`;
+  }
+
+  // level 2b: the same team as an office: desks, handoff lines, approvals running to your desk
+  function oOffice(D, team) {
+    const m = team.members.map((i) => ({ ...D[i] }));
+    const cols = Math.min(m.length, 3), rows = Math.ceil(m.length / 3);
+    const RW = cols * 124 + 24, RH = rows * 184 + 30;
+    m.forEach((a, n) => { a.cx = 12 + 62 + (n % 3) * 124; a.top = 24 + Math.floor(n / 3) * 184; });
+    const YX = RW + 22, YW = 140, YCX = YX + 70, YTOP = 24, W = YX + YW, H = RH + 34;
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const packet = (d, color, dur) => still ? '' : `<rect x="-4" y="-4" width="8" height="8" fill="${color}" stroke="#000" stroke-width="2"><animateMotion dur="${dur}s" repeatCount="indefinite" path="${d}"/></rect>`;
-
     const lines = [];
     let k = 0;
-    D.forEach((a) => {
-      if (a.from != null) {
-        const q = D[a.from], y = q.top + 98, d = `M${q.cx + 30} ${y} L${a.cx - 30} ${y}`;
-        lines.push(`<path class="o-line" stroke="#f8d838" d="${d}"/>${packet(d, '#f8d838', 1.2)}<text class="o-lbl" x="${(q.cx + a.cx) / 2}" y="${y - 10}" fill="#f8d838" text-anchor="middle">HANDOFF</text>`);
+    m.forEach((a) => {
+      const q = m.find((x) => x.i === a.from);
+      if (q) {
+        const d = `M${q.cx + 24} ${q.top + 76} L${a.cx - 24} ${a.top + 76}`;
+        lines.push(`<path class="o-line" stroke="#f8d838" d="${d}"/>${packet(d, '#f8d838', 1.2)}<text class="o-lbl" x="${(q.cx + a.cx) / 2}" y="${q.top + 66}" fill="#f8d838" text-anchor="middle">HANDOFF</text>`);
       }
       if (a.state === 'approval') {
-        const cy = 262 + k * 6, ey = O_YOU.top + 90 + k * 14;
+        const cy = RH + 12 + k * 7, ex = YCX - 12 + k * 12;
         k++;
-        const d = `M${a.cx} ${a.top + 224} L${a.cx} ${cy} L470 ${cy} L470 ${ey} L${O_YOU.cx - 72} ${ey}`;
+        const d = `M${a.cx} ${a.top + 168} L${a.cx} ${cy} L${ex} ${cy} L${ex} ${YTOP + 168}`;
         lines.push(`<path class="o-line" stroke="#e83838" d="${d}"/>${packet(d, '#e83838', 2.4)}`);
       }
     });
-
-    const desk = (a, i) => {
+    const desk = (a) => {
       const st = O_ST[a.state];
-      const pal = { K: '#000', W: '#fcfcfc', R: '#e83838', Y: '#f8d838', B: O_COLOR[a.agent], A: st.c };
-      return `<button class="o-desk${i === sel ? ' sel' : ''}" type="button" data-office="${i}" style="left:${a.cx - 70}px;top:${a.top}px" aria-label="${esc(AG[a.agent].name + ', ' + a.chat + ', ' + st.word.toLowerCase())}">
-        <span class="o-name"><span class="o-badge" style="background:${st.c}">${st.icon}</span><span style="color:${O_COLOR[a.agent]}">${AG[a.agent].cli.toUpperCase()}</span></span>
+      return `<button class="o-desk" type="button" data-tm-member="${a.i}" style="left:${a.cx - 58}px;top:${a.top}px" aria-label="${esc(AG[a.agent].name + ', ' + a.chat + ', ' + st.word.toLowerCase())}">
+        <span class="o-name">${oBadge(st)}<span style="color:${O_COLOR[a.agent]}">${AG[a.agent].cli.toUpperCase()}</span></span>
         <span class="o-title">${esc(a.chat)}</span>
-        <span class="o-seat">${oSprite(ROBOT, pal, a.state)}${a.state === 'idle' ? '<span class="o-z">z</span>' : ''}</span>
+        <span class="o-seat">${oSprite(ROBOT, oPal(a), a.state)}${a.state === 'idle' ? '<span class="o-z">z</span>' : ''}</span>
         <span class="o-mon" style="color:${st.c}">${a.state === 'working' ? `<span class="o-type" style="--n:${a.screen.length}">${esc(a.screen)}</span>` : esc(a.screen)}</span>
         <span class="o-table"></span>
         <span class="o-word" style="color:${st.c}">${st.word}</span>
         ${oQuota(a.agent)}
       </button>`;
     };
-
-    const pend = S.notifs.filter((n) => n.status === 'pending');
-    const you = `<button class="o-desk" type="button" data-office-bell="1" style="left:${O_YOU.cx - 70}px;top:${O_YOU.top}px" aria-label="Your approvals: ${pend.length} waiting">
-        <span class="o-name"><span class="o-badge" style="background:${pend.length ? '#e83838' : '#7c7c7c'}">${pend.length ? '!' : 'z'}</span>YOU</span>
+    const pend = m.filter((a) => a.state === 'approval');
+    const you = `<button class="o-desk" type="button" data-office-bell="1" style="left:${YCX - 58}px;top:${YTOP}px" aria-label="Your approvals: ${pend.length} from this team">
+        <span class="o-name">${oBadge(pend.length ? O_ST.approval : O_ST.idle)}YOU</span>
         <span class="o-title">${pend.length} to approve</span>
         <span class="o-seat">${oSprite(HUMAN, { K: '#000', W: '#fcfcfc', R: '#e83838', H: '#7c3c00', S: '#f8b878' }, '')}</span>
-        <span class="o-mon" style="color:#e83838">${pend.length ? '! ' + esc(pend[0].cmd) : 'all clear'}</span>
+        <span class="o-mon" style="color:#e83838">${pend.length ? '! ' + esc(pend[0].screen) : 'all clear'}</span>
         <span class="o-table"></span>
         <span class="o-word" style="color:#fcfcfc">INBOX ›</span>
       </button>`;
+    return `<div class="o-legend">${Object.values(O_ST).map((x) => `<span>${oBadge(x)}${x.word.toLowerCase()}</span>`).join('')}
+        <span><i style="color:#f8d838"></i>handoff</span><span><i style="color:#e83838"></i>needs your OK</span><span>5H bar: quota used</span></div>
+      <div class="office" style="width:${W}px;height:${H}px">
+        <div class="o-room" style="left:0;top:0;width:${RW}px;height:${RH}px"><span class="o-tab">${esc(team.name.toUpperCase())} · ${m.length}</span></div>
+        <div class="o-room you" style="left:${YX}px;top:0;width:${YW}px;height:${RH}px"><span class="o-tab">YOUR DESK</span></div>
+        <svg class="o-lines" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${lines.join('')}</svg>
+        ${m.map(desk).join('')}${you}
+      </div>`;
+  }
 
-    const rooms = `<div class="o-room" style="left:0;top:0;width:480px;height:534px"><span class="o-tab">OFFICE · ${D.length} AGENTS</span></div>
-      <div class="o-room you" style="left:${O_YOU.x}px;top:${O_YOU.y}px;width:${O_YOU.w}px;height:${O_YOU.h}px"><span class="o-tab">YOUR DESK</span></div>`;
-
-    // the selected agent: what it is doing, how it relates, what it did
-    const a = D[sel], st = O_ST[a.state];
+  // level 3: one member: what it does now, how it relates, what it did
+  function oMember(D, i) {
+    const a = D[i], st = O_ST[a.state];
     const rel = [];
     if (a.from != null) rel.push(`<span style="color:#f8d838">◀ handoff</span> from <span style="color:${O_COLOR[D[a.from].agent]}">${AG[D[a.from].agent].name}</span> · reason: usage limit · 138 tokens of context`);
-    D.forEach((b) => { if (b.from === sel) rel.push(`<span style="color:#f8d838">handoff ▶</span> to <span style="color:${O_COLOR[b.agent]}">${AG[b.agent].name}</span> · it continues ${esc(b.chat)}`); });
+    D.forEach((b) => { if (b.from === i) rel.push(`<span style="color:#f8d838">handoff ▶</span> to <span style="color:${O_COLOR[b.agent]}">${AG[b.agent].name}</span>, who continues ${esc(b.chat)}`); });
     if (a.ap && a.ap.status === 'pending') rel.push(`<span style="color:#e83838">! asks you</span> ${esc(a.ap.title)}: <code>${esc(a.ap.cmd)}</code>`);
-    if (a.ap && a.ap.status !== 'pending') rel.push(`<span style="color:#7c7c7c">you ${a.ap.status} ${esc(a.ap.title.toLowerCase())}</span>`);
+    if (a.ap && a.ap.status !== 'pending') rel.push(`<span style="color:#8c8c8c">you ${a.ap.status} ${esc(a.ap.title.toLowerCase())}</span>`);
     if (!rel.length) rel.push('<span style="color:#8c8c8c">no handoff, nothing waiting for you</span>');
     const log = a.evs.length
       ? a.evs.map((e) => `<span style="color:#8c8c8c">${e.t}</span> <span style="color:${e.st === 'ok' ? '#58d854' : '#e83838'}">${e.st === 'ok' ? '✓' : '✗'}</span> ${esc(e.name)} <span style="color:#bcbcbc">${esc(e.sum)}</span>`).join('<br>')
       : '<span style="color:#8c8c8c">No activity recorded yet.</span>';
-    const pal = { K: '#000', W: '#fcfcfc', R: '#e83838', Y: '#f8d838', B: O_COLOR[a.agent], A: st.c };
-    const detail = `<div class="o-detail" aria-live="polite">
-      <div>${oSprite(ROBOT, pal, a.state)}</div>
+    const mates = a.team.members.filter((j) => j !== i).map((j) => D[j]);
+    return `<div class="o-detail" aria-live="polite">
+      <div>${oSprite(ROBOT, oPal(a), a.state, 56)}</div>
       <div>
         <h3><span style="color:${O_COLOR[a.agent]}">${AG[a.agent].name.toUpperCase()}</span> · <span style="color:${st.c}">${st.icon} ${st.word}</span></h3>
-        <div><b>${esc(a.chat)}</b> <span style="color:#8c8c8c">· ${modelName(a.agent, S.model[a.agent])} · ${AG[a.agent].account}</span></div>
+        <div><b>${esc(a.chat)}</b> <span style="color:#8c8c8c">· ${modelName(a.agent, S.model[a.agent])} · ${AG[a.agent].account} · ${esc(a.team.name)}</span></div>
         <div style="margin-top:4px">${oQuota(a.agent)}</div>
         <div style="margin-top:10px">${rel.join('<br>')}</div>
         <div style="margin-top:10px"><span class="k">now</span><span style="color:${st.c}">${esc(a.screen)}</span></div>
         <div style="margin-top:6px">${log}</div>
+        <div style="margin-top:10px"><span class="k">team</span>${mates.map((b) => `<button type="button" class="o-mate" data-tm-member="${b.i}" style="font:inherit;background:none;border:0;padding:0 10px 0 0;cursor:pointer;color:${O_COLOR[b.agent]}">${oBadge(O_ST[b.state])} ${AG[b.agent].cli} · ${esc(b.chat)}</button>`).join('')}</div>
         <div class="o-acts">
           ${a.ap && a.ap.status === 'pending' ? `<button type="button" class="ok" data-office-ap="${a.ap.id}:allowed">Y ALLOW</button><button type="button" class="no" data-office-ap="${a.ap.id}:denied">N DENY</button>` : ''}
           <button type="button" data-open-chat="t_cake">OPEN CHAT</button>
@@ -2110,16 +2193,22 @@ Chorus 1.0.12, core 1.0.0, installer …</pre>
         </div>
       </div>
     </div>`;
+  }
 
-    const legend = `<div class="o-legend">
-      ${Object.values(O_ST).map((x) => `<span><span class="o-badge" style="background:${x.c}">${x.icon}</span>${x.word.toLowerCase()}</span>`).join('')}
-      <span><i style="color:#f8d838"></i>handoff</span><span><i style="color:#e83838"></i>needs your OK</span><span>5H ▮▮▯ quota used</span>
-    </div>`;
-
+  function teamsHTML() {
+    const T = S.tm || (S.tm = { team: null, mode: 'kanban', member: null });
+    const D = oDesks();
+    const team = TEAMS.find((t) => t.id === T.team);
+    const parts = [['TEAMS', 'top']];
+    if (team) parts.push([team.name.toUpperCase(), 'team']);
+    if (team && T.member != null) parts.push([`${AG[D[T.member].agent].cli.toUpperCase()} · ${D[T.member].chat.toUpperCase()}`]);
+    const crumbs = parts.map(([label, go], n) => n === parts.length - 1 ? `<span>${esc(label)}</span>` : `<button type="button" data-tm-go="${go}">${esc(label)}</button>`).join('<span class="o-sep">›</span>');
+    const sw = team && T.member == null ? `<div class="o-switch" role="group" aria-label="View">${['kanban', 'office'].map((v) => `<button type="button" data-tm-mode="${v}" aria-pressed="${T.mode === v}">${v.toUpperCase()}</button>`).join('')}</div>` : '';
+    const body = !team ? oOverview(D) : T.member != null ? oMember(D, T.member) : T.mode === 'office' ? oOffice(D, team) : oKanban(D, team);
     return `<div class="main">${topbarHTML('')}
       <div class="pg"><div class="pg-inner">
-        <div class="pg-title"><div><h2>Office</h2><p>Every chat is an agent at a desk. Badge and antenna say how it is doing, the monitor shows what it does right now, the lines show who hands work to whom and who waits for you. Click an agent to see its work.</p></div></div>
-        <div class="o-stage">${legend}<div class="office">${rooms}<svg class="o-lines" width="660" height="534" viewBox="0 0 660 534">${lines.join('')}</svg>${D.map(desk).join('')}${you}</div>${detail}</div>
+        <div class="pg-title"><div><h2>Teams</h2><p>Your agents grouped in teams. Pick a team, see it as a Kanban or as an Office, then pick a member to see its work.</p></div></div>
+        <div class="o-stage"><div class="o-bar"><nav class="o-crumbs" aria-label="Teams path">${crumbs}</nav>${sw}</div>${body}</div>
       </div></div>
     </div>`;
   }
@@ -2137,7 +2226,7 @@ Chorus 1.0.12, core 1.0.0, installer …</pre>
     if (S.view === 'skills') mainView = skillsHTML();
     else if (S.view === 'memory') mainView = memoryHTML();
     else if (S.view === 'activity') mainView = activityHTML();
-    else if (S.view === 'office') mainView = officeHTML();
+    else if (S.view === 'office') mainView = teamsHTML();
     else if (S.view === 'doctor') mainView = doctorHTML();
     else mainView = S.screen === 'home' ? homeHTML() : threadHTML();
 
@@ -2212,8 +2301,23 @@ Chorus 1.0.12, core 1.0.0, installer …</pre>
       return render();
     }
     if (d.dr) return drAct(d.dr);
-    if (d.office !== undefined) {
-      S.officeSel = Number(d.office);
+    if (d.tmGo) {
+      S.tm.member = null;
+      if (d.tmGo === 'top') S.tm.team = null;
+      return render();
+    }
+    if (d.tmTeam) {
+      S.tm.team = d.tmTeam;
+      S.tm.member = null;
+      return render();
+    }
+    if (d.tmMode) {
+      S.tm.mode = d.tmMode;
+      return render();
+    }
+    if (d.tmMember !== undefined) {
+      S.tm.member = Number(d.tmMember);
+      S.tm.team = oDesks()[S.tm.member].team.id;
       return render();
     }
     if (d.officeBell) {
