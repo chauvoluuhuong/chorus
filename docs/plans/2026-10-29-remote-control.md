@@ -1,6 +1,6 @@
 # Remote control: Telegram and a VPS
 
-Status: **proposal**, waiting for the owner's choices (§7). Nothing is built.
+Status: **agreed** on 2026-10-29 (choices in §7). Nothing is built yet; next step R1.
 
 ## 1. Outcome
 
@@ -90,7 +90,7 @@ execution by design. Guards:
 - Every remote write is logged in `~/.chorus/remote.log` (who, what, which chat) and shown in the app.
 - Remote can be switched off with one toggle; it is **off by default**.
 - New chats from remote: only in projects already known to Chorus (no free path); skip-permissions from remote needs a
-  second confirm in the app, or is refused (owner's choice, §7).
+  confirm in the Mac app (§7).
 - Screens sent to Telegram are plain text, secrets are not redacted automatically: the Settings panel says so.
 - B: HTTPS only, no token in URLs, device pairing shown on the Mac, per-device revoke, rate limit on login.
 
@@ -118,11 +118,10 @@ Each step ships as a preview (`vX.Y.Z-preview.N`); production only after "approv
 - **Headless CLI logins** (B2) are unproven per CLI; agy may not support it at all.
 - Provider terms (D4) for running agents unattended on a server: check before B2 ships.
 
-## 7. Decisions for the owner
+## 7. Decisions (owner, 2026-10-29)
 
-1. Which way first: A then B2 (recommended), A only, or B first.
-2. Telegram privacy: accept that prompts and screens pass through Telegram (bot chats are not end-to-end encrypted), or only
-   send notifications + buttons and never screen text.
-3. Skip-permissions chats started from remote: refused, or allowed with a confirm in the app.
-4. Self-hosted only (each user runs their own bot and VPS, $0 for Chorus), or later a Chorus-hosted relay (a chorus-core /
-   chorus-admin decision with a monthly cost; not planned here).
+1. **Order**: Way A (Telegram bot) first, then B2 (agents on the user's VPS) with B1's relay on the same box.
+2. **Telegram privacy**: the bot may send screen text and replies, not only buttons; the Settings panel warns that it all
+   passes through Telegram's servers.
+3. **Skip-permissions from remote**: allowed, but only after a confirm in the Mac app.
+4. Self-hosted only for now ($0 for Chorus); a Chorus-hosted relay is not planned here.
