@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,300;6..72,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,300;6..72,400&family=JetBrains+Mono:wght@400;500&family=Press+Start+2P&display=swap">
 <style>
 /* 
   Chorus Desktop Mockup v3
@@ -615,6 +615,61 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
 .app.dimmed .sidebar, .app.dimmed .main { opacity: .45; }
 .dr-steps { display: flex; gap: 8px; font-size: 12px; color: var(--faint); }
 .dr-steps span.on { color: var(--ink); font-weight: 600; } .dr-steps span.done { color: var(--ok); }
+
+/* ---------- Office: an 8-bit room where every chat is an agent at a desk ----------
+   Palette: black, white, red, yellow + the agent colors. Same look in light and dark (it is a game screen). */
+.o-stage { background: #000; color: #fcfcfc; border-radius: 10px; padding: 18px 18px 22px; overflow-x: auto; }
+.o-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 24px; font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 12px; color: #bcbcbc; }
+.o-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.o-legend i { display: inline-block; width: 22px; border-top: 3px dashed; }
+.office { position: relative; width: 660px; height: 534px; margin: 0 auto; font-family: 'Press Start 2P', monospace; }
+.o-room { position: absolute; box-sizing: border-box; border: 4px solid #fcfcfc; box-shadow: 0 0 0 4px #000, inset 0 0 0 4px #000;
+  background-color: #1c1c4c; background-image: conic-gradient(#28285c 25%, transparent 0 50%, #28285c 0 75%, transparent 0); background-size: 32px 32px; }
+.o-room.you { background-color: #4c1414; background-image: conic-gradient(#5c2020 25%, transparent 0 50%, #5c2020 0 75%, transparent 0); }
+.o-tab { position: absolute; top: -16px; left: 10px; background: #f8d838; color: #000; font-size: 9px; padding: 4px 6px; border: 3px solid #000; white-space: nowrap; }
+.o-room.you .o-tab { background: #e83838; color: #fcfcfc; left: 50%; transform: translateX(-50%); }
+.o-lines { position: absolute; left: 0; top: 0; z-index: 1; pointer-events: none; overflow: visible; }
+.o-line { fill: none; stroke-width: 3; stroke-dasharray: 6 6; stroke-linecap: square; }
+.o-lbl { font-family: 'Press Start 2P', monospace; font-size: 7px; paint-order: stroke; stroke: #000; stroke-width: 3px; }
+.o-desk { position: absolute; z-index: 2; width: 140px; height: 228px; box-sizing: border-box; padding: 6px 0 0; margin: 0; display: flex; flex-direction: column; align-items: center; gap: 5px;
+  cursor: pointer; border: 3px solid transparent; border-radius: 0; background: none; color: #fcfcfc; font: inherit; }
+.o-desk:hover, .o-desk:focus-visible { border: 3px dashed #7c7c7c; outline: none; }
+.o-desk.sel { border: 3px dashed #f8d838; background: rgba(248, 216, 56, 0.08); }
+.o-name { display: flex; align-items: center; gap: 6px; font-size: 9px; }
+.o-badge { width: 15px; height: 15px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; font-family: 'Press Start 2P', monospace; font-size: 8px; color: #000; border: 2px solid #000; box-shadow: 0 0 0 2px #fcfcfc; }
+.o-title { font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 11.5px; line-height: 14px; height: 28px; max-width: 128px; text-align: center; overflow: hidden; }
+.o-seat { position: relative; height: 75px; }
+.o-z { position: absolute; right: -14px; top: -4px; font-size: 9px; color: #bcbcbc; }
+.o-mon { position: relative; margin-top: -16px; width: 122px; height: 30px; box-sizing: border-box; background: #000; border: 3px solid #bcbcbc; box-shadow: 0 0 0 2px #000;
+  font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 10px; line-height: 12px; padding: 3px 4px; overflow: hidden; white-space: nowrap; text-align: left; }
+.o-type { display: inline-block; overflow: hidden; vertical-align: top; width: calc(var(--n) * 1ch); }
+.o-table { width: 132px; height: 12px; background: #ac7c00; border: 3px solid #000; box-shadow: inset 0 -4px 0 #7c4c00; }
+.o-word { font-size: 8px; }
+.o-hp { display: flex; align-items: center; gap: 2px; font-size: 7px; color: #bcbcbc; }
+.o-hp b { width: 5px; height: 7px; background: #3c3c3c; display: block; }
+.o-detail { margin: 28px auto 0; width: 660px; box-sizing: border-box; border: 4px solid #fcfcfc; box-shadow: 0 0 0 4px #000; padding: 14px 16px; display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 16px;
+  font-family: var(--mono, 'JetBrains Mono', monospace); font-size: 12.5px; line-height: 1.6; }
+.o-detail h3 { margin: 0 0 4px; font-family: 'Press Start 2P', monospace; font-size: 11px; line-height: 1.6; font-weight: 400; }
+.o-detail .k { color: #8c8c8c; display: inline-block; width: 8ch; }
+.o-detail code { color: #f8d838; }
+.o-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.o-acts button { font-family: 'Press Start 2P', monospace; font-size: 9px; padding: 8px 10px; border: 3px solid #fcfcfc; background: #000; color: #fcfcfc; border-radius: 0; cursor: pointer; }
+.o-acts button.ok { background: #f8d838; color: #000; border-color: #000; box-shadow: 0 0 0 2px #f8d838; }
+.o-acts button.no { background: #e83838; border-color: #000; box-shadow: 0 0 0 2px #e83838; }
+@media (prefers-reduced-motion: no-preference) {
+  .o-bot.working { animation: o-bob 0.5s steps(2) infinite; }
+  .o-bot.approval { animation: o-shake 0.35s steps(2) infinite; }
+  .o-bot.approval .ant { animation: o-blink 0.8s steps(1) infinite; }
+  .o-type { animation: o-type 3.2s steps(var(--n)) infinite; }
+  .o-line { animation: o-dash 0.7s linear infinite; }
+  .o-z { animation: o-z 2.4s steps(4) infinite; }
+}
+@keyframes o-bob { 50% { transform: translateY(-3px); } }
+@keyframes o-shake { 50% { transform: translateX(2px); } }
+@keyframes o-blink { 50% { opacity: 0; } }
+@keyframes o-type { 0% { width: 0; } 70%, 100% { width: calc(var(--n) * 1ch); } }
+@keyframes o-dash { to { stroke-dashoffset: -12; } }
+@keyframes o-z { 0% { transform: translate(0, 4px); opacity: 0; } 50% { opacity: 1; } 100% { transform: translate(6px, -10px); opacity: 0; } }
 </style>
 </head>
 <body>
@@ -672,7 +727,8 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
     moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
     monitor: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
-    swap: '<path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>'
+    swap: '<path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>',
+    office: '<path d="M3 13h8v4H3zM13 13h8v4h-8zM5 8h4v4H5zM15 8h4v4h-4z"/>'
   };
   const ic = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICON[n] || ''}</svg>`;
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -709,6 +765,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     { id: 'skills', label: 'Skills Studio (live search)', uc: 'UC-09' },
     { id: 'activity', label: 'Activity (Workspace Tools vs Agent Bridge)', uc: 'UC-11' },
     { id: 'mention', label: '@-Mentions & /-Skills', uc: 'UC-12' },
+    { id: 'office', label: 'Office: agents at work (8-bit)', uc: 'UC-14' },
     { id: 'doc_first', label: 'Doctor: first launch, not logged in', uc: 'UC-13' },
     { id: 'doc_terminal', label: 'Logged in from a terminal → back to Chorus', uc: 'UC-13' },
     { id: 'doc_wait', label: 'Chorus on another screen: 30 s re-check', uc: 'UC-13' },
@@ -874,6 +931,9 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
     } else if (id === 'memory') {
       S.view = 'memory';
       S.memTab = 'handoffs';
+    } else if (id === 'office') {
+      S.view = 'office';
+      S.officeSel = 0;
     } else if (id === 'activity') {
       S.view = 'activity';
       S.actFilter = 'all';
@@ -902,6 +962,7 @@ code, .mono { font-family: var(--f-mono); font-size: .9em; }
       ${navItem('skills', 'skills', 'Skills')}
       ${navItem('memory', 'memory', 'Shared memory')}
       ${navItem('activity', 'activity', 'Activity log')}
+      ${navItem('office', 'office', 'Office')}
       
       <div class="sb-label">Recent chats</div>
       <div class="recents">
@@ -1925,6 +1986,144 @@ Chorus 1.0.12, core 1.0.0, installer …</pre>
   }
 
   /* ---------- Main Render Function ---------- */
+  /* ---------- Office (8-bit) ----------
+     Every recent chat is an agent at a desk. Nothing new: state from S.notifs (approvals) and EVENTS (activity),
+     the handoff from Shared memory, the quota bar from AG usage. */
+  const O_COLOR = { claude: '#f87858', codex: '#00c8a8', agy: '#3c8cfc' };
+  const O_ST = {
+    working: { c: '#f8d838', icon: '▶', word: 'WORKING' },
+    approval: { c: '#e83838', icon: '!', word: 'NEEDS OK' },
+    idle: { c: '#7c7c7c', icon: 'z', word: 'IDLE' }
+  };
+  // the desks: the sidebar's recent chats; Codex continues Cake order page after the handoff (Shared memory)
+  const O_DESKS = [
+    { chat: 'Cake order page', agent: 'claude', events: ['e4', 'e5', 'e6', 'e7', 'e8', 'e9'], cx: 82, top: 26 },
+    { chat: 'Cake order page', agent: 'codex', events: ['e1', 'e2', 'e3'], from: 0, cx: 240, top: 26 },
+    { chat: 'Fix contact form', agent: 'codex', events: [], cx: 398, top: 26 },
+    { chat: 'Holiday landing page', agent: 'agy', events: [], cx: 82, top: 290 },
+    { chat: 'Menu colors', agent: 'claude', events: [], cx: 240, top: 290 }
+  ];
+  const O_YOU = { x: 500, y: 0, w: 160, h: 534, cx: 580, top: 150 };
+  // 12×14 sprites. K black, W white, R red, Y yellow, B agent color, A antenna (status color), H hair, S skin
+  const ROBOT = ['.....KK.....', '.....AA.....', '.....KK.....', '..KKKKKKKK..', '..KWWWWWWK..', '..KWKWWKWK..', '..KWWWWWWK..',
+    '..KWWRRWWK..', '...KKKKKK...', '.KKBBBBBBKK.', '.KBBBBBBBBK.', '.KBBYYYYBBK.', '.KBBBBBBBBK.', '..KK....KK..'];
+  const HUMAN = ['...HHHHHH...', '..HHHHHHHH..', '..HSSSSSSH..', '..SSKSSKSS..', '..SSSSSSSS..', '...SSRRSS...', '....SSSS....',
+    '..RRRWWRRR..', '.RRRRWWRRRR.', '.RRRRWWRRRR.', '.SRRRRRRRRS.', '..RRRRRRRR..', '..KKK..KKK..', '..KKK..KKK..'];
+  function oSprite(map, pal, cls) {
+    let r = '';
+    map.forEach((row, y) => [...row].forEach((ch, x) => {
+      if (pal[ch]) r += `<rect x="${x}" y="${y}" width="1" height="1" fill="${pal[ch]}"${ch === 'A' ? ' class="ant"' : ''}/>`;
+    }));
+    return `<svg class="o-bot ${cls}" viewBox="0 0 12 14" width="64" height="75" shape-rendering="crispEdges" aria-hidden="true">${r}</svg>`;
+  }
+  function oDesks() {
+    return O_DESKS.map((d) => {
+      const ap = S.notifs.find((n) => n.agent === d.agent && n.chat === d.chat) || null;
+      const evs = d.events.map((id) => EVENTS.find((e) => e.id === id));
+      let state = 'idle', screen = 'zzz';
+      if (ap && ap.status === 'pending') { state = 'approval'; screen = ap.cmd; }
+      else if (ap && ap.status === 'allowed') { state = 'working'; screen = '> ' + ap.cmd; }
+      else if (evs.length && evs[0] === EVENTS[0]) { state = 'working'; screen = '> ' + evs[0].name.replace('agent-bridge: ', ''); }
+      return { ...d, ap, evs, state, screen };
+    });
+  }
+  function oQuota(k) {
+    const u = AG[k].usage.limit;
+    if (u == null) return `<div class="o-hp">QUOTA OK</div>`;
+    const c = u >= 70 ? '#e83838' : u >= 40 ? '#f8d838' : '#fcfcfc';
+    return `<div class="o-hp">5H ${Array.from({ length: 10 }, (_, i) => `<b${i < Math.round(u / 10) ? ` style="background:${c}"` : ''}></b>`).join('')} ${u}%</div>`;
+  }
+
+  function officeHTML() {
+    const D = oDesks();
+    const sel = Math.min(S.officeSel || 0, D.length - 1);
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const packet = (d, color, dur) => still ? '' : `<rect x="-4" y="-4" width="8" height="8" fill="${color}" stroke="#000" stroke-width="2"><animateMotion dur="${dur}s" repeatCount="indefinite" path="${d}"/></rect>`;
+
+    const lines = [];
+    let k = 0;
+    D.forEach((a) => {
+      if (a.from != null) {
+        const q = D[a.from], y = q.top + 98, d = `M${q.cx + 30} ${y} L${a.cx - 30} ${y}`;
+        lines.push(`<path class="o-line" stroke="#f8d838" d="${d}"/>${packet(d, '#f8d838', 1.2)}<text class="o-lbl" x="${(q.cx + a.cx) / 2}" y="${y - 10}" fill="#f8d838" text-anchor="middle">HANDOFF</text>`);
+      }
+      if (a.state === 'approval') {
+        const cy = 262 + k * 6, ey = O_YOU.top + 90 + k * 14;
+        k++;
+        const d = `M${a.cx} ${a.top + 224} L${a.cx} ${cy} L470 ${cy} L470 ${ey} L${O_YOU.cx - 72} ${ey}`;
+        lines.push(`<path class="o-line" stroke="#e83838" d="${d}"/>${packet(d, '#e83838', 2.4)}`);
+      }
+    });
+
+    const desk = (a, i) => {
+      const st = O_ST[a.state];
+      const pal = { K: '#000', W: '#fcfcfc', R: '#e83838', Y: '#f8d838', B: O_COLOR[a.agent], A: st.c };
+      return `<button class="o-desk${i === sel ? ' sel' : ''}" type="button" data-office="${i}" style="left:${a.cx - 70}px;top:${a.top}px" aria-label="${esc(AG[a.agent].name + ', ' + a.chat + ', ' + st.word.toLowerCase())}">
+        <span class="o-name"><span class="o-badge" style="background:${st.c}">${st.icon}</span><span style="color:${O_COLOR[a.agent]}">${AG[a.agent].cli.toUpperCase()}</span></span>
+        <span class="o-title">${esc(a.chat)}</span>
+        <span class="o-seat">${oSprite(ROBOT, pal, a.state)}${a.state === 'idle' ? '<span class="o-z">z</span>' : ''}</span>
+        <span class="o-mon" style="color:${st.c}">${a.state === 'working' ? `<span class="o-type" style="--n:${a.screen.length}">${esc(a.screen)}</span>` : esc(a.screen)}</span>
+        <span class="o-table"></span>
+        <span class="o-word" style="color:${st.c}">${st.word}</span>
+        ${oQuota(a.agent)}
+      </button>`;
+    };
+
+    const pend = S.notifs.filter((n) => n.status === 'pending');
+    const you = `<button class="o-desk" type="button" data-office-bell="1" style="left:${O_YOU.cx - 70}px;top:${O_YOU.top}px" aria-label="Your approvals: ${pend.length} waiting">
+        <span class="o-name"><span class="o-badge" style="background:${pend.length ? '#e83838' : '#7c7c7c'}">${pend.length ? '!' : 'z'}</span>YOU</span>
+        <span class="o-title">${pend.length} to approve</span>
+        <span class="o-seat">${oSprite(HUMAN, { K: '#000', W: '#fcfcfc', R: '#e83838', H: '#7c3c00', S: '#f8b878' }, '')}</span>
+        <span class="o-mon" style="color:#e83838">${pend.length ? '! ' + esc(pend[0].cmd) : 'all clear'}</span>
+        <span class="o-table"></span>
+        <span class="o-word" style="color:#fcfcfc">INBOX ›</span>
+      </button>`;
+
+    const rooms = `<div class="o-room" style="left:0;top:0;width:480px;height:534px"><span class="o-tab">OFFICE · ${D.length} AGENTS</span></div>
+      <div class="o-room you" style="left:${O_YOU.x}px;top:${O_YOU.y}px;width:${O_YOU.w}px;height:${O_YOU.h}px"><span class="o-tab">YOUR DESK</span></div>`;
+
+    // the selected agent: what it is doing, how it relates, what it did
+    const a = D[sel], st = O_ST[a.state];
+    const rel = [];
+    if (a.from != null) rel.push(`<span style="color:#f8d838">◀ handoff</span> from <span style="color:${O_COLOR[D[a.from].agent]}">${AG[D[a.from].agent].name}</span> · reason: usage limit · 138 tokens of context`);
+    D.forEach((b) => { if (b.from === sel) rel.push(`<span style="color:#f8d838">handoff ▶</span> to <span style="color:${O_COLOR[b.agent]}">${AG[b.agent].name}</span> · it continues ${esc(b.chat)}`); });
+    if (a.ap && a.ap.status === 'pending') rel.push(`<span style="color:#e83838">! asks you</span> ${esc(a.ap.title)}: <code>${esc(a.ap.cmd)}</code>`);
+    if (a.ap && a.ap.status !== 'pending') rel.push(`<span style="color:#7c7c7c">you ${a.ap.status} ${esc(a.ap.title.toLowerCase())}</span>`);
+    if (!rel.length) rel.push('<span style="color:#8c8c8c">no handoff, nothing waiting for you</span>');
+    const log = a.evs.length
+      ? a.evs.map((e) => `<span style="color:#8c8c8c">${e.t}</span> <span style="color:${e.st === 'ok' ? '#58d854' : '#e83838'}">${e.st === 'ok' ? '✓' : '✗'}</span> ${esc(e.name)} <span style="color:#bcbcbc">${esc(e.sum)}</span>`).join('<br>')
+      : '<span style="color:#8c8c8c">No activity recorded yet.</span>';
+    const pal = { K: '#000', W: '#fcfcfc', R: '#e83838', Y: '#f8d838', B: O_COLOR[a.agent], A: st.c };
+    const detail = `<div class="o-detail" aria-live="polite">
+      <div>${oSprite(ROBOT, pal, a.state)}</div>
+      <div>
+        <h3><span style="color:${O_COLOR[a.agent]}">${AG[a.agent].name.toUpperCase()}</span> · <span style="color:${st.c}">${st.icon} ${st.word}</span></h3>
+        <div><b>${esc(a.chat)}</b> <span style="color:#8c8c8c">· ${modelName(a.agent, S.model[a.agent])} · ${AG[a.agent].account}</span></div>
+        <div style="margin-top:4px">${oQuota(a.agent)}</div>
+        <div style="margin-top:10px">${rel.join('<br>')}</div>
+        <div style="margin-top:10px"><span class="k">now</span><span style="color:${st.c}">${esc(a.screen)}</span></div>
+        <div style="margin-top:6px">${log}</div>
+        <div class="o-acts">
+          ${a.ap && a.ap.status === 'pending' ? `<button type="button" class="ok" data-office-ap="${a.ap.id}:allowed">Y ALLOW</button><button type="button" class="no" data-office-ap="${a.ap.id}:denied">N DENY</button>` : ''}
+          <button type="button" data-open-chat="t_cake">OPEN CHAT</button>
+          <button type="button" data-toast="Hand off ${esc(a.chat)} to another agent">HAND OFF</button>
+        </div>
+      </div>
+    </div>`;
+
+    const legend = `<div class="o-legend">
+      ${Object.values(O_ST).map((x) => `<span><span class="o-badge" style="background:${x.c}">${x.icon}</span>${x.word.toLowerCase()}</span>`).join('')}
+      <span><i style="color:#f8d838"></i>handoff</span><span><i style="color:#e83838"></i>needs your OK</span><span>5H ▮▮▯ quota used</span>
+    </div>`;
+
+    return `<div class="main">${topbarHTML('')}
+      <div class="pg"><div class="pg-inner">
+        <div class="pg-title"><div><h2>Office</h2><p>Every chat is an agent at a desk. Badge and antenna say how it is doing, the monitor shows what it does right now, the lines show who hands work to whom and who waits for you. Click an agent to see its work.</p></div></div>
+        <div class="o-stage">${legend}<div class="office">${rooms}<svg class="o-lines" width="660" height="534" viewBox="0 0 660 534">${lines.join('')}</svg>${D.map(desk).join('')}${you}</div>${detail}</div>
+      </div></div>
+    </div>`;
+  }
+
   function render() {
     // Render top scenario selector
     $('#scenarios').innerHTML = SCN.map((s) => `
@@ -1938,6 +2137,7 @@ Chorus 1.0.12, core 1.0.0, installer …</pre>
     if (S.view === 'skills') mainView = skillsHTML();
     else if (S.view === 'memory') mainView = memoryHTML();
     else if (S.view === 'activity') mainView = activityHTML();
+    else if (S.view === 'office') mainView = officeHTML();
     else if (S.view === 'doctor') mainView = doctorHTML();
     else mainView = S.screen === 'home' ? homeHTML() : threadHTML();
 
@@ -2012,6 +2212,21 @@ Chorus 1.0.12, core 1.0.0, installer …</pre>
       return render();
     }
     if (d.dr) return drAct(d.dr);
+    if (d.office !== undefined) {
+      S.officeSel = Number(d.office);
+      return render();
+    }
+    if (d.officeBell) {
+      S.bell = true;
+      return render();
+    }
+    if (d.officeAp) {
+      const [id, st] = d.officeAp.split(':');
+      const n = S.notifs.find((x) => x.id === id);
+      if (n) n.status = st;
+      toast(st === 'allowed' ? `Allowed: ${n.title}` : `Denied: ${n.title}`);
+      return render();
+    }
     if (d.view) {
       S.view = d.view;
       S.screen = 'thread';
