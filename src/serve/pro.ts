@@ -67,10 +67,12 @@ export class ProHost {
   /** `path` is what follows /api/pro/. */
   async call(method: string, path: string, query: Record<string, string>, body: unknown): Promise<{ status: number; json: unknown }> {
     await this.ready;
-    const h = this.routes[`${method} ${path}`];
+    const h = this.routes[`${method} ${path}`] ?? this.routes['*'];
     if (!this.module) return LOCKED;
-    if (!h) return { status: 404, json: { error: 'not found' } };
-    return { status: 200, json: await h({ method, path, query, body }) };
+    const out = await h?.({ method, path, query, body });
+    if (out === undefined) return { status: 404, json: { error: 'not found' } };
+    const { httpStatus, json } = out as { httpStatus?: number; json?: unknown };
+    return httpStatus ? { status: httpStatus, json } : { status: 200, json: out };
   }
 
   async ui(): Promise<{ js: string; css: string } | undefined> {

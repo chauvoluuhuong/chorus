@@ -112,6 +112,7 @@ function onMessage(m) {
   }
   if (m.t === 'flash') return flash(m.text);
   if (m.t === 'pro-status') return void onProStatus(m.status);
+  if (m.t === 'pro') return window.choruspro?.onEvent?.(m.event, m.data);
   if (m.t === 'dropped' && m.id === S.attached) return toast(`Added to the message: ${m.paths.map(base).join(', ')}`);
 }
 
@@ -284,9 +285,13 @@ function back() {
 
 const proSlot = name => `<div data-pro-slot="${name}"></div>`;
 
+function fillSidebarSlots() {
+  for (const el of document.querySelectorAll('#side [data-pro-slot]')) window.choruspro?.render(el.dataset.proSlot, el, { ...el.dataset, view: S.view.id });
+}
+
 function fillSlots() {
   for (const el of document.querySelectorAll('[data-pro-slot]')) {
-    if (window.choruspro) window.choruspro.render(el.dataset.proSlot, el);
+    if (window.choruspro) window.choruspro.render(el.dataset.proSlot, el, { ...el.dataset, view: S.view.id, id: S.view.id, project: S.form?.folder ?? S.state?.project });
     else if (el.dataset.proSlot === 'nav' && S.pro?.dev) el.innerHTML = `<button class="${S.view.name === 'unlock' ? 'on' : ''}" data-act="unlock"><span class="ico">⚿</span>Unlock</button>`;
   }
 }
@@ -301,6 +306,7 @@ async function onProStatus(st) {
       document.head.append(Object.assign(document.createElement('link'), { id: 'pro-css', rel: 'stylesheet', href: '/api/pro/ui.css' }), js);
     });
   }
+  window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: fillSidebarSlots });
   if (S.view.name === 'pro' && !st.unlocked) return go({ name: 'new' });
   renderChrome();
   if (S.view.name !== 'chat') renderView();
@@ -338,6 +344,7 @@ function renderChrome() {
     const here = (v.name === 'chat' && chats.some(c => c.id === v.id)) || (v.name === 'new' && !v.from && (S.form?.folder ?? v.folder) === cwd);
     tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-rm" data-act="rm-project" data-arg="${esc(cwd)}" title="Remove from the sidebar (the folder and its chats are kept)" aria-label="Remove ${esc(base(cwd))} from the sidebar">×</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button></div>`;
     if (folded) continue;
+    tree += `<div data-pro-slot="project" data-cwd="${esc(cwd)}"></div>`;
     for (const c of chats) {
       const child = c.parentId && chats.some(p => p.id === c.parentId);
       tree += `<button class="chat-row${child ? ' child' : ''}${v.name === 'chat' && v.id === c.id ? ' on' : ''}" data-act="chat" data-arg="${esc(c.id)}" title="${esc(c.title)} · ${esc(AGENT[c.agent]?.name ?? c.agent)} · ${esc(STATE_LABEL[c.state] ?? '')}">
@@ -399,7 +406,10 @@ function renderView() {
   const v = S.view;
   const el = $('#view');
   if (v.name === 'chat') return renderChat();
-  el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml, unlock: unlockHtml, pro: () => proSlot('view') }[v.name]?.() ?? '';
+  // the module's page keeps its own state: a push of the app's state must not rebuild it
+  const slot = el.querySelector('[data-pro-slot="view"]');
+  if (v.name === 'pro' && slot?.dataset.id === v.id) return;
+  el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml, unlock: unlockHtml, pro: () => `<div data-pro-slot="view" data-id="${esc(v.id ?? '')}" style="height:100%"></div>` }[v.name]?.() ?? '';
   fillSlots();
   if (v.name === 'new') {
     const ta = $('#nc-prompt');
@@ -468,7 +478,7 @@ function newChatHtml() {
     <p class="lead">${src ? 'A new chat loads the record of the old one through the Chorus MCP server, sums it up and waits for your OK.' : 'Pick an agent and a project folder. You talk to the agent in its own screen.'}</p>
     <div class="card form">
       ${src ? `<div class="handoff-src">Continues <b>${esc(src.title)}</b> <span class="badge ${esc(src.agent)}">${esc(AGENT[src.agent]?.name ?? src.agent)}</span></div>` : ''}
-      ${src ? '' : proSlot('new-who')}
+      ${proSlot('new-who')}
       <div class="field"><label>AGENT</label><div class="agents" id="nc-agents">${agentCards()}</div></div>
       <div class="row2">
         <div class="field"><label for="nc-model">MODEL</label><select id="nc-model" data-change="nc-model">${a.models.map(m => `<option${m === f.model ? ' selected' : ''}>${esc(m)}</option>`).join('')}</select></div>
