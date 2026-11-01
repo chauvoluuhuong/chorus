@@ -4,10 +4,12 @@
 // writes an artifact, and prints JSONL events. `--limit` simulates a plan-limit stop.
 //
 //   fake-agent.ts --mcp-command <bin> --mcp-args '<json array>' [--call tool[,tool]] [--artifact path] [--limit] "<prompt>"
+//   fake-agent.ts --mcp-command <bin> --mcp-args '<json array>' --script <file.json> "<prompt>"     (steps: script.ts)
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { readScript, runScript } from './script.ts';
 
 const argv = process.argv.slice(2);
 const opt = (n: string) => {
@@ -41,6 +43,18 @@ if (tools.length) {
     answer = r.content?.[0]?.text ?? answer;
   }
   await client.close();
+}
+
+if (opt('script')) {
+  const code = await runScript(readScript(opt('script')!), { command: opt('mcp-command')!, args: JSON.parse(opt('mcp-args') ?? '[]') }, {
+    said: text => (answer = text),
+    called(tool, args, text, failed) {
+      const item = { id: id(), type: 'mcp_tool_call', server: 'chorus', tool, arguments: args };
+      emit({ type: 'item.completed', item: { ...item, result: { content: [{ type: 'text', text }] }, error: failed ? { message: text } : null, status: failed ? 'failed' : 'completed' } });
+      answer = text || answer;
+    },
+  });
+  if (code) process.exit(code);
 }
 
 const artifact = opt('artifact');
