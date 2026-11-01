@@ -27,6 +27,7 @@ import { CLIS, type AgentCheck, type DeepReport, type FastReport } from '@chauvo
 import { check, composeIssue, firstLaunch, ghReady, host, isDue, isIssueKind, ISSUE_KINDS, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, remoteTested, reportDetails, runCommand, runDeep, sendIssue, DOCTOR_DIR } from '../core/doctor.ts';
 
 import type { NotificationInbox } from './notifications.ts';
+import { ProHost, type ProLoader } from './pro.ts';
 import type { UpdateCheck } from './updates.ts';
 
 const require = createRequire(import.meta.url);
@@ -77,6 +78,8 @@ export interface ServeOpts {
   /** the doctor's short check and the install/login command runner (tests); the real ones otherwise */
   check?: () => Promise<FastReport>;
   runCommand?: typeof runCommand;
+  /** the optional module's loader (tests); the real one otherwise */
+  proLoader?: ProLoader;
 }
 
 const plain = (l: RichLine): string => (typeof l === 'string' ? l : l.map(s => s[0]).join(''));
@@ -99,6 +102,9 @@ export class ChorusServer {
   readonly c: Controller;
   readonly app: App;
   readonly token: string;
+  /** what `chorus mcp` holds: it opens /api/pro/mcp/ and nothing else */
+  readonly mcpToken = crypto.randomBytes(24).toString('hex');
+  readonly pro: ProHost;
   url = '';
   private o: ServeOpts;
   private http: http.Server | undefined;
@@ -132,6 +138,7 @@ export class ChorusServer {
     this.c = o.controller;
     this.app = o.controller.app;
     this.token = o.token ?? crypto.randomBytes(24).toString('hex');
+    this.pro = new ProHost({ homeDir: this.c.store.root, emit: (event, data) => this.broadcast({ t: 'pro', event, data }) }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     this.bridge();
   }
 
@@ -191,6 +198,8 @@ export class ChorusServer {
     await listen(port).catch(() => listen(0));
     this.url = `http://127.0.0.1:${(this.http.address() as AddressInfo).port}`;
     this.ticker = setInterval(() => this.pushState(), 500);
+    fs.writeFileSync(this.serveFile, JSON.stringify({ url: this.url, mcpToken: this.mcpToken }), { mode: 0o600 });
+    void this.pro.start();
     const tested = JSON.stringify(remoteTested());
     if (this.o.notifications)
       void this.o.notifications.startup().then(() => {
@@ -239,8 +248,18 @@ export class ChorusServer {
     return `${this.url}/?token=${this.token}`;
   }
 
+  private get serveFile() {
+    return path.join(this.c.store.root, 'serve.json');
+  }
+
   close() {
     this.closed = true;
+    this.pro.close();
+    try {
+      if ((JSON.parse(fs.readFileSync(this.serveFile, 'utf8')) as { url: string }).url === this.url) fs.rmSync(this.serveFile);
+    } catch {
+      /* already gone */
+    }
     this.o.notifications?.close();
     this.o.updates?.close();
     clearInterval(this.ticker);
@@ -294,9 +313,11 @@ export class ChorusServer {
       res.setHeader('set-cookie', `${this.cookieName}=${this.token}; HttpOnly; SameSite=Strict; Path=/`);
       return this.file('/', res);
     }
+    if (u.pathname.startsWith('/api/pro/mcp/') && this.mcpAllowed(req)) return this.proMcp(req, res, u.pathname.slice(13));
     if (!this.allowed(req)) return send(res, 401, { error: 'open the address chorus serve printed (it carries the token)' });
     if (req.method !== 'GET' && (req.headers['x-chorus'] !== '1' || !this.sameOrigin(req))) return send(res, 403, { error: 'missing X-Chorus header' });
     if (!u.pathname.startsWith('/api/')) return this.file(u.pathname, res);
+    if (u.pathname.startsWith('/api/pro/')) return this.proHttp(req, res, u);
     // a dropped file with no path (a browser gives the bytes only, or an image dragged from a page): the raw bytes, its name in
     // the address; saved in the chat's attachments folder and its path put into the agent's input (docs/phase5.md §8.3)
     const upload = req.method === 'POST' && u.pathname.match(/^\/api\/chats\/([\w-]+)\/attachments$/);
@@ -310,6 +331,38 @@ export class ChorusServer {
     const out = await this.route(req.method ?? 'GET', u.pathname.slice(5).split('/').map(decodeURIComponent), u.searchParams, body);
     if (out === undefined) return send(res, 404, { error: 'not found' });
     send(res, 200, out);
+  }
+
+  private mcpAllowed(req: http.IncomingMessage) {
+    const t = req.headers.authorization?.match(/^Bearer (\S+)$/)?.[1];
+    const ok = !!t && t.length === this.mcpToken.length && crypto.timingSafeEqual(Buffer.from(t), Buffer.from(this.mcpToken));
+    return ok && this.hostOk(req) && !req.headers.origin && (req.method === 'GET' || req.headers['x-chorus'] === '1');
+  }
+
+  private async proMcp(req: http.IncomingMessage, res: http.ServerResponse, route: string) {
+    if (req.method === 'GET' && route === 'tools') return send(res, 200, { tools: await this.pro.mcpTools() });
+    if (req.method === 'POST' && route === 'call') {
+      const b = await readJson(req);
+      if (process.env.CHORUS_PRO_LOG) console.error(`[pro] mcp ${String(b.name)} thread ${String(b.threadId)}`);
+      const r = await this.pro.mcpCall(String(b.name), (b.args ?? {}) as Record<string, unknown>, typeof b.threadId === 'string' ? b.threadId : undefined);
+      return send(res, r.status, r.json);
+    }
+    send(res, 404, { error: 'not found' });
+  }
+
+  /** /api/pro/*: the status and Unlock always answer; everything else is the module's, or 402 from ProHost. */
+  private async proHttp(req: http.IncomingMessage, res: http.ServerResponse, u: URL) {
+    const route = u.pathname.slice(9);
+    if (req.method === 'GET' && route === 'status') return send(res, 200, this.pro.status());
+    if (req.method === 'POST' && route === 'activate') return send(res, 200, await this.pro.activate(String((await readJson(req)).key ?? '')));
+    if (req.method === 'GET' && (route === 'ui.js' || route === 'ui.css')) {
+      const ui = await this.pro.ui();
+      if (!ui) return send(res, 402, { locked: true });
+      res.writeHead(200, { 'content-type': route === 'ui.js' ? TYPES['.js'] : TYPES['.css'], 'cache-control': 'no-store' });
+      return res.end(route === 'ui.js' ? ui.js : ui.css);
+    }
+    const r = await this.pro.call(req.method ?? 'GET', route, Object.fromEntries(u.searchParams), req.method === 'GET' ? {} : await readJson(req));
+    send(res, r.status, r.json);
   }
 
   private file(p: string, res: http.ServerResponse) {
