@@ -138,7 +138,7 @@ export class ChorusServer {
     this.c = o.controller;
     this.app = o.controller.app;
     this.token = o.token ?? crypto.randomBytes(24).toString('hex');
-    this.pro = new ProHost({ homeDir: this.c.store.root, emit: (event, data) => this.broadcast({ t: 'pro', event, data }) }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
+    this.pro = new ProHost({ homeDir: this.c.store.root, skills: project => listSkills(project).map(s => s.name), emit: (event, data) => this.broadcast({ t: 'pro', event, data }) }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     this.bridge();
   }
 
