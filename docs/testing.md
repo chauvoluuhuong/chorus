@@ -60,3 +60,8 @@ Rules:
 - **Chrome driver** `test/smoke/chrome.ts`: headless Chrome over the DevTools protocol with real clicks and key presses, used by `proof:desktop` and other e2e runs.
 - **Risk harness** `tools/risk/` (`npm run risk -- free|cheap|<case>`): probes known risks with the real CLIs and writes the findings to [risks/](risks/README.md); not part of `npm test`.
 - `npm run typecheck`.
+
+## The optional module's seam
+
+`test/serve/pro.test.ts` tests the seam in `chorus serve` and `chorus mcp` with a stand-in module. The real bundle needs a dev build in the
+core checkout (`npm run build:pro -- --dev` there, plus its fake licence server); with a plain `npm run build` the app simply has nothing to unlock.

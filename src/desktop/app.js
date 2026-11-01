@@ -111,6 +111,7 @@ function onMessage(m) {
     return drawTermOver();
   }
   if (m.t === 'flash') return flash(m.text);
+  if (m.t === 'pro-status') return void onProStatus(m.status);
   if (m.t === 'dropped' && m.id === S.attached) return toast(`Added to the message: ${m.paths.map(base).join(', ')}`);
 }
 
@@ -279,6 +280,39 @@ function back() {
   if (v) go(v, false);
 }
 
+/* ---------- the optional module: slots stay empty unless it is unlocked ---------- */
+
+const proSlot = name => `<div data-pro-slot="${name}"></div>`;
+
+function fillSlots() {
+  for (const el of document.querySelectorAll('[data-pro-slot]')) {
+    if (window.choruspro) window.choruspro.render(el.dataset.proSlot, el);
+    else if (el.dataset.proSlot === 'nav' && S.pro?.dev) el.innerHTML = `<button class="${S.view.name === 'unlock' ? 'on' : ''}" data-act="unlock"><span class="ico">⚿</span>Unlock</button>`;
+  }
+}
+
+async function onProStatus(st) {
+  S.pro = st;
+  document.querySelector('#pro-css')?.remove();
+  if (!st.unlocked) delete window.choruspro;
+  else if (!window.choruspro) {
+    await new Promise(done => {
+      const js = Object.assign(document.createElement('script'), { src: '/api/pro/ui.js', onload: done, onerror: done });
+      document.head.append(Object.assign(document.createElement('link'), { id: 'pro-css', rel: 'stylesheet', href: '/api/pro/ui.css' }), js);
+    });
+  }
+  if (S.view.name === 'pro' && !st.unlocked) return go({ name: 'new' });
+  renderChrome();
+  if (S.view.name !== 'chat') renderView();
+}
+
+function unlockHtml() {
+  const p = S.pro;
+  return `<div class="page hero"><h1>Unlock</h1><div class="card form"><div class="field"><label for="pro-key">KEY</label><input id="pro-key" type="text" spellcheck="false"></div>
+    ${p?.message && !p.unlocked ? `<div class="err" id="pro-why">${esc(p.message)}</div>` : ''}${p?.unlocked ? '<div id="pro-why">Unlocked.</div>' : ''}
+    <div class="form-foot"><span class="hint">Development builds only</span><button class="btn primary" data-act="pro-unlock">Unlock</button></div></div></div>`;
+}
+
 /* ---------- sidebar, top bar, notice ---------- */
 
 function chatsByProject() {
@@ -327,7 +361,9 @@ function renderChrome() {
       <button class="${on('approvals').trim()}" data-act="approvals"><span class="ico">⚑</span>Approvals${waiting ? `<span class="count">${waiting}</span>` : ''}</button>
       <button class="${on('memory').trim()}" data-act="memory"><span class="ico">◫</span>Memory</button>
       <button class="${on('skills').trim()}" data-act="skills"><span class="ico">✦</span>Skills</button>
+      ${proSlot('nav')}
     </nav>
+    ${proSlot('side')}
     <div class="side-head">PROJECTS<button data-act="add-project" title="Start a chat in another folder">+ add</button></div>
     <div class="tree">${tree}</div>
     <div class="side-foot">${agentFoot}<span style="flex:1"></span><button data-act="doctor">Doctor</button></div>`;
@@ -354,6 +390,7 @@ function renderChrome() {
     const btn = ctx ? `<button class="btn" data-act="retry" data-arg="${esc(about?.id ?? '')}">Ask again</button>` : /limit|quota/i.test(notice) && about ? `<button class="btn" data-act="handoff" data-arg="${esc(about.id)}">Hand off</button>` : '';
     n.innerHTML = `<span>${esc(notice)}</span>${btn}`;
   }
+  fillSlots();
 }
 
 /* ---------- views ---------- */
@@ -362,7 +399,8 @@ function renderView() {
   const v = S.view;
   const el = $('#view');
   if (v.name === 'chat') return renderChat();
-  el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml }[v.name]?.() ?? '';
+  el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml, unlock: unlockHtml, pro: () => proSlot('view') }[v.name]?.() ?? '';
+  fillSlots();
   if (v.name === 'new') {
     const ta = $('#nc-prompt');
     if (ta && !v.from) ta.focus();
@@ -430,6 +468,7 @@ function newChatHtml() {
     <p class="lead">${src ? 'A new chat loads the record of the old one through the Chorus MCP server, sums it up and waits for your OK.' : 'Pick an agent and a project folder. You talk to the agent in its own screen.'}</p>
     <div class="card form">
       ${src ? `<div class="handoff-src">Continues <b>${esc(src.title)}</b> <span class="badge ${esc(src.agent)}">${esc(AGENT[src.agent]?.name ?? src.agent)}</span></div>` : ''}
+      ${src ? '' : proSlot('new-who')}
       <div class="field"><label>AGENT</label><div class="agents" id="nc-agents">${agentCards()}</div></div>
       <div class="row2">
         <div class="field"><label for="nc-model">MODEL</label><select id="nc-model" data-change="nc-model">${a.models.map(m => `<option${m === f.model ? ' selected' : ''}>${esc(m)}</option>`).join('')}</select></div>
@@ -1025,11 +1064,13 @@ function renderChatParts() {
     <div class="meta"><span class="dot ${esc(c.state)}"></span><span>${esc(STATE_LABEL[c.state] ?? c.state)}</span>
       ${c.model || c.effort ? `<span>· ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}</span>` : ''}${c.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${meter(c.usage)}
       <span class="mono faint path" title="${esc(c.cwd)}">‎${esc(tilde(c.cwd))}‎</span>${c.toast ? `<span class="badge ok">${esc(c.toast)}</span>` : ''}</div>
+    ${proSlot('chat-actions')}
     <button class="btn" data-act="handoff" data-arg="${esc(c.id)}" title="Continue this chat with another agent">⇄ Hand off</button>
     <button class="btn${S.drawer === 'artifacts' ? ' on' : ''}" data-act="drawer" data-arg="artifacts">Artifacts${c.artifacts ? ` <span class="badge plain">${c.artifacts}</span>` : ''}</button>
     <button class="btn${S.drawer === 'activity' ? ' on' : ''}" data-act="drawer" data-arg="activity">Activity</button>
     <button class="btn${S.drawer === 'record' ? ' on' : ''}" data-act="drawer" data-arg="record">Record</button>
     <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat">🗑</button>`;
+  fillSlots();
   let banners = '';
   for (const ask of S.state.approvals.filter(a => a.id === c.id)) {
     if (ask.kind === 'ask') banners += `<div class="banner ask card"><b>${esc(AGENT[c.agent]?.name ?? c.agent)} asks you</b><div class="ask-body">${askCard(ask)}</div></div>`;
@@ -1360,6 +1401,12 @@ document.addEventListener('click', async e => {
       return go({ name: act });
     case 'chat':
       return go({ name: 'chat', id: arg });
+    case 'unlock':
+      return go({ name: 'unlock' });
+    case 'pro-view':
+      return go({ name: 'pro', id: arg });
+    case 'pro-unlock':
+      return void api('POST', '/api/pro/activate', { key: $('#pro-key').value.trim() }).then(onProStatus, e => toast(String(e.message)));
     case 'doc-continue':
       return closeDoctorPopup();
     case 'doc-test':
@@ -1695,10 +1742,12 @@ function fromHash() {
   if (name === 'chat' && a) return { name, id: a };
   if (name === 'new' && a === 'from' && b) return { name, from: b };
   if (name === 'new' && a === 'in' && b) return { name, folder: decodeURIComponent(b) };
-  if (['approvals', 'memory', 'skills', 'doctor'].includes(name)) return { name };
+  if (name === 'pro' && a) return { name, id: a };
+  if (['approvals', 'memory', 'skills', 'doctor', 'unlock'].includes(name)) return { name };
   return { name: 'new' };
 }
 
 connect();
+void api('GET', '/api/pro/status').then(onProStatus, () => {});
 renderChrome();
 go(fromHash(), false);
