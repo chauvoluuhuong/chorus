@@ -8,21 +8,19 @@
 //   node test/smoke/proof-desktop.ts [--out docs/proof/phase5] [--open]
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
-import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import WebSocket from 'ws';
 import { activityCmd, artifactsCmd, threadsCmd } from '../../src/cli/commands.ts';
 import { buildHandoff } from '../../src/core/handoff.ts';
 import { Store } from '../../src/core/store.ts';
 // @ts-expect-error: a plain .mjs helper without types
 import { pdf, png } from './sample-files.mjs';
+import { openChrome, sleep } from './chrome.ts';
 import { openReport, writeReport } from './report.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const CLI = path.join(ROOT, 'src/cli/index.ts');
 const APP = path.join(ROOT, 'desktop/src-tauri/target/release/bundle/macos/Chorus.app');
-const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const argv = process.argv.slice(2);
 const OUT = path.resolve(argv.includes('--out') ? argv[argv.indexOf('--out') + 1] : path.join(ROOT, 'docs/proof/phase5'));
 fs.rmSync(OUT, { recursive: true, force: true });
@@ -34,9 +32,7 @@ const TITLE = 'Chorus Phase 5 e2e proof: the desktop app with Claude Code + Code
 const INTRO = 'The desktop page over `chorus serve`, driven in Chrome with real clicks and key presses, with the real CLIs in the server\'s PTYs. Then the native window (Tauri) starting its own server. Each screenshot is what the user sees at that step.';
 
 const log = (s: string) => console.log(s);
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const results: { ok: boolean; name: string; detail?: string }[] = [];
-const shots: { file: string; caption: string }[] = [];
 function check(name: string, ok: boolean, detail = '') {
   results.push({ ok, name, detail });
   log(`  ${ok ? 'PASS' : 'FAIL'}  ${name}${ok ? '' : `  (${detail.slice(0, 300)})`}`);
@@ -94,106 +90,13 @@ async function startServe(): Promise<string> {
 
 /* ---------- Chrome over the DevTools protocol ---------- */
 
-const freePort = () => new Promise<number>(r => { const s = net.createServer().listen(0, () => { const p = (s.address() as net.AddressInfo).port; s.close(() => r(p)); }); });
-const cdpPort = await freePort();
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-desk-chrome-'));
-const chrome = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${cdpPort}`, `--user-data-dir=${profile}`, `--window-size=${W},${H}`, '--no-first-run', '--no-default-browser-check', '--hide-scrollbars', '--force-device-scale-factor=1', 'about:blank'], { stdio: 'ignore' });
-// the server, its agents and Chrome go away however the proof ends (a failed step throws)
-process.on('exit', () => {
-  serve?.kill('SIGTERM');
-  chrome.kill();
-});
-let pageWs = '';
-for (let i = 0; i < 60 && !pageWs; i++) {
-  await sleep(250);
-  try {
-    const list = (await (await fetch(`http://127.0.0.1:${cdpPort}/json/list`)).json()) as { type: string; webSocketDebuggerUrl: string }[];
-    pageWs = list.find(t => t.type === 'page')?.webSocketDebuggerUrl ?? '';
-  } catch {
-    /* not up yet */
-  }
-}
-const ws = new WebSocket(pageWs, { perMessageDeflate: false });
-await new Promise(r => ws.once('open', r));
-let seq = 0;
-const waiters = new Map<number, (m: any) => void>();
-ws.on('message', d => {
-  const m = JSON.parse(String(d));
-  if (m.id && waiters.has(m.id)) {
-    waiters.get(m.id)!(m);
-    waiters.delete(m.id);
-  }
-});
-function cdp(method: string, params: object = {}): Promise<any> {
-  const id = ++seq;
-  ws.send(JSON.stringify({ id, method, params }));
-  return new Promise((resolve, reject) => waiters.set(id, m => (m.error ? reject(new Error(`${method}: ${m.error.message}`)) : resolve(m.result))));
-}
-async function js<T = any>(expr: string): Promise<T> {
-  const r = await cdp('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true });
-  if (r.exceptionDetails) throw new Error(`${expr.slice(0, 80)}: ${r.exceptionDetails.exception?.description ?? r.exceptionDetails.text}`);
-  return r.result.value as T;
-}
-await cdp('Page.enable');
-await cdp('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile: false });
-const scheme = (value: 'light' | 'dark') => cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value }] });
-await scheme('light');
-
-let n = 0;
-async function shot(slug: string, caption: string) {
-  await sleep(350); // let the last frame paint
-  const file = `${String(++n).padStart(2, '0')}-${slug}.png`;
-  const { data } = await cdp('Page.captureScreenshot', { format: 'png' });
-  fs.writeFileSync(path.join(OUT, file), Buffer.from(data, 'base64'));
-  shots.push({ file, caption });
-  log(`  📷 ${file}`);
-}
-async function until(pred: () => Promise<boolean> | boolean, ms: number, tick = 400) {
-  const t0 = Date.now();
-  while (Date.now() - t0 < ms) {
-    try {
-      if (await pred()) return true;
-    } catch {
-      /* the page may be reloading */
-    }
-    await sleep(tick);
-  }
-  return false;
-}
-/** a real mouse click in the middle of the first element that matches (and whose text matches) */
-async function click(sel: string, text?: string | RegExp): Promise<boolean> {
-  const re = text instanceof RegExp ? text.source : text ? text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
-  const at = await js<{ x: number; y: number } | null>(`(() => {
-    const els = [...document.querySelectorAll(${JSON.stringify(sel)})].filter(e => e.offsetParent !== null && ${re ? `new RegExp(${JSON.stringify(re)}).test(e.textContent)` : 'true'});
-    const e = els[0]; if (!e) return null;
-    e.scrollIntoView({ block: 'nearest' });
-    const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
-  })()`);
-  if (!at) return false;
-  await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y });
-  await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: at.x, y: at.y, button: 'left', clickCount: 1 });
-  await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: at.x, y: at.y, button: 'left', clickCount: 1 });
-  await sleep(300);
-  return true;
-}
-const KEYS: Record<string, [number, string]> = { Enter: [13, '\r'], ArrowUp: [38, ''], ArrowDown: [40, ''], Escape: [27, ''] };
-async function key(k: keyof typeof KEYS) {
-  const [vk, text] = KEYS[k];
-  await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: k, code: k, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, ...(text ? { text, unmodifiedText: text } : {}) });
-  await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code: k, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
-  await sleep(150);
-}
-/** types like a person: text, a pause, then Enter apart (TUIs read text + Enter in one chunk as a paste) */
-async function typeLine(text: string, enter = true) {
-  await cdp('Input.insertText', { text });
-  await sleep(600);
-  if (enter) await key('Enter');
-}
+const { cdp, js, scheme, shot, shots, nextShot, until, click, key, typeLine, has, close } = await openChrome({ out: OUT, width: W, height: H, log });
+// the server and its agents go away however the proof ends (a failed step throws)
+process.on('exit', () => serve?.kill('SIGTERM'));
 const term = () => js<string>(`(() => { if (!window.chorus) return ''; const b = chorus.term.buffer.active; const out = []; for (let i = 0; i < b.length; i++) out.push(b.getLine(i).translateToString(true)); return out.join('\\n'); })()`);
 const screen = () => js<string>(`(() => { if (!window.chorus) return ''; const b = chorus.term.buffer.active; const out = []; for (let i = b.viewportY; i < b.viewportY + chorus.term.rows; i++) out.push(b.getLine(i)?.translateToString(true) ?? ''); return out.join('\\n'); })()`);
 const state = () => js<any>('chorus.S.state');
 const view = () => js<any>('chorus.S.view');
-const has = (sel: string, re: RegExp) => js<boolean>(`[...document.querySelectorAll(${JSON.stringify(sel)})].some(e => new RegExp(${JSON.stringify(re.source)}).test(e.textContent))`);
 const focusTerm = () => click('#term-slot .xterm-screen');
 /** answers the folder-trust dialogs of Claude and Codex the way a person does once per folder */
 async function trustIfAsked() {
@@ -491,7 +394,7 @@ check('the app\'s server has the same chats (the shared database)', resumable.le
     spawnSync('osascript', ['-e', `tell application "System Events" to set frontmost of (first process whose unix id is ${app.pid}) to true`]);
     await sleep(1500);
     const winId = spawnSync('osascript', ['-l', 'JavaScript', '-e', `ObjC.import('CoreGraphics'); const l = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(0, 0))); const w = l.find(x => x.kCGWindowOwnerPID === ${app.pid} && x.kCGWindowLayer === 0 && x.kCGWindowName === 'Chorus'); w ? String(w.kCGWindowNumber) : ''`], { encoding: 'utf8' }).stdout.trim();
-    const file = `${String(++n).padStart(2, '0')}-native-window.png`;
+    const file = `${String(nextShot()).padStart(2, '0')}-native-window.png`;
     const shotOk = !!winId && spawnSync('screencapture', ['-x', '-o', '-l', winId, path.join(OUT, file)]).status === 0 && fs.existsSync(path.join(OUT, file));
     if (shotOk) {
       shots.push({ file, caption: 'The native window (desktop/, Tauri, 4.9 MB): it started its own chorus serve and shows the same chats. Closing it stops the server and the agents' });
@@ -508,8 +411,7 @@ check('the app\'s server has the same chats (the shared database)', resumable.le
 
 /* ---------- report ---------- */
 
-ws.close();
-chrome.kill();
+close();
 const s = store();
 const cmds: [string, string][] = [
   ['chorus threads', threadsCmd(s)],
