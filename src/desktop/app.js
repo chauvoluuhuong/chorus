@@ -283,15 +283,19 @@ function back() {
 
 /* ---------- the optional module: slots stay empty unless it is unlocked ---------- */
 
-const proSlot = name => `<div data-pro-slot="${name}"></div>`;
+const proSlot = (name, attrs = '') => `<div data-pro-slot="${name}"${attrs}></div>`;
 
 function fillSidebarSlots() {
   for (const el of document.querySelectorAll('#side [data-pro-slot]')) window.choruspro?.render(el.dataset.proSlot, el, { ...el.dataset, view: S.view.id });
 }
 
+function fillChatSlots() {
+  for (const el of document.querySelectorAll('#view [data-pro-slot^="chat-"]')) window.choruspro?.render(el.dataset.proSlot, el, { ...el.dataset, cwd: S.state?.chats.find(c => c.id === el.dataset.chat)?.cwd });
+}
+
 function fillSlots() {
   for (const el of document.querySelectorAll('[data-pro-slot]')) {
-    if (window.choruspro) window.choruspro.render(el.dataset.proSlot, el, { ...el.dataset, view: S.view.id, id: S.view.id, project: S.form?.folder ?? S.state?.project });
+    if (window.choruspro) window.choruspro.render(el.dataset.proSlot, el, { ...el.dataset, view: S.view.id, id: S.view.id, project: S.form?.folder ?? S.state?.project, cwd: el.dataset.cwd ?? S.state?.chats.find(c => c.id === el.dataset.chat)?.cwd });
     else if (el.dataset.proSlot === 'nav' && S.pro?.dev) el.innerHTML = `<button class="${S.view.name === 'unlock' ? 'on' : ''}" data-act="unlock"><span class="ico">⚿</span>Unlock</button>`;
   }
 }
@@ -306,7 +310,7 @@ async function onProStatus(st) {
       document.head.append(Object.assign(document.createElement('link'), { id: 'pro-css', rel: 'stylesheet', href: '/api/pro/ui.css' }), js);
     });
   }
-  window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: fillSidebarSlots, doctor: () => go({ name: 'doctor' }), toast });
+  window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: () => { fillSidebarSlots(); fillChatSlots(); }, doctor: () => go({ name: 'doctor' }), toast, openChat: id => go({ name: 'chat', id }) });
   if (S.view.name === 'pro' && !st.unlocked) return go({ name: 'new' });
   renderChrome();
   if (S.view.name !== 'chat') renderView();
@@ -478,7 +482,7 @@ function newChatHtml() {
     <p class="lead">${src ? 'A new chat loads the record of the old one through the Chorus MCP server, sums it up and waits for your OK.' : 'Pick an agent and a project folder. You talk to the agent in its own screen.'}</p>
     <div class="card form">
       ${src ? `<div class="handoff-src">Continues <b>${esc(src.title)}</b> <span class="badge ${esc(src.agent)}">${esc(AGENT[src.agent]?.name ?? src.agent)}</span></div>` : ''}
-      ${proSlot('new-who')}
+      ${proSlot('new-who', src ? ` data-from="${esc(src.id)}"` : '')}
       <div class="field"><label>AGENT</label><div class="agents" id="nc-agents">${agentCards()}</div></div>
       <div class="row2">
         <div class="field"><label for="nc-model">MODEL</label><select id="nc-model" data-change="nc-model">${a.models.map(m => `<option${m === f.model ? ' selected' : ''}>${esc(m)}</option>`).join('')}</select></div>
@@ -504,6 +508,11 @@ async function startChat() {
   const src = S.info.from;
   try {
     localStorage.setItem('chorus.agent', f.agent);
+    const thread = await window.choruspro?.startNew?.({ folder: f.folder, prompt: f.prompt, from: src?.id });
+    if (thread) {
+      S.history = S.history.filter(v => v.name !== 'new');
+      return go({ name: 'chat', id: thread }, false);
+    }
     const body = { agent: f.agent, to: f.agent, model: f.model, effort: f.effort, folder: f.folder, skip: f.skip, prompt: f.prompt };
     const r = src ? await api('POST', `/api/chats/${src.id}/handoff`, body) : await api('POST', '/api/chats', body);
     if (r.error || !r.id) throw new Error(r.error || 'could not start the chat');
@@ -1041,9 +1050,10 @@ async function reportIssue() {
 
 function renderChat() {
   const id = S.view.id;
-  $('#view').innerHTML = `<div class="chat"><div class="chat-head" id="chat-head"></div><div id="chat-banners"></div>
-    <div class="chat-body"><div class="term-wrap" id="term-slot"><div class="term-over" id="term-over" hidden></div></div><aside class="drawer" id="drawer" hidden></aside></div></div>`;
+  $('#view').innerHTML = `<div class="chat"><div class="chat-head" id="chat-head"></div>${proSlot('chat-actions', ` data-chat="${esc(id)}"`)}<div id="chat-banners"></div>
+    <div class="chat-body"><div class="term-wrap" id="term-slot"><div class="term-over" id="term-over" hidden></div></div><aside class="drawer" id="drawer" hidden></aside>${proSlot('chat-side', ` data-chat="${esc(id)}"`)}</div></div>`;
   $('#term-slot').prepend(termEl);
+  fillSlots();
   if (!termOpened) {
     term.open(termEl);
     termOpened = true;
@@ -1074,7 +1084,6 @@ function renderChatParts() {
     <div class="meta"><span class="dot ${esc(c.state)}"></span><span>${esc(STATE_LABEL[c.state] ?? c.state)}</span>
       ${c.model || c.effort ? `<span>· ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}</span>` : ''}${c.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${meter(c.usage)}
       <span class="mono faint path" title="${esc(c.cwd)}">‎${esc(tilde(c.cwd))}‎</span>${c.toast ? `<span class="badge ok">${esc(c.toast)}</span>` : ''}</div>
-    ${proSlot('chat-actions')}
     <button class="btn" data-act="handoff" data-arg="${esc(c.id)}" title="Continue this chat with another agent">⇄ Hand off</button>
     <button class="btn${S.drawer === 'artifacts' ? ' on' : ''}" data-act="drawer" data-arg="artifacts">Artifacts${c.artifacts ? ` <span class="badge plain">${c.artifacts}</span>` : ''}</button>
     <button class="btn${S.drawer === 'activity' ? ' on' : ''}" data-act="drawer" data-arg="activity">Activity</button>

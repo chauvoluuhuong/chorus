@@ -1,11 +1,29 @@
 // The optional module's seam. This file only passes calls on: with nothing loaded there is no code to run, so patching the check below
 // gains nothing. The loader and its formats live in the core package.
-import { activatePro, isLocked, loadPro, proDev, type LoadResult, type McpToolDef, type ProCtx, type ProHandler, type ProModule } from '@chauvoluuhuong/chorus-core/pro-loader';
+import { exclude } from '@chauvoluuhuong/chorus-core';
+import type { AgentId } from '../core/types.ts';
+import { syncSkills } from '../core/skills.ts';
+import { activatePro, isLocked, loadPro, proDev, type ChatExtras, type LoadResult, type McpToolDef, type ProCtx, type ProHandler, type ProModule } from '@chauvoluuhuong/chorus-core/pro-loader';
 
 export interface ProLoader {
   load(ctx: ProCtx, onChange: (r: LoadResult) => void): Promise<LoadResult>;
   activate(ctx: ProCtx, key: string, onChange: (r: LoadResult) => void): Promise<LoadResult>;
   dev: boolean;
+}
+
+/** What a chat gets on top of a normal launch. `chorus serve` passes this to the Controller's launcher, so the CLI app's code stays as it is. */
+export class ChatLaunch {
+  /** set just around a new chat, which starts synchronously */
+  next: ChatExtras | undefined;
+  host: ProHost | undefined;
+
+  extras(o: { threadId: string; project: string; cwd: string }, agent: AgentId) {
+    const e = this.next ?? this.host?.chatExtras(o.threadId);
+    if (!e) return {};
+    exclude(o.cwd, ['.chorus/']); // a teammate's check reads `git status`
+    if (e.skills) syncSkills(o.project, { agents: [agent], into: o.cwd, only: e.skills });
+    return { note: e.note, readOnly: e.readOnly, moreTools: this.host?.toolNames() };
+  }
 }
 
 const realLoader: ProLoader = { load: loadPro, activate: activatePro, dev: proDev };
@@ -29,6 +47,7 @@ export class ProHost {
   private loader: ProLoader;
   private onChange: () => void;
   private doctorSeen: { type: string } | undefined;
+  private closed = false;
 
   constructor(ctx: ProCtx, onChange: () => void, loader: ProLoader = realLoader) {
     this.ctx = ctx;
@@ -95,13 +114,23 @@ export class ProHost {
     return { status: 200, json: { text: await t.handler(args, { threadId }) } };
   }
 
+  chatExtras(thread: string) {
+    return this.module?.chatExtras?.(this.ctx, thread);
+  }
+
+  toolNames() {
+    return this.tools.map(t => t.name);
+  }
+
   /** What happens in the app that the module acts on. The last doctor answer also reaches a module that loads later. */
   chatEvent(ev: { type: string }) {
     if (ev.type === 'doctor') this.doctorSeen = ev;
-    if (this.module) this.module.onChatEvent(this.ctx, ev);
+    if (this.module && !this.closed) this.module.onChatEvent(this.ctx, ev);
   }
 
+  /** A closing app kills its chats: those exits are not "stopped, not done". */
   close() {
+    this.closed = true;
     this.module?.dispose();
   }
 }
