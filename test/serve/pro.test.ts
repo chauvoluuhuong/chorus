@@ -9,6 +9,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { LoadResult, ProCtx, ProModule } from '@chauvoluuhuong/chorus-core/pro-loader';
 import { Controller } from '../../src/app/controller.ts';
 import { createServer } from '../../src/mcp/server.ts';
+import { sourceDir, syncSkills } from '../../src/core/skills.ts';
 import { Store } from '../../src/core/store.ts';
 import { ChorusServer, headlessApp } from '../../src/serve/server.ts';
 import type { ProLoader } from '../../src/serve/pro.ts';
@@ -105,4 +106,16 @@ test('serve gone: chat tools are the usual ones', async () => {
   fs.writeFileSync(path.join(r.home, 'serve.json'), JSON.stringify({ url: 'http://127.0.0.1:9', mcpToken: 'x' }));
   const list = await (await r.tools()).listTools();
   assert.equal(list.tools.some(t => t.name === 'stand_in'), false);
+});
+
+test('syncSkills `only` links just those skills', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-skills-'));
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-skills-p-'));
+  const src = sourceDir(project);
+  for (const s of ['one', 'two', 'three']) {
+    fs.mkdirSync(path.join(src, s), { recursive: true });
+    fs.writeFileSync(path.join(src, s, 'SKILL.md'), `---\nname: ${s}\ndescription: d\n---\nbody\n`);
+  }
+  syncSkills(project, { agents: ['claude'], only: ['one', 'three'], into: home });
+  assert.deepEqual(fs.readdirSync(path.join(home, '.claude/skills')).sort(), ['one', 'three']);
 });

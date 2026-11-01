@@ -28,6 +28,7 @@ export class ProHost {
   private ctx: ProCtx;
   private loader: ProLoader;
   private onChange: () => void;
+  private doctorSeen: { type: string } | undefined;
 
   constructor(ctx: ProCtx, onChange: () => void, loader: ProLoader = realLoader) {
     this.ctx = ctx;
@@ -43,6 +44,7 @@ export class ProHost {
     this.result = r;
     this.routes = isLocked(r) ? {} : r.routes(this.ctx);
     this.tools = isLocked(r) ? [] : r.mcpTools(this.ctx);
+    if (this.doctorSeen && !isLocked(r)) r.onChatEvent(this.ctx, this.doctorSeen);
     this.onChange();
   };
 
@@ -91,6 +93,12 @@ export class ProHost {
     const t = this.tools.find(x => x.name === name);
     if (!t) return { status: 404, json: { error: `no tool ${name}` } };
     return { status: 200, json: { text: await t.handler(args, { threadId }) } };
+  }
+
+  /** What happens in the app that the module acts on. The last doctor answer also reaches a module that loads later. */
+  chatEvent(ev: { type: string }) {
+    if (ev.type === 'doctor') this.doctorSeen = ev;
+    if (this.module) this.module.onChatEvent(this.ctx, ev);
   }
 
   close() {

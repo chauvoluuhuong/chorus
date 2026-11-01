@@ -138,7 +138,7 @@ export class ChorusServer {
     this.c = o.controller;
     this.app = o.controller.app;
     this.token = o.token ?? crypto.randomBytes(24).toString('hex');
-    this.pro = new ProHost({ homeDir: this.c.store.root, skills: project => listSkills(project).map(s => s.name), emit: (event, data) => this.broadcast({ t: 'pro', event, data }) }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
+    this.pro = new ProHost({ homeDir: this.c.store.root, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }) }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     this.bridge();
   }
 
@@ -219,7 +219,9 @@ export class ChorusServer {
       // the first check waits briefly for this launch's backend answer, which may add versions tested after this build
       if (!this.agentCheck) await Promise.race([this.o.notifications?.startup(), new Promise(r => setTimeout(r, 3000))]);
       const report = await (this.o.check ?? (() => check()))();
-      return (this.agentCheck = { at: new Date().toISOString(), report });
+      this.agentCheck = { at: new Date().toISOString(), report };
+      this.pro.chatEvent({ type: 'doctor' });
+      return this.agentCheck;
     })().finally(() => {
       this.checking = undefined;
       this.checkShown = false;
