@@ -306,7 +306,7 @@ async function onProStatus(st) {
       document.head.append(Object.assign(document.createElement('link'), { id: 'pro-css', rel: 'stylesheet', href: '/api/pro/ui.css' }), js);
     });
   }
-  window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: fillSidebarSlots });
+  window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: fillSidebarSlots, doctor: () => go({ name: 'doctor' }), toast });
   if (S.view.name === 'pro' && !st.unlocked) return go({ name: 'new' });
   renderChrome();
   if (S.view.name !== 'chat') renderView();
