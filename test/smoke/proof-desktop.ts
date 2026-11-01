@@ -128,6 +128,8 @@ log('1. the window opens on New chat');
 check('the page loads from chorus serve and the token leaves the address bar', await until(async () => (await js<string>('location.search')) === '' && !!(await js('window.chorus && chorus.S.state')), 15000));
 check('New chat shows the three agents with their versions, model, effort, folder and the skip switch', await until(async () => (await js<number>('document.querySelectorAll(".agent").length')) === 3 && (await has('.agent', /Claude Code\s*2\.\d+\.\d+/)) && (await has('.agent', /Codex\s*0\.\d+/)), 30000) && (await js<string>('document.querySelector("#nc-folder").value')).endsWith(path.basename(project)) && (await has('.toggle', /Skip permission prompts/)));
 check('the sidebar lists the chat recorded in another project (one shared database)', await has('.proj', new RegExp(path.basename(otherProject))) && (await has('.chat-row', /Rate limiter/)));
+// the first launch opens the Doctor over the page
+if (await until(() => has('button', /Skip, start using Chorus/), 8000)) await click('button', 'Skip, start using Chorus');
 await shot('new-chat', 'The window opens on New chat: agent (with version and login), model, effort, project folder, an optional first message, and whether it may skip permission prompts. The sidebar already lists a chat from another project (one shared database)');
 
 log('1b. the + of a project row: New chat in that project');
