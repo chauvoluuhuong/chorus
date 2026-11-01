@@ -18,7 +18,7 @@ import type { ItemState, RichLine } from '../app/compositor.ts';
 import { effortsFor } from '../app/models.ts';
 import { computerDir } from '../app/screens.ts';
 import type { ThreadHost } from '../app/thread-host.ts';
-import { buildHandoff } from '../core/handoff.ts';
+import { buildHandoff, handoffPrompt } from '../core/handoff.ts';
 import { SKIP_FLAG } from '../core/launch.ts';
 import { defaultOpener } from '../core/opener.ts';
 import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, sourceDir, syncSkills } from '../core/skills.ts';
@@ -27,8 +27,9 @@ import { CLIS, type AgentCheck, type DeepReport, type FastReport } from '@chauvo
 import { check, composeIssue, firstLaunch, ghReady, host, isDue, isIssueKind, ISSUE_KINDS, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, remoteTested, reportDetails, runCommand, runDeep, sendIssue, DOCTOR_DIR } from '../core/doctor.ts';
 
 import type { NotificationInbox } from './notifications.ts';
-import { ProHost, type ProLoader } from './pro.ts';
+import { ChatLaunch, ProHost, type ProLoader } from './pro.ts';
 import type { UpdateCheck } from './updates.ts';
+import type { ChatStart } from '@chauvoluuhuong/chorus-core/pro-loader';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(import.meta.dirname, '../..');
@@ -80,6 +81,8 @@ export interface ServeOpts {
   runCommand?: typeof runCommand;
   /** the optional module's loader (tests); the real one otherwise */
   proLoader?: ProLoader;
+  /** read by the launcher given to the Controller */
+  chatLaunch?: ChatLaunch;
 }
 
 const plain = (l: RichLine): string => (typeof l === 'string' ? l : l.map(s => s[0]).join(''));
@@ -138,8 +141,27 @@ export class ChorusServer {
     this.c = o.controller;
     this.app = o.controller.app;
     this.token = o.token ?? crypto.randomBytes(24).toString('hex');
-    this.pro = new ProHost({ homeDir: this.c.store.root, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }) }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
+    this.pro = new ProHost({ homeDir: this.c.store.root, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => void this.select(id), approvals: () => this.c.approvalItems('all').map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options })), answerApproval: (id, answer, request) => void (request ? this.c.answerRequest(request, answer) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent } : undefined; } }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
+    if (o.chatLaunch) o.chatLaunch.host = this.pro;
     this.bridge();
+  }
+
+  private startChat(x: ChatStart): string {
+    const launch = this.o.chatLaunch;
+    if (launch) launch.next = { note: x.note, readOnly: x.readOnly, skills: x.skills };
+    try {
+      return this.c.newThread({ agent: x.agent, model: x.model, effort: x.effort, title: x.title, prompt: x.prompt, cwd: x.cwd, skipPermissions: x.skipPermissions, parent: x.parent ? this.c.store.getThread(x.parent) : undefined }).id;
+    } finally {
+      if (launch) launch.next = undefined;
+    }
+  }
+
+  private sendToChat(id: string, text: string) {
+    const host = this.app.entry(id)?.host;
+    if (!host) return;
+    host.write(text);
+    // text and Enter in one chunk read as a paste in the TUIs: Enter goes apart
+    setTimeout(() => host.state === 'running' && host.write('\r'), 700);
   }
 
   /** The Controller's questions, flashes and bell reach the desktop instead of a terminal. */
@@ -162,7 +184,10 @@ export class ChorusServer {
       for (const cl of this.clients) if (cl.attached === e.id) void cl.attach(e.id);
       this.pushState();
     });
-    app.on('thread-exit', () => this.pushState());
+    app.on('thread-exit', (e: Entry) => {
+      this.pro.chatEvent({ type: 'exit', thread: e?.id } as { type: string });
+      this.pushState();
+    });
   }
 
   private ask(d: Omit<Dialog, 'id'>): Promise<unknown> {
