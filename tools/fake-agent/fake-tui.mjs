@@ -2,6 +2,7 @@
 // Fake interactive TUI for app tests: runs inside a PTY and behaves like an agent screen.
 //   READY <name>, colored line, line-based echo ("got: <line>"), SIZE on resize, DSR query/reply,
 //   "alt" enters the alternate screen, "paste?" reports bracketed paste, "q" exits.
+//   With CHORUS_FAKE_SCRIPT (a script.ts file) it also plays those steps, over the chat's own MCP server, after READY.
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const name = process.argv[2] ?? 'fake';
@@ -16,6 +17,14 @@ let buf = '';
 const size = () => `${process.stdout.columns}x${process.stdout.rows}`;
 process.stdout.on('resize', () => out(`SIZE ${size()}\r\n`));
 out(`SIZE ${size()}\r\n`);
+if (process.env.CHORUS_FAKE_SCRIPT) {
+  const { readScript, runScript } = await import('./script.ts');
+  const code = await runScript(readScript(process.env.CHORUS_FAKE_SCRIPT), { command: process.argv[3], args: JSON.parse(process.argv[4] ?? '[]') }, {
+    said: text => out(`${text}\r\n`),
+    called: (tool, args, text, failed) => out(`${failed ? 'FAILED' : 'CALLED'} ${tool} ${JSON.stringify(args)}: ${text}\r\n`),
+  });
+  if (code) process.exit(code);
+}
 process.stdin.on('data', d => {
   const mouse = d.match(/\x1b\[<(\d+);(\d+);(\d+)([Mm])/);
   if (mouse) { out(`MOUSE ${mouse[1]} ${mouse[2]} ${mouse[3]} ${mouse[4]}\r\n`); return; }

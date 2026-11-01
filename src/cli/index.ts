@@ -16,6 +16,7 @@ import { ChorusServer, headlessApp } from '../serve/server.ts';
 import { NotificationInbox } from '../serve/notifications.ts';
 import { UpdateCheck } from '../serve/updates.ts';
 import { saveRemoteTested, versions } from '../core/doctor.ts';
+import { mcpCommand } from '../core/launch.ts';
 import { activityCmd, artifactsCmd, doctorCmd, memoryCmd, showCmd, threadsCmd, traceCmd } from './commands.ts';
 
 const argv = process.argv.slice(2);
@@ -204,7 +205,8 @@ switch (cmd) {
     const store = openStore();
     const fake = argv.includes('--fake-agents') || process.env.CHORUS_FAKE_AGENTS === '1'; // dev: fake TUIs instead of the real agents, for working on the desktop UI
     const fakeTui = path.resolve(import.meta.dirname, '../../tools/fake-agent/fake-tui.mjs');
-    const c = new Controller({ project, store, app: headlessApp(), models: models(), launcher: fake ? (agent, o) => ({ bin: process.execPath, args: [fakeTui, agent], cwd: o.cwd }) : undefined });
+    const fakeMcp = (o: { project: string; threadId: string; home?: string }) => { const m = mcpCommand(o.project, o.threadId, o.home); return [m.command, JSON.stringify(m.args)]; };
+    const c = new Controller({ project, store, app: headlessApp(), models: models(), launcher: fake ? (agent, o) => ({ bin: process.execPath, args: [fakeTui, agent, ...(process.env.CHORUS_FAKE_SCRIPT ? fakeMcp(o) : [])], cwd: o.cwd }) : undefined });
     c.restore();
     const quit = () => {
       srv.close();
