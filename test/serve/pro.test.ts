@@ -119,3 +119,15 @@ test('syncSkills `only` links just those skills', () => {
   syncSkills(project, { agents: ['claude'], only: ['one', 'three'], into: home });
   assert.deepEqual(fs.readdirSync(path.join(home, '.claude/skills')).sort(), ['one', 'three']);
 });
+
+test('a chat the module resumes while it starts gets its tools', async () => {
+  const { ProHost } = await import('../../src/serve/pro.ts');
+  let seen: string[] = [];
+  let host!: InstanceType<typeof ProHost>;
+  let starting = true;
+  // like the real module: its start resumes chats, and a resumed chat asks for the tools before `use` has them
+  const mod: ProModule = { ...stand, mcpTools: c => { if (starting) { starting = false; seen = host.toolNames(); } return stand.mcpTools(c); } };
+  host = new ProHost({} as ProCtx, () => {}, { dev: true, load: async () => mod, activate: async () => mod });
+  await host.start();
+  assert.deepEqual(seen, ['stand_in']);
+});

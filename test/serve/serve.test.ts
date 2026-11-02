@@ -25,7 +25,7 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const agentCheck = (agent: AgentId, state: AgentCheck['state'], login: AgentCheck['login'] = state === 'needs-login' ? 'no' : 'yes'): AgentCheck => ({ agent, name: agent, state, login, version: '1.0.0', page: '', loginCommand: [agent, 'login'], ms: 1 });
 const fastReport = (agents: AgentCheck[] = (['claude', 'codex', 'agy'] as AgentId[]).map(a => agentCheck(a, 'ready'))): FastReport => ({ node: { version: '22', ok: true }, platform: 'test', agents, ms: 1 });
 
-async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand'> = {}) {
+async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand' | 'pickFolder'> = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-home-'));
   process.env.CODEX_HOME = home;
   const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-serve-')));
@@ -499,4 +499,21 @@ test('serve: release notice uses launch state; download is explicit and skip sup
     assert.match((await r.api('POST', '/api/updates/open', {})).json.error, /No update/);
     assert.equal(checks, 1);
   } finally { await r.done(); fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('Browse… asks the system picker: its folder, a cancel, or none here (the page then shows its own dialog)', async () => {
+  const asked: string[] = [];
+  let answer: { dir?: string; cancelled?: boolean; none?: boolean } = { dir: '/Users/x/new-app' };
+  const r = await rig(undefined, undefined, undefined, { pickFolder: async (start, title) => (asked.push(`${start}|${title}`), answer) });
+  try {
+    assert.deepEqual((await r.api('POST', '/api/folders/pick', { dir: r.project })).json, { dir: '/Users/x/new-app' });
+    assert.deepEqual(asked, [`${r.project}|Choose a project folder`]);
+    answer = { cancelled: true };
+    assert.deepEqual((await r.api('POST', '/api/folders/pick', { dir: '~' })).json, { cancelled: true });
+    assert.equal(asked[1].split('|')[0], os.homedir(), '~ is the home folder');
+    answer = { none: true };
+    assert.deepEqual((await r.api('POST', '/api/folders/pick', {})).json, { none: true });
+  } finally {
+    await r.done();
+  }
 });
