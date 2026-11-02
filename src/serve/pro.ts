@@ -118,8 +118,9 @@ export class ProHost {
     return this.module?.chatExtras?.(this.ctx, thread);
   }
 
+  /** The module's start resumes chats while `use` is still asking for its tools: those chats ask it again here. */
   toolNames() {
-    return this.tools.map(t => t.name);
+    return (this.tools.length ? this.tools : (this.module?.mcpTools(this.ctx) ?? [])).map(t => t.name);
   }
 
   /** What happens in the app that the module acts on. The last doctor answer also reaches a module that loads later. */

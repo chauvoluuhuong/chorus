@@ -539,6 +539,18 @@ async function startChat() {
 
 /* Folder browser (Browse… and "+ add") */
 
+/** The system's own picker (pick or make a folder anywhere); the dialog below only where the system has none. */
+async function pickFolder(dir, then) {
+  let r;
+  try {
+    r = await api('POST', '/api/folders/pick', { dir });
+  } catch (e) {
+    return toast(e.message);
+  }
+  if (r.dir) return then(r.dir);
+  if (r.none) return openBrowse(dir, then);
+}
+
 async function openBrowse(dir, then) {
   try {
     S.browse = { ...(await api('GET', `/api/folders?dir=${encodeURIComponent(dir)}`)), then: then ?? S.browse?.then };
@@ -1533,7 +1545,7 @@ document.addEventListener('click', async e => {
       return renderChrome();
     case 'add-project':
       go({ name: 'new' });
-      return openBrowse(S.state?.project ?? '~', dir => S.form && ((S.form.folder = dir), renderChrome(), renderView()));
+      return pickFolder(S.state?.project ?? '~', dir => S.form && ((S.form.folder = dir), renderChrome(), renderView()));
     case 'handoff':
       if (window.choruspro?.handOff) return window.choruspro.handOff(arg, S.state?.chats.find(c => c.id === arg));
       return go({ name: 'new', from: arg });
@@ -1613,7 +1625,7 @@ document.addEventListener('click', async e => {
     case 'nc-start':
       return startChat();
     case 'browse':
-      return openBrowse(S.form?.folder ?? '~', dir => S.form && ((S.form.folder = dir), renderChrome(), renderView()));
+      return pickFolder(S.form?.folder ?? '~', dir => S.form && ((S.form.folder = dir), renderChrome(), renderView()));
     case 'br-up':
       return openBrowse(S.browse.parent);
     case 'br-open':

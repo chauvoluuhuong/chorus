@@ -4,6 +4,7 @@
 //
 // Security: 127.0.0.1 only; a random token (in the first URL, then an HttpOnly SameSite=Strict cookie) on every request;
 // the Host header must be ours (no DNS rebinding); WebSocket upgrades must come from our own origin; writes need X-Chorus: 1.
+import { execFile } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -42,7 +43,7 @@ const VENDOR: Record<string, string> = {
 };
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const DEFAULT_SIZE = { cols: 120, rows: 36 };
-const LITERAL = new Set(['POST skills/import', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/send']);
+const LITERAL = new Set(['POST folders/pick', 'POST skills/import', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/send']);
 
 /** The App without a terminal: input and output go nowhere, the Controller drives it as usual. */
 export function headlessIO(): AppIO {
@@ -83,6 +84,8 @@ export interface ServeOpts {
   proLoader?: ProLoader;
   /** read by the launcher given to the Controller */
   chatLaunch?: ChatLaunch;
+  /** the system's folder picker (tests); the real one otherwise */
+  pickFolder?: typeof pickFolder;
 }
 
 const plain = (l: RichLine): string => (typeof l === 'string' ? l : l.map(s => s[0]).join(''));
@@ -141,7 +144,7 @@ export class ChorusServer {
     this.c = o.controller;
     this.app = o.controller.app;
     this.token = o.token ?? crypto.randomBytes(24).toString('hex');
-    this.pro = new ProHost({ homeDir: this.c.store.root, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.c.approvalItems('all').map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options })), answerApproval: (id, answer, request) => void (request ? this.c.answerRequest(request, answer) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; } }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
+    this.pro = new ProHost({ homeDir: this.c.store.root, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.c.approvalItems('all').map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; } }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     if (o.chatLaunch) o.chatLaunch.host = this.pro;
     this.bridge();
   }
@@ -473,6 +476,8 @@ export class ChorusServer {
         return this.newChatInfo(q.get('from') ?? undefined);
       case 'GET folders':
         return listFolders(q.get('dir') ?? c.project);
+      case 'POST folders/pick':
+        return (this.o.pickFolder ?? pickFolder)(path.resolve(expand(String(b.dir ?? c.project))), String(b.title ?? 'Choose a project folder'));
       case 'POST folders': {
         const dir = path.join(expand(String(b.dir)), String(b.name ?? '').replace(/[/\\]/g, ''));
         fs.mkdirSync(dir, { recursive: true });
@@ -910,6 +915,26 @@ function readJson(req: http.IncomingMessage): Promise<Record<string, any>> {
 
 const asAgent = (s: unknown): AgentId | undefined => (AGENTS.includes(s as AgentId) ? (s as AgentId) : undefined);
 const expand = (p: string) => p.replace(/^~(?=\/|$)/, process.env.HOME ?? '~');
+
+/**
+ * The system's own folder picker, so a folder can be picked or made anywhere: Finder's on macOS (it has New Folder), zenity's on
+ * Linux when it is installed. `none`: there is no picker here, and the page shows its own Browse dialog.
+ */
+export function pickFolder(start: string, title: string): Promise<{ dir?: string; cancelled?: boolean; none?: boolean }> {
+  const q = (t: string) => `"${t.replace(/[\\"]/g, '\\$&')}"`;
+  const [bin, args] =
+    process.platform === 'darwin'
+      ? ['osascript', ['-e', 'activate', '-e', `POSIX path of (choose folder with prompt ${q(title)}${fs.existsSync(start) ? ` default location (POSIX file ${q(start)})` : ''})`]]
+      : ['zenity', ['--file-selection', '--directory', `--title=${title}`, `--filename=${start}/`]];
+  return new Promise(resolve =>
+    execFile(bin, args, { timeout: 30 * 60_000 }, (err, out) => {
+      if ((err as NodeJS.ErrnoException | null)?.code === 'ENOENT') return resolve({ none: true });
+      if (err) return resolve({ cancelled: true }); // closed or Cancel (osascript -128, zenity 1)
+      const dir = out.trim().replace(/(.)\/$/, '$1');
+      resolve(dir ? { dir } : { cancelled: true });
+    }),
+  );
+}
 
 /** One folder level for the Browse dialog: its sub-folders by name (hidden ones left out). */
 function listFolders(dir: string) {
