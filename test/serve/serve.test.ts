@@ -517,3 +517,17 @@ test('Browse… asks the system picker: its folder, a cancel, or none here (the 
     await r.done();
   }
 });
+
+test('Hand off to any agent with a note: the record, then the note, in the first message', async () => {
+  const r = await rig();
+  try {
+    const a = (await r.api('POST', '/api/chats', { agent: 'claude', folder: r.project })).json.id as string;
+    const id = (await r.api('POST', `/api/chats/${a}/handoff`, { to: 'codex', model: 'gpt-6-luna', effort: 'high', note: ' Only look at the tests ' })).json.id as string;
+    assert.match(r.launches.at(-1)!.prompt ?? '', /get_handoff_context[\s\S]*\n\nOnly look at the tests$/);
+    assert.equal(r.launches.at(-1)!.agent, 'codex');
+    assert.equal(r.store.getThread(id)!.parent_thread_id, a);
+    assert.equal(r.store.getThread(id)!.model, 'gpt-6-luna');
+  } finally {
+    await r.done();
+  }
+});

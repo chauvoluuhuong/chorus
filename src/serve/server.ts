@@ -504,7 +504,10 @@ export class ChorusServer {
       case 'POST chats/:id/handoff': {
         const to = asAgent(b.to);
         if (!thread || !to) return undefined;
-        const e = await c.handoff(id, to, { model: b.model, effort: b.effort, skipPermissions: !!b.skip });
+        const opts = { model: b.model, effort: b.effort, skipPermissions: !!b.skip };
+        const note = typeof b.note === 'string' ? b.note.trim() : '';
+        // a note (the paid Hand off's "Anything to add?") goes after the record, in the same first message
+        const e = note ? c.newThread({ agent: to, title: `${thread.title} → ${to}`, prompt: `${handoffPrompt(thread)}\n\n${note}`, parent: thread, cwd: thread.cwd, ...opts }) : await c.handoff(id, to, opts);
         this.pushState();
         return { id: e?.id };
       }
