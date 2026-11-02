@@ -290,12 +290,12 @@ function fillSidebarSlots() {
 }
 
 function fillChatSlots() {
-  for (const el of document.querySelectorAll('#view [data-pro-slot^="chat-"]')) window.choruspro?.render(el.dataset.proSlot, el, { ...el.dataset, cwd: S.state?.chats.find(c => c.id === el.dataset.chat)?.cwd });
+  for (const el of document.querySelectorAll('#view [data-pro-slot^="chat-"]')) window.choruspro?.render(el.dataset.proSlot, el, { ...el.dataset, cwd: S.state?.chats.find(c => c.id === el.dataset.chat)?.cwd, chatRow: S.state?.chats.find(c => c.id === el.dataset.chat), chats: S.state?.chats });
 }
 
 function fillSlots() {
   for (const el of document.querySelectorAll('[data-pro-slot]')) {
-    if (window.choruspro) window.choruspro.render(el.dataset.proSlot, el, { ...el.dataset, view: S.view.id, id: S.view.id, project: S.form?.folder ?? S.state?.project, cwd: el.dataset.cwd ?? S.state?.chats.find(c => c.id === el.dataset.chat)?.cwd });
+    if (window.choruspro) window.choruspro.render(el.dataset.proSlot, el, { ...el.dataset, view: S.view.id, id: S.view.id, project: S.form?.folder ?? S.state?.project, cwd: el.dataset.cwd ?? S.state?.chats.find(c => c.id === el.dataset.chat)?.cwd, chatRow: S.state?.chats.find(c => c.id === el.dataset.chat), chats: S.state?.chats });
     else if (el.dataset.proSlot === 'nav' && S.pro?.dev) el.innerHTML = `<button class="${S.view.name === 'unlock' ? 'on' : ''}" data-act="unlock"><span class="ico">⚿</span>Unlock</button>`;
   }
 }
@@ -310,7 +310,7 @@ async function onProStatus(st) {
       document.head.append(Object.assign(document.createElement('link'), { id: 'pro-css', rel: 'stylesheet', href: '/api/pro/ui.css' }), js);
     });
   }
-  window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: () => { fillSidebarSlots(); fillChatSlots(); }, doctor: () => go({ name: 'doctor' }), toast, openChat: id => go({ name: 'chat', id }) });
+  window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: () => { renderChrome(); fillChatSlots(); if (S.view.name === 'new') renderView(); }, doctor: () => go({ name: 'doctor' }), toast, openChat: id => go({ name: 'chat', id }) });
   if (S.view.name === 'pro' && !st.unlocked) return go({ name: 'new' });
   renderChrome();
   if (S.view.name !== 'chat') renderView();
@@ -326,7 +326,7 @@ function unlockHtml() {
 /* ---------- sidebar, top bar, notice ---------- */
 
 function chatsByProject() {
-  const groups = new Map();
+  const groups = new Map((window.choruspro?.projects?.() ?? []).map(cwd => [cwd, []]));
   for (const c of S.state?.chats ?? []) {
     if (S.hidden[c.cwd]?.includes(c.id) && c.id !== S.view.id) continue;
     if (!groups.has(c.cwd)) groups.set(c.cwd, []);
@@ -350,6 +350,7 @@ function renderChrome() {
     if (folded) continue;
     tree += `<div data-pro-slot="project" data-cwd="${esc(cwd)}"></div>`;
     for (const c of chats) {
+      if (window.choruspro?.hidesChat?.(c.id)) continue; // shown under its task
       const child = c.parentId && chats.some(p => p.id === c.parentId);
       tree += `<button class="chat-row${child ? ' child' : ''}${v.name === 'chat' && v.id === c.id ? ' on' : ''}" data-act="chat" data-arg="${esc(c.id)}" title="${esc(c.title)} · ${esc(AGENT[c.agent]?.name ?? c.agent)} · ${esc(STATE_LABEL[c.state] ?? '')}">
         ${child ? '<span class="arrow">↳</span>' : ''}<span class="dot ${esc(c.state)}"></span><span class="t">${esc(c.title)}</span><span class="badge mini ${esc(c.agent)}">${esc(AGENT[c.agent]?.letter ?? '?')}</span></button>`;
@@ -383,6 +384,7 @@ function renderChrome() {
   let crumbs = '';
   if (chat) crumbs = `<a data-act="fold-open" data-arg="${esc(chat.cwd)}">${esc(base(chat.cwd))}</a><span class="sep">›</span><span class="here">${esc(chat.title)}</span>`;
   else if (v.name === 'new') crumbs = `<span>${esc(base(S.form?.folder ?? st?.project ?? ''))}</span><span class="sep">›</span><span class="here">${v.from ? 'Hand off' : 'New chat'}</span>`;
+  else if (v.name === 'pro') crumbs = window.choruspro?.crumbs?.(v.id) ?? '';
   else crumbs = `<span class="here">${{ approvals: 'Approvals', memory: 'Memory', skills: 'Skills', doctor: 'Doctor' }[v.name] ?? ''}</span>`;
   $('#top').innerHTML = `
     ${$('#app').classList.contains('side-off') ? `<button class="icon-btn" data-act="sidebar" title="Show the sidebar (${MOD}B)">⇥</button>` : ''}
@@ -450,53 +452,62 @@ async function openNew(from, folder) {
   }
 }
 
-function agentCards() {
-  const f = S.form;
+function agentRows() {
+  const f = S.form, from = S.info.from;
   return S.info.agents
-    .filter(a => !S.info.from || a.id !== S.info.from.agent || true)
     .map(a => {
       const live = drAgent(a.id) ?? { agent: a.id };
       const st = agentStatus(live, false);
-      const sub = st.kind === 'plain' ? '<span class="sub">checking…</span>' : live.state === 'missing' ? '<span class="sub bad">Not installed</span>' : live.state === 'needs-login' ? `<span class="sub bad">${esc(live.version ?? '')} · Not logged in</span><span class="sub">Logged in already? Check again in Doctor</span>` : `<span class="sub">${esc(live.version ?? '')} · ${esc(live.login === 'yes' ? 'Logged in' : st.label)}</span>`;
-      const q = a.quota ? `<span class="sub ${a.quota.level === 'err' ? 'bad' : a.quota.level === 'warn' ? 'warn' : ''}">plan ${esc(a.quota.text)}</span>` : '';
-      const same = S.info.from && a.id === S.info.from.agent;
-      return `<button class="agent${f.agent === a.id ? ' on' : ''}" data-act="nc-agent" data-arg="${a.id}"><span class="name"><span class="badge mini ${a.id}">${AGENT[a.id].letter}</span>${AGENT[a.id].name}${same ? ' <span class="faint" style="font-weight:400">(same agent)</span>' : ''}</span>${sub}${q}</button>`;
+      const sub = st.kind === 'plain' ? 'checking…' : live.state === 'missing' ? '<span class="bad">Not installed</span>' : live.state === 'needs-login' ? `<span class="bad">${esc(live.version ?? '')} · Not logged in</span>` : `${esc(live.version ?? '')} · ${esc(live.login === 'yes' ? 'Logged in' : st.label)}`;
+      const q = a.quota ? ` · <span class="${a.quota.level === 'err' ? 'bad' : a.quota.level === 'warn' ? 'warn' : ''}">plan ${esc(a.quota.text)}</span>` : '';
+      return `<button class="${f.agent === a.id && !window.choruspro?.teammatePicked?.() ? 'on' : ''}" data-act="nc-agent" data-arg="${a.id}"><span class="nc-mi"><span class="badge mini ${a.id}">${AGENT[a.id].letter}</span>${AGENT[a.id].name}${from?.agent === a.id ? ' <span class="faint">(same agent)</span>' : ''}</span><span class="nc-sub">${sub}${q}</span></button>`;
     })
     .join('');
 }
 function renderAgentsOnly() {
-  const el = $('#nc-agents');
-  if (el && S.info && S.form) el.innerHTML = agentCards();
+  if (S.ncMenu === 'agent' || S.ncMenu === 'who') renderView();
 }
 
 function newChatHtml() {
   const f = S.form;
   const src = S.info?.from;
-  if (!f) return '<div class="page hero"><h1>What should we build?</h1><p class="lead">Loading the agents…</p></div>';
+  if (!f) return '<div class="page nc-wrap"><h1 class="nc-h">What are we working on?</h1><p class="nc-hint">Loading the agents…</p></div>';
   const a = S.info.agents.find(x => x.id === f.agent);
   const efforts = a.efforts[f.model] ?? ['default'];
   if (!efforts.includes(f.effort)) f.effort = efforts[0];
-  const recent = [...new Set([...(S.info.recent ?? []), S.info.computer])].filter(r => r && r !== f.folder);
-  return `<div class="page hero">
-    <h1><span class="logo" style="height:26px"><i style="width:5px;height:14px"></i><i style="width:5px;height:26px"></i><i style="width:5px;height:19px"></i></span>${src ? 'Continue with another agent' : 'What should we build?'}</h1>
-    <p class="lead">${src ? 'A new chat loads the record of the old one through the Chorus MCP server, sums it up and waits for your OK.' : 'Pick an agent and a project folder. You talk to the agent in its own screen.'}</p>
-    <div class="card form">
-      ${src ? `<div class="handoff-src">Continues <b>${esc(src.title)}</b> <span class="badge ${esc(src.agent)}">${esc(AGENT[src.agent]?.name ?? src.agent)}</span></div>` : ''}
-      ${proSlot('new-who', src ? ` data-from="${esc(src.id)}"` : '')}
-      <div class="field"><label>AGENT</label><div class="agents" id="nc-agents">${agentCards()}</div></div>
-      <div class="row2">
-        <div class="field"><label for="nc-model">MODEL</label><select id="nc-model" data-change="nc-model">${a.models.map(m => `<option${m === f.model ? ' selected' : ''}>${esc(m)}</option>`).join('')}</select></div>
-        <div class="field"><label for="nc-effort">EFFORT</label><select id="nc-effort" data-change="nc-effort">${efforts.map(m => `<option${m === f.effort ? ' selected' : ''}>${esc(m)}</option>`).join('')}</select></div>
+  const recent = [...new Set([...(S.info.recent ?? []), S.info.computer])].filter(Boolean);
+  const m = S.ncMenu;
+  const menu = (id, body) => (m === id ? `<div class="nc-menu" role="menu">${body}</div>` : '');
+  const pk = (id, label, cls = '', dis = false, body = '') => `<span class="nc-pk-wrap"><button class="nc-pk ${cls}" data-act="nc-menu" data-arg="${id}" aria-expanded="${m === id}"${dis ? ' disabled' : ''}>${label}</button>${menu(id, body)}</span>`;
+  const agentLabel = `<span class="badge mini ${f.agent}">${AGENT[f.agent].letter}</span>${AGENT[f.agent].name}`;
+  // the optional module adds who and what; without it the first picker is the agent
+  const T = src ? undefined : window.choruspro?.newChat?.({ pk, agentRows: agentRows(), agentLabel });
+  const folderName = f.folder === S.info.computer ? 'This computer' : base(f.folder);
+  const folders = `${recent.map(r => `<button class="${r === f.folder ? 'on' : ''}" data-act="nc-folder" data-arg="${esc(r)}"><span class="nc-mi">${esc(r === S.info.computer ? 'This computer (no project)' : base(r))}</span><span class="nc-sub">${esc(r === S.info.computer ? 'chats that belong to no folder' : tilde(r))}</span></button>`).join('')}<button data-act="browse"><span class="nc-mi">Browse…</span><span class="nc-sub">Pick another folder</span></button>`;
+  const modelLabel = `${f.model === 'default' ? 'Default model' : esc(f.model)}${f.effort === 'default' ? '' : ` · ${esc(f.effort)}`}`;
+  const models = `<div class="nc-sel"><label for="nc-model">Model</label><select id="nc-model" data-change="nc-model">${a.models.map(x => `<option${x === f.model ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></div><div class="nc-sel"><label for="nc-effort">Effort</label><select id="nc-effort" data-change="nc-effort">${efforts.map(x => `<option${x === f.effort ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></div>`;
+  const perms = [[false, 'Ask me', 'The agent asks before it edits files or runs commands; you answer here or in Approvals.'], [true, 'Skip permission prompts', `Starts ${AGENT[f.agent].name} with ${a.skipFlag}. Nothing from this chat reaches Approvals.`]]
+    .map(([v, t, d]) => `<button class="${f.skip === v ? 'on' : ''}" data-act="nc-skip" data-arg="${v ? 1 : 0}"><span class="nc-mi${v ? ' bad' : ''}">${v ? '⚠' : '✓'} ${t}</span><span class="nc-sub">${esc(d)}</span></button>`)
+    .join('');
+  const engine = T?.info ? `<span class="nc-info">${esc(T.info)}</span>` : `${pk('model', modelLabel, 'nc-dim', false, models)}${pk('perm', f.skip ? '⚠ Skip permissions' : 'Ask before acting', f.skip ? 'nc-danger' : 'nc-dim', false, perms)}`;
+  return `<div class="page nc-wrap">
+    <h1 class="nc-h">${src ? 'Continue with another agent' : 'What are we working on?'}</h1>
+    ${src ? `<p class="nc-src">Continues <b>${esc(src.title)}</b> <span class="badge ${esc(src.agent)}">${esc(AGENT[src.agent]?.name ?? src.agent)}</span>. The new agent loads its record through the Chorus MCP server and waits for your OK.</p>` : ''}
+    <div class="nc-box">
+      <textarea id="nc-prompt" data-input="nc-prompt" aria-label="Message" placeholder="${src ? 'Anything to add for the next agent? (optional)' : 'Describe the work…'}">${esc(f.prompt)}</textarea>
+      <div class="nc-bar">
+        <div class="nc-left">
+          ${T?.picks ?? pk('agent', agentLabel, 'nc-strong', false, agentRows())}
+          ${pk('folder', `<span class="nc-ico">▢</span>${esc(folderName)}`, '', !!src, folders)}
+          ${engine}
+        </div>
+        <div class="nc-right"><button class="btn primary nc-send" data-act="nc-start" title="Send (${MOD}↵)"${f.busy ? ' disabled' : ''}>${src ? 'Hand off' : esc(T?.send ?? 'Send')} <kbd>${MOD}↵</kbd></button></div>
       </div>
-      <div class="field"><label for="nc-folder">PROJECT FOLDER</label>
-        <div class="folder"><input id="nc-folder" type="text" value="${esc(tilde(f.folder))}" data-input="nc-folder" spellcheck="false"${src ? ' disabled' : ''}>${src ? '' : '<button class="btn" data-act="browse">Browse…</button>'}</div>
-        ${src || !recent.length ? '' : `<div class="chips">${recent.map(r => `<button class="chip" data-act="nc-folder" data-arg="${esc(r)}">${esc(r === S.info.computer ? 'This computer (no project)' : tilde(r))}</button>`).join('')}</div>`}
-      </div>
-      ${src ? '' : `<div class="field"><label for="nc-prompt">FIRST MESSAGE <span class="faint" style="font-weight:400">(optional: you can also type it in the agent)</span></label><textarea id="nc-prompt" data-input="nc-prompt" placeholder="What do you want to build today?">${esc(f.prompt)}</textarea></div>`}
-      <label class="toggle"><input type="checkbox" data-change="nc-skip"${f.skip ? ' checked' : ''}><span><b>Skip permission prompts</b> <span class="muted">· starts ${esc(AGENT[f.agent].name)} with <code>${esc(a.skipFlag)}</code></span><br><span class="muted" style="font-size:12.5px">${f.skip ? 'Nothing reaches the approvals inbox for this chat: the agent runs commands and edits files without asking.' : 'Off: the agent asks, and Chorus shows it in the approvals inbox.'}</span></span></label>
-      ${f.error ? `<div class="err">${esc(f.error)}</div>` : ''}
-      <div class="form-foot"><span class="hint">${src ? '' : `${MOD}↵ starts from the message box`}</span><button class="btn primary" data-act="nc-start"${f.busy ? ' disabled' : ''}>${src ? 'Hand off' : 'Start chat'} <kbd>↵</kbd></button></div>
-    </div></div>`;
+      ${f.skip && !T?.info ? `<div class="nc-warn">⚠ Starts ${esc(AGENT[f.agent].name)} with <code>${esc(a.skipFlag)}</code>: it won't stop to ask before editing files or running commands, and nothing from this chat reaches Approvals.</div>` : ''}
+      ${f.error ? `<div class="nc-warn">${esc(f.error)}</div>` : ''}
+    </div>
+    <p class="nc-hint">${src ? 'The old chat stays as it is; the new one shows under it with ↳.' : T?.hint || `${MOD}↵ sends · you talk to the agent in its own screen`}</p>
+  </div>`;
 }
 
 async function startChat() {
@@ -511,6 +522,7 @@ async function startChat() {
     const thread = await window.choruspro?.startNew?.({ folder: f.folder, prompt: f.prompt, from: src?.id });
     if (thread) {
       S.history = S.history.filter(v => v.name !== 'new');
+      f.busy = false;
       return go({ name: 'chat', id: thread }, false);
     }
     const body = { agent: f.agent, to: f.agent, model: f.model, effort: f.effort, folder: f.folder, skip: f.skip, prompt: f.prompt };
@@ -1403,6 +1415,10 @@ function askToast(a) {
 /* ---------- input ---------- */
 
 document.addEventListener('click', async e => {
+  if (S.ncMenu && !e.target.closest('.nc-pk-wrap')) {
+    S.ncMenu = null;
+    if (!e.target.closest('[data-act]')) return renderView();
+  }
   const el = e.target.closest('[data-act]');
   if (!el) return;
   const act = el.dataset.act;
@@ -1497,6 +1513,11 @@ document.addEventListener('click', async e => {
   renderDoctorDot();
       return setTimeout(refit, 50);
     case 'fold':
+      // the project's name opens its Portal; the caret only folds
+      if (window.choruspro && !e.target.closest('.caret')) {
+        S.folded.delete(arg);
+        return go({ name: 'pro', id: `portal~${encodeURIComponent(arg)}` });
+      }
       S.folded.has(arg) ? S.folded.delete(arg) : S.folded.add(arg);
       localStorage.setItem('chorus.folded', JSON.stringify([...S.folded]));
       return renderChrome();
@@ -1514,6 +1535,7 @@ document.addEventListener('click', async e => {
       go({ name: 'new' });
       return openBrowse(S.state?.project ?? '~', dir => S.form && ((S.form.folder = dir), renderChrome(), renderView()));
     case 'handoff':
+      if (window.choruspro?.handOff) return window.choruspro.handOff(arg, S.state?.chats.find(c => c.id === arg));
       return go({ name: 'new', from: arg });
     case 'approve':
     case 'deny':
@@ -1564,14 +1586,28 @@ document.addEventListener('click', async e => {
         toast(arg, { ms: 8000 });
       }
       return;
+    case 'nc-menu':
+      S.ncMenu = S.ncMenu === arg ? null : arg;
+      return renderView();
+    case 'nc-skip':
+      S.form.skip = arg === '1';
+      S.ncMenu = null;
+      return renderView();
+    case 'pro-nc':
+      window.choruspro?.newChatPick?.(arg);
+      S.ncMenu = null;
+      return renderView();
     case 'nc-agent':
       if (!S.form) return;
       S.form.agent = arg;
       S.form.model = 'default';
       S.form.effort = 'default';
+      S.ncMenu = null;
+      window.choruspro?.newChatPick?.('who:just');
       return renderView();
     case 'nc-folder':
       S.form.folder = arg;
+      S.ncMenu = null;
       renderChrome(); // the sidebar marks the project the form starts in
       return renderView();
     case 'nc-start':
