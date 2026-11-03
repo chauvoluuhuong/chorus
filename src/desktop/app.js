@@ -142,8 +142,9 @@ function onState(st) {
     const key = a.id + '|' + a.what;
     if (S.asked.has(key)) continue;
     S.asked.add(key);
-    if (!first && !(S.view.name === 'chat' && S.view.id === a.id)) askToast(a);
+    if (!first && !(S.view.name === 'chat' && S.view.id === a.id) && !inNeedsYou(a)) askToast(a);
   }
+  dropNeedsYouToasts();
   // the toast of a request goes when the request does (answered here, in the agent, or elsewhere)
   for (const [k, el] of askToasts) if (!st.approvals.some(a => a.id + '|' + a.what === k)) (el.remove(), askToasts.delete(k));
   if (S.view.name === 'chat' && !st.chats.some(c => c.id === S.view.id)) {
@@ -263,6 +264,7 @@ function go(view, push = true) {
   S.history = S.history.slice(-30);
   S.view = view;
   S.drawerData = null;
+  dropNeedsYouToasts();
   // the address keeps the screen, so a reload comes back to it
   history.replaceState(null, '', `#/${view.name}${view.id ? `/${view.id}` : view.from ? `/from/${view.from}` : view.folder ? `/in/${encodeURIComponent(view.folder)}` : ''}`);
   if (view.name !== 'chat') detachTerm();
@@ -295,7 +297,7 @@ function fillChatSlots() {
 
 function fillSlots() {
   for (const el of document.querySelectorAll('[data-pro-slot]')) {
-    if (window.choruspro) window.choruspro.render(el.dataset.proSlot, el, { ...el.dataset, view: S.view.id, id: S.view.id, project: S.form?.folder ?? S.state?.project, cwd: el.dataset.cwd ?? S.state?.chats.find(c => c.id === el.dataset.chat)?.cwd, chatRow: S.state?.chats.find(c => c.id === el.dataset.chat), chats: S.state?.chats });
+    if (window.choruspro) window.choruspro.render(el.dataset.proSlot, el, { ...el.dataset, view: S.view.id, id: S.view.id, open: S.view.name === 'chat' ? S.view.id : '', project: S.form?.folder ?? S.state?.project, cwd: el.dataset.cwd ?? S.state?.chats.find(c => c.id === el.dataset.chat)?.cwd, chatRow: S.state?.chats.find(c => c.id === el.dataset.chat), chats: S.state?.chats });
     else if (el.dataset.proSlot === 'nav' && S.pro?.dev) el.innerHTML = `<button class="${S.view.name === 'unlock' ? 'on' : ''}" data-act="unlock"><span class="ico">⚿</span>Unlock</button>`;
   }
 }
@@ -332,6 +334,8 @@ function chatsByProject() {
     if (!groups.has(c.cwd)) groups.set(c.cwd, []);
     groups.get(c.cwd).push(c);
   }
+  // a project with tasks is listed even with no chat left: taken off the sidebar, it stays off until a new chat starts there
+  for (const [cwd, chats] of groups) if (S.hidden[cwd] && !chats.length) groups.delete(cwd);
   return groups;
 }
 
@@ -1411,6 +1415,9 @@ function toast(text, opts = {}) {
   return el;
 }
 const askToasts = new Map();
+/** On a project's Portal, a teammate's request is under Needs you already: no toast for it. */
+const dropNeedsYouToasts = () => { for (const [k, el] of askToasts) if (inNeedsYou({ id: k.split('|')[0] })) (el.remove(), askToasts.delete(k)); };
+const inNeedsYou = a => S.view.name === 'pro' && String(S.view.id ?? '').startsWith('portal~') && !!window.choruspro?.hidesChat?.(a.id);
 function askToast(a) {
   const ask = a.kind === 'ask';
   const el = toast(`${AGENT[a.agent]?.name ?? a.agent} in "${a.title}" asks${ask ? ' you' : ''}: ${ask ? a.question : a.what.split(' · ').slice(-1)[0]}`, {
