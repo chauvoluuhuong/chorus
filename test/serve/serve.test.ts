@@ -531,3 +531,19 @@ test('Hand off to any agent with a note: the record, then the note, in the first
     await r.done();
   }
 });
+
+test('opening another chat leaves the first one working: same process, still running', async () => {
+  const r = await rig();
+  try {
+    const a = (await r.api('POST', '/api/chats', { agent: 'codex', folder: r.project })).json.id as string;
+    const host = r.c.app.entry(a)!.host!;
+    const b = (await r.api('POST', '/api/chats', { agent: 'claude', folder: r.project })).json.id as string;
+    await r.api('POST', `/api/chats/${b}/select`);
+    await sleep(300);
+    assert.equal(r.c.app.entry(a)!.host, host, 'the same process');
+    assert.notEqual(host.state, 'ended');
+    assert.notEqual((await r.api('GET', '/api/state')).json.chats.find((c: any) => c.id === a).state, 'parked');
+  } finally {
+    await r.done();
+  }
+});
