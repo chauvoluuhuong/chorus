@@ -114,6 +114,11 @@ export class ProHost {
     return { status: 200, json: { text: await t.handler(args, { threadId }) } };
   }
 
+  /** A teammate's chat whose CLI lost its session: its action's brief again, and what it already made (decision 18). */
+  lostBrief(thread: string): string | undefined {
+    return this.module?.lostBrief?.(this.ctx, thread);
+  }
+
   chatExtras(thread: string) {
     return this.module?.chatExtras?.(this.ctx, thread);
   }

@@ -19,6 +19,8 @@ import type { ItemState, RichLine } from '../app/compositor.ts';
 import { effortsFor } from '../app/models.ts';
 import { computerDir } from '../app/screens.ts';
 import type { ThreadHost } from '../app/thread-host.ts';
+import { transcriptPath } from '../core/capture.ts';
+import type { ThreadRow } from '../core/store.ts';
 import { buildHandoff, handoffPrompt } from '../core/handoff.ts';
 import { SKIP_FLAG } from '../core/launch.ts';
 import { defaultOpener } from '../core/opener.ts';
@@ -86,6 +88,8 @@ export interface ServeOpts {
   chatLaunch?: ChatLaunch;
   /** the system's folder picker (tests); the real one otherwise */
   pickFolder?: typeof pickFolder;
+  /** whether the CLI still has a chat's session (tests); its transcript on disk otherwise */
+  sessionExists?: (row: ThreadRow) => boolean;
 }
 
 const plain = (l: RichLine): string => (typeof l === 'string' ? l : l.map(s => s[0]).join(''));
@@ -714,12 +718,33 @@ export class ChorusServer {
     };
   }
 
+  /** Chats whose CLI had lost their session, continued from Chorus's record in this run: the chat says so. */
+  private fromRecord = new Set<string>();
+
+  /**
+   * Given to the Controller (decision 18): a chat about to resume whose CLI no longer has the session gets a new session in the
+   * same chat. Its first message: read this chat's own record, then go on; a teammate's chat also gets its action's brief again.
+   * The check is the session's file, before launching: Antigravity opens an empty conversation for an id it lacks, with no error.
+   */
+  sessionGone(row: ThreadRow): string | undefined {
+    if ((this.o.sessionExists ?? sessionOnDisk)(row)) return undefined;
+    this.fromRecord.add(row.id);
+    if (!this.c.store.getTurns(row.id, { limit: 1 }).length) return ''; // nothing was said yet: a plain new session
+    const name = CLIS[row.agent]?.name ?? row.agent;
+    const brief = this.pro.lostBrief(row.id);
+    const record = `${name} no longer has the earlier session of this chat, so Chorus started a new session in the same chat. Call the chorus MCP tool get_handoff_context with thread_id ${row.id} first: that is this chat's own record.`;
+    return brief
+      ? `${record} Go on from where it stopped, and do not redo what it already did. Do not wait for an OK.\n\n${brief}`
+      : `${record} Then reply with at most 5 bullets: what was done, decisions, open work, and your next step. Wait for my next message before changing anything.`;
+  }
+
   chatDetail(id: string) {
     const c = this.c;
     const t = c.store.getThread(id)!;
     const parent = t.parent_thread_id ? c.store.getThread(t.parent_thread_id) : undefined;
     return {
       thread: t,
+      fromRecord: this.fromRecord.has(id) ? CLIS[t.agent]?.name ?? t.agent : null,
       parent: parent ? { id: parent.id, title: parent.title, agent: parent.agent } : null,
       usage: c.store.getUsage(id) ?? null,
       record: buildHandoff(c.store, t).text,
@@ -937,6 +962,13 @@ export function pickFolder(start: string, title: string): Promise<{ dir?: string
       resolve(dir ? { dir } : { cancelled: true });
     }),
   );
+}
+
+/** The CLI still has a chat's session: its transcript is where the CLI keeps it (docs/integrations/pro-probes.md, lost sessions). */
+function sessionOnDisk(row: ThreadRow) {
+  if (!row.native_session_id) return true;
+  if (row.transcript_path && fs.existsSync(row.transcript_path)) return true;
+  return !!transcriptPath(row.agent, row.native_session_id, row.cwd);
 }
 
 /** One folder level for the Browse dialog: its sub-folders by name (hidden ones left out). */

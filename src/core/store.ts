@@ -25,6 +25,8 @@ export interface ThreadRow {
   skip_permissions: number;
   /** reasoning effort chosen for the chat (null = the agent's default) */
   effort: string | null;
+  /** the last turn of earlier sessions: a new session of this chat (its CLI lost the old one) saves its turns after them */
+  turn_base?: number;
   created: string;
   updated: string;
 }
@@ -138,6 +140,7 @@ export class Store {
     if (!tcols.includes('note')) this.db.exec('ALTER TABLE tool_calls ADD COLUMN note TEXT');
     if (!tcols.includes('detail')) this.db.exec('ALTER TABLE tool_calls ADD COLUMN detail TEXT');
     if (!cols.includes('effort')) this.db.exec('ALTER TABLE threads ADD COLUMN effort TEXT');
+    if (!cols.includes('turn_base')) this.db.exec('ALTER TABLE threads ADD COLUMN turn_base INTEGER NOT NULL DEFAULT 0');
   }
 
   /**
@@ -256,6 +259,12 @@ export class Store {
     }
   }
 
+  /** The chat's CLI lost its session: a new one starts, and its turns are saved after the ones the chat has. */
+  startOver(id: string) {
+    const last = (this.db.prepare('SELECT COALESCE(MAX(seq), 0) AS n FROM turns WHERE thread_id = ?').get(id) as { n: number }).n;
+    this.updateThread(id, { turn_base: last, transcript_path: null });
+  }
+
   updateThread(id: string, patch: Partial<Omit<ThreadRow, 'id' | 'created'>>) {
     const keys = Object.keys(patch) as (keyof typeof patch)[];
     if (!keys.length) return;
@@ -274,18 +283,20 @@ export class Store {
   /** Replace a thread's captured record with the latest parse of its CLI session (idempotent). */
   recordSession(threadId: string, s: Session, extra: { transcriptPath?: string } = {}) {
     const db = this.db;
+    // the session's own turns come after those of the chat's earlier sessions (startOver)
+    const base = this.getThread(threadId)?.turn_base ?? 0;
     db.exec('BEGIN');
     try {
       // upsert: a tailed session only grows, so rewriting every row each time would get slower with every turn
-      db.prepare('DELETE FROM turns WHERE thread_id = ? AND seq > ?').run(threadId, s.turns.length);
-      const have = (db.prepare('SELECT COUNT(*) AS n FROM tool_calls WHERE thread_id = ?').get(threadId) as any).n as number;
-      if (have > s.toolCalls.length) db.prepare('DELETE FROM tool_calls WHERE thread_id = ?').run(threadId);
+      db.prepare('DELETE FROM turns WHERE thread_id = ? AND seq > ?').run(threadId, base + s.turns.length);
+      const have = (db.prepare('SELECT COUNT(*) AS n FROM tool_calls WHERE thread_id = ? AND turn_seq > ?').get(threadId, base) as any).n as number;
+      if (have > s.toolCalls.length) db.prepare('DELETE FROM tool_calls WHERE thread_id = ? AND turn_seq > ?').run(threadId, base);
       const ti = db.prepare('INSERT OR REPLACE INTO turns (thread_id,seq,role,text,ts) VALUES (?,?,?,?,?)');
-      for (const t of s.turns) ti.run(threadId, t.seq, t.role, t.text, t.ts ?? null);
+      for (const t of s.turns) ti.run(threadId, base + t.seq, t.role, t.text, t.ts ?? null);
       const ci = db.prepare(
         'INSERT OR REPLACE INTO tool_calls (thread_id,call_id,turn_seq,tool,target,status,result,duration_ms,note,detail) VALUES (?,?,?,?,?,?,?,?,?,?)',
       );
-      for (const c of s.toolCalls) ci.run(threadId, c.id, c.turnSeq, c.tool, maskSecrets(c.target), c.status, c.result ? maskSecrets(c.result) : null, c.durationMs ?? null, c.note ?? null, c.detail ? maskSecrets(c.detail) : null);
+      for (const c of s.toolCalls) ci.run(threadId, c.id, base + c.turnSeq, c.tool, maskSecrets(c.target), c.status, c.result ? maskSecrets(c.result) : null, c.durationMs ?? null, c.note ?? null, c.detail ? maskSecrets(c.detail) : null);
       db.prepare(
         `INSERT OR REPLACE INTO usage (thread_id,input_tokens,output_tokens,cache_read_tokens,cost_usd,limit_utilization,limit_resets_at,limit_status,updated)
          VALUES (?,?,?,?,?,?,?,?,?)`,
