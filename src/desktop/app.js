@@ -312,7 +312,7 @@ async function onProStatus(st) {
       document.head.append(Object.assign(document.createElement('link'), { id: 'pro-css', rel: 'stylesheet', href: '/api/pro/ui.css' }), js);
     });
   }
-  window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: () => { renderChrome(); fillChatSlots(); if (S.view.name === 'new') renderView(); }, doctor: () => go({ name: 'doctor' }), toast, openChat: id => go({ name: 'chat', id }) });
+  window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: () => { renderChrome(); fillChatSlots(); if (S.view.name === 'new' || S.view.name === 'approvals') renderView(); }, doctor: () => go({ name: 'doctor' }), toast, openChat: id => go({ name: 'chat', id }) });
   if (S.view.name === 'pro' && !st.unlocked) return go({ name: 'new' });
   renderChrome();
   if (S.view.name !== 'chat') renderView();
@@ -341,7 +341,8 @@ function chatsByProject() {
 
 function renderChrome() {
   const st = S.state;
-  const waiting = st?.approvals.length ?? 0;
+  // chats' requests and Chorus's own (a plan to approve, work to check)
+  const waiting = (st?.approvals.length ?? 0) + (window.choruspro?.needsCount?.() ?? 0);
   const v = S.view;
   const on = n => (v.name === n ? ' on' : '');
   let tree = '';
@@ -386,7 +387,7 @@ function renderChrome() {
 
   const chat = v.name === 'chat' ? st?.chats.find(c => c.id === v.id) : undefined;
   let crumbs = '';
-  if (chat) crumbs = `<a data-act="fold-open" data-arg="${esc(chat.cwd)}">${esc(base(chat.cwd))}</a><span class="sep">›</span><span class="here">${esc(chat.title)}</span>`;
+  if (chat) crumbs = `<a data-act="fold-open" data-arg="${esc(chat.cwd)}">${esc(base(chat.cwd))}</a><span class="sep">›</span><span class="here">${window.choruspro?.chatCrumb?.(chat.id) ?? esc(chat.title)}</span>`;
   else if (v.name === 'new') crumbs = `<span>${esc(base(S.form?.folder ?? st?.project ?? ''))}</span><span class="sep">›</span><span class="here">${v.from ? 'Hand off' : 'New chat'}</span>`;
   else if (v.name === 'pro') crumbs = window.choruspro?.crumbs?.(v.id) ?? '';
   else crumbs = `<span class="here">${{ approvals: 'Approvals', memory: 'Memory', skills: 'Skills', doctor: 'Doctor' }[v.name] ?? ''}</span>`;
@@ -598,7 +599,9 @@ function approvalsHtml() {
   const wait = since => { const s = Date.now() / 1000 - since; return s < 60 ? `${Math.max(0, Math.round(s))}s` : `${Math.round(s / 60)}m`; };
   const riskBadge = r => (r ? `<span class="badge ${r.level === 'err' ? 'bad' : r.level === 'warn' ? 'warn' : 'plain'}">${esc(r.label)}</span>` : '');
   return `<div class="page"><h1>Approvals</h1><p class="lead">What your agents are asking for, from every chat: their permission prompts (answering types the agent's own key) and the questions they put to you through Chorus (your choice and note become your next message to that agent). You do not have to switch to the chat.</p>
-    <div class="toolbar"><div class="seg"><button class="${S.scope === 'all' ? 'on' : ''}" data-act="scope" data-arg="all">All projects</button><button class="${S.scope === 'this' ? 'on' : ''}" data-act="scope" data-arg="this">This project</button></div><span class="grow"></span><span class="muted">${all.length} waiting</span></div>
+    <div class="toolbar"><div class="seg"><button class="${S.scope === 'all' ? 'on' : ''}" data-act="scope" data-arg="all">All projects</button><button class="${S.scope === 'this' ? 'on' : ''}" data-act="scope" data-arg="this">This project</button></div><span class="grow"></span><span class="muted">${all.length + (window.choruspro?.needsCount?.() ?? 0)} waiting</span></div>
+    ${proSlot('approvals', ` data-scope="${esc(S.scope)}" data-cwd="${esc(cur?.cwd ?? '')}"`)}
+    ${window.choruspro ? '<div class="section-title" style="margin-top:4px">From chats</div>' : ''}
     <div class="card list">${
       items.length
         ? items
