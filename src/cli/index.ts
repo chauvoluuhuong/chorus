@@ -208,7 +208,8 @@ switch (cmd) {
     const fakeTui = path.resolve(import.meta.dirname, '../../tools/fake-agent/fake-tui.mjs');
     const fakeMcp = (o: { project: string; threadId: string; home?: string }) => { const m = mcpCommand(o.project, o.threadId, o.home); return [m.command, JSON.stringify(m.args)]; };
     const chatLaunch = new ChatLaunch();
-    const c = new Controller({ project, store, app: headlessApp(), models: models(), launcher: fake ? (agent, o) => ({ bin: process.execPath, args: [fakeTui, agent, ...(process.env.CHORUS_FAKE_SCRIPT ? fakeMcp(o) : [])], cwd: o.cwd }) : (agent, o) => buildInteractive(agent, { ...o, ...chatLaunch.extras(o, agent) }) });
+    let server: ChorusServer | undefined; // a chat may resume before the server is made: it resumes as always then
+    const c = new Controller({ project, store, app: headlessApp(), models: models(), sessionGone: fake ? undefined : row => server?.sessionGone(row), launcher: fake ? (agent, o) => ({ bin: process.execPath, args: [fakeTui, agent, ...(process.env.CHORUS_FAKE_SCRIPT ? fakeMcp(o) : [])], cwd: o.cwd }) : (agent, o) => buildInteractive(agent, { ...o, ...chatLaunch.extras(o, agent) }) });
     c.restore();
     const quit = () => {
       srv.close();
@@ -229,7 +230,7 @@ switch (cmd) {
       try { updates = new UpdateCheck({ directory: path.join(process.env.CHORUS_HOME ?? path.join(os.homedir(), '.chorus'), 'updates'), version: versions().chorus }); }
       catch { /* Keep the app available if update preferences cannot be read. */ }
     }
-    const srv = new ChorusServer({ controller: c, port: Number(flag('port') ?? 4318), onQuit: quit, notifications, updates, chatLaunch });
+    const srv = (server = new ChorusServer({ controller: c, port: Number(flag('port') ?? 4318), onQuit: quit, notifications, updates, chatLaunch }));
     await srv.start();
     // the first line is read by the desktop shell: keep its shape
     console.log(`chorus serve: ${srv.openUrl}`);

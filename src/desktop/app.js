@@ -1148,6 +1148,7 @@ function renderChatParts() {
     if (ask.kind === 'ask') banners += `<div class="banner ask card"><b>${esc(AGENT[c.agent]?.name ?? c.agent)} asks you</b><div class="ask-body">${askCard(ask)}</div></div>`;
     else banners += `<div class="banner ask"><b>${esc(AGENT[c.agent]?.name ?? c.agent)} asks</b><span class="what" title="${esc(ask.what)}">${esc(ask.what)}</span><button class="btn good" data-act="approve" data-arg="${esc(c.id)}">✓ Approve</button><button class="btn danger" data-act="deny" data-arg="${esc(c.id)}">✕ Deny</button></div>`;
   }
+  if (d?.fromRecord) banners += `<div class="banner info"><span>${esc(d.fromRecord)} no longer had this chat's session, so Chorus continues it from its own record.</span></div>`;
   if (c.parentId && d && !d.contextLoaded && c.state === 'idle' && d.turns.some(t => t.role === 'assistant')) banners += `<div class="banner info"><span>⚠ This chat has not loaded the record of the chat it continues.</span><button class="btn" data-act="retry" data-arg="${esc(c.id)}">Ask again</button></div>`;
   const bannerEl = $('#chat-banners');
   if (bannerEl.dataset.html !== banners && !bannerEl.contains(document.activeElement)) {

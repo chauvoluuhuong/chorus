@@ -25,16 +25,19 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const agentCheck = (agent: AgentId, state: AgentCheck['state'], login: AgentCheck['login'] = state === 'needs-login' ? 'no' : 'yes'): AgentCheck => ({ agent, name: agent, state, login, version: '1.0.0', page: '', loginCommand: [agent, 'login'], ms: 1 });
 const fastReport = (agents: AgentCheck[] = (['claude', 'codex', 'agy'] as AgentId[]).map(a => agentCheck(a, 'ready'))): FastReport => ({ node: { version: '22', ok: true }, platform: 'test', agents, ms: 1 });
 
-async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand' | 'pickFolder'> = {}) {
+async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand' | 'pickFolder' | 'sessionExists'> = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-home-'));
   process.env.CODEX_HOME = home;
   const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-serve-')));
   const store = new Store(project);
   seed?.(store, project);
   const launches: { agent: AgentId; prompt?: string; resumeId?: string; skipPermissions?: boolean }[] = [];
+  let srvRef: ChorusServer | undefined;
   const c = new Controller({
     project,
     store,
+    // only a test that says whether sessions exist checks for lost ones (decision 18)
+    sessionGone: doctor.sessionExists ? row => srvRef?.sessionGone(row) : undefined,
     app: headlessApp(),
     tailPollMs: 100,
     opener: async () => ({ ok: true }),
@@ -46,6 +49,7 @@ async function rig(seed?: (store: Store, project: string) => void, notifications
   c.restore();
   const notificationLinks: string[] = [];
   const srv = new ChorusServer({ controller: c, token: 'a'.repeat(48), notifications, updates, check: async () => fastReport(), ...doctor, onUpdateOpen: url => { notificationLinks.push(url); }, onNotificationLink: url => { notificationLinks.push(url); } });
+  srvRef = srv;
   const url = await srv.start(0);
   const api = async (method: string, p: string, body?: object, headers: Record<string, string> = {}) => {
     const res = await fetch(url + p, { method, headers: { authorization: `Bearer ${srv.token}`, 'x-chorus': '1', 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined, redirect: 'manual' });
@@ -559,6 +563,42 @@ test('a project taken off the sidebar stays off after a restart: the server keep
     const saved = JSON.parse(fs.readFileSync(path.join(r.store.root, 'ui.json'), 'utf8'));
     assert.deepEqual(saved, { hidden: { '/work/old': ['t_1'] }, folded: ['/work/big'] });
     assert.deepEqual((await r.api('GET', '/api/state')).json.ui, saved);
+  } finally {
+    await r.done();
+  }
+});
+
+test('a chat whose CLI lost its session goes on in the same chat, from its record (decision 18)', async () => {
+  const r = await rig(
+    (store, project) => {
+      store.createThread({ id: 't_old', title: 'Old chat', agent: 'claude', cwd: project, native_session_id: 'gone-1', state: 'waiting' });
+      store.recordSession('t_old', { agent: 'claude', turns: [{ seq: 1, role: 'user', text: 'Make the cart faster' }, { seq: 2, role: 'assistant', text: 'Cached the totals.' }], toolCalls: [{ id: 'c1', turnSeq: 2, tool: 'Edit', target: 'cart.ts', status: 'ok' }], usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0 } });
+      store.createThread({ id: 't_kept', title: 'Kept chat', agent: 'codex', cwd: project, native_session_id: 'kept-1', state: 'waiting' });
+    },
+    undefined,
+    undefined,
+    { sessionExists: row => row.native_session_id === 'kept-1' },
+  );
+  try {
+    const v = await viewer(r.url, r.srv.token);
+    await v.until(() => v.state()?.chats.length === 2, 'state');
+    const at = () => v.state().chats.map((c: any) => c.id);
+    const order = at();
+    v.send({ t: 'attach', id: 't_old', cols: 100, rows: 30 });
+    await v.until(() => /READY claude/.test(v.text()), 'started');
+    const l = r.launches.at(-1)!;
+    assert.equal(l.resumeId, undefined, 'not resumed: the CLI has no such session');
+    assert.match(l.prompt ?? '', /no longer has the earlier session of this chat[\s\S]*get_handoff_context with thread_id t_old/);
+    assert.deepEqual(at(), order, 'the same chat, in the same place');
+    assert.equal((await r.api('GET', '/api/chats/t_old')).json.fromRecord, 'Claude Code');
+    // the new session's turns go after the old ones: the record keeps both
+    r.store.recordSession('t_old', { agent: 'claude', turns: [{ seq: 1, role: 'user', text: 'new session' }], toolCalls: [{ id: 'n1', turnSeq: 1, tool: 'Read', target: 'cart.ts', status: 'ok' }], usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0 } });
+    assert.deepEqual(r.store.getTurns('t_old', { limit: 10 }).map(t => [t.seq, t.text]), [[1, 'Make the cart faster'], [2, 'Cached the totals.'], [3, 'new session']]);
+    assert.deepEqual(r.store.getToolCalls('t_old').map(c => c.id), ['c1', 'n1']);
+    // a chat whose session is still there resumes as always
+    v.send({ t: 'attach', id: 't_kept', cols: 100, rows: 30 });
+    await v.until(() => r.launches.at(-1)!.resumeId === 'kept-1', 'resumed');
+    assert.equal((await r.api('GET', '/api/chats/t_kept')).json.fromRecord, null);
   } finally {
     await r.done();
   }
