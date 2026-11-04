@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { buildHandoff, pickSourceThread } from '../core/handoff.ts';
 import { listSkills, readSkill } from '../core/skills.ts';
 import { Store } from '../core/store.ts';
+import { addProTools } from './pro.ts';
 
 export const TOOL_NAMES = ['get_handoff_context', 'get_thread_turns', 'list_threads', 'list_artifacts', 'list_skills', 'get_skill', 'request_approval'] as const;
 
@@ -18,14 +19,14 @@ export const TOOL_NAMES = ['get_handoff_context', 'get_thread_turns', 'list_thre
 export const APPROVAL_NOTE =
   'The user answers you in Chorus. Whenever you would ask the user to approve, confirm or choose something before you go on (a plan, a risky or irreversible change, a choice between options, "click Proceed", "reply Approve"), do not ask in your reply: call the chorus MCP tool request_approval with the question, a short summary and the options, then end your turn. Chorus shows it to the user as an approval card and their answer arrives as their next message. Your own permission prompts for commands and edits stay as they are.';
 
-export function createServer(project: string, threadId?: string, home?: string): McpServer {
+export function createServer(project: string, threadId?: string, home?: string): McpServer & { addProTools(): Promise<void> } {
   const store = new Store(project, { home });
   // Every agent starts this server for its thread, so this text reaches all three: it says where the thread's artifacts go.
   const dir = threadId ? store.artifactsDir(threadId) : undefined;
   const instructions = dir
     ? `This chat is Chorus thread ${threadId}. Files meant for the user (notes, plans, reports, mockups, anything that is not source code of the project) go in ${dir} (create it if missing). Chorus shows them in its Artifacts view. ${APPROVAL_NOTE}`
     : undefined;
-  const server = new McpServer({ name: 'chorus', version: '1.0.0' }, instructions ? { instructions } : undefined);
+  const server = new McpServer({ name: 'chorus', version: '1.0.0' }, instructions ? { instructions } : undefined) as McpServer & { addProTools(): Promise<void> };
 
   const reply = (tool: string, text: string, isError = false) => {
     try {
@@ -111,10 +112,12 @@ export function createServer(project: string, threadId?: string, home?: string):
     },
   );
 
+  server.addProTools = () => addProTools(server, store.root, threadId, reply);
   return server;
 }
 
 export async function runMcp(project: string, threadId?: string, home?: string) {
   const server = createServer(project, threadId, home);
+  await server.addProTools();
   await server.connect(new StdioServerTransport());
 }
