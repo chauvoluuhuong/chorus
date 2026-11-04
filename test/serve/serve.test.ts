@@ -25,16 +25,19 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const agentCheck = (agent: AgentId, state: AgentCheck['state'], login: AgentCheck['login'] = state === 'needs-login' ? 'no' : 'yes'): AgentCheck => ({ agent, name: agent, state, login, version: '1.0.0', page: '', loginCommand: [agent, 'login'], ms: 1 });
 const fastReport = (agents: AgentCheck[] = (['claude', 'codex', 'agy'] as AgentId[]).map(a => agentCheck(a, 'ready'))): FastReport => ({ node: { version: '22', ok: true }, platform: 'test', agents, ms: 1 });
 
-async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand'> = {}) {
+async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand' | 'pickFolder' | 'sessionExists'> = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-home-'));
   process.env.CODEX_HOME = home;
   const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-serve-')));
   const store = new Store(project);
   seed?.(store, project);
   const launches: { agent: AgentId; prompt?: string; resumeId?: string; skipPermissions?: boolean }[] = [];
+  let srvRef: ChorusServer | undefined;
   const c = new Controller({
     project,
     store,
+    // only a test that says whether sessions exist checks for lost ones (decision 18)
+    sessionGone: doctor.sessionExists ? row => srvRef?.sessionGone(row) : undefined,
     app: headlessApp(),
     tailPollMs: 100,
     opener: async () => ({ ok: true }),
@@ -46,6 +49,7 @@ async function rig(seed?: (store: Store, project: string) => void, notifications
   c.restore();
   const notificationLinks: string[] = [];
   const srv = new ChorusServer({ controller: c, token: 'a'.repeat(48), notifications, updates, check: async () => fastReport(), ...doctor, onUpdateOpen: url => { notificationLinks.push(url); }, onNotificationLink: url => { notificationLinks.push(url); } });
+  srvRef = srv;
   const url = await srv.start(0);
   const api = async (method: string, p: string, body?: object, headers: Record<string, string> = {}) => {
     const res = await fetch(url + p, { method, headers: { authorization: `Bearer ${srv.token}`, 'x-chorus': '1', 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined, redirect: 'manual' });
@@ -499,4 +503,103 @@ test('serve: release notice uses launch state; download is explicit and skip sup
     assert.match((await r.api('POST', '/api/updates/open', {})).json.error, /No update/);
     assert.equal(checks, 1);
   } finally { await r.done(); fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('Browse… asks the system picker: its folder, a cancel, or none here (the page then shows its own dialog)', async () => {
+  const asked: string[] = [];
+  let answer: { dir?: string; cancelled?: boolean; none?: boolean } = { dir: '/Users/x/new-app' };
+  const r = await rig(undefined, undefined, undefined, { pickFolder: async (start, title) => (asked.push(`${start}|${title}`), answer) });
+  try {
+    assert.deepEqual((await r.api('POST', '/api/folders/pick', { dir: r.project })).json, { dir: '/Users/x/new-app' });
+    assert.deepEqual(asked, [`${r.project}|Choose a project folder`]);
+    answer = { cancelled: true };
+    assert.deepEqual((await r.api('POST', '/api/folders/pick', { dir: '~' })).json, { cancelled: true });
+    assert.equal(asked[1].split('|')[0], os.homedir(), '~ is the home folder');
+    answer = { none: true };
+    assert.deepEqual((await r.api('POST', '/api/folders/pick', {})).json, { none: true });
+  } finally {
+    await r.done();
+  }
+});
+
+test('Hand off to any agent with a note: the record, then the note, in the first message', async () => {
+  const r = await rig();
+  try {
+    const a = (await r.api('POST', '/api/chats', { agent: 'claude', folder: r.project })).json.id as string;
+    const id = (await r.api('POST', `/api/chats/${a}/handoff`, { to: 'codex', model: 'gpt-6-luna', effort: 'high', note: ' Only look at the tests ' })).json.id as string;
+    assert.match(r.launches.at(-1)!.prompt ?? '', /get_handoff_context[\s\S]*\n\nOnly look at the tests$/);
+    assert.equal(r.launches.at(-1)!.agent, 'codex');
+    assert.equal(r.store.getThread(id)!.parent_thread_id, a);
+    assert.equal(r.store.getThread(id)!.model, 'gpt-6-luna');
+  } finally {
+    await r.done();
+  }
+});
+
+test('opening another chat leaves the first one working: same process, still running', async () => {
+  const r = await rig();
+  try {
+    const a = (await r.api('POST', '/api/chats', { agent: 'codex', folder: r.project })).json.id as string;
+    const host = r.c.app.entry(a)!.host!;
+    const b = (await r.api('POST', '/api/chats', { agent: 'claude', folder: r.project })).json.id as string;
+    await r.api('POST', `/api/chats/${b}/select`);
+    await sleep(300);
+    assert.equal(r.c.app.entry(a)!.host, host, 'the same process');
+    assert.notEqual(host.state, 'ended');
+    assert.notEqual((await r.api('GET', '/api/state')).json.chats.find((c: any) => c.id === a).state, 'parked');
+  } finally {
+    await r.done();
+  }
+});
+
+test('a project taken off the sidebar stays off after a restart: the server keeps the choice, not the browser', async () => {
+  const r = await rig();
+  try {
+    assert.deepEqual((await r.api('GET', '/api/state')).json.ui, {}, 'nothing chosen yet');
+    assert.deepEqual((await r.api('POST', '/api/ui', { key: 'hidden', value: { '/work/old': ['t_1'] } })).json, { ok: true });
+    await r.api('POST', '/api/ui', { key: 'folded', value: ['/work/big'] });
+    assert.equal((await r.api('POST', '/api/ui', { key: 'token', value: 'x' })).json.error, 'unknown setting');
+    // the window's next launch is a new server on a new port, reading the same data folder
+    const saved = JSON.parse(fs.readFileSync(path.join(r.store.root, 'ui.json'), 'utf8'));
+    assert.deepEqual(saved, { hidden: { '/work/old': ['t_1'] }, folded: ['/work/big'] });
+    assert.deepEqual((await r.api('GET', '/api/state')).json.ui, saved);
+  } finally {
+    await r.done();
+  }
+});
+
+test('a chat whose CLI lost its session goes on in the same chat, from its record (decision 18)', async () => {
+  const r = await rig(
+    (store, project) => {
+      store.createThread({ id: 't_old', title: 'Old chat', agent: 'claude', cwd: project, native_session_id: 'gone-1', state: 'waiting' });
+      store.recordSession('t_old', { agent: 'claude', turns: [{ seq: 1, role: 'user', text: 'Make the cart faster' }, { seq: 2, role: 'assistant', text: 'Cached the totals.' }], toolCalls: [{ id: 'c1', turnSeq: 2, tool: 'Edit', target: 'cart.ts', status: 'ok' }], usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0 } });
+      store.createThread({ id: 't_kept', title: 'Kept chat', agent: 'codex', cwd: project, native_session_id: 'kept-1', state: 'waiting' });
+    },
+    undefined,
+    undefined,
+    { sessionExists: row => row.native_session_id === 'kept-1' },
+  );
+  try {
+    const v = await viewer(r.url, r.srv.token);
+    await v.until(() => v.state()?.chats.length === 2, 'state');
+    const at = () => v.state().chats.map((c: any) => c.id);
+    const order = at();
+    v.send({ t: 'attach', id: 't_old', cols: 100, rows: 30 });
+    await v.until(() => /READY claude/.test(v.text()), 'started');
+    const l = r.launches.at(-1)!;
+    assert.equal(l.resumeId, undefined, 'not resumed: the CLI has no such session');
+    assert.match(l.prompt ?? '', /no longer has the earlier session of this chat[\s\S]*get_handoff_context with thread_id t_old/);
+    assert.deepEqual(at(), order, 'the same chat, in the same place');
+    assert.equal((await r.api('GET', '/api/chats/t_old')).json.fromRecord, 'Claude Code');
+    // the new session's turns go after the old ones: the record keeps both
+    r.store.recordSession('t_old', { agent: 'claude', turns: [{ seq: 1, role: 'user', text: 'new session' }], toolCalls: [{ id: 'n1', turnSeq: 1, tool: 'Read', target: 'cart.ts', status: 'ok' }], usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0 } });
+    assert.deepEqual(r.store.getTurns('t_old', { limit: 10 }).map(t => [t.seq, t.text]), [[1, 'Make the cart faster'], [2, 'Cached the totals.'], [3, 'new session']]);
+    assert.deepEqual(r.store.getToolCalls('t_old').map(c => c.id), ['c1', 'n1']);
+    // a chat whose session is still there resumes as always
+    v.send({ t: 'attach', id: 't_kept', cols: 100, rows: 30 });
+    await v.until(() => r.launches.at(-1)!.resumeId === 'kept-1', 'resumed');
+    assert.equal((await r.api('GET', '/api/chats/t_kept')).json.fromRecord, null);
+  } finally {
+    await r.done();
+  }
 });

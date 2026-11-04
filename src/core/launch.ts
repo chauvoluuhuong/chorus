@@ -37,6 +37,12 @@ export interface InteractiveOpts {
   skipPermissions?: boolean;
   /** reasoning effort (low … max); omitted = the agent's own default (docs/integrations/effort.md) */
   effort?: string;
+  /** more standing text for the whole chat */
+  note?: string;
+  /** no edits and no writing commands */
+  readOnly?: boolean;
+  /** more chorus tools the agent may call without a prompt */
+  moreTools?: string[];
 }
 
 /** Where a thread's artifacts go, said to the agent (architecture §9). Claude and agy also get it through the MCP server's instructions. */
@@ -68,7 +74,9 @@ export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
     model: o.model,
     effort: o.effort,
     skipPermissions: o.skipPermissions,
-    mcp: server(o),
+    mcp: o.moreTools ? { ...server(o), tools: [...server(o).tools, ...o.moreTools] } : server(o),
     instructions: artifactNote(o.project, o.threadId),
+    note: o.note,
+    readOnly: o.readOnly,
   });
 }

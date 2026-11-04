@@ -111,6 +111,16 @@ function onMessage(m) {
     return drawTermOver();
   }
   if (m.t === 'flash') return flash(m.text);
+  if (m.t === 'pro-status') return void onProStatus(m.status);
+  if (m.t === 'pro-signed-in') return void onProStatus(m.status).then(() => {
+    if (!m.status.unlocked) return toast(m.status.message || 'Signing in did not work. Try again.');
+    remember('welcome', 'pro');
+    S.welcome = 'pro';
+    if (m.then === 'upgrade') return upgrade();
+    go({ name: m.status.plan === 'trial' ? 'pro-started' : 'new' });
+    if (m.status.plan === 'free') toast('Signed in. This email already had a trial: Community keeps working, and Upgrade unlocks Pro.');
+  });
+  if (m.t === 'pro') return window.choruspro?.onEvent?.(m.event, m.data);
   if (m.t === 'dropped' && m.id === S.attached) return toast(`Added to the message: ${m.paths.map(base).join(', ')}`);
 }
 
@@ -130,6 +140,10 @@ function flash(text) {
 function onState(st) {
   renderUpdate(st.update);
   const first = !S.state;
+  if (first) {
+    takeUi(st.ui ?? {});
+    queueMicrotask(planScreens);
+  }
   const previousNews = S.state?.notifications;
   const doctorChanged = JSON.stringify(S.state?.doctor) !== JSON.stringify(st.doctor);
   S.state = st;
@@ -140,8 +154,9 @@ function onState(st) {
     const key = a.id + '|' + a.what;
     if (S.asked.has(key)) continue;
     S.asked.add(key);
-    if (!first && !(S.view.name === 'chat' && S.view.id === a.id)) askToast(a);
+    if (!first && !(S.view.name === 'chat' && S.view.id === a.id) && !inNeedsYou(a)) askToast(a);
   }
+  dropNeedsYouToasts();
   // the toast of a request goes when the request does (answered here, in the agent, or elsewhere)
   for (const [k, el] of askToasts) if (!st.approvals.some(a => a.id + '|' + a.what === k)) (el.remove(), askToasts.delete(k));
   if (S.view.name === 'chat' && !st.chats.some(c => c.id === S.view.id)) {
@@ -261,6 +276,8 @@ function go(view, push = true) {
   S.history = S.history.slice(-30);
   S.view = view;
   S.drawerData = null;
+  if (view.name === 'pro-ended' && !S.endedSeen) (S.endedSeen = true), remember('ended', true);
+  dropNeedsYouToasts();
   // the address keeps the screen, so a reload comes back to it
   history.replaceState(null, '', `#/${view.name}${view.id ? `/${view.id}` : view.from ? `/from/${view.from}` : view.folder ? `/in/${encodeURIComponent(view.folder)}` : ''}`);
   if (view.name !== 'chat') detachTerm();
@@ -279,21 +296,158 @@ function back() {
   if (v) go(v, false);
 }
 
+/* ---------- the optional module: slots stay empty unless it is unlocked ---------- */
+
+const proSlot = (name, attrs = '') => `<div data-pro-slot="${name}"${attrs}></div>`;
+
+function fillSidebarSlots() {
+  for (const el of document.querySelectorAll('#side [data-pro-slot]')) window.choruspro?.render(el.dataset.proSlot, el, { ...el.dataset, view: S.view.id });
+}
+
+function fillChatSlots() {
+  for (const el of document.querySelectorAll('#view [data-pro-slot^="chat-"]')) window.choruspro?.render(el.dataset.proSlot, el, { ...el.dataset, cwd: S.state?.chats.find(c => c.id === el.dataset.chat)?.cwd, chatRow: S.state?.chats.find(c => c.id === el.dataset.chat), chats: S.state?.chats });
+}
+
+function fillSlots() {
+  for (const el of document.querySelectorAll('[data-pro-slot]')) {
+    if (window.choruspro) window.choruspro.render(el.dataset.proSlot, el, { ...el.dataset, view: S.view.id, id: S.view.id, open: S.view.name === 'chat' ? S.view.id : '', project: S.form?.folder ?? S.state?.project, cwd: el.dataset.cwd ?? S.state?.chats.find(c => c.id === el.dataset.chat)?.cwd, chatRow: S.state?.chats.find(c => c.id === el.dataset.chat), chats: S.state?.chats });
+    else if (el.dataset.proSlot === 'nav') {
+      // Community: the Pro items show, locked; a click offers the trial. A dev build also has Unlock (a test key)
+      const lock = community() ? [['☺', 'Teammates'], ['⇢', 'Processes']].map(([ic, t]) => `<button class="locked" data-act="plan-welcome" title="Pro only"><span class="ico">${ic}</span>${t}<span class="lock" aria-label="Pro only">🔒</span></button>`).join('') : '';
+      el.innerHTML = lock + (S.pro?.dev ? `<button class="${S.view.name === 'unlock' ? 'on' : ''}" data-act="unlock"><span class="ico">⚿</span>Unlock</button>` : '');
+    }
+  }
+}
+
+async function onProStatus(st) {
+  S.pro = st;
+  document.querySelector('#pro-css')?.remove();
+  if (!st.unlocked) delete window.choruspro;
+  else if (!window.choruspro) {
+    await new Promise(done => {
+      const js = Object.assign(document.createElement('script'), { src: '/api/pro/ui.js', onload: done, onerror: done });
+      document.head.append(Object.assign(document.createElement('link'), { id: 'pro-css', rel: 'stylesheet', href: '/api/pro/ui.css' }), js);
+    });
+  }
+  window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: () => { renderChrome(); fillChatSlots(); if (S.view.name === 'new' || S.view.name === 'approvals') renderView(); }, doctor: () => go({ name: 'doctor' }), toast, openChat: id => go({ name: 'chat', id }), upgrade, back: () => history.length && go(S.history.pop() ?? { name: 'new' }, false) });
+  if (S.view.name === 'pro' && !st.unlocked) return go({ name: 'new' });
+  renderChrome();
+  drawPlanBanner();
+  if (S.view.name !== 'chat') renderView();
+  planScreens();
+}
+
+function unlockHtml() {
+  const p = S.pro;
+  return `<div class="page hero"><h1>Unlock</h1><div class="card form"><div class="field"><label for="pro-key">KEY</label><input id="pro-key" type="text" spellcheck="false"></div>
+    ${p?.message && !p.unlocked ? `<div class="err" id="pro-why">${esc(p.message)}</div>` : ''}${p?.unlocked ? '<div id="pro-why">Unlocked.</div>' : ''}
+    <div class="form-foot"><span class="hint">Development builds only</span><button class="btn primary" data-act="pro-unlock">Unlock</button></div></div></div>`;
+}
+
+/* ---------- the plan: Welcome, Try Pro, the plan box, the trial banners (chorus-core plan stage 6) ---------- */
+// The words of the Welcome screen come from the backend (/api/pro/plans), so no sales text sits in this repo. Community has no paid
+// code at all; signing up opens /try in the user's own browser, which comes back to /api/pro/signed-in with a one-time code.
+
+const DAY = 86_400_000;
+const daysLeft = iso => Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / DAY));
+// no paid code on this install: what a Community user sees (a dev build adds Unlock for a test key)
+const community = () => !!S.pro && !S.pro.unlocked;
+const upgrade = () => toast('Upgrade is coming soon.');
+
+/** First launch, or a trial that just ended: the screen that says so, once. */
+function planScreens() {
+  if (!S.pro || !S.state || S.view.name !== 'new') return;
+  if (community() && S.welcome === undefined) return go({ name: 'welcome' });
+  if (S.pro.plan === 'free' && !S.endedSeen) return go({ name: 'pro-ended' });
+}
+
+function planBox() {
+  const p = S.pro;
+  if (!p) return '';
+  const box = (title, sub, button = '', warn = false) => `<div class="plan-box"><b>${esc(title)}</b><span class="${warn ? 'warn' : 'muted'}">${esc(sub)}</span>${button}</div>`;
+  if (!p.unlocked) return box('Community', 'Free, as today', '<button class="btn" data-act="plan-welcome">Try Pro</button>');
+  if (p.plan === 'trial') {
+    const n = daysLeft(p.ends);
+    return box('Pro trial', `${n} day${n === 1 ? '' : 's'} left`, n <= 3 ? '<button class="btn primary" data-act="plan-upgrade">Upgrade</button>' : '', n <= 3);
+  }
+  if (p.plan === 'free') return box('No Pro', 'Your trial ended', '<button class="btn primary" data-act="plan-upgrade">Upgrade</button>');
+  if (p.plan === 'pro') return box('Pro', 'Thank you');
+  return '';
+}
+
+/** The trial's last days: a line under the top bar, until Later (then again the next day). */
+function drawPlanBanner() {
+  const el = $('#plan-banner');
+  const p = S.pro, n = p?.plan === 'trial' ? daysLeft(p.ends) : 99, today = new Date().toDateString();
+  el.hidden = !(n <= 3 && S.bannerDay !== today);
+  if (!el.hidden) el.innerHTML = `<span>Your Pro trial ends ${n === 0 ? 'today' : `in ${n} day${n === 1 ? '' : 's'}`}.</span><span style="flex:1"></span><button class="btn primary" data-act="plan-upgrade">Upgrade</button><button class="btn" data-act="plan-later">Later</button>`;
+}
+
+let planWords;
+function welcomeHtml() {
+  if (planWords === undefined) {
+    planWords = null;
+    void api('GET', '/api/pro/plans').then(w => { planWords = w; if (S.view.name === 'welcome') renderView(); }, () => { planWords = { offline: true }; renderView(); });
+  }
+  const w = planWords && !planWords.offline ? planWords : null;
+  const card = (c, pro) => `<div class="plan-card${pro ? ' pro' : ''}"><h2>${esc(c?.name ?? (pro ? 'Pro' : 'Community'))}${pro && c?.badge ? ` <span class="badge acc">${esc(c.badge)}</span>` : ''}</h2><div class="muted">${esc(c?.sub ?? (pro ? 'Everything in Community, plus more' : 'Free'))}</div>
+    <ul>${(c?.items ?? []).map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+    <button class="btn${pro ? ' primary' : ''} wide" data-act="${pro ? 'plan-try' : 'plan-community'}">${esc(c?.button ?? (pro ? 'Try Pro free' : 'Keep Community'))}</button><div class="fine">${esc(c?.fine ?? '')}</div></div>`;
+  return `<div class="page welcome"><h1>${esc(w?.title ?? 'Welcome to Chorus')}</h1><p class="lead">${esc(w?.lede ?? 'Start free, or try Pro. You can change your mind any time.')}</p>
+    ${planWords === null ? '<p class="muted" role="status" style="text-align:center">Loading…</p>' : `<div class="plan-cards">${card(w?.community, false)}${card(w?.pro, true)}</div>`}</div>`;
+}
+const tryingHtml = () => `<div class="page welcome center"><div class="big">↗</div><h1>Finish in your browser</h1><p class="lead">Sign in with Google or your email on the page that opened. Chorus picks it up here when you're done.</p>
+  <div class="row-c"><button class="btn" data-act="plan-try">Open the page again</button><button class="btn" data-act="plan-community">Not now</button></div></div>`;
+const startedHtml = () => `<div class="page welcome center"><div class="big">✓</div><h1>Your Pro trial has started</h1><p class="lead">${S.pro?.ends ? `${daysLeft(S.pro.ends)} days from today. ` : ''}Your first step is meeting your teammates.</p>
+  <div class="row-c"><button class="btn primary" data-act="pro-view" data-arg="teammates">Meet your teammates</button><button class="btn" data-act="new">Start a chat</button></div></div>`;
+function endedHtml() {
+  const names = { portal: 'Open the Portal', 'teammate.create': 'Create a new teammate' }, off = (S.pro?.locked ?? []).filter(g => names[g]).map(g => `<b>${esc(names[g])}</b>`);
+  return `<div class="page welcome center"><h1>Your Pro trial has ended</h1><p class="lead">You keep your teammates, plans, Workers and tasks.${off.length ? ` These now need Pro: ${off.join(' and ')}.` : ' Everything keeps working.'}</p>
+    <div class="row-c"><button class="btn primary" data-act="plan-upgrade">Upgrade</button><button class="btn" data-act="pro-view" data-arg="teammates">Open Teammates</button></div></div>`;
+}
+
+/* ---------- your choices, kept by the server ---------- */
+// The native window's server takes a new port at each launch, and a browser keeps its storage per address, so what the page
+// remembers lives on the server (POST /api/ui). Browser storage stays as a copy, and fills the server once if it has nothing yet.
+
+function remember(key, value) {
+  try {
+    localStorage.setItem(`chorus.${key}`, typeof value === 'string' ? value : JSON.stringify(value));
+  } catch {
+    /* no storage: the server's copy is enough */
+  }
+  void api('POST', '/api/ui', { key, value }).catch(() => {});
+}
+function takeUi(ui) {
+  if (ui.hidden) S.hidden = ui.hidden;
+  else if (Object.keys(S.hidden).length) remember('hidden', S.hidden);
+  if (ui.folded) S.folded = new Set(ui.folded);
+  else if (S.folded.size) remember('folded', [...S.folded]);
+  if (ui.drawer !== undefined) S.drawer = ui.drawer || null;
+  S.agentPref = typeof ui.agent === 'string' ? ui.agent : undefined;
+  S.welcome = ui.welcome;
+  S.endedSeen = !!ui.ended;
+  S.bannerDay = ui.banner;
+}
+
 /* ---------- sidebar, top bar, notice ---------- */
 
 function chatsByProject() {
-  const groups = new Map();
+  const groups = new Map((window.choruspro?.projects?.() ?? []).map(cwd => [cwd, []]));
   for (const c of S.state?.chats ?? []) {
     if (S.hidden[c.cwd]?.includes(c.id) && c.id !== S.view.id) continue;
     if (!groups.has(c.cwd)) groups.set(c.cwd, []);
     groups.get(c.cwd).push(c);
   }
+  // a project with tasks is listed even with no chat left: taken off the sidebar, it stays off until a new chat starts there
+  for (const [cwd, chats] of groups) if (S.hidden[cwd] && !chats.length) groups.delete(cwd);
   return groups;
 }
 
 function renderChrome() {
   const st = S.state;
-  const waiting = st?.approvals.length ?? 0;
+  // chats' requests and Chorus's own (a plan to approve, work to check)
+  const waiting = (st?.approvals.length ?? 0) + (window.choruspro?.needsCount?.() ?? 0);
   const v = S.view;
   const on = n => (v.name === n ? ' on' : '');
   let tree = '';
@@ -304,7 +458,9 @@ function renderChrome() {
     const here = (v.name === 'chat' && chats.some(c => c.id === v.id)) || (v.name === 'new' && !v.from && (S.form?.folder ?? v.folder) === cwd);
     tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-rm" data-act="rm-project" data-arg="${esc(cwd)}" title="Remove from the sidebar (the folder and its chats are kept)" aria-label="Remove ${esc(base(cwd))} from the sidebar">×</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button></div>`;
     if (folded) continue;
+    tree += `<div data-pro-slot="project" data-cwd="${esc(cwd)}"></div>`;
     for (const c of chats) {
+      if (window.choruspro?.hidesChat?.(c.id)) continue; // shown under its task
       const child = c.parentId && chats.some(p => p.id === c.parentId);
       tree += `<button class="chat-row${child ? ' child' : ''}${v.name === 'chat' && v.id === c.id ? ' on' : ''}" data-act="chat" data-arg="${esc(c.id)}" title="${esc(c.title)} · ${esc(AGENT[c.agent]?.name ?? c.agent)} · ${esc(STATE_LABEL[c.state] ?? '')}">
         ${child ? '<span class="arrow">↳</span>' : ''}<span class="dot ${esc(c.state)}"></span><span class="t">${esc(c.title)}</span><span class="badge mini ${esc(c.agent)}">${esc(AGENT[c.agent]?.letter ?? '?')}</span></button>`;
@@ -327,15 +483,18 @@ function renderChrome() {
       <button class="${on('approvals').trim()}" data-act="approvals"><span class="ico">⚑</span>Approvals${waiting ? `<span class="count">${waiting}</span>` : ''}</button>
       <button class="${on('memory').trim()}" data-act="memory"><span class="ico">◫</span>Memory</button>
       <button class="${on('skills').trim()}" data-act="skills"><span class="ico">✦</span>Skills</button>
+      ${proSlot('nav')}
     </nav>
+    ${proSlot('side')}
     <div class="side-head">PROJECTS<button data-act="add-project" title="Start a chat in another folder">+ add</button></div>
     <div class="tree">${tree}</div>
-    <div class="side-foot">${agentFoot}<span style="flex:1"></span><button data-act="doctor">Doctor</button></div>`;
+    ${planBox()}<div class="side-foot">${agentFoot}<span style="flex:1"></span><button data-act="doctor">Doctor</button></div>`;
 
   const chat = v.name === 'chat' ? st?.chats.find(c => c.id === v.id) : undefined;
   let crumbs = '';
-  if (chat) crumbs = `<a data-act="fold-open" data-arg="${esc(chat.cwd)}">${esc(base(chat.cwd))}</a><span class="sep">›</span><span class="here">${esc(chat.title)}</span>`;
+  if (chat) crumbs = `<a data-act="fold-open" data-arg="${esc(chat.cwd)}">${esc(base(chat.cwd))}</a><span class="sep">›</span><span class="here">${window.choruspro?.chatCrumb?.(chat.id) ?? esc(chat.title)}</span>`;
   else if (v.name === 'new') crumbs = `<span>${esc(base(S.form?.folder ?? st?.project ?? ''))}</span><span class="sep">›</span><span class="here">${v.from ? 'Hand off' : 'New chat'}</span>`;
+  else if (v.name === 'pro') crumbs = window.choruspro?.crumbs?.(v.id) ?? '';
   else crumbs = `<span class="here">${{ approvals: 'Approvals', memory: 'Memory', skills: 'Skills', doctor: 'Doctor' }[v.name] ?? ''}</span>`;
   $('#top').innerHTML = `
     ${$('#app').classList.contains('side-off') ? `<button class="icon-btn" data-act="sidebar" title="Show the sidebar (${MOD}B)">⇥</button>` : ''}
@@ -354,6 +513,7 @@ function renderChrome() {
     const btn = ctx ? `<button class="btn" data-act="retry" data-arg="${esc(about?.id ?? '')}">Ask again</button>` : /limit|quota/i.test(notice) && about ? `<button class="btn" data-act="handoff" data-arg="${esc(about.id)}">Hand off</button>` : '';
     n.innerHTML = `<span>${esc(notice)}</span>${btn}`;
   }
+  fillSlots();
 }
 
 /* ---------- views ---------- */
@@ -362,7 +522,11 @@ function renderView() {
   const v = S.view;
   const el = $('#view');
   if (v.name === 'chat') return renderChat();
-  el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml }[v.name]?.() ?? '';
+  // the module's page keeps its own state: a push of the app's state must not rebuild it
+  const slot = el.querySelector('[data-pro-slot="view"]');
+  if (v.name === 'pro' && slot?.dataset.id === v.id) return;
+  el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml, unlock: unlockHtml, welcome: welcomeHtml, trying: tryingHtml, 'pro-started': startedHtml, 'pro-ended': endedHtml, pro: () => `<div data-pro-slot="view" data-id="${esc(v.id ?? '')}" style="height:100%"></div>` }[v.name]?.() ?? '';
+  fillSlots();
   if (v.name === 'new') {
     const ta = $('#nc-prompt');
     if (ta && !v.from) ta.focus();
@@ -389,7 +553,7 @@ async function openNew(from, folder) {
     return toast(String(e.message));
   }
   const src = S.info.from;
-  const agent = src ? S.info.agents.find(a => a.id !== src.agent).id : localStorage.getItem('chorus.agent') || 'claude';
+  const agent = src ? S.info.agents.find(a => a.id !== src.agent).id : (S.agentPref || localStorage.getItem('chorus.agent') || 'claude');
   S.form = { agent, model: 'default', effort: 'default', folder: folder ?? S.info.folder, skip: src ? src.skip : false, prompt: '', error: '', busy: false };
   if (S.view.name === 'new') {
     renderChrome();
@@ -398,52 +562,62 @@ async function openNew(from, folder) {
   }
 }
 
-function agentCards() {
-  const f = S.form;
+function agentRows() {
+  const f = S.form, from = S.info.from;
   return S.info.agents
-    .filter(a => !S.info.from || a.id !== S.info.from.agent || true)
     .map(a => {
       const live = drAgent(a.id) ?? { agent: a.id };
       const st = agentStatus(live, false);
-      const sub = st.kind === 'plain' ? '<span class="sub">checking…</span>' : live.state === 'missing' ? '<span class="sub bad">Not installed</span>' : live.state === 'needs-login' ? `<span class="sub bad">${esc(live.version ?? '')} · Not logged in</span><span class="sub">Logged in already? Check again in Doctor</span>` : `<span class="sub">${esc(live.version ?? '')} · ${esc(live.login === 'yes' ? 'Logged in' : st.label)}</span>`;
-      const q = a.quota ? `<span class="sub ${a.quota.level === 'err' ? 'bad' : a.quota.level === 'warn' ? 'warn' : ''}">plan ${esc(a.quota.text)}</span>` : '';
-      const same = S.info.from && a.id === S.info.from.agent;
-      return `<button class="agent${f.agent === a.id ? ' on' : ''}" data-act="nc-agent" data-arg="${a.id}"><span class="name"><span class="badge mini ${a.id}">${AGENT[a.id].letter}</span>${AGENT[a.id].name}${same ? ' <span class="faint" style="font-weight:400">(same agent)</span>' : ''}</span>${sub}${q}</button>`;
+      const sub = st.kind === 'plain' ? 'checking…' : live.state === 'missing' ? '<span class="bad">Not installed</span>' : live.state === 'needs-login' ? `<span class="bad">${esc(live.version ?? '')} · Not logged in</span>` : `${esc(live.version ?? '')} · ${esc(live.login === 'yes' ? 'Logged in' : st.label)}`;
+      const q = a.quota ? ` · <span class="${a.quota.level === 'err' ? 'bad' : a.quota.level === 'warn' ? 'warn' : ''}">plan ${esc(a.quota.text)}</span>` : '';
+      return `<button class="${f.agent === a.id && !window.choruspro?.teammatePicked?.() ? 'on' : ''}" data-act="nc-agent" data-arg="${a.id}"><span class="nc-mi"><span class="badge mini ${a.id}">${AGENT[a.id].letter}</span>${AGENT[a.id].name}${from?.agent === a.id ? ' <span class="faint">(same agent)</span>' : ''}</span><span class="nc-sub">${sub}${q}</span></button>`;
     })
     .join('');
 }
 function renderAgentsOnly() {
-  const el = $('#nc-agents');
-  if (el && S.info && S.form) el.innerHTML = agentCards();
+  if (S.ncMenu === 'agent' || S.ncMenu === 'who') renderView();
 }
 
 function newChatHtml() {
   const f = S.form;
   const src = S.info?.from;
-  if (!f) return '<div class="page hero"><h1>What should we build?</h1><p class="lead">Loading the agents…</p></div>';
+  if (!f) return '<div class="page nc-wrap"><h1 class="nc-h">What are we working on?</h1><p class="nc-hint">Loading the agents…</p></div>';
   const a = S.info.agents.find(x => x.id === f.agent);
   const efforts = a.efforts[f.model] ?? ['default'];
   if (!efforts.includes(f.effort)) f.effort = efforts[0];
-  const recent = [...new Set([...(S.info.recent ?? []), S.info.computer])].filter(r => r && r !== f.folder);
-  return `<div class="page hero">
-    <h1><span class="logo" style="height:26px"><i style="width:5px;height:14px"></i><i style="width:5px;height:26px"></i><i style="width:5px;height:19px"></i></span>${src ? 'Continue with another agent' : 'What should we build?'}</h1>
-    <p class="lead">${src ? 'A new chat loads the record of the old one through the Chorus MCP server, sums it up and waits for your OK.' : 'Pick an agent and a project folder. You talk to the agent in its own screen.'}</p>
-    <div class="card form">
-      ${src ? `<div class="handoff-src">Continues <b>${esc(src.title)}</b> <span class="badge ${esc(src.agent)}">${esc(AGENT[src.agent]?.name ?? src.agent)}</span></div>` : ''}
-      <div class="field"><label>AGENT</label><div class="agents" id="nc-agents">${agentCards()}</div></div>
-      <div class="row2">
-        <div class="field"><label for="nc-model">MODEL</label><select id="nc-model" data-change="nc-model">${a.models.map(m => `<option${m === f.model ? ' selected' : ''}>${esc(m)}</option>`).join('')}</select></div>
-        <div class="field"><label for="nc-effort">EFFORT</label><select id="nc-effort" data-change="nc-effort">${efforts.map(m => `<option${m === f.effort ? ' selected' : ''}>${esc(m)}</option>`).join('')}</select></div>
+  const recent = [...new Set([...(S.info.recent ?? []), S.info.computer])].filter(Boolean);
+  const m = S.ncMenu;
+  const menu = (id, body) => (m === id ? `<div class="nc-menu" role="menu">${body}</div>` : '');
+  const pk = (id, label, cls = '', dis = false, body = '') => `<span class="nc-pk-wrap"><button class="nc-pk ${cls}" data-act="nc-menu" data-arg="${id}" aria-expanded="${m === id}"${dis ? ' disabled' : ''}>${label}</button>${menu(id, body)}</span>`;
+  const agentLabel = `<span class="badge mini ${f.agent}">${AGENT[f.agent].letter}</span>${AGENT[f.agent].name}`;
+  // the optional module adds who and what; without it the first picker is the agent
+  const T = src ? undefined : window.choruspro?.newChat?.({ pk, agentRows: agentRows(), agentLabel });
+  const folderName = f.folder === S.info.computer ? 'This computer' : base(f.folder);
+  const folders = `${recent.map(r => `<button class="${r === f.folder ? 'on' : ''}" data-act="nc-folder" data-arg="${esc(r)}"><span class="nc-mi">${esc(r === S.info.computer ? 'This computer (no project)' : base(r))}</span><span class="nc-sub">${esc(r === S.info.computer ? 'chats that belong to no folder' : tilde(r))}</span></button>`).join('')}<button data-act="browse"><span class="nc-mi">Browse…</span><span class="nc-sub">Pick another folder</span></button>`;
+  const modelLabel = `${f.model === 'default' ? 'Default model' : esc(f.model)}${f.effort === 'default' ? '' : ` · ${esc(f.effort)}`}`;
+  const models = `<div class="nc-sel"><label for="nc-model">Model</label><select id="nc-model" data-change="nc-model">${a.models.map(x => `<option${x === f.model ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></div><div class="nc-sel"><label for="nc-effort">Effort</label><select id="nc-effort" data-change="nc-effort">${efforts.map(x => `<option${x === f.effort ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></div>`;
+  const perms = [[false, 'Ask me', 'The agent asks before it edits files or runs commands; you answer here or in Approvals.'], [true, 'Skip permission prompts', `Starts ${AGENT[f.agent].name} with ${a.skipFlag}. Nothing from this chat reaches Approvals.`]]
+    .map(([v, t, d]) => `<button class="${f.skip === v ? 'on' : ''}" data-act="nc-skip" data-arg="${v ? 1 : 0}"><span class="nc-mi${v ? ' bad' : ''}">${v ? '⚠' : '✓'} ${t}</span><span class="nc-sub">${esc(d)}</span></button>`)
+    .join('');
+  const engine = T?.info ? `<span class="nc-info">${esc(T.info)}</span>` : `${pk('model', modelLabel, 'nc-dim', false, models)}${pk('perm', f.skip ? '⚠ Skip permissions' : 'Ask before acting', f.skip ? 'nc-danger' : 'nc-dim', false, perms)}`;
+  return `<div class="page nc-wrap">
+    <h1 class="nc-h">${src ? 'Continue with another agent' : 'What are we working on?'}</h1>
+    ${src ? `<p class="nc-src">Continues <b>${esc(src.title)}</b> <span class="badge ${esc(src.agent)}">${esc(AGENT[src.agent]?.name ?? src.agent)}</span>. The new agent loads its record through the Chorus MCP server and waits for your OK.</p>` : ''}
+    <div class="nc-box">
+      <textarea id="nc-prompt" data-input="nc-prompt" aria-label="Message" placeholder="${src ? 'Anything to add for the next agent? (optional)' : 'Describe the work…'}">${esc(f.prompt)}</textarea>
+      <div class="nc-bar">
+        <div class="nc-left">
+          ${T?.picks ?? pk('agent', agentLabel, 'nc-strong', false, agentRows())}
+          ${pk('folder', `<span class="nc-ico">▢</span>${esc(folderName)}`, '', !!src, folders)}
+          ${engine}
+        </div>
+        <div class="nc-right"><button class="btn primary nc-send" data-act="nc-start" title="Send (${MOD}↵)"${f.busy ? ' disabled' : ''}>${src ? 'Hand off' : esc(T?.send ?? 'Send')} <kbd>${MOD}↵</kbd></button></div>
       </div>
-      <div class="field"><label for="nc-folder">PROJECT FOLDER</label>
-        <div class="folder"><input id="nc-folder" type="text" value="${esc(tilde(f.folder))}" data-input="nc-folder" spellcheck="false"${src ? ' disabled' : ''}>${src ? '' : '<button class="btn" data-act="browse">Browse…</button>'}</div>
-        ${src || !recent.length ? '' : `<div class="chips">${recent.map(r => `<button class="chip" data-act="nc-folder" data-arg="${esc(r)}">${esc(r === S.info.computer ? 'This computer (no project)' : tilde(r))}</button>`).join('')}</div>`}
-      </div>
-      ${src ? '' : `<div class="field"><label for="nc-prompt">FIRST MESSAGE <span class="faint" style="font-weight:400">(optional: you can also type it in the agent)</span></label><textarea id="nc-prompt" data-input="nc-prompt" placeholder="What do you want to build today?">${esc(f.prompt)}</textarea></div>`}
-      <label class="toggle"><input type="checkbox" data-change="nc-skip"${f.skip ? ' checked' : ''}><span><b>Skip permission prompts</b> <span class="muted">· starts ${esc(AGENT[f.agent].name)} with <code>${esc(a.skipFlag)}</code></span><br><span class="muted" style="font-size:12.5px">${f.skip ? 'Nothing reaches the approvals inbox for this chat: the agent runs commands and edits files without asking.' : 'Off: the agent asks, and Chorus shows it in the approvals inbox.'}</span></span></label>
-      ${f.error ? `<div class="err">${esc(f.error)}</div>` : ''}
-      <div class="form-foot"><span class="hint">${src ? '' : `${MOD}↵ starts from the message box`}</span><button class="btn primary" data-act="nc-start"${f.busy ? ' disabled' : ''}>${src ? 'Hand off' : 'Start chat'} <kbd>↵</kbd></button></div>
-    </div></div>`;
+      ${f.skip && !T?.info ? `<div class="nc-warn">⚠ Starts ${esc(AGENT[f.agent].name)} with <code>${esc(a.skipFlag)}</code>: it won't stop to ask before editing files or running commands, and nothing from this chat reaches Approvals.</div>` : ''}
+      ${f.error ? `<div class="nc-warn">${esc(f.error)}</div>` : ''}
+    </div>
+    <p class="nc-hint">${src ? 'The old chat stays as it is; the new one shows under it with ↳.' : T?.hint || `${MOD}↵ sends · you talk to the agent in its own screen`}</p>
+  </div>`;
 }
 
 async function startChat() {
@@ -454,7 +628,13 @@ async function startChat() {
   renderView();
   const src = S.info.from;
   try {
-    localStorage.setItem('chorus.agent', f.agent);
+    remember('agent', f.agent);
+    const thread = await window.choruspro?.startNew?.({ folder: f.folder, prompt: f.prompt, from: src?.id });
+    if (thread) {
+      S.history = S.history.filter(v => v.name !== 'new');
+      f.busy = false;
+      return go({ name: 'chat', id: thread }, false);
+    }
     const body = { agent: f.agent, to: f.agent, model: f.model, effort: f.effort, folder: f.folder, skip: f.skip, prompt: f.prompt };
     const r = src ? await api('POST', `/api/chats/${src.id}/handoff`, body) : await api('POST', '/api/chats', body);
     if (r.error || !r.id) throw new Error(r.error || 'could not start the chat');
@@ -468,6 +648,18 @@ async function startChat() {
 }
 
 /* Folder browser (Browse… and "+ add") */
+
+/** The system's own picker (pick or make a folder anywhere); the dialog below only where the system has none. */
+async function pickFolder(dir, then) {
+  let r;
+  try {
+    r = await api('POST', '/api/folders/pick', { dir });
+  } catch (e) {
+    return toast(e.message);
+  }
+  if (r.dir) return then(r.dir);
+  if (r.none) return openBrowse(dir, then);
+}
 
 async function openBrowse(dir, then) {
   try {
@@ -512,7 +704,9 @@ function approvalsHtml() {
   const wait = since => { const s = Date.now() / 1000 - since; return s < 60 ? `${Math.max(0, Math.round(s))}s` : `${Math.round(s / 60)}m`; };
   const riskBadge = r => (r ? `<span class="badge ${r.level === 'err' ? 'bad' : r.level === 'warn' ? 'warn' : 'plain'}">${esc(r.label)}</span>` : '');
   return `<div class="page"><h1>Approvals</h1><p class="lead">What your agents are asking for, from every chat: their permission prompts (answering types the agent's own key) and the questions they put to you through Chorus (your choice and note become your next message to that agent). You do not have to switch to the chat.</p>
-    <div class="toolbar"><div class="seg"><button class="${S.scope === 'all' ? 'on' : ''}" data-act="scope" data-arg="all">All projects</button><button class="${S.scope === 'this' ? 'on' : ''}" data-act="scope" data-arg="this">This project</button></div><span class="grow"></span><span class="muted">${all.length} waiting</span></div>
+    <div class="toolbar"><div class="seg"><button class="${S.scope === 'all' ? 'on' : ''}" data-act="scope" data-arg="all">All projects</button><button class="${S.scope === 'this' ? 'on' : ''}" data-act="scope" data-arg="this">This project</button></div><span class="grow"></span><span class="muted">${all.length + (window.choruspro?.needsCount?.() ?? 0)} waiting</span></div>
+    ${proSlot('approvals', ` data-scope="${esc(S.scope)}" data-cwd="${esc(cur?.cwd ?? '')}"`)}
+    ${window.choruspro ? '<div class="section-title" style="margin-top:4px">From chats</div>' : ''}
     <div class="card list">${
       items.length
         ? items
@@ -992,9 +1186,10 @@ async function reportIssue() {
 
 function renderChat() {
   const id = S.view.id;
-  $('#view').innerHTML = `<div class="chat"><div class="chat-head" id="chat-head"></div><div id="chat-banners"></div>
-    <div class="chat-body"><div class="term-wrap" id="term-slot"><div class="term-over" id="term-over" hidden></div></div><aside class="drawer" id="drawer" hidden></aside></div></div>`;
+  $('#view').innerHTML = `<div class="chat"><div class="chat-head" id="chat-head"></div>${proSlot('chat-actions', ` data-chat="${esc(id)}"`)}<div id="chat-banners"></div>
+    <div class="chat-body"><div class="term-wrap" id="term-slot"><div class="term-over" id="term-over" hidden></div></div><aside class="drawer" id="drawer" hidden></aside>${proSlot('chat-side', ` data-chat="${esc(id)}"`)}</div></div>`;
   $('#term-slot').prepend(termEl);
+  fillSlots();
   if (!termOpened) {
     term.open(termEl);
     termOpened = true;
@@ -1030,11 +1225,13 @@ function renderChatParts() {
     <button class="btn${S.drawer === 'activity' ? ' on' : ''}" data-act="drawer" data-arg="activity">Activity</button>
     <button class="btn${S.drawer === 'record' ? ' on' : ''}" data-act="drawer" data-arg="record">Record</button>
     <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat">🗑</button>`;
+  fillSlots();
   let banners = '';
   for (const ask of S.state.approvals.filter(a => a.id === c.id)) {
     if (ask.kind === 'ask') banners += `<div class="banner ask card"><b>${esc(AGENT[c.agent]?.name ?? c.agent)} asks you</b><div class="ask-body">${askCard(ask)}</div></div>`;
     else banners += `<div class="banner ask"><b>${esc(AGENT[c.agent]?.name ?? c.agent)} asks</b><span class="what" title="${esc(ask.what)}">${esc(ask.what)}</span><button class="btn good" data-act="approve" data-arg="${esc(c.id)}">✓ Approve</button><button class="btn danger" data-act="deny" data-arg="${esc(c.id)}">✕ Deny</button></div>`;
   }
+  if (d?.fromRecord) banners += `<div class="banner info"><span>${esc(d.fromRecord)} no longer had this chat's session, so Chorus continues it from its own record.</span></div>`;
   if (c.parentId && d && !d.contextLoaded && c.state === 'idle' && d.turns.some(t => t.role === 'assistant')) banners += `<div class="banner info"><span>⚠ This chat has not loaded the record of the chat it continues.</span><button class="btn" data-act="retry" data-arg="${esc(c.id)}">Ask again</button></div>`;
   const bannerEl = $('#chat-banners');
   if (bannerEl.dataset.html !== banners && !bannerEl.contains(document.activeElement)) {
@@ -1327,6 +1524,9 @@ function toast(text, opts = {}) {
   return el;
 }
 const askToasts = new Map();
+/** On a project's Portal, a teammate's request is under Needs you already: no toast for it. */
+const dropNeedsYouToasts = () => { for (const [k, el] of askToasts) if (inNeedsYou({ id: k.split('|')[0] })) (el.remove(), askToasts.delete(k)); };
+const inNeedsYou = a => S.view.name === 'pro' && String(S.view.id ?? '').startsWith('portal~') && !!window.choruspro?.hidesChat?.(a.id);
 function askToast(a) {
   const ask = a.kind === 'ask';
   const el = toast(`${AGENT[a.agent]?.name ?? a.agent} in "${a.title}" asks${ask ? ' you' : ''}: ${ask ? a.question : a.what.split(' · ').slice(-1)[0]}`, {
@@ -1343,6 +1543,10 @@ function askToast(a) {
 /* ---------- input ---------- */
 
 document.addEventListener('click', async e => {
+  if (S.ncMenu && !e.target.closest('.nc-pk-wrap')) {
+    S.ncMenu = null;
+    if (!e.target.closest('[data-act]')) return renderView();
+  }
   const el = e.target.closest('[data-act]');
   if (!el) return;
   const act = el.dataset.act;
@@ -1360,6 +1564,29 @@ document.addEventListener('click', async e => {
       return go({ name: act });
     case 'chat':
       return go({ name: 'chat', id: arg });
+    case 'plan-welcome':
+      return go({ name: 'welcome' });
+    case 'plan-community':
+      remember('welcome', 'community');
+      S.welcome = 'community';
+      return go({ name: 'new' });
+    case 'plan-try': {
+      const r = await api('POST', '/api/pro/try').catch(err => ({ error: err.message }));
+      if (r.error) return toast(r.error);
+      return go({ name: 'trying' });
+    }
+    case 'plan-upgrade':
+      return upgrade();
+    case 'plan-later':
+      S.bannerDay = new Date().toDateString();
+      remember('banner', S.bannerDay);
+      return drawPlanBanner();
+    case 'unlock':
+      return go({ name: 'unlock' });
+    case 'pro-view':
+      return go({ name: 'pro', id: arg });
+    case 'pro-unlock':
+      return void api('POST', '/api/pro/activate', { key: $('#pro-key').value.trim() }).then(onProStatus, e => toast(String(e.message)));
     case 'doc-continue':
       return closeDoctorPopup();
     case 'doc-test':
@@ -1431,12 +1658,17 @@ document.addEventListener('click', async e => {
   renderDoctorDot();
       return setTimeout(refit, 50);
     case 'fold':
+      // the project's name opens its Portal; the caret only folds
+      if (window.choruspro && !e.target.closest('.caret')) {
+        S.folded.delete(arg);
+        return go({ name: 'pro', id: `portal~${encodeURIComponent(arg)}` });
+      }
       S.folded.has(arg) ? S.folded.delete(arg) : S.folded.add(arg);
-      localStorage.setItem('chorus.folded', JSON.stringify([...S.folded]));
+      remember('folded', [...S.folded]);
       return renderChrome();
     case 'rm-project': {
       S.hidden[arg] = (S.state?.chats ?? []).filter(c => c.cwd === arg).map(c => c.id);
-      localStorage.setItem('chorus.hidden', JSON.stringify(S.hidden));
+      remember('hidden', S.hidden);
       const open = S.view.name === 'chat' && S.state?.chats.find(c => c.id === S.view.id)?.cwd === arg;
       if (open) return go({ name: 'new' });
       return renderChrome();
@@ -1446,8 +1678,9 @@ document.addEventListener('click', async e => {
       return renderChrome();
     case 'add-project':
       go({ name: 'new' });
-      return openBrowse(S.state?.project ?? '~', dir => S.form && ((S.form.folder = dir), renderChrome(), renderView()));
+      return pickFolder(S.state?.project ?? '~', dir => S.form && ((S.form.folder = dir), renderChrome(), renderView()));
     case 'handoff':
+      if (window.choruspro?.handOff) return window.choruspro.handOff(arg, S.state?.chats.find(c => c.id === arg));
       return go({ name: 'new', from: arg });
     case 'approve':
     case 'deny':
@@ -1480,7 +1713,7 @@ document.addEventListener('click', async e => {
     case 'drawer':
       S.drawer = S.drawer === arg ? null : arg;
       S.drawerData = null;
-      localStorage.setItem('chorus.drawer', S.drawer ?? '');
+      remember('drawer', S.drawer ?? '');
       renderChatParts();
       setTimeout(refit, 30);
       return loadDrawer();
@@ -1498,20 +1731,34 @@ document.addEventListener('click', async e => {
         toast(arg, { ms: 8000 });
       }
       return;
+    case 'nc-menu':
+      S.ncMenu = S.ncMenu === arg ? null : arg;
+      return renderView();
+    case 'nc-skip':
+      S.form.skip = arg === '1';
+      S.ncMenu = null;
+      return renderView();
+    case 'pro-nc':
+      window.choruspro?.newChatPick?.(arg);
+      S.ncMenu = null;
+      return renderView();
     case 'nc-agent':
       if (!S.form) return;
       S.form.agent = arg;
       S.form.model = 'default';
       S.form.effort = 'default';
+      S.ncMenu = null;
+      window.choruspro?.newChatPick?.('who:just');
       return renderView();
     case 'nc-folder':
       S.form.folder = arg;
+      S.ncMenu = null;
       renderChrome(); // the sidebar marks the project the form starts in
       return renderView();
     case 'nc-start':
       return startChat();
     case 'browse':
-      return openBrowse(S.form?.folder ?? '~', dir => S.form && ((S.form.folder = dir), renderChrome(), renderView()));
+      return pickFolder(S.form?.folder ?? '~', dir => S.form && ((S.form.folder = dir), renderChrome(), renderView()));
     case 'br-up':
       return openBrowse(S.browse.parent);
     case 'br-open':
@@ -1695,10 +1942,12 @@ function fromHash() {
   if (name === 'chat' && a) return { name, id: a };
   if (name === 'new' && a === 'from' && b) return { name, from: b };
   if (name === 'new' && a === 'in' && b) return { name, folder: decodeURIComponent(b) };
-  if (['approvals', 'memory', 'skills', 'doctor'].includes(name)) return { name };
+  if (name === 'pro' && a) return { name, id: a };
+  if (['approvals', 'memory', 'skills', 'doctor', 'unlock', 'welcome', 'trying', 'pro-started', 'pro-ended'].includes(name)) return { name };
   return { name: 'new' };
 }
 
 connect();
+void api('GET', '/api/pro/status').then(onProStatus, () => {});
 renderChrome();
 go(fromHash(), false);

@@ -55,6 +55,11 @@ export interface ControllerOpts {
   launcher?: (agent: AgentId, o: InteractiveOpts) => Launch;
   /** how files and links are opened for the user (tests replace it) */
   opener?: Opener;
+  /**
+   * A parked chat about to resume (the desktop app passes this; the CLI app resumes as always): undefined resumes it; a string means
+   * its CLI no longer has the session, and a new session starts in the same chat with that first message ('' for none).
+   */
+  sessionGone?: (row: ThreadRow) => string | undefined;
 }
 
 export class Controller {
@@ -139,11 +144,19 @@ export class Controller {
   private resume(entry: Entry) {
     const row = this.store.getThread(entry.id);
     if (!row?.native_session_id) return;
-    const launch = (this.o.launcher ?? buildInteractive)(row.agent, { cwd: row.cwd, project: row.project ?? this.project, home: this.store.shared ? this.store.root : undefined, threadId: row.id, resumeId: row.native_session_id, model: this.o.models?.[row.agent], effort: row.effort ?? undefined, skipPermissions: !!row.skip_permissions });
+    const fresh = this.o.sessionGone?.(row);
+    const how = fresh === undefined ? { resumeId: row.native_session_id } : { prompt: fresh || undefined };
+    const launch = (this.o.launcher ?? buildInteractive)(row.agent, { cwd: row.cwd, project: row.project ?? this.project, home: this.store.shared ? this.store.root : undefined, threadId: row.id, ...how, model: this.o.models?.[row.agent], effort: row.effort ?? undefined, skipPermissions: !!row.skip_permissions });
+    if (fresh !== undefined) {
+      // the same chat on a new session: its id, place and record stay; the new turns are saved after the old ones
+      this.store.startOver(row.id);
+      if (launch.sessionId) this.store.updateThread(row.id, { native_session_id: launch.sessionId });
+      this.sawStart.set(row.id, fresh ? Date.now() : 0);
+    }
     const host = this.app.attach(entry, { id: row.id, title: row.title, agent: row.agent, file: launch.bin, args: launch.args, cwd: launch.cwd });
     this.store.updateThread(row.id, { state: 'working' });
     this.watchRaw(row.id, host);
-    this.tail(row, row.native_session_id);
+    this.tail(row, fresh === undefined ? row.native_session_id : launch.sessionId);
   }
 
   private async onSelect(e: Entry) {

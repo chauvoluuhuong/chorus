@@ -102,12 +102,12 @@ export function exclude(project: string, rel: string[]) {
   if (missing.length) fs.appendFileSync(file, (have.endsWith('\n') || !have ? '' : '\n') + missing.join('\n') + '\n');
 }
 
-export function syncSkills(project: string, opts: { agents?: AgentId[]; mode?: 'symlink' | 'copy'; into?: string } = {}): SyncReport {
+export function syncSkills(project: string, opts: { agents?: AgentId[]; mode?: 'symlink' | 'copy'; into?: string; only?: string[] } = {}): SyncReport {
   const agents = opts.agents ?? (['claude', 'codex', 'agy'] as AgentId[]);
   fs.mkdirSync(sourceDir(project), { recursive: true });
   const src = fs.realpathSync(sourceDir(project));
   const off = new Set(disabledSkills(project));
-  const skills = listSkills(project).filter(s => !off.has(path.basename(s.dir)));
+  const skills = listSkills(project).filter(s => !off.has(path.basename(s.dir)) && (!opts.only || opts.only.includes(s.name)));
   const report: SyncReport = { linked: [], updated: [], removed: [], conflicts: [] };
   const dirs = [...new Set(agents.map(a => TARGET_DIRS[a]))];
   const excludes: string[] = [];
