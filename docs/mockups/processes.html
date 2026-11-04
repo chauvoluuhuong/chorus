@@ -11,8 +11,8 @@
   sends a step back at most 2 times; the task's state moves by itself; one serial task per folder runs at a time.
 
   Scenes:
-  1. Process   - a chain of actions as a vertical list; "+" between rows adds the next one. Rows: a teammate's action, You decide,
-                 and Plan & build, which comes with Chorus and is used whole (decided 2026-11-04: its steps aren't edited).
+  1. Process   - the chain as a vertical list. Three kinds of row: a teammate does it, you decide, Chorus does it by itself.
+                 Click a row to edit it; "+" between rows adds the next action (the picker the app already uses).
   2. Start     - before the first step: exactly what pressing Start will do, and which Worker gets each step.
   3. Run       - one task going down the same list: who is working, each chat, what Chorus did and when.
   4. Notes     - what changes compared with today's page.
@@ -153,18 +153,6 @@ h1.t { font: 400 28px/1.2 var(--f-serif); margin: 0 0 4px; letter-spacing: -.01e
 .plus { position: absolute; left: 16px; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--muted); display: grid; place-items: center; font-size: 14px; line-height: 1; padding: 0; z-index: 2; opacity: 0; transition: opacity .12s; }
 .flow:hover .plus, .plus:focus, .plus.open { opacity: 1; }
 .plus:hover, .plus.open { border-color: var(--accent); color: var(--accent); }
-.row.block { background: var(--side); border-color: var(--line); }
-.row.block.sel { border-color: var(--accent); }
-.chip.lock { background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
-.stages { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 9px; font-size: 12.5px; }
-.stg { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 3px 9px 3px 4px; }
-.stg .avs { width: 18px; height: 18px; } .stg .avs .av { width: 13px; height: 13px; font-size: 8px; border-radius: 4px; }
-.sa { color: var(--faint); }
-.inside { margin-top: 10px; border-left: 2px solid var(--line); padding-left: 12px; display: grid; gap: 9px; }
-.in { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; font-size: 13px; }
-.in b { font-weight: 600; display: block; }
-.in small { display: block; color: var(--muted); font-size: 12.5px; }
-.in .in-sys { color: var(--faint); font-size: 12px; margin-top: 2px; }
 .end { display: flex; align-items: center; gap: 10px; padding: 10px 14px; color: var(--ok); font-weight: 600; }
 .end .av { background: var(--ok-soft); color: var(--ok); }
 
@@ -291,14 +279,15 @@ table.cmp th { color: var(--faint); font-weight: 600; font-size: 11px; letter-sp
   <div class="page">
     <div class="ph"><div class="grow">
       <h1 class="t">Processes</h1>
-      <p class="lead">A process is a chain: when one action is done, it hands off to the next. Press <b>＋</b> to add what comes next, or click a row to change it. <b>Plan &amp; build</b> comes with Chorus and is used whole.</p>
+      <p class="lead">What happens to a task, from top to bottom. Each row is someone doing one thing. Click a row to change it, or <b>＋</b> between rows to add what comes next.</p>
     </div></div>
-    <div class="tabs" id="tabs"></div>
+    <div class="tabs"><span class="lbl">Starts with</span>
+      <button class="on">▤ Create plan</button><button>⚑ Reproduce bug</button><button>◇ Write release notes <span class="faint">(yours)</span></button>
+    </div>
     <div class="legend">
       <span><span class="av sm planner">P</span>A teammate does it</span>
       <span><span class="av sm you">!</span>You decide</span>
-      <span><span class="av sm chorus">▣</span>Comes with Chorus <span class="faint">(use it whole)</span></span>
-      <span><span class="av sm chorus">⚙</span>Chorus does it by itself</span>
+      <span><span class="av sm chorus">⚙</span>Chorus does it by itself <span class="faint">(not editable)</span></span>
     </div>
 
     <div class="split" id="split">
@@ -311,7 +300,7 @@ table.cmp th { color: var(--faint); font-weight: 600; font-size: 11px; letter-sp
 <!-- ============ 2. BEFORE START ============ -->
 <section class="scene" id="s-start">
   <div class="page">
-    <div class="lbl">cake-shop · Task #12 · Plan &amp; build</div>
+    <div class="lbl">cake-shop · Task #12</div>
     <h1 class="t">Ready to start: Add a login page</h1>
     <p class="lead">The plan is approved. Pick who does each step, then Start. Nothing has run yet.</p>
     <div class="st">
@@ -359,7 +348,7 @@ Finish: when your work is done, run its check, then call the chorus tool action_
   <div class="page">
     <div class="lbl">cake-shop · Task #12</div>
     <div class="rh"><h1 class="t" style="margin:0">Add a login page</h1><span class="chip acc">Doing</span><span class="muted" style="font-size:13px">Step 3 of 3</span><span class="prog"><i style="width:66%"></i></span></div>
-    <p class="lead" style="margin-top:6px">Plan &amp; build, with this task going down it.</p>
+    <p class="lead" style="margin-top:6px">The same list as the process, with this task going down it.</p>
 
     <div class="split">
       <div class="card tl">
@@ -396,52 +385,50 @@ Finish: when your work is done, run its check, then call the chorus tool action_
 <section class="scene" id="s-notes">
   <div class="page">
     <h1 class="t">What changes, and why</h1>
-    <p class="lead">Decided 2026-11-04: a process is a chain of actions, built with ＋. <b>Plan &amp; build</b> comes with Chorus as one piece: you use it whole or not at all. Read against chorus-core <code>src/pro/runner/index.ts</code> and <code>src/pro/playbook/index.ts</code>.</p>
+    <p class="lead">This builds on today's page and the teammate editor (chorus-core <code>src/pro/ui/app.js</code>), and on the runner, which stays as it is.</p>
     <div class="notes">
       <div class="card wide">
         <h3>Today vs this proposal</h3>
         <table class="cmp">
           <tr><th>Today</th><th>Proposal</th></tr>
-          <tr><td>A horizontal chain on a zoom-and-drag canvas, read-only; you edit an action in the teammate editor</td><td>A vertical list you edit right there; ＋ between rows picks what comes next. No canvas, no dragging</td></tr>
-          <tr><td>Create plan, Do step, Review changes and Resolve conflict are four actions with their own next, ask-first and if-it-fails settings</td><td>They are one piece, <b>Plan &amp; build</b>, with a lock. Inside, it shows what happens, read-only. You change who does it in Teammates</td></tr>
-          <tr><td>Reproduce bug → Do step (a Do step with no task and no step)</td><td>Reproduce bug → Plan &amp; build: the Planner turns the failing test into a task</td></tr>
-          <tr><td>"You: Approve" is a small chip on the arrow</td><td>"You decide" is its own row, with its answers</td></tr>
-          <tr><td>"Start step 1"</td><td>"Start: claude-worker-1 does step 1", with a numbered list of what Start does</td></tr>
-          <tr><td>A running task: a chip per step in the side panel</td><td>The same Plan &amp; build stages, with times, chats and send-backs</td></tr>
+          <tr><td>A horizontal chain on a zoom-and-drag canvas, read-only; edit an action in the teammate editor</td><td>A vertical list you edit right there; the canvas, zoom and Fit go away</td></tr>
+          <tr><td>"Do step" is one box; it's not visible that it runs once per plan step, each with its own Worker</td><td>The row says "Repeats for every step of the plan" and shows the Workers</td></tr>
+          <tr><td>The send-back limit (2), the review loop and status changes live only in the runner</td><td>Each row lists its outcomes; grey ⚙ lines say what Chorus does by itself</td></tr>
+          <tr><td>"You: Approve" is a small chip on the arrow</td><td>"You decide" is its own row, with its answers (Approve / Change it / Reject)</td></tr>
+          <tr><td>The "Start step 1" button</td><td>"Start: claude-worker-1 does step 1", with a numbered list of what will happen</td></tr>
+          <tr><td>A running task: a chip per step in the side panel</td><td>The same list as the process, with times, chats and send-backs</td></tr>
         </table>
-      </div>
-      <div class="card">
-        <h3>Why Plan &amp; build is locked</h3>
-        <ul>
-          <li>In the runner it isn't a chain already: <code>afterStep()</code> calls <code>review()</code> whatever Do step's next says, and Do step repeats once per plan step.</li>
-          <li>Some of today's settings do nothing (Do step's next); some break it (taking the ask-first off Review changes removes Accept).</li>
-          <li>One sentence explains Start: "Plan &amp; build gives each step of the task to its Worker". The detail is shown, not configured.</li>
-        </ul>
       </div>
       <div class="card">
         <h3>Why not a free canvas</h3>
         <ul>
-          <li>The engine is a chain: one next, an ask-first, pass or fail. A canvas promises branches and joins it doesn't have.</li>
-          <li>Loose boxes, loops and two arrows out of one box each need a rule and an error message: the n8n cost.</li>
-          <li>＋ is the same choice as "What happens next?", put where you're looking.</li>
+          <li>The runner is a chain: one <code>next</code>, a gate, and pass/fail. A canvas promises branches and joins the engine doesn't have.</li>
+          <li>Unconnected nodes, cycles and two arrows leaving one box each need a rule and an error.</li>
+          <li>"＋ pick what comes next" is the same choice as the "What happens next?" select, placed where you look.</li>
         </ul>
       </div>
       <div class="card">
-        <h3>What chorus-core needs</h3>
+        <h3>Two kinds of action</h3>
         <ul>
-          <li>Hide <code>buildTask</code>, <code>reviewChanges</code> and <code>resolveConflict</code> from the picker, the Then select and a teammate's Actions list; <code>saveAction</code> refuses next / gate / onFail / kind on them.</li>
-          <li><code>reproduceBug.next</code>: <code>buildTask</code> → <code>createPlan</code>.</li>
-          <li>＋ after Plan &amp; build: <code>accepted()</code> starts the next action (stored on the piece, e.g. <code>reviewChanges.next</code>, unused today). Today an accepted task stops there.</li>
-          <li>The list, the ⚙ lines and the Run view only read what is stored now.</li>
+          <li><b>Teammate actions</b> (Create plan, Do step, Review changes, yours) are rows. They're the only thing you add.</li>
+          <li><b>Chorus actions</b> (create the task, move its state, queue it, send it back, close its chats) aren't rows. They follow from the rows and appear as ⚙ lines.</li>
+          <li><b>You decide</b> is the one non-teammate row, because it's where you take part.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>What the engine needs</h3>
+        <ul>
+          <li>Nothing for the list, the ⚙ lines or the run view: they read <code>next</code>, <code>gate</code>, <code>onFail</code> and the <code>event</code> table.</li>
+          <li>"＋ You decide" between rows maps to <code>gate</code> on the row above.</li>
+          <li>Optional later: <code>onFail: 'to:&lt;action&gt;'</code> for "if it fails, go to…". Not in this mockup.</li>
         </ul>
       </div>
       <div class="card">
         <h3>Open questions</h3>
         <ul>
-          <li>Can you still edit the instructions of the actions inside (for example how the Planner reviews), as an advanced setting in Teammates?</li>
-          <li>Plan &amp; build anywhere in a chain, or only as its last piece?</li>
-          <li>Its name: "Plan &amp; build", "Task", "Build it"?</li>
-          <li>Run views: Worker names (claude-worker-1), or "Workers"?</li>
+          <li>"Workers" or the names (claude-worker-1)? The mockup uses the names in a run and "Workers" in the process.</li>
+          <li>Should Resolve conflict (parallel only) always show as a dashed row, or only when "In parallel" is picked?</li>
+          <li>Does an action keep living under a teammate, or under the process with a "who" picker? The mockup does both: the row has a Who select.</li>
         </ul>
       </div>
     </div>
@@ -452,150 +439,119 @@ Finish: when your work is done, run its check, then call the chorus tool action_
 
 <script>
 const PEOPLE = {
-  planner: { av: 'planner', l: 'P', name: 'Planner' },
-  worker: { av: 'claude', l: 'C', name: 'claude-worker-1' },
-  docs: { av: 'agy', l: 'A', name: 'Docs writer' },
+  planner: { av: 'planner', l: 'P', name: 'Planner', sub: 'Claude Code · opus · high' },
+  workers: { name: 'Workers', sub: 'claude-worker-1, codex-worker-1 · one per step' },
+  you: { av: 'you', l: '!', name: 'You' },
 };
-const PB = () => ({ id: 'pb' + Math.random().toString(36).slice(2, 6), kind: 'block', label: 'Plan & build' });
-const mate = (id, who, icon, label, desc, fail = 'ask') => ({ id, kind: 'mate', who, icon, label, desc, fail });
-const you = (id, label, desc, outs) => ({ id, kind: 'you', label, desc, outs });
-const CHAINS = {
-  bug: { tab: '⚑ Reproduce bug', rows: [
-    mate('reproduceBug', 'worker', '⚑', 'Reproduce bug', 'Writes the smallest test that fails because of the bug. Does not fix it.'),
-    PB(),
-  ] },
-  plan: { tab: '▣ Plan & build', lock: true, rows: [PB()] },
-  notes: { tab: '◇ Write release notes', yours: true, rows: [
-    mate('relNotes', 'docs', '◇', 'Write release notes', 'Reads what changed since the last tag and drafts the notes in CHANGELOG.md.'),
-    you('g-rel', 'Check the notes', 'You read the draft in the folder.', [['ok', 'Looks right', 'next'], ['bad', 'Stop here', 'the process ends']]),
-  ] },
-};
-let cur = 'bug', sel = null, pickAt = null, open = {};
-const rows = () => CHAINS[cur].rows;
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-const nextRow = i => rows()[i + 1];
-const nextName = i => { const r = nextRow(i); return !r ? 'Done' : r.kind === 'you' ? `you: ${r.label}` : r.label; };
-const nextAction = i => rows().slice(i + 1).find(r => r.kind !== 'you')?.label ?? 'Nothing, it stops here';
-
-// what happens inside Plan & build: shown, never edited (runner.ts: createPlan, plan gate, runSteps, review, check gate)
-const INSIDE = [
-  ['planner', 'P', 'Planner writes the task and its steps', 'Reads the project and asks what it can\'t find. Changes no file.', 'Creates task #N'],
-  ['you', '!', 'You approve the plan', 'Or say what to change. You pick a Worker for each step, then Start.', 'Waits if another task in this folder is running'],
-  ['workers', '', 'Workers do the steps', 'One new chat per step, with that step\'s Worker. A failed check goes back to the same Worker, 2 times at most.', 'Parallel only: the Planner brings the work together'],
-  ['planner', 'P', 'Planner reviews the changes', 'Reads the diff. Something wrong goes back to that step, 2 times at most.', ''],
-  ['you', '!', 'You accept', 'Or send it back. Chorus never commits.', 'Its chats are parked; the next waiting task starts'],
+// The default chain from chorus-core playbook ACTIONS: createPlan → (gate) → buildTask → reviewChanges → (gate) → done.
+let ROWS = [
+  { id: 'createPlan', kind: 'mate', who: 'planner', icon: '▤', label: 'Create plan', desc: 'Reads the project, asks what it can\'t find, and writes the task and its steps. Changes no file.',
+    outs: [['ok', 'Done', 'next'], ['bad', 'Fails', 'Stop and ask you']], sys: ['Creates task #N · Planning'], fail: 'ask', gate: true },
+  { id: 'g1', kind: 'you', label: 'Approve the plan', desc: 'You read the steps and pick who does each.',
+    outs: [['ok', 'Approve', 'next'], ['', 'Change it', 'back to Create plan, with what you said'], ['bad', 'Reject', 'the task stops']], sys: ['Task moves to Ready', 'Waits if another task in this folder is running'] },
+  { id: 'buildTask', kind: 'mate', who: 'workers', icon: '⚒', label: 'Do step', repeat: true, desc: 'Repeats for every step of the plan. Each step is a new chat with the Worker you picked for it.',
+    outs: [['ok', 'Check passes', 'the next step; after the last one, @next'], ['bad', 'Check fails', 'back to the same Worker (2 times at most), then ask you']], sys: ['Task moves to Doing'], fail: 'back' },
+  { id: 'resolveConflict', kind: 'opt', who: 'planner', icon: '⇆', label: 'Resolve conflict', desc: 'Only when steps ran in parallel. Starts by itself and brings the work together.',
+    outs: [['ok', 'Done', 'next']], sys: [] },
+  { id: 'reviewChanges', kind: 'mate', who: 'planner', icon: '✓', label: 'Review changes', desc: 'Reads the diff against the task. Read-only: fixes nothing.',
+    outs: [['ok', 'Looks right', 'next'], ['bad', 'Something\'s wrong', 'back to the step it names (2 times at most), then ask you']], sys: ['Task moves to To check'], fail: 'back', gate: true },
+  { id: 'g2', kind: 'you', label: 'Accept', desc: 'You check the work in the folder. Chorus never commits.',
+    outs: [['ok', 'Accept', 'done'], ['', 'Send back', 'to a step\'s Worker, with what you said']], sys: ['Task moves to Done', 'Its chats are parked', 'The next waiting task starts'] },
 ];
-const av = (a, l) => a === 'workers' ? '<span class="avs"><span class="av claude">C</span><span class="av codex">X</span></span>' : `<span class="av sm ${a}">${l}</span>`;
+let sel = 'buildTask', pickAt = null;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+// the row after i; a parallel-only row is skipped (one after another is the default)
+const nextRow = i => ROWS.slice(i + 1).find(r => r.kind !== 'opt');
+const nextLabel = i => { const r = nextRow(i); return !r ? 'Done' : r.kind === 'you' ? `you: ${r.label}` : r.label; };
+/** the next teammate action after i, past a You decide row */
+const nextAction = i => ROWS.slice(i + 1).find(r => r.kind === 'mate')?.label ?? 'Nothing, it stops here';
 
+function avatar(r) {
+  if (r.kind === 'you') return '<span class="av you">!</span>';
+  if (r.who === 'workers') return '<span class="avs"><span class="av claude">C</span><span class="av codex">X</span></span>';
+  return '<span class="av planner">P</span>';
+}
 function rowHtml(r, i) {
-  const s = sel === r.id ? 'sel' : '';
-  if (r.kind === 'block') {
-    const o = open[r.id] ?? CHAINS[cur].lock;
-    const inside = o ? `<div class="inside">${INSIDE.map(([a, l, t, d, sys]) => `<div class="in"><span class="in-av">${av(a, l)}</span><span><b>${esc(t)}</b><small>${esc(d)}</small>${sys ? `<small class="in-sys">⚙ ${esc(sys)}</small>` : ''}</span></div>`).join('')}</div>` : '';
-    return `<div class="row block ${s}" data-row="${r.id}"><span class="av chorus">▣</span><span><span class="who">Comes with Chorus · use it whole</span>
-      <span class="what">Plan &amp; build <span class="chip lock">🔒 steps fixed</span></span>
-      <div class="desc">The Planner writes a task, you approve it, Workers do its steps, the Planner reviews, you accept.</div>
-      <div class="stages">${INSIDE.map(([a, l, t]) => `<span class="stg">${av(a, l)}${esc(t.replace(/^(Planner|You|Workers) /, m => m))}</span>`).join('<span class="sa">›</span>')}</div>
-      <button class="linkb" data-open="${r.id}" style="margin-top:8px">${o ? 'Hide what happens inside ▴' : 'Show what happens inside ▾'}</button>${inside}
-      <div class="outs"><div class="out"><b class="ok">✓ You accept</b><span class="go">→ ${esc(nextName(i))}</span></div><div class="out"><b class="bad">✕ It stops</b><span class="go">→ waits for you under Needs you</span></div></div></span><span class="edit">Edit ›</span></div>`;
-  }
-  if (r.kind === 'you') {
-    const outs = r.outs.map(([c, k, v]) => `<div class="out"><b class="${c}">${c === 'ok' ? '✓' : '✕'} ${esc(k)}</b><span class="go">→ ${esc(v === 'next' ? nextName(i) : v)}</span></div>`).join('');
-    return `<div class="row you ${s}" data-row="${r.id}"><span class="av you">!</span><span><span class="who">You decide</span><span class="what">${esc(r.label)}</span><div class="desc">${esc(r.desc)}</div><div class="outs">${outs}</div></span><span class="edit">Edit ›</span></div>`;
-  }
-  const p = PEOPLE[r.who];
-  return `<div class="row ${s}" data-row="${r.id}"><span class="av ${p.av}">${p.l}</span><span><span class="who">${esc(p.name)}</span><span class="what"><span class="ai">${r.icon}</span>${esc(r.label)}</span><div class="desc">${esc(r.desc)}</div>
-    <div class="outs"><div class="out"><b class="ok">✓ Done</b><span class="go">→ ${esc(nextName(i))}</span></div><div class="out"><b class="bad">✕ Fails</b><span class="go">→ ${r.fail === 'back' ? 'back to the same teammate (2 times at most), then ask you' : 'stop and ask you'}</span></div></div></span><span class="edit">Edit ›</span></div>`;
+  const who = r.kind === 'you' ? 'You decide' : `${PEOPLE[r.who].name}${r.kind === 'opt' ? ' · starts by itself' : ''}`;
+  const outs = r.outs.map(([c, k, v]) => `<div class="out"><b class="${c}">${c === 'ok' ? '✓' : c === 'bad' ? '✕' : '↺'} ${esc(k)}</b><span class="go">→ ${esc(v === 'next' ? nextLabel(i) : v.replace('@next', nextLabel(i)))}</span></div>`).join('');
+  const rep = r.repeat ? `<div class="rep">${[['claude', 'C', '1 · Add the login form'], ['codex', 'X', '2 · Server check'], ['claude', 'C', '3 · Tests']].map(([a, l, t]) => `<span class="s"><span class="av sm ${a}">${l}</span>${t}</span>`).join('')}<span class="s faint" style="padding-left:8px">example task</span></div>` : '';
+  return `<button class="row ${r.kind === 'you' ? 'you' : ''} ${r.kind === 'opt' ? 'opt' : ''} ${sel === r.id ? 'sel' : ''}" data-row="${r.id}">
+    ${avatar(r)}<span><span class="who">${esc(who)}</span><span class="what">${r.icon ? `<span class="ai">${r.icon}</span>` : ''}${esc(r.label)}${r.kind === 'opt' ? ' <span class="chip">only in parallel</span>' : ''}</span>
+    <div class="desc">${esc(r.desc)}</div>${rep}<div class="outs">${outs}</div></span><span class="edit">Edit ›</span></button>`;
 }
 function gapHtml(r, i) {
-  const n = nextRow(i);
-  const sys = n && r.kind !== 'you' && n.kind !== 'you' ? `<span class="c">Hands off: ${esc(n.kind === 'block' ? 'the Planner' : PEOPLE[n.who].name)} starts a new chat from this one's record</span>` : '';
+  const sys = (r.sys || []).map(s => `<span class="c">${esc(s)}</span>`).join('');
   return `<div class="gap"><button class="plus ${pickAt === i ? 'open' : ''}" data-plus="${i}" aria-label="Add what comes next" title="Add what comes next">＋</button><div class="sysl">${sys}</div>${pickAt === i ? pickHtml() : ''}</div>`;
 }
 function pickHtml() {
-  const it = (a, l, t, s) => `<button data-add="${esc(t)}">${a === 'chorus' ? '<span class="av sm chorus">▣</span>' : `<span class="av sm ${a}">${l}</span>`}<span>${esc(t)}<small>${esc(s)}</small></span></button>`;
+  const it = (av, l, t, s) => `<button data-add="${esc(t)}"><span class="av sm ${av}">${l}</span><span>${esc(t)}<small>${esc(s)}</small></span></button>`;
   return `<div class="pick" role="menu"><div class="lbl">What comes next?</div>
     ${it('you', '!', 'You decide', 'Wait for your OK before going on')}
-    ${it('chorus', '', 'Plan & build', 'Comes with Chorus: plan, steps, review, accept')}
-    <hr><div class="lbl">Planner</div>${it('planner', 'P', 'Find goals', 'Read-only')}
-    <div class="lbl">Workers</div>${it('claude', 'C', 'Reproduce bug', 'Writes a failing test')}
+    <hr><div class="lbl">Planner</div>${it('planner', 'P', 'Review changes', 'Read-only')}${it('planner', 'P', 'Find goals', 'Read-only')}
+    <div class="lbl">Workers</div>${it('claude', 'C', 'Reproduce bug', 'Writes a failing test')}${it('codex', 'X', 'Do step', 'One chat per plan step')}
     <div class="lbl">Yours</div>${it('agy', 'A', 'Write release notes', 'Docs writer · Antigravity')}
-    <hr><button data-add="new"><span class="av sm chorus">＋</span><span>New action…<small>A name, instructions and a teammate</small></span></button></div>`;
-}
-function drawTabs() {
-  document.getElementById('tabs').innerHTML = '<span class="lbl">Starts with</span>' + Object.entries(CHAINS).map(([k, c]) => `<button class="${cur === k ? 'on' : ''}" data-tab="${k}">${esc(c.tab)}${c.lock ? ' <span class="faint">(Chorus)</span>' : c.yours ? ' <span class="faint">(yours)</span>' : ''}</button>`).join('');
+    <hr><button data-add="new"><span class="av sm chorus">＋</span><span>New action…<small>Give it a name, instructions and a teammate</small></span></button></div>`;
 }
 function drawFlow() {
-  drawTabs();
-  if (!rows().some(r => r.id === sel)) sel = rows()[0]?.id ?? null;
-  document.getElementById('flow').innerHTML = rows().map((r, i) => rowHtml(r, i) + gapHtml(r, i)).join('') + '<div class="end"><span class="av">✓</span>Done</div>';
+  document.getElementById('flow').innerHTML = ROWS.map((r, i) => rowHtml(r, i) + gapHtml(r, i)).join('') + '<div class="end"><span class="av">✓</span>Done</div>';
   drawEd();
 }
 function drawEd() {
-  const r = rows().find(x => x.id === sel), ed = document.getElementById('ed');
+  const r = ROWS.find(x => x.id === sel), ed = document.getElementById('ed');
   if (!r) { ed.className = 'card ed empty'; ed.innerHTML = 'Click a row to change it.'; return; }
   ed.className = 'card ed';
-  const i = rows().indexOf(r), first = i === 0;
-  const remove = first ? '' : `<button class="btn sm ghost" style="color:var(--bad)" data-del="${r.id}">Take it out</button>`;
-  const thenSel = () => { const na = nextAction(i); return `<select>${[...new Set([na, 'Nothing, it stops here', 'Plan & build', 'Find goals', 'Write release notes'])].map(o => `<option${o === na ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`; };
-  if (r.kind === 'block') {
-    ed.innerHTML = `<h3><span class="av sm chorus">▣</span>Plan &amp; build</h3>
-      <div class="say" style="margin-top:12px">This comes with Chorus. Use it whole, or take it out. Its steps can't be moved or changed here.</div>
-      <div class="grid"><span>Plans, reviews</span><span><span class="av sm planner">P</span> Planner <button class="linkb">Teammates ›</button></span>
-        <span>Does the steps</span><span>claude-worker-1, codex-worker-1 <button class="linkb">Teammates ›</button></span>
-        <span>Steps run</span><span class="muted">You choose for each task, when you start it</span></div>
-      <div class="after"><div class="lbl">After you accept</div>
-        <div class="grid" style="margin-top:8px"><span>Then</span>${thenSel()}</div></div>
-      <div class="foot" style="justify-content:space-between">${remove}<button class="btn sm pri">Save</button></div>`;
-    return;
-  }
+  const i = ROWS.indexOf(r), nx = nextLabel(i);
   if (r.kind === 'you') {
     ed.innerHTML = `<h3><span class="av sm you">!</span>You decide · ${esc(r.label)}</h3>
       <div class="grid"><span>Question</span><input value="${esc(r.label)}"><span class="tp">Answers</span><div>${r.outs.map(o => `<div class="chip" style="margin:0 4px 4px 0">${esc(o[1])}</div>`).join('')}</div></div>
-      <div class="say">Chorus stops after <b>${esc(rows()[i - 1]?.label ?? '')}</b> and puts this under <b>Needs you</b>. Nothing goes on until you answer.</div>
-      <div class="foot" style="justify-content:space-between">${remove}<button class="btn sm pri">Save</button></div>`;
+      <div class="say">Chorus stops after <b>${esc(ROWS[i - 1].label)}</b> and puts this under <b>Needs you</b>. Nothing goes on until you answer.</div>
+      <div class="foot" style="justify-content:space-between"><button class="btn sm ghost" style="color:var(--bad)" data-del="${r.id}">Don't ask me here</button><button class="btn sm pri">Save</button></div>
+      <div class="note">Same as "Ask you first? Yes" on ${esc(ROWS[i - 1].label)} today.</div>`;
     return;
   }
-  const n = nextRow(i), askMe = n?.kind === 'you';
-  const say = `When <b>${esc(r.label)}</b> is done, ${askMe ? `it waits for you (<b>${esc(n.label)}</b>)` : n ? `it hands off to <b>${esc(n.label)}</b> right away` : 'the process ends'}. ${r.fail === 'back' ? 'If it fails, it goes back to the same teammate, at most 2 times, then waits for you.' : 'If it fails, it stops and waits for you.'}`;
+  const whoOpts = ['Planner', 'Workers (one per step)', 'Docs writer'].map(w => `<option${(r.who === 'planner' ? 'Planner' : 'Workers (one per step)') === w ? ' selected' : ''}>${w}</option>`).join('');
+  const na = nextAction(i);
+  const nextOpts = [...new Set([na, 'Nothing, it stops here', 'Review changes', 'Do step', 'Write release notes'])].map(o => `<option${o === na ? ' selected' : ''}>${o}</option>`).join('');
+  const askMe = nextRow(i)?.kind === 'you';
   ed.innerHTML = `<h3>${r.icon} ${esc(r.label)}</h3>
-    <div class="grid"><span>Who does it</span><select><option>${esc(PEOPLE[r.who].name)}</option><option>Planner</option><option>Docs writer</option></select>
+    <div class="grid"><span>Who does it</span><select>${whoOpts}</select>
       <span class="tp">Instructions</span><textarea>${esc(r.desc)}</textarea></div>
     <div class="after"><div class="lbl">When it's done</div>
-      <div class="grid" style="margin-top:8px"><span>Then</span>${thenSel()}
+      <div class="grid" style="margin-top:8px"><span>Then</span><select>${nextOpts}</select>
         <span>Ask you first?</span><div class="seg"><button class="${askMe ? 'on' : ''}">Yes, wait</button><button class="${askMe ? '' : 'on'}">No, go on</button></div>
         <span>If it fails</span><div class="seg"><button class="${r.fail === 'back' ? 'on' : ''}">Send it back</button><button class="${r.fail !== 'back' ? 'on' : ''}">Ask me</button></div></div>
-      <div class="say">${say}</div></div>
-    <div class="foot" style="justify-content:space-between">${remove}<span class="note" style="margin:0">Its button also shows in every chat.</span></div>`;
+      <div class="say">${sayOf(r, i)}</div></div>
+    <div class="note">${r.kind === 'opt' ? 'Automatic: it has no button. Chorus starts it when every step of a parallel run is done.' : 'Its button also shows in every chat, so you can run it by hand.'}</div>`;
+}
+function sayOf(r, i) {
+  const nx = nextLabel(i);
+  const fail = r.fail === 'back' ? 'If it fails, it goes back to the same teammate, at most 2 times, then waits for you.' : 'If it fails, it stops and waits for you.';
+  if (r.repeat) return `For each step of the plan, Chorus opens a chat with that step's Worker. When the last step passes, <b>${esc(nx)}</b> starts by itself. ${fail}`;
+  return `When <b>${esc(r.label)}</b> is done, ${nx.startsWith('you') ? `it waits for <b>${esc(nx.slice(5))}</b>` : `<b>${esc(nx)}</b> starts right away`}. ${fail}`;
 }
 
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-scene],[data-go],[data-tab],[data-open],[data-row],[data-plus],[data-add],[data-del],[data-theme-t],#brief-t,#nav-proc,#nav-proj');
+  const t = e.target.closest('[data-scene],[data-go],[data-row],[data-plus],[data-add],[data-del],[data-theme-t],#brief-t,#nav-proc,#nav-proj');
   if (!t) { if (pickAt !== null && !e.target.closest('.pick')) { pickAt = null; drawFlow(); } return; }
   if (t.matches('a')) e.preventDefault();
   if (t.dataset.scene || t.dataset.go) return show(t.dataset.scene || t.dataset.go);
   if (t.id === 'nav-proc') return show('process');
   if (t.id === 'nav-proj') return show('run');
-  if (t.dataset.tab) { cur = t.dataset.tab; sel = null; pickAt = null; return drawFlow(); }
-  if (t.dataset.open) { open[t.dataset.open] = !(open[t.dataset.open] ?? CHAINS[cur].lock); sel = t.dataset.open; return drawFlow(); }
   if (t.dataset.row) { sel = t.dataset.row; pickAt = null; return drawFlow(); }
   if (t.dataset.plus) { pickAt = pickAt === Number(t.dataset.plus) ? null : Number(t.dataset.plus); return drawFlow(); }
   if (t.dataset.add) {
     const i = pickAt, name = t.dataset.add;
-    pickAt = null;
-    if (name === 'new') return drawFlow();
-    const row = name === 'You decide' ? you('g' + Date.now(), 'Check it', 'Added by you.', [['ok', 'OK', 'next'], ['bad', 'Stop here', 'the process ends']])
-      : name === 'Plan & build' ? PB()
-      : name === 'Write release notes' ? mate('a' + Date.now(), 'docs', '◇', name, 'Reads what changed since the last tag and drafts the notes.')
-      : name === 'Reproduce bug' ? mate('a' + Date.now(), 'worker', '⚑', name, 'Writes the smallest test that fails because of the bug.')
-      : mate('a' + Date.now(), 'planner', '◎', name, 'Proposes 3 to 5 goals for the project. Changes no file.');
-    rows().splice(i + 1, 0, row); sel = row.id; return drawFlow();
+    if (name === 'new') { pickAt = null; return drawFlow(); }
+    const row = name === 'You decide'
+      ? { id: 'g' + Date.now(), kind: 'you', label: 'Check it', desc: 'Added by you.', outs: [['ok', 'OK', 'next'], ['bad', 'Stop here', 'the task stops']], sys: [] }
+      : { id: 'a' + Date.now(), kind: 'mate', who: /Do step|Reproduce/.test(name) ? 'workers' : 'planner', icon: '◆', label: name, desc: 'Added here. Its instructions come from the action.', outs: [['ok', 'Done', 'next'], ['bad', 'Fails', 'Stop and ask you']], sys: [], fail: 'ask' };
+    ROWS.splice(i + 1, 0, row); sel = row.id; pickAt = null; return drawFlow();
   }
-  if (t.dataset.del) { CHAINS[cur].rows = rows().filter(r => r.id !== t.dataset.del); sel = null; return drawFlow(); }
+  if (t.dataset.del) { ROWS = ROWS.filter(r => r.id !== t.dataset.del); sel = null; return drawFlow(); }
   if (t.id === 'brief-t') { const b = document.getElementById('brief'); b.hidden = !b.hidden; t.textContent = b.hidden ? 'Show the brief ▾' : 'Hide the brief ▴'; return; }
   if (t.dataset.themeT !== undefined) {
-    const c = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    document.documentElement.dataset.theme = c === 'dark' ? 'light' : 'dark';
+    const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.dataset.theme = cur === 'dark' ? 'light' : 'dark';
   }
 });
 function show(name) {
