@@ -3,11 +3,15 @@
 import { exclude } from '@chauvoluuhuong/chorus-core';
 import type { AgentId } from '../core/types.ts';
 import { syncSkills } from '../core/skills.ts';
-import { activatePro, isLocked, loadPro, proDev, type ChatExtras, type LoadResult, type McpToolDef, type ProCtx, type ProHandler, type ProModule } from '@chauvoluuhuong/chorus-core/pro-loader';
+import { activatePro, isLocked, loadPro, proDev, proLinks, signInPro, type ChatExtras, type LoadResult, type McpToolDef, type ProCtx, type ProHandler, type ProModule } from '@chauvoluuhuong/chorus-core/pro-loader';
 
 export interface ProLoader {
   load(ctx: ProCtx, onChange: (r: LoadResult) => void): Promise<LoadResult>;
   activate(ctx: ProCtx, key: string, onChange: (r: LoadResult) => void): Promise<LoadResult>;
+  /** back from the browser with a one-time code (plan stage 6) */
+  signIn?(ctx: ProCtx, code: string, state: string, onChange: (r: LoadResult) => void): Promise<LoadResult>;
+  /** the sign-up page and the first-launch words */
+  links?(): { tryUrl: string; plansUrl: string };
   dev: boolean;
 }
 
@@ -26,7 +30,7 @@ export class ChatLaunch {
   }
 }
 
-const realLoader: ProLoader = { load: loadPro, activate: activatePro, dev: proDev };
+const realLoader: ProLoader = { load: loadPro, activate: activatePro, signIn: signInPro, links: proLinks, dev: proDev };
 
 export interface ProStatus {
   unlocked: boolean;
@@ -34,6 +38,10 @@ export interface ProStatus {
   reason?: string;
   message?: string;
   version?: string;
+  /** what the signed entitlement says: trial, pro, free (trial ended), dev; the plan box and the trial banners read it */
+  plan?: string;
+  ends?: string;
+  locked?: string[];
 }
 
 const LOCKED = { status: 402, json: { locked: true } };
@@ -82,7 +90,22 @@ export class ProHost {
 
   status(): ProStatus {
     const r = this.result;
-    return isLocked(r) ? { unlocked: false, dev: this.loader.dev, reason: r.locked, message: r.message } : { unlocked: true, dev: this.loader.dev, version: r.version };
+    if (isLocked(r)) return { unlocked: false, dev: this.loader.dev, reason: r.locked, message: r.message };
+    const e = r.entitled;
+    return { unlocked: true, dev: this.loader.dev, version: r.version, ...(e ? { plan: e.plan, ends: e.ends, locked: e.locked } : {}) };
+  }
+
+  /** Back from the browser with the one-time code: the account's licence, activated here (plan stage 6). */
+  async signIn(code: string, state: string): Promise<ProStatus> {
+    await this.ready;
+    if (!this.loader.signIn) return this.status();
+    this.module?.dispose();
+    this.use(await this.loader.signIn(this.ctx, code, state, this.use).catch((e: Error): LoadResult => ({ locked: 'damaged', message: e.message })));
+    return this.status();
+  }
+
+  links() {
+    return this.loader.links?.() ?? { tryUrl: '', plansUrl: '' };
   }
 
   /** `path` is what follows /api/pro/. */
