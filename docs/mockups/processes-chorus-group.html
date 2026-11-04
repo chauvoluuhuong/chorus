@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Processes: Chorus group</title>
+<!--
+  Today's Processes page (chorus-core src/pro/ui/app.js processes()), unchanged, with one addition: the steps Chorus runs
+  (Approve the plan → How to run → Workers do the steps) sit in one dashed box named "Run the plan", marked as Chorus's.
+-->
+<style>
+:root {
+  --bg: #faf9f5; --side: #f3f1ea; --panel: #ffffff; --hover: #ece9e0; --line: #e5e2d9;
+  --ink: #141413; --ink-2: #3d3d3a; --muted: #6f6c64; --faint: #a09e96;
+  --accent: #0f766e; --accent-soft: #e2f3f1; --warn: #a8660b; --warn-soft: #fbefd9; --ok: #2f7d3a; --ok-soft: #e3f1e3;
+  --claude-soft: #f7e8e1; --codex-soft: #e4ecfa; --agy-soft: #e2f1e5;
+  --shadow-sm: 0 1px 2px rgba(20, 20, 19, .06);
+  --f-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif;
+  --f-serif: 'Iowan Old Style', Charter, Georgia, serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #262624; --side: #1f1e1c; --panel: #2c2b29; --hover: #353532; --line: #3c3b38;
+    --ink: #f5f4ee; --ink-2: #dad8d0; --muted: #a9a69c; --faint: #7d7a72;
+    --accent: #4fc1b6; --accent-soft: #15302e; --warn: #f0b85a; --warn-soft: #3d3020; --ok: #8ccf7e; --ok-soft: #22331f;
+    --claude-soft: #46302a; --codex-soft: #233250; --agy-soft: #243824; --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-sans); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.app { display: grid; grid-template-columns: 210px minmax(0, 1fr); min-height: 100%; }
+.side { background: var(--side); border-right: 1px solid var(--line); padding: 14px 10px; font-size: 13px; }
+.side .h { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); margin: 14px 8px 6px; }
+.side a { display: block; padding: 5px 8px; border-radius: 7px; color: var(--ink-2); text-decoration: none; }
+.side a.on { background: var(--hover); color: var(--ink); font-weight: 500; }
+.pr { padding: 22px 26px 16px; min-width: 0; display: flex; flex-direction: column; }
+h1 { font: 400 28px/1.2 var(--f-serif); margin: 0 0 4px; }
+.muted { color: var(--muted); }
+.lbl { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); }
+.tabs { display: flex; gap: 6px; margin: 16px 0; flex-wrap: wrap; align-items: center; }
+.tabs button { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 5px 13px; font-size: 13px; }
+.tabs button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.tabs .sp { flex: 1; }
+
+.flow { position: relative; overflow: auto; border: 1px solid var(--line); border-radius: 14px; background-color: var(--panel); background-image: radial-gradient(var(--line) 1px, transparent 1px); background-size: 22px 22px; padding: 48px 32px; min-height: 360px; display: flex; align-items: center; }
+.stage { display: inline-flex; align-items: center; white-space: nowrap; }
+.tm { flex: none; width: 214px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); overflow: hidden; box-shadow: var(--shadow-sm); }
+.tm-h { display: flex; align-items: center; gap: 9px; width: 100%; border: 0; border-bottom: 1px solid var(--line); background: transparent; padding: 9px 11px; text-align: left; }
+.tm-h b { display: block; font-size: 13.5px; }
+.tm-h small { font-size: 11.5px; color: var(--muted); }
+.tm-m { display: inline-flex; }
+.tm-m .pix + .pix { margin-left: -8px; box-shadow: 0 0 0 2px var(--bg); }
+.pix { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; font: 700 11px ui-monospace, Menlo, monospace; }
+.pix.planner { background: linear-gradient(135deg, #ff6b6b33, #54a0ff33); color: #7a4fc4; }
+.pix.claude { background: var(--claude-soft); color: #c6613f; }
+.pix.codex { background: var(--codex-soft); color: #3f6fd1; }
+.tm-acts { padding: 8px; display: flex; flex-direction: column; gap: 5px; }
+.ta { display: flex; align-items: center; gap: 7px; text-align: left; border: 1px solid var(--line); background: var(--panel); border-radius: 9px; padding: 6px 9px; font-weight: 500; font-size: 13px; }
+.ai { width: 18px; text-align: center; color: var(--muted); }
+.gate { display: inline-block; background: var(--warn-soft); color: var(--warn); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.link { flex: none; display: flex; align-items: center; }
+.line { position: relative; display: block; width: 34px; height: 2px; background: var(--faint); }
+.line.arrow { margin-right: 7px; }
+.line.arrow::after { content: ''; position: absolute; right: -7px; top: -4px; border-left: 8px solid var(--faint); border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+.done-n { flex: none; padding: 7px 14px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); font-size: 13px; font-weight: 600; }
+
+/* NEW: the steps Chorus runs */
+.cg { position: relative; flex: none; display: inline-flex; align-items: center; padding: 30px 16px 16px; border: 2px dashed var(--accent); border-radius: 18px; background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+.cg-l { position: absolute; top: -13px; left: 14px; display: inline-flex; align-items: center; gap: 7px; background: var(--accent); color: #fff; border: 0; border-radius: 999px; padding: 3px 11px 3px 8px; font-size: 12.5px; font-weight: 600; }
+.cg-l .logo { display: inline-flex; gap: 2px; align-items: flex-end; height: 11px; }
+.cg-l .logo i { display: block; width: 3px; border-radius: 1px; background: currentColor; }
+.cg-l .logo i:nth-child(1) { height: 6px; } .cg-l .logo i:nth-child(2) { height: 11px; } .cg-l .logo i:nth-child(3) { height: 8px; }
+.cg-l .lock { opacity: .85; font-weight: 400; }
+.cg-note { position: absolute; top: 9px; left: 16px; right: 16px; font-size: 11.5px; color: var(--accent); white-space: normal; }
+.howrun { flex: none; display: flex; flex-direction: column; gap: 3px; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 8px 11px; font-size: 12.5px; }
+.howrun b { font-size: 13px; }
+.howrun span { color: var(--muted); }
+.cg .tm { background: var(--panel); }
+.tip { position: absolute; top: 18px; left: 14px; z-index: 5; width: 300px; white-space: normal; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, .14); padding: 12px 14px; font-size: 13px; font-weight: 400; text-align: left; }
+.tip b { display: block; margin-bottom: 4px; }
+.tip p { margin: 0; color: var(--ink-2); }
+.tip[hidden] { display: none; }
+
+.legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; font-size: 12.5px; color: var(--muted); align-items: center; }
+.legend .sw { display: inline-block; width: 18px; height: 12px; border: 2px dashed var(--accent); border-radius: 4px; vertical-align: -1px; margin-right: 6px; }
+@media (max-width: 720px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .side { display: none; }
+  .pr { padding: 18px 16px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="side"><a href="#">＋ New chat</a><div class="h">Pro</div><a href="#">☺ Teammates</a><a href="#" class="on">⇢ Processes</a><div class="h">Projects</div><a href="#">▸ cake-shop</a></nav>
+  <div class="pr">
+    <h1>Processes</h1>
+    <p class="muted" style="margin:0;max-width:640px">The chain of actions, under the teammate who does each one.</p>
+    <div class="tabs"><span class="lbl">Starts with</span><button class="on">▤ Create plan</button><button>⚑ Reproduce bug</button><span class="sp"></span><span class="lbl">Steps run</span><button class="on">One after another</button><button>In parallel</button></div>
+
+    <div class="flow"><div class="stage">
+      <div class="tm"><button class="tm-h"><span class="tm-m"><span class="pix planner">P</span></span><span><b>Planner</b><small>Claude Code · opus</small></span></button><div class="tm-acts"><button class="ta"><span class="ai">▤</span>Create plan</button></div></div>
+      <div class="link"><span class="line arrow"></span></div>
+
+      <div class="cg">
+        <button class="cg-l" id="cg-l" aria-expanded="false"><span class="logo"><i></i><i></i><i></i></span>Chorus · Run the plan <span class="lock">🔒</span></button>
+        <div class="tip" id="tip" hidden><b>Chorus runs these steps</b><p>After you approve the plan and choose how to run it, Chorus gives each step of the task to its Worker. You can change who the Workers are in Teammates. You can't change these steps here.</p></div>
+        <span class="gate">You: Approve the plan</span>
+        <div class="link"><span class="line arrow"></span></div>
+        <div class="howrun"><b>How to run</b><span>One after another, or in parallel</span></div>
+        <div class="link"><span class="line arrow"></span></div>
+        <div class="tm"><button class="tm-h"><span class="tm-m"><span class="pix claude">C</span><span class="pix codex">X</span></span><span><b>Workers</b><small>2 teammates, one per step</small></span></button><div class="tm-acts"><button class="ta"><span class="ai">⚒</span>Do step</button></div></div>
+      </div>
+
+      <div class="link"><span class="line arrow"></span></div>
+      <div class="tm"><button class="tm-h"><span class="tm-m"><span class="pix planner">P</span></span><span><b>Planner</b><small>Claude Code · opus</small></span></button><div class="tm-acts"><button class="ta"><span class="ai">✓</span>Review changes</button></div></div>
+      <div class="link"><span class="line"></span><span class="gate">You: Accept</span><span class="line arrow"></span></div>
+      <div class="done-n">✓ Done</div>
+    </div></div>
+
+    <div class="legend"><span><span class="sw"></span>Run by Chorus: shown here, not editable</span><span>Click <b>Chorus · Run the plan</b> to see what it does.</span></div>
+  </div>
+</div>
+<script>
+const l = document.getElementById('cg-l'), tip = document.getElementById('tip');
+l.addEventListener('click', e => { e.stopPropagation(); tip.hidden = !tip.hidden; l.setAttribute('aria-expanded', String(!tip.hidden)); });
+document.addEventListener('click', () => { tip.hidden = true; l.setAttribute('aria-expanded', 'false'); });
+</script>
+</body>
+</html>
