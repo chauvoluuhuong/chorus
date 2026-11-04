@@ -132,6 +132,7 @@ function flash(text) {
 function onState(st) {
   renderUpdate(st.update);
   const first = !S.state;
+  if (first) takeUi(st.ui ?? {});
   const previousNews = S.state?.notifications;
   const doctorChanged = JSON.stringify(S.state?.doctor) !== JSON.stringify(st.doctor);
   S.state = st;
@@ -325,6 +326,27 @@ function unlockHtml() {
     <div class="form-foot"><span class="hint">Development builds only</span><button class="btn primary" data-act="pro-unlock">Unlock</button></div></div></div>`;
 }
 
+/* ---------- your choices, kept by the server ---------- */
+// The native window's server takes a new port at each launch, and a browser keeps its storage per address, so what the page
+// remembers lives on the server (POST /api/ui). Browser storage stays as a copy, and fills the server once if it has nothing yet.
+
+function remember(key, value) {
+  try {
+    localStorage.setItem(`chorus.${key}`, typeof value === 'string' ? value : JSON.stringify(value));
+  } catch {
+    /* no storage: the server's copy is enough */
+  }
+  void api('POST', '/api/ui', { key, value }).catch(() => {});
+}
+function takeUi(ui) {
+  if (ui.hidden) S.hidden = ui.hidden;
+  else if (Object.keys(S.hidden).length) remember('hidden', S.hidden);
+  if (ui.folded) S.folded = new Set(ui.folded);
+  else if (S.folded.size) remember('folded', [...S.folded]);
+  if (ui.drawer !== undefined) S.drawer = ui.drawer || null;
+  S.agentPref = typeof ui.agent === 'string' ? ui.agent : undefined;
+}
+
 /* ---------- sidebar, top bar, notice ---------- */
 
 function chatsByProject() {
@@ -448,7 +470,7 @@ async function openNew(from, folder) {
     return toast(String(e.message));
   }
   const src = S.info.from;
-  const agent = src ? S.info.agents.find(a => a.id !== src.agent).id : localStorage.getItem('chorus.agent') || 'claude';
+  const agent = src ? S.info.agents.find(a => a.id !== src.agent).id : (S.agentPref || localStorage.getItem('chorus.agent') || 'claude');
   S.form = { agent, model: 'default', effort: 'default', folder: folder ?? S.info.folder, skip: src ? src.skip : false, prompt: '', error: '', busy: false };
   if (S.view.name === 'new') {
     renderChrome();
@@ -523,7 +545,7 @@ async function startChat() {
   renderView();
   const src = S.info.from;
   try {
-    localStorage.setItem('chorus.agent', f.agent);
+    remember('agent', f.agent);
     const thread = await window.choruspro?.startNew?.({ folder: f.folder, prompt: f.prompt, from: src?.id });
     if (thread) {
       S.history = S.history.filter(v => v.name !== 'new');
@@ -1541,11 +1563,11 @@ document.addEventListener('click', async e => {
         return go({ name: 'pro', id: `portal~${encodeURIComponent(arg)}` });
       }
       S.folded.has(arg) ? S.folded.delete(arg) : S.folded.add(arg);
-      localStorage.setItem('chorus.folded', JSON.stringify([...S.folded]));
+      remember('folded', [...S.folded]);
       return renderChrome();
     case 'rm-project': {
       S.hidden[arg] = (S.state?.chats ?? []).filter(c => c.cwd === arg).map(c => c.id);
-      localStorage.setItem('chorus.hidden', JSON.stringify(S.hidden));
+      remember('hidden', S.hidden);
       const open = S.view.name === 'chat' && S.state?.chats.find(c => c.id === S.view.id)?.cwd === arg;
       if (open) return go({ name: 'new' });
       return renderChrome();
@@ -1590,7 +1612,7 @@ document.addEventListener('click', async e => {
     case 'drawer':
       S.drawer = S.drawer === arg ? null : arg;
       S.drawerData = null;
-      localStorage.setItem('chorus.drawer', S.drawer ?? '');
+      remember('drawer', S.drawer ?? '');
       renderChatParts();
       setTimeout(refit, 30);
       return loadDrawer();

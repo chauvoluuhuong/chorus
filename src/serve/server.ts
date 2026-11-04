@@ -43,7 +43,7 @@ const VENDOR: Record<string, string> = {
 };
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const DEFAULT_SIZE = { cols: 120, rows: 36 };
-const LITERAL = new Set(['POST folders/pick', 'POST skills/import', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/send']);
+const LITERAL = new Set(['POST ui', 'POST folders/pick', 'POST skills/import', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/send']);
 
 /** The App without a terminal: input and output go nowhere, the Controller drives it as usual. */
 export function headlessIO(): AppIO {
@@ -470,6 +470,14 @@ export class ChorusServer {
     const literal = `${method} ${parts.join('/')}`;
     const key = LITERAL.has(literal) ? literal : `${method} ${a}${id ? '/:id' : ''}${sub ? '/' + sub : ''}`;
     switch (key) {
+      case 'POST ui': {
+        // the page's own choices (projects taken off the sidebar, folded ones, the last agent): kept here, not in the browser,
+        // because the window's server takes a new port each launch and a browser keeps storage per address
+        if (typeof b.key !== 'string' || !UI_KEYS.has(b.key)) return { error: 'unknown setting' };
+        const ui = { ...this.ui(), [b.key]: b.value };
+        fs.writeFileSync(path.join(c.store.root, 'ui.json'), JSON.stringify(ui, null, 2));
+        return { ok: true };
+      }
       case 'GET state':
         return this.state();
       case 'GET newchat':
@@ -675,6 +683,7 @@ export class ChorusServer {
       // when each request appeared (whole seconds), not "seconds waiting": the state must not change every push, or the
       // window would redraw the inbox under the mouse
       approvals: c.approvalItems('all').map(({ waiting, ...x }) => ({ ...x, since: Math.round(Date.now() / 1000 - waiting) })),
+      ui: this.ui(),
       notice: this.app.notice,
       dialogs: [...this.dialogs.values()].map(x => x.d),
       // the doctor's short check, the one status of the agents (null until the first one is done)
@@ -712,6 +721,14 @@ export class ChorusServer {
         return { id: a, quota: quota[a] ?? null, skipFlag: SKIP_FLAG[a], models, efforts: Object.fromEntries(models.map(m => [m, effortsFor(a, m)])) };
       }),
     };
+  }
+
+  private ui(): Record<string, unknown> {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(this.c.store.root, 'ui.json'), 'utf8'));
+    } catch {
+      return {};
+    }
   }
 
   chatDetail(id: string) {
@@ -916,6 +933,8 @@ function readJson(req: http.IncomingMessage): Promise<Record<string, any>> {
   });
 }
 
+/** What the page may save on the server (`POST ui`). */
+const UI_KEYS = new Set(['hidden', 'folded', 'agent', 'drawer']);
 const asAgent = (s: unknown): AgentId | undefined => (AGENTS.includes(s as AgentId) ? (s as AgentId) : undefined);
 const expand = (p: string) => p.replace(/^~(?=\/|$)/, process.env.HOME ?? '~');
 

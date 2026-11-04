@@ -547,3 +547,19 @@ test('opening another chat leaves the first one working: same process, still run
     await r.done();
   }
 });
+
+test('a project taken off the sidebar stays off after a restart: the server keeps the choice, not the browser', async () => {
+  const r = await rig();
+  try {
+    assert.deepEqual((await r.api('GET', '/api/state')).json.ui, {}, 'nothing chosen yet');
+    assert.deepEqual((await r.api('POST', '/api/ui', { key: 'hidden', value: { '/work/old': ['t_1'] } })).json, { ok: true });
+    await r.api('POST', '/api/ui', { key: 'folded', value: ['/work/big'] });
+    assert.equal((await r.api('POST', '/api/ui', { key: 'token', value: 'x' })).json.error, 'unknown setting');
+    // the window's next launch is a new server on a new port, reading the same data folder
+    const saved = JSON.parse(fs.readFileSync(path.join(r.store.root, 'ui.json'), 'utf8'));
+    assert.deepEqual(saved, { hidden: { '/work/old': ['t_1'] }, folded: ['/work/big'] });
+    assert.deepEqual((await r.api('GET', '/api/state')).json.ui, saved);
+  } finally {
+    await r.done();
+  }
+});
