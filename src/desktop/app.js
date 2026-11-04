@@ -112,6 +112,14 @@ function onMessage(m) {
   }
   if (m.t === 'flash') return flash(m.text);
   if (m.t === 'pro-status') return void onProStatus(m.status);
+  if (m.t === 'pro-signed-in') return void onProStatus(m.status).then(() => {
+    if (!m.status.unlocked) return toast(m.status.message || 'Signing in did not work. Try again.');
+    remember('welcome', 'pro');
+    S.welcome = 'pro';
+    if (m.then === 'upgrade') return upgrade();
+    go({ name: m.status.plan === 'trial' ? 'pro-started' : 'new' });
+    if (m.status.plan === 'free') toast('Signed in. This email already had a trial: Community keeps working, and Upgrade unlocks Pro.');
+  });
   if (m.t === 'pro') return window.choruspro?.onEvent?.(m.event, m.data);
   if (m.t === 'dropped' && m.id === S.attached) return toast(`Added to the message: ${m.paths.map(base).join(', ')}`);
 }
@@ -132,7 +140,10 @@ function flash(text) {
 function onState(st) {
   renderUpdate(st.update);
   const first = !S.state;
-  if (first) takeUi(st.ui ?? {});
+  if (first) {
+    takeUi(st.ui ?? {});
+    queueMicrotask(planScreens);
+  }
   const previousNews = S.state?.notifications;
   const doctorChanged = JSON.stringify(S.state?.doctor) !== JSON.stringify(st.doctor);
   S.state = st;
@@ -265,6 +276,7 @@ function go(view, push = true) {
   S.history = S.history.slice(-30);
   S.view = view;
   S.drawerData = null;
+  if (view.name === 'pro-ended' && !S.endedSeen) (S.endedSeen = true), remember('ended', true);
   dropNeedsYouToasts();
   // the address keeps the screen, so a reload comes back to it
   history.replaceState(null, '', `#/${view.name}${view.id ? `/${view.id}` : view.from ? `/from/${view.from}` : view.folder ? `/in/${encodeURIComponent(view.folder)}` : ''}`);
@@ -299,7 +311,11 @@ function fillChatSlots() {
 function fillSlots() {
   for (const el of document.querySelectorAll('[data-pro-slot]')) {
     if (window.choruspro) window.choruspro.render(el.dataset.proSlot, el, { ...el.dataset, view: S.view.id, id: S.view.id, open: S.view.name === 'chat' ? S.view.id : '', project: S.form?.folder ?? S.state?.project, cwd: el.dataset.cwd ?? S.state?.chats.find(c => c.id === el.dataset.chat)?.cwd, chatRow: S.state?.chats.find(c => c.id === el.dataset.chat), chats: S.state?.chats });
-    else if (el.dataset.proSlot === 'nav' && S.pro?.dev) el.innerHTML = `<button class="${S.view.name === 'unlock' ? 'on' : ''}" data-act="unlock"><span class="ico">⚿</span>Unlock</button>`;
+    else if (el.dataset.proSlot === 'nav') {
+      // Community: the Pro items show, locked; a click offers the trial. A dev build also has Unlock (a test key)
+      const lock = community() ? [['☺', 'Teammates'], ['⇢', 'Processes']].map(([ic, t]) => `<button class="locked" data-act="plan-welcome" title="Pro only"><span class="ico">${ic}</span>${t}<span class="lock" aria-label="Pro only">🔒</span></button>`).join('') : '';
+      el.innerHTML = lock + (S.pro?.dev ? `<button class="${S.view.name === 'unlock' ? 'on' : ''}" data-act="unlock"><span class="ico">⚿</span>Unlock</button>` : '');
+    }
   }
 }
 
@@ -313,10 +329,12 @@ async function onProStatus(st) {
       document.head.append(Object.assign(document.createElement('link'), { id: 'pro-css', rel: 'stylesheet', href: '/api/pro/ui.css' }), js);
     });
   }
-  window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: () => { renderChrome(); fillChatSlots(); if (S.view.name === 'new' || S.view.name === 'approvals') renderView(); }, doctor: () => go({ name: 'doctor' }), toast, openChat: id => go({ name: 'chat', id }) });
+  window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: () => { renderChrome(); fillChatSlots(); if (S.view.name === 'new' || S.view.name === 'approvals') renderView(); }, doctor: () => go({ name: 'doctor' }), toast, openChat: id => go({ name: 'chat', id }), upgrade, back: () => history.length && go(S.history.pop() ?? { name: 'new' }, false) });
   if (S.view.name === 'pro' && !st.unlocked) return go({ name: 'new' });
   renderChrome();
+  drawPlanBanner();
   if (S.view.name !== 'chat') renderView();
+  planScreens();
 }
 
 function unlockHtml() {
@@ -324,6 +342,68 @@ function unlockHtml() {
   return `<div class="page hero"><h1>Unlock</h1><div class="card form"><div class="field"><label for="pro-key">KEY</label><input id="pro-key" type="text" spellcheck="false"></div>
     ${p?.message && !p.unlocked ? `<div class="err" id="pro-why">${esc(p.message)}</div>` : ''}${p?.unlocked ? '<div id="pro-why">Unlocked.</div>' : ''}
     <div class="form-foot"><span class="hint">Development builds only</span><button class="btn primary" data-act="pro-unlock">Unlock</button></div></div></div>`;
+}
+
+/* ---------- the plan: Welcome, Try Pro, the plan box, the trial banners (chorus-core plan stage 6) ---------- */
+// The words of the Welcome screen come from the backend (/api/pro/plans), so no sales text sits in this repo. Community has no paid
+// code at all; signing up opens /try in the user's own browser, which comes back to /api/pro/signed-in with a one-time code.
+
+const DAY = 86_400_000;
+const daysLeft = iso => Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / DAY));
+// no paid code on this install: what a Community user sees (a dev build adds Unlock for a test key)
+const community = () => !!S.pro && !S.pro.unlocked;
+const upgrade = () => toast('Upgrade is coming soon.');
+
+/** First launch, or a trial that just ended: the screen that says so, once. */
+function planScreens() {
+  if (!S.pro || !S.state || S.view.name !== 'new') return;
+  if (community() && S.welcome === undefined) return go({ name: 'welcome' });
+  if (S.pro.plan === 'free' && !S.endedSeen) return go({ name: 'pro-ended' });
+}
+
+function planBox() {
+  const p = S.pro;
+  if (!p) return '';
+  const box = (title, sub, button = '', warn = false) => `<div class="plan-box"><b>${esc(title)}</b><span class="${warn ? 'warn' : 'muted'}">${esc(sub)}</span>${button}</div>`;
+  if (!p.unlocked) return box('Community', 'Free, as today', '<button class="btn" data-act="plan-welcome">Try Pro</button>');
+  if (p.plan === 'trial') {
+    const n = daysLeft(p.ends);
+    return box('Pro trial', `${n} day${n === 1 ? '' : 's'} left`, n <= 3 ? '<button class="btn primary" data-act="plan-upgrade">Upgrade</button>' : '', n <= 3);
+  }
+  if (p.plan === 'free') return box('No Pro', 'Your trial ended', '<button class="btn primary" data-act="plan-upgrade">Upgrade</button>');
+  if (p.plan === 'pro') return box('Pro', 'Thank you');
+  return '';
+}
+
+/** The trial's last days: a line under the top bar, until Later (then again the next day). */
+function drawPlanBanner() {
+  const el = $('#plan-banner');
+  const p = S.pro, n = p?.plan === 'trial' ? daysLeft(p.ends) : 99, today = new Date().toDateString();
+  el.hidden = !(n <= 3 && S.bannerDay !== today);
+  if (!el.hidden) el.innerHTML = `<span>Your Pro trial ends ${n === 0 ? 'today' : `in ${n} day${n === 1 ? '' : 's'}`}.</span><span style="flex:1"></span><button class="btn primary" data-act="plan-upgrade">Upgrade</button><button class="btn" data-act="plan-later">Later</button>`;
+}
+
+let planWords;
+function welcomeHtml() {
+  if (planWords === undefined) {
+    planWords = null;
+    void api('GET', '/api/pro/plans').then(w => { planWords = w; if (S.view.name === 'welcome') renderView(); }, () => { planWords = { offline: true }; renderView(); });
+  }
+  const w = planWords && !planWords.offline ? planWords : null;
+  const card = (c, pro) => `<div class="plan-card${pro ? ' pro' : ''}"><h2>${esc(c?.name ?? (pro ? 'Pro' : 'Community'))}${pro && c?.badge ? ` <span class="badge acc">${esc(c.badge)}</span>` : ''}</h2><div class="muted">${esc(c?.sub ?? (pro ? 'Everything in Community, plus more' : 'Free'))}</div>
+    <ul>${(c?.items ?? []).map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+    <button class="btn${pro ? ' primary' : ''} wide" data-act="${pro ? 'plan-try' : 'plan-community'}">${esc(c?.button ?? (pro ? 'Try Pro free' : 'Keep Community'))}</button><div class="fine">${esc(c?.fine ?? '')}</div></div>`;
+  return `<div class="page welcome"><h1>${esc(w?.title ?? 'Welcome to Chorus')}</h1><p class="lead">${esc(w?.lede ?? 'Start free, or try Pro. You can change your mind any time.')}</p>
+    ${planWords === null ? '<p class="muted" role="status" style="text-align:center">Loading…</p>' : `<div class="plan-cards">${card(w?.community, false)}${card(w?.pro, true)}</div>`}</div>`;
+}
+const tryingHtml = () => `<div class="page welcome center"><div class="big">↗</div><h1>Finish in your browser</h1><p class="lead">Sign in with Google or your email on the page that opened. Chorus picks it up here when you're done.</p>
+  <div class="row-c"><button class="btn" data-act="plan-try">Open the page again</button><button class="btn" data-act="plan-community">Not now</button></div></div>`;
+const startedHtml = () => `<div class="page welcome center"><div class="big">✓</div><h1>Your Pro trial has started</h1><p class="lead">${S.pro?.ends ? `${daysLeft(S.pro.ends)} days from today. ` : ''}Your first step is meeting your teammates.</p>
+  <div class="row-c"><button class="btn primary" data-act="pro-view" data-arg="teammates">Meet your teammates</button><button class="btn" data-act="new">Start a chat</button></div></div>`;
+function endedHtml() {
+  const names = { portal: 'Open the Portal', 'teammate.create': 'Create a new teammate' }, off = (S.pro?.locked ?? []).filter(g => names[g]).map(g => `<b>${esc(names[g])}</b>`);
+  return `<div class="page welcome center"><h1>Your Pro trial has ended</h1><p class="lead">You keep your teammates, plans, Workers and tasks.${off.length ? ` These now need Pro: ${off.join(' and ')}.` : ' Everything keeps working.'}</p>
+    <div class="row-c"><button class="btn primary" data-act="plan-upgrade">Upgrade</button><button class="btn" data-act="pro-view" data-arg="teammates">Open Teammates</button></div></div>`;
 }
 
 /* ---------- your choices, kept by the server ---------- */
@@ -345,6 +425,9 @@ function takeUi(ui) {
   else if (S.folded.size) remember('folded', [...S.folded]);
   if (ui.drawer !== undefined) S.drawer = ui.drawer || null;
   S.agentPref = typeof ui.agent === 'string' ? ui.agent : undefined;
+  S.welcome = ui.welcome;
+  S.endedSeen = !!ui.ended;
+  S.bannerDay = ui.banner;
 }
 
 /* ---------- sidebar, top bar, notice ---------- */
@@ -405,7 +488,7 @@ function renderChrome() {
     ${proSlot('side')}
     <div class="side-head">PROJECTS<button data-act="add-project" title="Start a chat in another folder">+ add</button></div>
     <div class="tree">${tree}</div>
-    <div class="side-foot">${agentFoot}<span style="flex:1"></span><button data-act="doctor">Doctor</button></div>`;
+    ${planBox()}<div class="side-foot">${agentFoot}<span style="flex:1"></span><button data-act="doctor">Doctor</button></div>`;
 
   const chat = v.name === 'chat' ? st?.chats.find(c => c.id === v.id) : undefined;
   let crumbs = '';
@@ -442,7 +525,7 @@ function renderView() {
   // the module's page keeps its own state: a push of the app's state must not rebuild it
   const slot = el.querySelector('[data-pro-slot="view"]');
   if (v.name === 'pro' && slot?.dataset.id === v.id) return;
-  el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml, unlock: unlockHtml, pro: () => `<div data-pro-slot="view" data-id="${esc(v.id ?? '')}" style="height:100%"></div>` }[v.name]?.() ?? '';
+  el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml, unlock: unlockHtml, welcome: welcomeHtml, trying: tryingHtml, 'pro-started': startedHtml, 'pro-ended': endedHtml, pro: () => `<div data-pro-slot="view" data-id="${esc(v.id ?? '')}" style="height:100%"></div>` }[v.name]?.() ?? '';
   fillSlots();
   if (v.name === 'new') {
     const ta = $('#nc-prompt');
@@ -1481,6 +1564,23 @@ document.addEventListener('click', async e => {
       return go({ name: act });
     case 'chat':
       return go({ name: 'chat', id: arg });
+    case 'plan-welcome':
+      return go({ name: 'welcome' });
+    case 'plan-community':
+      remember('welcome', 'community');
+      S.welcome = 'community';
+      return go({ name: 'new' });
+    case 'plan-try': {
+      const r = await api('POST', '/api/pro/try').catch(err => ({ error: err.message }));
+      if (r.error) return toast(r.error);
+      return go({ name: 'trying' });
+    }
+    case 'plan-upgrade':
+      return upgrade();
+    case 'plan-later':
+      S.bannerDay = new Date().toDateString();
+      remember('banner', S.bannerDay);
+      return drawPlanBanner();
     case 'unlock':
       return go({ name: 'unlock' });
     case 'pro-view':
@@ -1843,7 +1943,7 @@ function fromHash() {
   if (name === 'new' && a === 'from' && b) return { name, from: b };
   if (name === 'new' && a === 'in' && b) return { name, folder: decodeURIComponent(b) };
   if (name === 'pro' && a) return { name, id: a };
-  if (['approvals', 'memory', 'skills', 'doctor', 'unlock'].includes(name)) return { name };
+  if (['approvals', 'memory', 'skills', 'doctor', 'unlock', 'welcome', 'trying', 'pro-started', 'pro-ended'].includes(name)) return { name };
   return { name: 'new' };
 }
 

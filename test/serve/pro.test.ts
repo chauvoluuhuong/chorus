@@ -131,3 +131,42 @@ test('a chat the module resumes while it starts gets its tools', async () => {
   await host.start();
   assert.deepEqual(seen, ['stand_in']);
 });
+
+test('Try Pro: the sign-up page opens in the browser, comes back once with a code, and the app hears it (plan stage 6)', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-'));
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-p-'));
+  const store = new Store(project, { home });
+  const codes: string[] = [];
+  const trial = { ...stand, entitled: { plan: 'trial', locked: [], ends: '2026-11-18T00:00:00.000Z' } };
+  const proLoader: ProLoader = {
+    dev: false, load: async () => LOCKED, activate: async () => LOCKED,
+    signIn: async (_c, code) => (codes.push(code), code === 'good-code' ? trial : { locked: 'unknown-key', message: 'This sign-in has expired.' }),
+    links: () => ({ tryUrl: 'https://chorus-cli.web.app/try', plansUrl: '' }),
+  };
+  const opened: string[] = [];
+  const c = new Controller({ project, store, app: headlessApp(), opener: async () => ({ ok: true }), launcher: (_a, o) => ({ bin: process.execPath, args: [], cwd: o.cwd }) });
+  const srv = new ChorusServer({ controller: c, token: 'a'.repeat(48), check: async () => ({ node: { version: '22', ok: true }, platform: 't', agents: [], ms: 1 }), proLoader, openLink: u => opened.push(u) });
+  const url = await srv.start(0);
+  try {
+    const t = await (await fetch(`${url}/api/pro/try`, { method: 'POST', headers: { authorization: `Bearer ${srv.token}`, 'x-chorus': '1' } })).json();
+    assert.equal(opened.length, 1);
+    const sent = new URL(opened[0]);
+    assert.equal(sent.origin + sent.pathname, 'https://chorus-cli.web.app/try');
+    assert.equal(sent.searchParams.get('port'), new URL(url).port, 'the page knows where to come back');
+    const state = sent.searchParams.get('state')!;
+    assert.equal(t.url, opened[0]);
+    // no token on the way back (another browser): a wrong state is refused, the right one works once
+    assert.equal((await fetch(`${url}/api/pro/signed-in?code=good-code&state=made-up-state-123456`)).status, 403);
+    const back = await fetch(`${url}/api/pro/signed-in?code=good-code&state=${state}`);
+    assert.equal(back.status, 200);
+    assert.match(await back.text(), /You're signed in/);
+    assert.deepEqual(codes, ['good-code']);
+    assert.equal((await fetch(`${url}/api/pro/signed-in?code=good-code&state=${state}`)).status, 403, 'once');
+    const st = await (await fetch(`${url}/api/pro/status`, { headers: { authorization: `Bearer ${srv.token}` } })).json();
+    assert.deepEqual([st.unlocked, st.plan, st.ends], [true, 'trial', '2026-11-18T00:00:00.000Z']);
+  } finally {
+    srv.close();
+    c.stop();
+    store.close();
+  }
+});

@@ -86,6 +86,8 @@ export interface ServeOpts {
   proLoader?: ProLoader;
   /** read by the launcher given to the Controller */
   chatLaunch?: ChatLaunch;
+  /** opens the sign-up page in the user's browser (tests); the system's opener otherwise */
+  openLink?: (url: string) => void;
   /** the system's folder picker (tests); the real one otherwise */
   pickFolder?: typeof pickFolder;
   /** whether the CLI still has a chat's session (tests); its transcript on disk otherwise */
@@ -348,6 +350,9 @@ export class ChorusServer {
       return this.file('/', res);
     }
     if (u.pathname.startsWith('/api/pro/mcp/') && this.mcpAllowed(req)) return this.proMcp(req, res, u.pathname.slice(13));
+    // the browser coming back from sign-up (plan stage 6): another browser, so no token cookie; the single-use state it carries,
+    // made by an authenticated Try Pro, is what lets it in
+    if (req.method === 'GET' && u.pathname === '/api/pro/signed-in') return this.signedIn(res, u);
     if (!this.allowed(req)) return send(res, 401, { error: 'open the address chorus serve printed (it carries the token)' });
     if (req.method !== 'GET' && (req.headers['x-chorus'] !== '1' || !this.sameOrigin(req))) return send(res, 403, { error: 'missing X-Chorus header' });
     if (!u.pathname.startsWith('/api/')) return this.file(u.pathname, res);
@@ -384,9 +389,46 @@ export class ChorusServer {
     send(res, 404, { error: 'not found' });
   }
 
+  /** Try Pro states waiting for the browser to come back: each works once, for 30 minutes. */
+  private tries = new Map<string, number>();
+  private plansWords: unknown;
+
+  private async signedIn(res: http.ServerResponse, u: URL) {
+    const state = u.searchParams.get('state') ?? '', code = u.searchParams.get('code') ?? '', then = u.searchParams.get('then') === 'upgrade' ? 'upgrade' : '';
+    const ok = (this.tries.get(state) ?? 0) > Date.now();
+    this.tries.delete(state);
+    const page = (title: string, text: string) => {
+      res.writeHead(ok ? 200 : 403, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>:root{color-scheme:light dark}body{margin:0;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:light-dark(#faf9f5,#262624);color:light-dark(#141413,#f5f4ee)}main{max-width:420px;margin:12vh auto;padding:26px;border:1px solid light-dark(#e5e2d9,#3c3b38);border-radius:16px;background:light-dark(#fff,#30302e);text-align:center}h1{font:400 26px/1.2 Georgia,serif;margin:0 0 8px}p{margin:0;color:light-dark(#73726c,#a6a39a)}</style><main><h1>${title}</h1><p>${text}</p></main>`);
+    };
+    if (!ok || !code) return page('Sign in again from Chorus', 'This sign-in link was already used or has expired. Open Chorus and choose Try Pro free again.');
+    const st = await this.pro.signIn(code, state);
+    this.broadcast({ t: 'pro-signed-in', status: st, then });
+    if (!st.unlocked) return page('Something went wrong', `${st.message ?? 'Chorus could not finish signing you in.'} Open Chorus and try again.`);
+    page('You\'re signed in', 'Go back to Chorus: it is ready. You can close this tab.');
+  }
+
   /** /api/pro/*: the status and Unlock always answer; everything else is the module's, or 402 from ProHost. */
   private async proHttp(req: http.IncomingMessage, res: http.ServerResponse, u: URL) {
     const route = u.pathname.slice(9);
+    if (req.method === 'POST' && route === 'try') {
+      // Try Pro free: the sign-up page in the user's own browser; it comes back to /api/pro/signed-in with a one-time code
+      const { tryUrl } = this.pro.links();
+      if (!tryUrl) return send(res, 200, { error: 'Pro sign-up is not available in this build' });
+      const state = crypto.randomBytes(24).toString('base64url');
+      this.tries.set(state, Date.now() + 30 * 60_000);
+      const url = `${tryUrl}?${new URLSearchParams({ state, port: new URL(this.url).port })}`;
+      (this.o.openLink ?? openUrl)(url);
+      return send(res, 200, { ok: true, url });
+    }
+    if (req.method === 'GET' && route === 'plans') {
+      // the Welcome screen's words come from the backend (no sales text in this repo); fetched once, only when it shows
+      if (!this.plansWords) {
+        const { plansUrl } = this.pro.links();
+        this.plansWords = plansUrl ? await fetch(plansUrl, { signal: AbortSignal.timeout(6000) }).then(r => (r.ok ? r.json() : undefined)).catch(() => undefined) : undefined;
+      }
+      return send(res, 200, this.plansWords ?? { offline: true });
+    }
     if (req.method === 'GET' && route === 'status') return send(res, 200, this.pro.status());
     if (req.method === 'POST' && route === 'activate') return send(res, 200, await this.pro.activate(String((await readJson(req)).key ?? '')));
     if (req.method === 'GET' && (route === 'ui.js' || route === 'ui.css')) {
@@ -959,7 +1001,7 @@ function readJson(req: http.IncomingMessage): Promise<Record<string, any>> {
 }
 
 /** What the page may save on the server (`POST ui`). */
-const UI_KEYS = new Set(['hidden', 'folded', 'agent', 'drawer']);
+const UI_KEYS = new Set(['hidden', 'folded', 'agent', 'drawer', 'welcome', 'ended', 'banner']);
 const asAgent = (s: unknown): AgentId | undefined => (AGENTS.includes(s as AgentId) ? (s as AgentId) : undefined);
 const expand = (p: string) => p.replace(/^~(?=\/|$)/, process.env.HOME ?? '~');
 
