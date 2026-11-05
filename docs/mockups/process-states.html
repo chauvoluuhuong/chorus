@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Process: stages and rules</title>
+<!--
+  Process as "who is responsible at each stage, what they hand back, and what happens when things change"
+  (discussed 2026-11-05), instead of a chain of actions. Tasks, Goals and the Project each have stages.
+  Each stage: who is responsible, what they hand back, what happens when something arrives (rules).
+  Rules marked Chorus are the ones the runner does today (chorus-core src/pro/runner): shown, locked.
+  Click a stage to edit it. Type a rule in plain words at the bottom.
+-->
+<style>
+:root {
+  --bg: #faf9f5; --side: #f3f1ea; --panel: #ffffff; --hover: #ece9e0; --sel: #e6e2d6; --line: #e5e2d9;
+  --ink: #141413; --ink-2: #3d3d3a; --muted: #6f6c64; --faint: #a09e96;
+  --accent: #0f766e; --accent-soft: #e2f3f1; --warn: #a8660b; --warn-soft: #fbefd9; --ok: #2f7d3a; --ok-soft: #e3f1e3;
+  --claude: #c6613f; --claude-soft: #f7e8e1; --codex: #3f6fd1; --codex-soft: #e4ecfa; --agy: #3a8a4b; --agy-soft: #e2f1e5;
+  --planner: #7a4fc4; --planner-soft: #efe7fb;
+  --shadow: 0 8px 24px rgba(20, 20, 19, .10);
+  --f-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif;
+  --f-serif: 'Iowan Old Style', Charter, Georgia, serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #262624; --side: #1f1e1c; --panel: #2c2b29; --hover: #353532; --sel: #3b3a36; --line: #3c3b38;
+    --ink: #f5f4ee; --ink-2: #dad8d0; --muted: #a9a69c; --faint: #7d7a72;
+    --accent: #4fc1b6; --accent-soft: #15302e; --warn: #f0b85a; --warn-soft: #3d3020; --ok: #8ccf7e; --ok-soft: #22331f;
+    --claude: #e08a6b; --claude-soft: #46302a; --codex: #8fb8ff; --codex-soft: #233250; --agy: #9bd38f; --agy-soft: #243824;
+    --planner: #c3a6f5; --planner-soft: #352b46; --shadow: 0 8px 24px rgba(0, 0, 0, .4);
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-sans); -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.muted { color: var(--muted); } .faint { color: var(--faint); }
+.app { display: grid; grid-template-columns: 210px minmax(0, 1fr); min-height: 100vh; }
+.side { background: var(--side); border-right: 1px solid var(--line); padding: 14px 10px; font-size: 13px; }
+.side .h { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); margin: 14px 8px 6px; }
+.side a { display: block; padding: 5px 8px; border-radius: 7px; color: var(--ink-2); text-decoration: none; }
+.side a.on { background: var(--sel); color: var(--ink); font-weight: 500; }
+main { min-width: 0; }
+.page { max-width: 1180px; margin: 0 auto; padding: 26px 30px 60px; }
+h1 { font: 400 28px/1.2 var(--f-serif); margin: 0 0 4px; }
+h2 { font-size: 15px; margin: 0; }
+.lead { margin: 0; color: var(--muted); max-width: 680px; }
+.lbl { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 5px 12px; font-size: 13px; }
+.btn.pri { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn.sm { padding: 3px 9px; font-size: 12px; }
+.av { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; font: 700 11px ui-monospace, Menlo, monospace; flex: none; }
+.av.planner { background: var(--planner-soft); color: var(--planner); }
+.av.claude { background: var(--claude-soft); color: var(--claude); }
+.av.codex { background: var(--codex-soft); color: var(--codex); }
+.av.agy { background: var(--agy-soft); color: var(--agy); }
+.av.you { background: var(--warn-soft); color: var(--warn); }
+.avs { display: inline-flex; } .avs .av + .av { margin-left: -6px; box-shadow: 0 0 0 2px var(--panel); }
+.chorus { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 1px 8px 1px 6px; white-space: nowrap; }
+.logo { display: inline-flex; gap: 2px; align-items: flex-end; height: 10px; }
+.logo i { display: block; width: 3px; border-radius: 1px; background: currentColor; }
+.logo i:nth-child(1) { height: 5px; } .logo i:nth-child(2) { height: 10px; } .logo i:nth-child(3) { height: 7px; }
+
+.tabs { display: flex; gap: 6px; margin: 18px 0 14px; flex-wrap: wrap; }
+.tabs button { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 5px 14px; font-size: 13px; }
+.tabs button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+/* stages */
+.stages { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 10px; }
+.stage { position: relative; text-align: left; border: 1px solid var(--line); background: var(--panel); border-radius: 14px; padding: 12px 13px 13px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.stage:hover { border-color: var(--faint); }
+.stage.sel { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.stage:not(:last-child)::after { content: '›'; position: absolute; right: -10px; top: 12px; width: 10px; text-align: center; color: var(--faint); font-size: 18px; line-height: 1; }
+.st-h { display: flex; align-items: center; gap: 8px; }
+.st-h b { font-size: 15px; }
+.st-h .n { margin-left: auto; font-size: 11.5px; color: var(--muted); background: var(--hover); border-radius: 999px; padding: 0 7px; }
+.f .lbl { display: block; margin-bottom: 3px; }
+.who { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; }
+.out { font-size: 13px; color: var(--ink-2); }
+.rules { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.rules li { font-size: 12.5px; color: var(--ink-2); background: var(--bg); border-radius: 8px; padding: 6px 8px; }
+.rules li.locked { background: var(--accent-soft); }
+.rules li .chorus { margin-bottom: 3px; background: transparent; padding: 0; }
+
+/* editor */
+.ed { margin-top: 14px; border: 1px solid var(--line); background: var(--panel); border-radius: 14px; padding: 16px 18px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+.ed .grid { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 10px 12px; align-items: center; font-size: 13px; }
+.ed .grid > span { color: var(--muted); }
+.ed select, .ed input, .ed textarea { width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 6px 9px; font-size: 13px; }
+.ed .moves { display: flex; gap: 6px; flex-wrap: wrap; }
+.ed .moves span { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; background: var(--bg); }
+.ed .note { font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+
+/* rule box */
+.rb { margin-top: 26px; }
+.rb-in { margin-top: 8px; display: flex; gap: 8px; align-items: flex-start; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 10px 10px 14px; position: relative; }
+.rb-in textarea { flex: 1; border: 0; background: transparent; resize: none; outline: none; min-height: 44px; font-size: 14px; }
+.ment { position: absolute; left: 14px; top: 100%; margin-top: 4px; z-index: 5; width: 280px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 6px; }
+.ment button { display: flex; width: 100%; gap: 8px; align-items: center; border: 0; background: transparent; padding: 6px 8px; border-radius: 8px; font-size: 13px; text-align: left; }
+.ment button:hover, .ment button.on { background: var(--hover); }
+.ment small { color: var(--muted); margin-left: auto; font-size: 11.5px; }
+.parsed { margin-top: 10px; border: 1px dashed var(--accent); border-radius: 12px; padding: 12px 14px; background: color-mix(in srgb, var(--accent-soft) 45%, transparent); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; gap: 12px; align-items: end; font-size: 13px; }
+.parsed .v { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.parsed[hidden] { display: none; }
+.list { margin-top: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.list .r { display: grid; grid-template-columns: 90px minmax(0, 1fr) auto; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 13px; align-items: center; }
+.list .r:first-child { border-top: 0; }
+.list .r .k { font-size: 11.5px; color: var(--muted); }
+.mine { color: var(--warn); font-size: 11px; font-weight: 600; }
+
+@media (max-width: 1000px) {
+  .stages { grid-template-columns: minmax(0, 1fr); }
+  .stage:not(:last-child)::after { content: '⌄'; right: auto; left: 50%; top: auto; bottom: -14px; }
+  .ed { grid-template-columns: minmax(0, 1fr); }
+  .parsed { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .side { display: none; }
+  .page { padding: 18px 16px 48px; }
+  .list .r { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .ed .grid { grid-template-columns: minmax(0, 1fr); }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="side"><a href="#">＋ New chat</a><div class="h">Pro</div><a href="#">☺ Teammates</a><a href="#" class="on">⇢ Process</a><div class="h">Projects</div><a href="#">▸ cake-shop</a></nav>
+  <main><div class="page">
+    <h1>Process</h1>
+    <p class="lead">How your team works: at each stage, who is responsible, what they hand back, and what happens when something changes.</p>
+
+    <div class="tabs" id="tabs"></div>
+    <div class="stages" id="stages"></div>
+    <div class="ed" id="ed"></div>
+
+    <div class="rb">
+      <h2>Add a rule</h2>
+      <p class="muted" style="margin:2px 0 0;font-size:13px">Say it in your own words. Type <b>@</b> to name a teammate.</p>
+      <div class="rb-in">
+        <textarea id="rule" placeholder="When a task reaches To check and it changes UI files, @Designer checks the screenshots"></textarea>
+        <button class="btn pri" id="read">Read it</button>
+        <div class="ment" id="ment" hidden></div>
+      </div>
+      <div class="parsed" id="parsed" hidden>
+        <div><div class="lbl">When</div><div class="v">A task reaches To check</div></div>
+        <div><div class="lbl">Only if</div><div class="v">It changes UI files</div></div>
+        <div><div class="lbl">Who</div><div class="v"><span class="av agy">D</span>Designer</div></div>
+        <div><div class="lbl">Does</div><div class="v">Checks the screenshots</div></div>
+        <div style="display:flex;gap:6px"><button class="btn sm">Change</button><button class="btn sm pri" id="add">Add rule</button></div>
+      </div>
+
+      <div class="list" id="list"></div>
+    </div>
+  </div></main>
+</div>
+
+<script>
+const P = {
+  planner: ['planner', 'P', 'Planner'], you: ['you', '!', 'You'], reviewer: ['planner', 'P', 'Planner (reviews)'],
+  workers: ['workers', '', 'Workers'], designer: ['agy', 'D', 'Designer'], none: ['', '', '—'],
+};
+const who = k => k === 'workers' ? '<span class="avs"><span class="av claude">C</span><span class="av codex">X</span></span>Workers' : k === 'none' ? '<span class="faint">No one</span>' : `<span class="av ${P[k][0]}">${P[k][1]}</span>${P[k][2]}`;
+const CH = '<span class="chorus"><span class="logo"><i></i><i></i><i></i></span>Chorus</span>';
+
+const TABS = {
+  tasks: { name: 'Tasks', stages: [
+    { id: 'planning', name: 'Planning', n: 1, who: 'planner', out: 'The task, its steps and how to check each one', moves: ['Ready'],
+      rules: [[1, 'The Planner reads the project and writes the steps']] },
+    { id: 'ready', name: 'Ready', n: 2, who: 'you', out: 'Your OK, and how the steps run', moves: ['Doing', 'Planning'],
+      rules: [[1, 'Waits here if another task in this project is running']] },
+    { id: 'doing', name: 'Doing', n: 1, who: 'workers', out: 'Every step\'s check passes', moves: ['To check'],
+      rules: [[1, 'Gives each step to its Worker'], [1, 'A failed check goes back to the same Worker, 2 times at most']] },
+    { id: 'check', name: 'To check', n: 0, who: 'reviewer', out: 'A review: right, or which step is wrong', moves: ['Done', 'Doing'],
+      rules: [[1, 'The Planner reads the diff'], [0, 'If it changes UI files, @Designer checks the screenshots too']] },
+    { id: 'done', name: 'Done', n: 7, who: 'none', out: 'You accepted it', moves: [],
+      rules: [[1, 'Its chats are parked; the next waiting task starts'], [0, 'Tell me in Needs you']] },
+  ] },
+  goals: { name: 'Goals', stages: [
+    { id: 'proposed', name: 'Proposed', n: 1, who: 'planner', out: 'A goal and when it is done', moves: ['Active', 'Dropped'],
+      rules: [[1, 'Waits for you to keep or drop it']] },
+    { id: 'active', name: 'Active', n: 2, who: 'you', out: 'Tasks that serve it', moves: ['Reached'],
+      rules: [[1, 'When all its tasks are Done, asks you "Reached?"']] },
+    { id: 'reached', name: 'Reached', n: 3, who: 'none', out: '—', moves: [],
+      rules: [[0, '@Planner proposes the next goals']] },
+  ] },
+  project: { name: 'Project', stages: [
+    { id: 'p-new', name: 'New work in a chat', n: 0, who: 'planner', out: 'A task in Planning', moves: [],
+      rules: [[1, 'Any chat can turn new work into a task']] },
+    { id: 'p-mate', name: 'Teammate added', n: 0, who: 'you', out: 'Its CLI, model and skills', moves: [],
+      rules: [[0, 'Tell me which stages have no one responsible']] },
+    { id: 'p-week', name: 'Every Monday', n: 0, who: 'planner', out: 'A short status note', moves: [],
+      rules: [[0, '@Planner writes what moved last week and what is stuck']] },
+  ] },
+};
+let tab = 'tasks', sel = 'check';
+
+function draw() {
+  const T = TABS[tab];
+  document.getElementById('tabs').innerHTML = Object.entries(TABS).map(([k, t]) => `<button class="${k === tab ? 'on' : ''}" data-tab="${k}">${t.name}</button>`).join('');
+  const box = document.getElementById('stages');
+  box.style.setProperty('--n', T.stages.length);
+  box.innerHTML = T.stages.map(s => `<button class="stage ${s.id === sel ? 'sel' : ''}" data-st="${s.id}">
+    <div class="st-h"><b>${s.name}</b>${tab !== 'project' ? `<span class="n">${s.n}</span>` : ''}</div>
+    <div class="f"><span class="lbl">Responsible</span><span class="who">${who(s.who)}</span></div>
+    <div class="f"><span class="lbl">Hands back</span><span class="out">${s.out}</span></div>
+    <div class="f"><span class="lbl">${tab === 'project' ? 'Then' : 'When a ' + (tab === 'goals' ? 'goal' : 'task') + ' gets here'}</span><ul class="rules">${s.rules.map(([c, t]) => `<li class="${c ? 'locked' : ''}">${c ? CH + '<br>' : ''}${t.replace(/@(\w+)/g, '<b>@$1</b>')}</li>`).join('')}</ul></div>
+  </button>`).join('');
+  drawEd();
+  drawList();
+}
+function drawEd() {
+  const s = TABS[tab].stages.find(x => x.id === sel), ed = document.getElementById('ed');
+  if (!s) { ed.hidden = true; return; }
+  ed.hidden = false;
+  const opts = ['Planner', 'Workers', 'You', 'Designer', 'No one'];
+  const cur = { planner: 'Planner', reviewer: 'Planner', workers: 'Workers', you: 'You', designer: 'Designer', none: 'No one' }[s.who];
+  ed.innerHTML = `<div><h2>${s.name}</h2>
+      <div class="grid" style="margin-top:12px">
+        <span>Responsible</span><select>${opts.map(o => `<option${o === cur ? ' selected' : ''}>${o}</option>`).join('')}</select>
+        <span>Hands back</span><input value="${s.out}">
+        ${s.moves.length ? `<span>Can move it to</span><div class="moves">${s.moves.map(m => `<span>${m}</span>`).join('')}</div>` : ''}
+      </div>
+      <p class="note">The one responsible decides where it goes next, from these. That is how a task takes a different path.</p></div>
+    <div><div class="lbl" style="margin-bottom:6px">Rules here</div><ul class="rules">${s.rules.map(([c, t]) => `<li class="${c ? 'locked' : ''}">${c ? CH + ' <span class="faint" style="font-size:11px">can\'t be changed</span><br>' : ''}${t.replace(/@(\w+)/g, '<b>@$1</b>')}</li>`).join('')}</ul>
+      <button class="btn sm" style="margin-top:8px" data-focus>＋ Add a rule here</button></div>`;
+}
+function drawList() {
+  const all = Object.values(TABS).flatMap(t => t.stages.flatMap(s => s.rules.filter(r => !r[0]).map(r => [t.name, s.name, r[1]])));
+  document.getElementById('list').innerHTML = `<div class="r"><span class="lbl">Your rules</span><span></span><span></span></div>` + all.map(([t, s, r]) => `<div class="r"><span class="k">${t} · ${s}</span><span>${r.replace(/@(\w+)/g, '<b>@$1</b>')}</span><span><button class="btn sm">Edit</button></span></div>`).join('');
+}
+
+const rule = document.getElementById('rule'), ment = document.getElementById('ment');
+rule.addEventListener('input', () => {
+  const m = /@(\w*)$/.exec(rule.value);
+  if (!m) { ment.hidden = true; return; }
+  const q = m[1].toLowerCase();
+  const list = [['planner', 'P', 'Planner', 'Claude Code'], ['claude', 'C', 'claude-worker-1', 'Worker'], ['codex', 'X', 'codex-worker-1', 'Worker'], ['agy', 'D', 'Designer', 'Antigravity']].filter(x => x[2].toLowerCase().startsWith(q));
+  ment.hidden = !list.length;
+  ment.innerHTML = list.map(([a, l, n, s], i) => `<button class="${i ? '' : 'on'}" data-m="${n}"><span class="av ${a}">${l}</span>${n}<small>${s}</small></button>`).join('');
+});
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-tab],[data-st],[data-m],#read,#add,[data-focus]');
+  if (!t) return;
+  if (t.dataset.tab) { tab = t.dataset.tab; sel = TABS[tab].stages[0].id; return draw(); }
+  if (t.dataset.st) { sel = t.dataset.st; return drawEd(), draw(); }
+  if (t.dataset.m) { rule.value = rule.value.replace(/@\w*$/, '@' + t.dataset.m + ' '); ment.hidden = true; return rule.focus(); }
+  if (t.dataset.focus !== undefined) { rule.focus(); return rule.scrollIntoView({ block: 'center' }); }
+  if (t.id === 'read') { if (!rule.value.trim()) rule.value = rule.placeholder; document.getElementById('parsed').hidden = false; return; }
+  if (t.id === 'add') {
+    const s = TABS.tasks.stages.find(x => x.id === 'check');
+    if (!s.rules.some(r => /screenshots/.test(r[1]) && r[1].startsWith('When'))) s.rules.push([0, 'When it changes UI files, @Designer checks the screenshots']);
+    document.getElementById('parsed').hidden = true; rule.value = ''; tab = 'tasks'; sel = 'check'; return draw();
+  }
+});
+draw();
+</script>
+</body>
+</html>
