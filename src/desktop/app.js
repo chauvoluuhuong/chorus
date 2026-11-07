@@ -71,11 +71,22 @@ const S = {
 
 /* ---------- the socket ---------- */
 
+// The Chorus window, not a browser tab: the shell opens the page with ?window=native (the address is cleaned later, so it is kept for
+// reloads in this window's session). While the window is open, only it sets the agents' screen size.
+const NATIVE = (() => {
+  let yes = !!(window.__TAURI_INTERNALS__ || window.__TAURI__) || new URLSearchParams(location.search).get('window') === 'native';
+  try {
+    if (yes) sessionStorage.setItem('chorus-window', 'native');
+    else yes = sessionStorage.getItem('chorus-window') === 'native';
+  } catch { /* no storage: the address and the globals decide */ }
+  return yes;
+})();
+
 let ws;
 let outbox = [];
 function connect() {
   // the window says it is the window: while it is open, a browser tab on the same Chorus never resizes the agents
-  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws${window.__TAURI_INTERNALS__ || window.__TAURI__ ? '?window=native' : ''}`);
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws${NATIVE ? '?window=native' : ''}`);
   ws.onopen = () => {
     $('#conn').hidden = true;
     for (const m of outbox.splice(0)) ws.send(m);
@@ -1151,7 +1162,7 @@ async function reportIssue() {
   el.innerHTML = `<div class="dialog dr-dialog" role="dialog"><h2>Report an issue</h2><div class="body"><p class="muted"><span class="spin"></span> Collecting what Chorus knows about this machine…</p></div></div>`;
   $('#dialogs').append(el);
   const client = {
-    window: window.__TAURI_INTERNALS__ || window.__TAURI__ ? 'native' : 'browser',
+    window: NATIVE ? 'native' : 'browser',
     agent: navigator.userAgent,
     screen: `${screen.width}×${screen.height}@${devicePixelRatio}`,
     size: `${innerWidth}×${innerHeight}`,

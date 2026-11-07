@@ -303,7 +303,10 @@ switch (cmd) {
     } else if (process.platform === 'darwin' && fs.existsSync(appDir)) {
       const bin = path.join(appDir, 'Contents/MacOS', fs.readdirSync(path.join(appDir, 'Contents/MacOS'))[0]);
       const env = { ...process.env, CHORUS_SERVE_CMD: serveCmd };
-      spawn(bin, [], { stdio: 'ignore', detached: true, env }).unref();
+      // already open: bring it forward (`open` focuses a running app), as the installed app does, instead of a second window
+      const running = (() => { try { execFileSync('pgrep', ['-f', bin], { stdio: 'ignore' }); return true; } catch { return false; } })();
+      if (running) spawn('open', [appDir], { stdio: 'ignore', detached: true }).unref();
+      else spawn(bin, [], { stdio: 'ignore', detached: true, env }).unref();
       console.log(`opened ${appDir}`);
       await printBrowserAddress();
     } else if (linuxBin && hasDisplay() && !missing.length) {

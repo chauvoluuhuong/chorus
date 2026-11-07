@@ -912,6 +912,9 @@ export class ChorusServer {
   private connect(ws: WebSocket, remote = false, native = false) {
     const cl = new Client(this, ws, remote, native);
     this.clients.add(cl);
+    // CHORUS_DEBUG_VIEWERS=1: who connects and who sizes the agents (plan 2026-11-07 check A.4)
+    const debug = (what: string) => process.env.CHORUS_DEBUG_VIEWERS && console.error(`viewer ${remote ? 'remote' : native ? 'window' : 'browser tab'}: ${what}`);
+    debug('connected');
     this.lastState = '';
     ws.on('close', () => {
       cl.detach();
@@ -928,6 +931,7 @@ export class ChorusServer {
       if (m.t === 'attach' && typeof m.id === 'string') {
         // one screen size for every viewer: a phone looks at the agent at the Mac's size and never resizes it (stage 7)
         if (m.cols > 0 && m.rows > 0 && this.setsSize(cl)) this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
+        debug(`attach ${m.cols}x${m.rows}, agents at ${this.size.cols}x${this.size.rows}`);
         if (!this.app.entry(m.id)?.host) this.select(m.id); // a parked chat resumes when you open it
         void cl.attach(m.id);
       } else if (m.t === 'in' && typeof m.data === 'string') {
@@ -937,7 +941,9 @@ export class ChorusServer {
       else if (m.t === 'resize' && m.cols > 0 && m.rows > 0 && this.setsSize(cl)) {
         this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
         host?.resize(this.size.cols, this.size.rows);
-      } else if (m.t === 'detach') cl.detach();
+        debug(`resize ${m.cols}x${m.rows}: agents at ${this.size.cols}x${this.size.rows}`);
+      } else if (m.t === 'resize') debug(`resize ${m.cols}x${m.rows} ignored: agents stay at ${this.size.cols}x${this.size.rows}`);
+      else if (m.t === 'detach') cl.detach();
       else if (m.t === 'drop' && typeof m.id === 'string' && Array.isArray(m.paths)) {
         // files dropped on the native window: Tauri gives their full paths (docs/phase5.md §8.3)
         const paths = m.paths.filter((p: unknown): p is string => typeof p === 'string' && path.isAbsolute(p));

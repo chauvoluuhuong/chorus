@@ -112,7 +112,9 @@ fn start_serve(app: &AppHandle) {
             // the first line of `chorus serve` is "chorus serve: <url with the token>"
             if let Some(url) = line.strip_prefix("chorus serve: ") {
                 found = true;
-                if let Ok(u) = Url::parse(url.trim()) {
+                if let Ok(mut u) = Url::parse(url.trim()) {
+                    // the page knows it is the window (not a browser tab): only the window sizes the agents while it is open
+                    u.query_pairs_mut().append_pair("window", "native");
                     let app = app.clone();
                     thread::spawn(move || open_page(&app, u));
                 }
