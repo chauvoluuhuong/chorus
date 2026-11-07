@@ -1,6 +1,7 @@
 # Remote control: Telegram and a VPS
 
-Status: **agreed** on 2026-10-29 (choices in §7). Nothing is built yet; next step R1.
+Status: **agreed**, last changed 2026-11-07: §8 replaces the order in §7. Nothing is built yet. It is built as stage 7 of the 2.0 plan
+(chorus-core `docs/plans/2026-11-01-teammates-portal-implementation.md`); the mockup is chorus-core `docs/mockups/remote-access.html`.
 
 ## 1. Outcome
 
@@ -125,3 +126,26 @@ Each step ships as a preview (`vX.Y.Z-preview.N`); production only after "approv
    passes through Telegram's servers.
 3. **Skip-permissions from remote**: allowed, but only after a confirm in the Mac app.
 4. Self-hosted only for now ($0 for Chorus); a Chorus-hosted relay is not planned here.
+
+## 8. Decisions (owner, 2026-11-07)
+
+These replace decision 1 of §7. Decisions 2–4 of §7 stay.
+
+1. **Private link first, with Tailscale.** Chorus guides the setup: it explains how it works with a moving diagram, checks each
+   step on this Mac, and adds a device with a 6-digit code that the Mac must allow. Allowed devices can be removed any time.
+   - `chorus serve` keeps listening on 127.0.0.1 only. Tailscale Serve forwards the private network's HTTPS to it, so serve needs: the
+     tailnet name in its `Host` and `Origin` checks, a device login (pairing, per-device removal), to keep running when its window is
+     closed, and the Mac kept awake. Both of the last two are switches on the page.
+   - Tailscale's free Personal plan: 6 users, unlimited devices, **non-commercial use only** (checked 2026-11-07). The setup page says so.
+2. **Chorus's MCP server for AI apps.**
+   - **Apps on the same Mac** (Claude Desktop, Claude Code, Codex, Cursor) start `chorus mcp` themselves. Chorus shows the exact setting
+     to copy and a link to each app's guide. It never edits another app's files: the user sets it up.
+   - **claude.ai and ChatGPT** connect from their own servers, so they can't reach a private link. They need a **public link**: Tailscale
+     Funnel (beta), for the MCP endpoint only, never the app, protected by a secret key, off by default, with a New key button. claude.ai
+     accepts the key as a request header. ChatGPT needs OAuth sign-in and a paid ChatGPT plan, so it comes later.
+3. **Every tool is open.** A connected app can use every Chorus tool, reading and starting work, with no extra prompt in Chorus. The
+   protection is the key, the public link being off until turned on, and the warning shown when it's turned on.
+4. The Telegram bot and the VPS stay as later options, not scheduled.
+
+**To prove first** (rule 1): Chorus can read Tailscale's state on the Mac (`tailscale status`); Tailscale Serve to serve's 127.0.0.1 port
+passes its checks once the tailnet name is allowed; MCP over HTTP from `chorus serve`; each AI app's setting format, against its own docs.
