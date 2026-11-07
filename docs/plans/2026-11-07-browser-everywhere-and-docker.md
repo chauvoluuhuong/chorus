@@ -1,13 +1,15 @@
 # Chorus in the browser everywhere, and a ready Docker box
 
-Status: **planned** (owner, 2026-11-07). Not built. Free features, built in this repo. Part A comes first: part B needs it.
+Status: **planned** (owner, 2026-11-07; the website's install box and Windows added the same day). Not built. Free features. Part A comes
+first: part B needs it, and part C needs part B's launchers.
 
 ## Outcome
 
 - **Every start shows the browser address.** On a computer with a screen, `chorus` opens the window **and** prints the address of the same Chorus in a
   browser. With no screen, it runs Chorus for the browser and prints the address. Chorus can always be used from a web browser.
 - **A clean Linux Docker box** with the AI CLIs at the newest versions Chorus has tested. On first start you pick **stable or preview** and **which
-  folder to share** (default: your home folder), and Chorus opens in your browser.
+  folder to share** (default: your home folder), and Chorus opens in your browser. It works on macOS, Linux and **Windows**.
+- **The website's install box offers both,** simply: Docker beside macOS and Linux, and a **Preview** tick beside Copy.
 
 ## What exists today (checked on `dev`, 2026-11-07)
 
@@ -75,10 +77,10 @@ Status: **planned** (owner, 2026-11-07). Not built. Free features, built in this
    `install.sh` (`CHORUS_NO_OPEN=1`), and on later starts updates on the same channel. The answer is kept in the volume.
 2. Starts `chorus serve --host 0.0.0.0 --port 4318` and prints the browser address (also in `docker logs chorus`).
 
-**The launcher on your computer**, `docker.sh`, published as a release asset (later on the website too):
+**The launcher on your computer**, `docker.sh`, served by the website next to `install.sh` (chorus-admin `site/`):
 
 ```
-curl -fsSL https://github.com/chauvoluuhuong/chorus/releases/latest/download/docker.sh | bash
+curl -fsSL https://chorus-cli.web.app/docker.sh | bash                    # add -s -- --preview for preview
 ```
 
 It checks Docker is installed, then asks three things: **stable or preview**, **folder to share** (default: your home folder), **port** (default
@@ -120,6 +122,56 @@ container, the box ships without it and says so.
 | B.8 | From another computer on the network, port 4318 refuses to connect | Command output |
 | B.9 | `linux/arm64` on Apple silicon and `linux/amd64` both start | Run logs |
 
+### Windows
+
+Chorus has no native Windows build yet (TD-6), so the box is the way to run it on Windows. Docker Desktop runs the same Linux image through WSL 2,
+its default on Windows; Chorus opens in the normal Windows browser at `http://localhost:4318/?token=…`.
+
+- **`docker.ps1`**, the same launcher for PowerShell, served by the website too:
+
+  ```
+  irm https://chorus-cli.web.app/docker.ps1 | iex                           # preview: $env:CHORUS_CHANNEL="preview"; irm … | iex
+  ```
+
+- **Folder to share:** the home folder `C:\Users\<you>` by default (Enter), any other path typed, or **Browse…**, which opens Windows' own folder
+  picker. Any drive works. It asks "Share another folder?" until the answer is no. Each one is mounted at a matching Linux path inside, for example
+  `C:\Users\Lan` at `/mnt/c/Users/Lan`; Chorus could show these paths the Windows way later.
+- **Speed:** a folder on `C:` is read across Windows and Linux, so big projects are slower there than in a folder inside WSL. When WSL has one,
+  the launcher offers it.
+- File ownership is not a concern on Windows. The 127.0.0.1 port binding works the same.
+
+| # | Check | Evidence |
+|---|---|---|
+| B.10 | Windows 11, Docker Desktop with WSL 2: `docker.ps1` asks the questions, Browse… picks a folder, Chorus opens in Edge or Chrome | Screen recording |
+| B.11 | Two shared folders on two drives: both show inside, and an agent edits a file in each | Screenshots |
+| B.12 | Preview through `$env:CHORUS_CHANNEL="preview"` installs the preview | Screenshot |
+
+## Part C: the website's install box
+
+chorus-admin `site/index.html` (and `site-vi.json` for the Vietnamese page). Mockup: chorus-admin `docs/mockups/install-chooser.html`. It stays the
+box the page has today, with two additions:
+
+- **Docker beside macOS and Linux** in the switch at the top right of the box.
+- **A Preview tick beside Copy.** Ticking it changes the command to the preview channel; the tick turns amber, and its tooltip says "Every change
+  as soon as it's merged. It can break."
+- The hint under the command and the requirements line follow the choice, as they already do for macOS and Linux.
+- **Windows visitors** see only Docker, and the box says PowerShell. No extra message: there is no other choice.
+
+| Choice | Command | Preview ticked |
+|---|---|---|
+| macOS or Linux | `curl -fsSL https://chorus-cli.web.app/install.sh \| bash` | adds ` -s -- --preview` |
+| Docker on macOS or Linux | `curl -fsSL https://chorus-cli.web.app/docker.sh \| bash` | adds ` -s -- --preview` |
+| Docker on Windows | `irm https://chorus-cli.web.app/docker.ps1 \| iex` | starts with `$env:CHORUS_CHANNEL="preview"; ` |
+
+A merge to chorus-admin's `main` is a production deploy, so this ships only with the owner's OK, after part B's launchers work.
+
+| # | Check | Evidence |
+|---|---|---|
+| C.1 | Each system (macOS, Linux, Windows) and each choice shows the command in the table, with and without Preview | Screenshots |
+| C.2 | Copy copies exactly what is shown; the copied command works in a fresh terminal | Terminal output |
+| C.3 | The Vietnamese page shows the same box in Vietnamese | Screenshot |
+| C.4 | A phone: nothing scrolls sideways; Preview and Copy fit under the command | Screenshot |
+
 ## Risks
 
 - **A shared home folder is a lot to give agents.** It's the owner's chosen default; the launcher warns every time it is used.
@@ -135,4 +187,5 @@ container, the box ships without it and says so.
 |---|---|---|
 | A | `feature/browser-everywhere` | Checks A.1–A.8 pass; a preview ships |
 | B0 | `feature/docker-box` | The sign-in probes per CLI (rule 1), fixtures in chorus-core |
-| B | `feature/docker-box` | Checks B.1–B.9 pass; the image is on GHCR; a preview ships with `docker.sh` |
+| B | `feature/docker-box` | Checks B.1–B.12 pass; the image is on GHCR; a preview ships with `docker.sh` and `docker.ps1` |
+| C | chorus-admin `codex/install-box` | Checks C.1–C.4 pass; deployed after the owner's OK |
