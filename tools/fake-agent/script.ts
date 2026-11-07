@@ -19,7 +19,11 @@ export interface ScriptEvents {
   called(tool: string, args: Record<string, unknown>, text: string, failed: boolean): void;
 }
 
-export const readScript = (file: string) => JSON.parse(fs.readFileSync(file, 'utf8')) as Step[];
+/** A list of steps, or steps per agent: { "claude": [...], "codex": [...], "*": [...] }, so one run can give each CLI its own part. */
+export const readScript = (file: string, agent = ''): Step[] => {
+  const s = JSON.parse(fs.readFileSync(file, 'utf8')) as Step[] | Record<string, Step[]>;
+  return Array.isArray(s) ? s : (s[agent] ?? s['*'] ?? []);
+};
 
 /** Runs the steps in order. Returns the exit code a step asked for, or 0. */
 export async function runScript(steps: Step[], mcp: { command: string; args: string[] }, on: ScriptEvents): Promise<number> {

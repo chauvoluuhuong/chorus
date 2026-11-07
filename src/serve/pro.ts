@@ -3,7 +3,7 @@
 import { exclude } from '@chauvoluuhuong/chorus-core';
 import type { AgentId } from '../core/types.ts';
 import { syncSkills } from '../core/skills.ts';
-import { activatePro, isLocked, loadPro, proDev, proLinks, signInPro, type ChatExtras, type LoadResult, type McpToolDef, type ProCtx, type ProHandler, type ProModule } from '@chauvoluuhuong/chorus-core/pro-loader';
+import { activatePro, isLocked, loadPro, proDev, proLinks, signInPro, type ChatExtras, type LoadResult, type McpToolDef, type ProCtx, type ProHandler, type ProModule, type RemoteDecision, type RemoteRequest } from '@chauvoluuhuong/chorus-core/pro-loader';
 
 export interface ProLoader {
   load(ctx: ProCtx, onChange: (r: LoadResult) => void): Promise<LoadResult>;
@@ -124,17 +124,28 @@ export class ProHost {
     return this.module?.ui();
   }
 
-  async mcpTools() {
+  /** `app`: the tools of an AI app that connects with no chat (`chorus mcp` alone), asked each time because the plan can lock them */
+  async mcpTools(app = false) {
     await this.ready;
-    return this.tools.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
+    return (app ? this.appTools() : this.tools).map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
+  }
+
+  private appTools(): McpToolDef[] {
+    return this.module?.appTools?.(this.ctx) ?? [];
   }
 
   async mcpCall(name: string, args: Record<string, unknown>, threadId?: string): Promise<{ status: number; json: unknown }> {
     await this.ready;
     if (!this.module) return LOCKED;
-    const t = this.tools.find(x => x.name === name);
+    const t = this.tools.find(x => x.name === name) ?? (threadId ? undefined : this.appTools().find(x => x.name === name));
     if (!t) return { status: 404, json: { error: `no tool ${name}` } };
     return { status: 200, json: { text: await t.handler(args, { threadId }) } };
+  }
+
+  /** A request through the private or public link (stage 7). Nothing loaded: nothing answers it. */
+  async remote(req: RemoteRequest): Promise<RemoteDecision | undefined> {
+    await this.ready;
+    return this.module?.remote?.(this.ctx, req);
   }
 
   /** A teammate's chat whose CLI lost its session: its action's brief again, and what it already made (decision 18). */
