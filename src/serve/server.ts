@@ -379,6 +379,8 @@ export class ChorusServer {
     const withBody = req.method === 'POST' && (u.pathname === '/mcp' || u.pathname.startsWith('/mcp/') || u.pathname.startsWith('/_remote/'));
     const body = withBody ? await readRaw(req, 1_000_000).catch(() => undefined) : undefined;
     if (withBody && !body) return send(res, 413, { error: 'too large' });
+    // for the Tailscale probe (docs/integrations/tailscale.md): which headers a proxied request carries, cookies and keys left out
+    if (process.env.CHORUS_PRO_LOG) console.error(`[pro] remote ${req.method} ${u.pathname} ${JSON.stringify(Object.fromEntries(Object.entries(req.headers).filter(([k]) => !['cookie', 'authorization'].includes(k))))}`);
     const d = await this.pro.remote({ method: req.method ?? 'GET', url: req.url ?? '/', headers: req.headers, body });
     if (!d) return this.hostOk(req) ? send(res, 404, { error: 'not found' }) : send(res, 403, { error: 'wrong host' });
     if ('answer' in d) {
