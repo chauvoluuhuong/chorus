@@ -17,10 +17,20 @@ fn home() -> PathBuf {
     std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"))
 }
 
+fn chorus_dir() -> PathBuf {
+    std::env::var_os("CHORUS_HOME").map(PathBuf::from).unwrap_or_else(|| home().join(".chorus"))
+}
+
 fn log_file() -> PathBuf {
-    let dir = std::env::var_os("CHORUS_HOME").map(PathBuf::from).unwrap_or_else(|| home().join(".chorus"));
+    let dir = chorus_dir();
     let _ = fs::create_dir_all(&dir);
     dir.join("desktop.log")
+}
+
+/// Remote access is on with "Keep Chorus running when its window is closed" (stage 7): `chorus serve` writes this file. Closing the
+/// window then only hides it, so the agents and the private link go on; quitting from the menu still stops everything.
+fn keep_running() -> bool {
+    fs::read_to_string(chorus_dir().join("desktop.json")).map(|s| s.split_whitespace().collect::<String>().contains("\"keepRunning\":true")).unwrap_or(false)
 }
 
 /// `chorus serve` through the user's login shell, so it finds `chorus`, `node` and the agents on the PATH their terminal has
@@ -188,6 +198,20 @@ fn main() {
         .expect("error while building the Chorus window")
         .run(|app, event| match event {
             RunEvent::Exit => stop_serve(app),
+            RunEvent::WindowEvent { label, event: WindowEvent::CloseRequested { api, .. }, .. } if keep_running() => {
+                api.prevent_close();
+                if let Some(w) = app.get_webview_window(&label) {
+                    let _ = w.hide();
+                }
+            }
+            // the Dock icon clicked while the window is hidden
+            #[cfg(target_os = "macos")]
+            RunEvent::Reopen { .. } => {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            }
             RunEvent::WindowEvent { label, event: WindowEvent::DragDrop(d), .. } => forward_drop(app, &label, &d),
             _ => {}
         });
