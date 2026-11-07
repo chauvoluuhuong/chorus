@@ -47,7 +47,6 @@ const S = {
   // projects taken off the sidebar: folder -> ids of the chats it had then. Only the sidebar forgets them (chats and folder stay);
   // a chat that is new since then brings the project back.
   hidden: JSON.parse(localStorage.getItem('chorus.hidden') || '{}'),
-  asked: new Set(),
   detail: {},
   drawerData: null,
   actFilter: 'all',
@@ -149,16 +148,7 @@ function onState(st) {
   S.state = st;
   if (JSON.stringify(previousNews) !== JSON.stringify(st.notifications) && !$('#news').hidden && !S.newsDetail) void loadNews();
   if (!S.homeGuess) S.homeGuess = st.project.split('/').slice(0, 3).join('/');
-  // a request on a chat you are not looking at: a toast with the answer buttons (the CLI app's flash and bell)
-  for (const a of st.approvals) {
-    const key = a.id + '|' + a.what;
-    if (S.asked.has(key)) continue;
-    S.asked.add(key);
-    if (!first && !(S.view.name === 'chat' && S.view.id === a.id) && !inNeedsYou(a)) askToast(a);
-  }
-  dropNeedsYouToasts();
-  // the toast of a request goes when the request does (answered here, in the agent, or elsewhere)
-  for (const [k, el] of askToasts) if (!st.approvals.some(a => a.id + '|' + a.what === k)) (el.remove(), askToasts.delete(k));
+  // a request no longer pops up at the bottom (owner, 2026-11-07): it waits in Approvals and the top bar's "waiting" button
   if (S.view.name === 'chat' && !st.chats.some(c => c.id === S.view.id)) {
     S.history = [];
     return go({ name: 'new' }, false);
@@ -278,7 +268,6 @@ function go(view, push = true) {
   S.view = view;
   S.drawerData = null;
   if (view.name === 'pro-ended' && !S.endedSeen) (S.endedSeen = true), remember('ended', true);
-  dropNeedsYouToasts();
   // the address keeps the screen, so a reload comes back to it
   history.replaceState(null, '', `#/${view.name}${view.id ? `/${view.id}` : view.from ? `/from/${view.from}` : view.folder ? `/in/${encodeURIComponent(view.folder)}` : ''}`);
   if (view.name !== 'chat') detachTerm();
@@ -1525,23 +1514,6 @@ function toast(text, opts = {}) {
   setTimeout(() => el.remove(), opts.ms ?? 4000);
   return el;
 }
-const askToasts = new Map();
-/** On a project's Portal, a teammate's request is under Needs you already: no toast for it. */
-const dropNeedsYouToasts = () => { for (const [k, el] of askToasts) if (inNeedsYou({ id: k.split('|')[0] })) (el.remove(), askToasts.delete(k)); };
-const inNeedsYou = a => S.view.name === 'pro' && String(S.view.id ?? '').startsWith('portal~') && !!window.choruspro?.hidesChat?.(a.id);
-function askToast(a) {
-  const ask = a.kind === 'ask';
-  const el = toast(`${AGENT[a.agent]?.name ?? a.agent} in "${a.title}" asks${ask ? ' you' : ''}: ${ask ? a.question : a.what.split(' · ').slice(-1)[0]}`, {
-    cls: 'ask',
-    ms: 10 * 60 * 1000,
-    buttons: ask
-      ? `${optionButtons({ ...a, options: a.options.slice(0, 3) })}<button class="btn" data-act="chat" data-arg="${esc(a.id)}">Open</button>`
-      : `<button class="btn" data-act="approve" data-arg="${esc(a.id)}">Approve</button><button class="btn" data-act="deny" data-arg="${esc(a.id)}">Deny</button><button class="btn" data-act="chat" data-arg="${esc(a.id)}">Open</button>`,
-  });
-  el?.addEventListener('click', e => e.target.closest('[data-act]') && setTimeout(() => el.remove(), 0));
-  askToasts.set(a.id + '|' + a.what, el);
-}
-
 /* ---------- input ---------- */
 
 document.addEventListener('click', async e => {
