@@ -170,3 +170,45 @@ test('Try Pro: the sign-up page opens in the browser, comes back once with a cod
     store.close();
   }
 });
+
+/* ---------- stage 7: requests through the private link go to the module ---------- */
+
+const remoteStand: ProModule = {
+  ...stand,
+  remote: (_c, req) => {
+    const ok = String(req.headers.cookie ?? '').includes('chorus_device=ok');
+    if (req.url.startsWith('/mcp')) return { answer: { status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ got: req.body?.toString() }) } };
+    return ok ? { pass: true, origins: ['https://mac.tail.ts.net'], device: 'd1' } : { answer: { status: 401, headers: { 'content-type': 'text/plain' }, body: 'pair first' } };
+  },
+  appTools: () => [{ name: 'chorus_projects', description: 'app', inputSchema: { type: 'object', properties: {} }, handler: () => 'p1' }],
+};
+
+test('a request through a proxy never uses the token: only the module lets a device in, and from its own origin', async () => {
+  const r = await rig(remoteStand);
+  await new Promise(x => setTimeout(x, 20));
+  const url = r.srv.url;
+  const via = (p: string, h: Record<string, string> = {}, method = 'GET', body?: string) => fetch(url + p, { method, headers: { 'x-forwarded-for': '100.64.0.2', host: 'mac.tail.ts.net', ...h }, body });
+  // the window's token is no key here
+  const t = await via('/api/state', { authorization: `Bearer ${r.srv.token}` });
+  assert.equal(t.status, 401);
+  assert.equal(await t.text(), 'pair first');
+  assert.equal((await via('/api/state', { cookie: 'chorus_device=ok' })).status, 200);
+  assert.equal((await via('/api/approvals', { cookie: 'chorus_device=ok', 'x-chorus': '1', origin: 'https://evil.example' }, 'POST', '{}')).status, 403);
+  assert.equal((await via('/api/pro/remote', { cookie: 'chorus_device=ok', 'x-chorus': '1', origin: 'https://mac.tail.ts.net', 'content-type': 'application/json' }, 'POST', '{"do":"allow"}')).status, 403, 'devices are allowed on the Mac only');
+  const m = await via('/mcp', { 'content-type': 'application/json' }, 'POST', '{"jsonrpc":"2.0"}');
+  assert.deepEqual(await m.json(), { got: '{"jsonrpc":"2.0"}' });
+  // the window on this Mac is as before
+  assert.equal((await r.api('GET', '/api/state')).status, 200);
+  // an AI app with no chat gets the app's tools
+  const tools = await (await fetch(`${url}/api/pro/mcp/tools?app=1`, { headers: { authorization: `Bearer ${JSON.parse(fs.readFileSync(path.join(r.home, 'serve.json'), 'utf8')).mcpToken}` } })).json();
+  assert.deepEqual(tools.tools.map((x: any) => x.name), ['chorus_projects']);
+  r.close();
+});
+
+test('with no module, nothing answers through a proxy', async () => {
+  const r = await rig();
+  await new Promise(x => setTimeout(x, 20));
+  const res = await fetch(r.srv.url + '/', { headers: { 'x-forwarded-for': '100.64.0.2', cookie: 'chorus_device=ok' } });
+  assert.equal(res.status, 404);
+  r.close();
+});

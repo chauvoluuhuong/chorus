@@ -2,7 +2,8 @@
 // Fake interactive TUI for app tests: runs inside a PTY and behaves like an agent screen.
 //   READY <name>, colored line, line-based echo ("got: <line>"), SIZE on resize, DSR query/reply,
 //   "alt" enters the alternate screen, "paste?" reports bracketed paste, "q" exits.
-//   With CHORUS_FAKE_SCRIPT (a script.ts file) it also plays those steps, over the chat's own MCP server, after READY.
+//   With CHORUS_FAKE_SCRIPT (a script.ts file) it also plays those steps, over the chat's own MCP server, after READY. The file is
+//   read when the chat starts, and can give each agent its own steps.
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const name = process.argv[2] ?? 'fake';
@@ -19,7 +20,7 @@ process.stdout.on('resize', () => out(`SIZE ${size()}\r\n`));
 out(`SIZE ${size()}\r\n`);
 if (process.env.CHORUS_FAKE_SCRIPT) {
   const { readScript, runScript } = await import('./script.ts');
-  const code = await runScript(readScript(process.env.CHORUS_FAKE_SCRIPT), { command: process.argv[3], args: JSON.parse(process.argv[4] ?? '[]') }, {
+  const code = await runScript(readScript(process.env.CHORUS_FAKE_SCRIPT, name), { command: process.argv[3], args: JSON.parse(process.argv[4] ?? '[]') }, {
     said: text => out(`${text}\r\n`),
     called: (tool, args, text, failed) => out(`${failed ? 'FAILED' : 'CALLED'} ${tool} ${JSON.stringify(args)}: ${text}\r\n`),
   });
