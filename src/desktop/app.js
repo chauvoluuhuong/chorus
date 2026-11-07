@@ -74,7 +74,8 @@ const S = {
 let ws;
 let outbox = [];
 function connect() {
-  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  // the window says it is the window: while it is open, a browser tab on the same Chorus never resizes the agents
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws${window.__TAURI_INTERNALS__ || window.__TAURI__ ? '?window=native' : ''}`);
   ws.onopen = () => {
     $('#conn').hidden = true;
     for (const m of outbox.splice(0)) ws.send(m);
