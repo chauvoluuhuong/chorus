@@ -1,7 +1,8 @@
 # Remote control: Telegram and a VPS
 
-Status: **agreed**, last changed 2026-11-07: §8 replaces the order in §7. Nothing is built yet. It is built as stage 7 of the 2.0 plan
-(chorus-core `docs/plans/2026-11-01-teammates-portal-implementation.md`); the mockup is chorus-core `docs/mockups/remote-access.html`.
+Status: **§8 built** (2026-11-07) as stage 7 of the 2.0 plan (chorus-core `docs/plans/2026-11-01-teammates-portal-implementation.md`): the
+private link with Tailscale, Connect an AI app, and the public link for claude.ai. The Tailscale side is from its docs only until probed on a
+Mac with Tailscale (chorus-core `docs/integrations/tailscale.md`). The Telegram bot and the VPS (§3, §7) are not built.
 
 ## 1. Outcome
 
