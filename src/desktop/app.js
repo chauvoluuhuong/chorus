@@ -272,6 +272,7 @@ function drawTermOver() {
 /* ---------- navigation ---------- */
 
 function go(view, push = true) {
+  $('#app').classList.remove('side-open');
   if (push && S.view && JSON.stringify(S.view) !== JSON.stringify(view)) S.history.push(S.view);
   S.history = S.history.slice(-30);
   S.view = view;
@@ -497,6 +498,7 @@ function renderChrome() {
   else if (v.name === 'pro') crumbs = window.choruspro?.crumbs?.(v.id) ?? '';
   else crumbs = `<span class="here">${{ approvals: 'Approvals', memory: 'Memory', skills: 'Skills', doctor: 'Doctor' }[v.name] ?? ''}</span>`;
   $('#top').innerHTML = `
+    <button class="icon-btn menu-btn" data-act="menu" aria-label="Chats and projects" aria-expanded="${$('#app').classList.contains('side-open')}">☰</button>
     ${$('#app').classList.contains('side-off') ? `<button class="icon-btn" data-act="sidebar" title="Show the sidebar (${MOD}B)">⇥</button>` : ''}
     ${S.history.length ? '<button class="btn" data-act="back" title="Back">‹ Back</button>' : ''}
     <div class="crumbs">${crumbs}</div>
@@ -1652,6 +1654,10 @@ document.addEventListener('click', async e => {
     case 'news-privacy': return api('POST', '/api/notifications/link', { url: 'https://chorus-cli.web.app/privacy' });
     case 'back':
       return back();
+    case 'menu':
+      // a narrow window, like a phone through the private link: the sidebar comes over the page
+      $('#app').classList.toggle('side-open');
+      return renderChrome();
     case 'sidebar':
       $('#app').classList.toggle('side-off');
       renderChrome();
