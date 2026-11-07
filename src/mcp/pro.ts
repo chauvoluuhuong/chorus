@@ -25,7 +25,8 @@ export async function addProTools(server: McpServer, home: string, threadId: str
   const headers = { authorization: `Bearer ${info.mcpToken}`, 'x-chorus': '1', 'content-type': 'application/json' };
   let tools: Listed[];
   try {
-    const r = await fetch(`${info.url}/api/pro/mcp/tools`, { headers, signal: AbortSignal.timeout(2000) });
+    // with no chat it is an AI app the user connected (Claude Desktop, Cursor…): it gets the app's tools instead (stage 7)
+    const r = await fetch(`${info.url}/api/pro/mcp/tools${threadId ? '' : '?app=1'}`, { headers, signal: AbortSignal.timeout(2000) });
     if (!r.ok) return;
     tools = ((await r.json()) as { tools: Listed[] }).tools;
   } catch {

@@ -150,7 +150,7 @@ export class ChorusServer {
     this.c = o.controller;
     this.app = o.controller.app;
     this.token = o.token ?? crypto.randomBytes(24).toString('hex');
-    this.pro = new ProHost({ homeDir: this.c.store.root, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.c.approvalItems('all').map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; } }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
+    this.pro = new ProHost({ homeDir: this.c.store.root, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.c.approvalItems('all').map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))] }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     if (o.chatLaunch) o.chatLaunch.host = this.pro;
     this.bridge();
   }
@@ -220,6 +220,13 @@ export class ChorusServer {
     this.http = http.createServer((req, res) => void this.handle(req, res).catch(e => (this.noteError(`${req.method} ${req.url?.split('?')[0]}`, e), send(res, 500, { error: String((e as Error)?.message ?? e) }))));
     this.wss = new WebSocketServer({ noServer: true });
     this.http.on('upgrade', (req, sock, head) => {
+      if (this.isRemote(req)) {
+        // another device, through the private link: only one this Mac allowed, from its own page (stage 7)
+        return void this.pro.remote({ method: 'GET', url: req.url ?? '/', headers: req.headers }).then(
+          d => (d && 'pass' in d && d.origins.includes(String(req.headers.origin ?? '')) ? this.wss!.handleUpgrade(req, sock, head, ws => this.connect(ws, true)) : sock.destroy()),
+          () => sock.destroy(),
+        );
+      }
       if (!this.allowed(req) || !this.sameOrigin(req)) return sock.destroy();
       this.wss!.handleUpgrade(req, sock, head, ws => this.connect(ws));
     });
@@ -340,6 +347,7 @@ export class ChorusServer {
 
   private async handle(req: http.IncomingMessage, res: http.ServerResponse) {
     const u = new URL(req.url ?? '/', this.url);
+    if (this.isRemote(req)) return this.remoteHttp(req, res, u);
     if (!this.hostOk(req)) return send(res, 403, { error: 'wrong host' });
     // the first visit carries the token in the URL: the page comes with it in a cookie and drops it from the address bar.
     // No redirect: a window that navigates here from another origin (the desktop app's tauri://) is a cross-site
@@ -355,6 +363,36 @@ export class ChorusServer {
     if (req.method === 'GET' && u.pathname === '/api/pro/signed-in') return this.signedIn(res, u);
     if (!this.allowed(req)) return send(res, 401, { error: 'open the address chorus serve printed (it carries the token)' });
     if (req.method !== 'GET' && (req.headers['x-chorus'] !== '1' || !this.sameOrigin(req))) return send(res, 403, { error: 'missing X-Chorus header' });
+    return this.authed(req, res, u);
+  }
+
+  /**
+   * Came through a proxy (Tailscale Serve or Funnel) or for another host name. chorus serve still listens on 127.0.0.1 only; such a request
+   * goes to the optional module, which lets a device this Mac allowed in, or answers itself. With no module there is nothing to reach.
+   */
+  isRemote(req: http.IncomingMessage) {
+    const h = req.headers;
+    return !!(h['x-forwarded-for'] || h['forwarded'] || h['tailscale-user-login'] || h['tailscale-funnel-request']) || (!!h.host && !this.hostOk(req));
+  }
+
+  private async remoteHttp(req: http.IncomingMessage, res: http.ServerResponse, u: URL) {
+    const withBody = req.method === 'POST' && (u.pathname === '/mcp' || u.pathname.startsWith('/mcp/') || u.pathname.startsWith('/_remote/'));
+    const body = withBody ? await readRaw(req, 1_000_000).catch(() => undefined) : undefined;
+    if (withBody && !body) return send(res, 413, { error: 'too large' });
+    const d = await this.pro.remote({ method: req.method ?? 'GET', url: req.url ?? '/', headers: req.headers, body });
+    if (!d) return this.hostOk(req) ? send(res, 404, { error: 'not found' }) : send(res, 403, { error: 'wrong host' });
+    if ('answer' in d) {
+      res.writeHead(d.answer.status, d.answer.headers ?? {});
+      return res.end(d.answer.body ?? '');
+    }
+    if (req.method !== 'GET' && (req.headers['x-chorus'] !== '1' || !d.origins.includes(String(req.headers.origin ?? '')))) return send(res, 403, { error: 'missing X-Chorus header' });
+    // which devices may come in is decided on the Mac itself, never from a device
+    if (u.pathname === '/api/pro/remote' && req.method !== 'GET') return send(res, 403, { error: 'Change remote access on the Mac itself.' });
+    return this.authed(req, res, u);
+  }
+
+  /** Past the checks: a request from this Mac's window, or from a device it allowed. */
+  private async authed(req: http.IncomingMessage, res: http.ServerResponse, u: URL) {
     if (!u.pathname.startsWith('/api/')) return this.file(u.pathname, res);
     if (u.pathname.startsWith('/api/pro/')) return this.proHttp(req, res, u);
     // a dropped file with no path (a browser gives the bytes only, or an image dragged from a page): the raw bytes, its name in
@@ -379,7 +417,7 @@ export class ChorusServer {
   }
 
   private async proMcp(req: http.IncomingMessage, res: http.ServerResponse, route: string) {
-    if (req.method === 'GET' && route === 'tools') return send(res, 200, { tools: await this.pro.mcpTools() });
+    if (req.method === 'GET' && route === 'tools') return send(res, 200, { tools: await this.pro.mcpTools(new URL(req.url ?? '/', 'http://x').searchParams.get('app') === '1') });
     if (req.method === 'POST' && route === 'call') {
       const b = await readJson(req);
       if (process.env.CHORUS_PRO_LOG) console.error(`[pro] mcp ${String(b.name)} thread ${String(b.threadId)}`);
@@ -837,8 +875,8 @@ export class ChorusServer {
 
   /* ---------- WebSocket: the agent screens ---------- */
 
-  private connect(ws: WebSocket) {
-    const cl = new Client(this, ws);
+  private connect(ws: WebSocket, remote = false) {
+    const cl = new Client(this, ws, remote);
     this.clients.add(cl);
     this.lastState = '';
     ws.on('close', () => {
@@ -854,14 +892,15 @@ export class ChorusServer {
       }
       const host = typeof m.id === 'string' ? this.app.entry(m.id)?.host : undefined;
       if (m.t === 'attach' && typeof m.id === 'string') {
-        if (m.cols > 0 && m.rows > 0) this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
+        // one screen size for every viewer: a phone looks at the agent at the Mac's size and never resizes it (stage 7)
+        if (m.cols > 0 && m.rows > 0 && !cl.remote) this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
         if (!this.app.entry(m.id)?.host) this.select(m.id); // a parked chat resumes when you open it
         void cl.attach(m.id);
       } else if (m.t === 'in' && typeof m.data === 'string') {
         if (process.env.CHORUS_DEBUG_INPUT) fs.appendFileSync(process.env.CHORUS_DEBUG_INPUT, JSON.stringify(m.data) + '\n');
         host?.write(m.data);
       }
-      else if (m.t === 'resize' && m.cols > 0 && m.rows > 0) {
+      else if (m.t === 'resize' && m.cols > 0 && m.rows > 0 && !cl.remote) {
         this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
         host?.resize(this.size.cols, this.size.rows);
       } else if (m.t === 'detach') cl.detach();
@@ -884,9 +923,12 @@ class Client {
   private gen = 0;
   private srv: ChorusServer;
   readonly ws: WebSocket;
-  constructor(srv: ChorusServer, ws: WebSocket) {
+  /** a device through the private link */
+  readonly remote: boolean;
+  constructor(srv: ChorusServer, ws: WebSocket, remote = false) {
     this.srv = srv;
     this.ws = ws;
+    this.remote = remote;
   }
 
   send(s: string) {
