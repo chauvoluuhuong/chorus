@@ -12,8 +12,9 @@ irm https://chorus-cli.web.app/docker.ps1 | iex                           # Wind
 
 The launcher asks yes/no questions, Enter meaning yes: **use the stable version?** (no: preview), **share your whole home
 folder?** (no: type folders, Tab completes; "Is that all the folders?"), and picks the port itself (4318, or the next free one; `CHORUS_PORT` sets another).
-On Windows a folder can also be picked with B (Browse). It starts the box and opens `http://127.0.0.1:<port>/?token=…` (`localhost`
-on Windows). Run it again to open Chorus again: a stopped box is started, nothing is asked. Start over: `docker rm -f chorus`.
+On Windows a folder can also be picked with B (Browse). It starts the box, opens `http://127.0.0.1:<port>/?token=…` (`localhost`
+on Windows) and prints the address for another computer. Run it again to open Chorus again: a stopped box is started, nothing is
+asked. Start over: `docker rm -f chorus`.
 
 **Signing in the AI CLIs** happens in Chorus: in a container (`CHORUS_BOX=1` or `/.dockerenv`), the Doctor's **Log in** runs the
 CLI's own sign-in inside the box (`src/serve/signin.ts`, in a PTY), opens its sign-in page in a new tab (opened on the click, so the
@@ -40,7 +41,7 @@ docker exec -it -u chorus chorus agy
 |---|---|---|
 | Image `ghcr.io/chauvoluuhuong/chorus-box` | `docker/box/Dockerfile` | `node:22-bookworm-slim` (Debian 12, glibc) with git, Python 3, build tools, tini. Claude Code, Codex (npm, into `/usr/local`) and agy (its GitHub release) at the newest versions in chorus-core `src/tested.json` (`docker/box/tested.mjs`), auto-update off (`DISABLE_AUTOUPDATER=1`, `AGY_CLI_DISABLE_AUTO_UPDATE=1`). User `chorus` (uid 1000). Not Chorus itself. 2.2 GB unpacked (arm64) |
 | Entrypoint | `docker/box/entrypoint.sh` | As root: gives `chorus` the host's ids (`HOST_UID`, `HOST_GID`, set by the launcher on Linux), then drops to it. Channel: `CHORUS_CHANNEL`, else the one kept in the volume, else asked (`docker run -it`), else stable. Installs or updates Chorus with the official `install.sh` (`CHORUS_NO_OPEN=1`), then `chorus serve --host 0.0.0.0 --port $CHORUS_PORT` and prints the address. Warns when the installed Chorus is too old for `--host` |
-| Launchers | `docker/docker.sh`, `docker/docker.ps1`; served by the website (chorus-admin `site/`) | `docker run -d --name chorus -p 127.0.0.1:<port>:<port> -v chorus-home:/home/chorus -v <folder>:<same path> …` (Windows: `C:\Users\Lan` at `/mnt/c/Users/Lan`). Reads the address from this run's `docker logs` |
+| Launchers | `docker/docker.sh`, `docker/docker.ps1`; served by the website (chorus-admin `site/`) | `docker run -d --name chorus -p <port>:<port> -v chorus-home:/home/chorus -v <folder>:<same path> …` (Windows: `C:\Users\Lan` at `/mnt/c/Users/Lan`). Reads the address from this run's `docker logs` |
 | Build | `.github/workflows/docker.yml` | amd64 + arm64, tags `latest` and the date, on a release tag, on chorus-core's `repository_dispatch: tested-changed`, daily when the tested versions differ from the image's labels (`app.chorus.claude` …), or by hand |
 
 - **The port is open on every address of the computer** (`-p <port>:<port>`), so another computer on the network reaches Chorus
