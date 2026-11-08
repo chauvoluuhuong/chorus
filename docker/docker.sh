@@ -30,7 +30,10 @@ TTY=""
 if [ -r /dev/tty ] && [ -w /dev/tty ] && { : < /dev/tty; } 2>/dev/null; then TTY=/dev/tty; fi
 ask() { # ask <question> <default> → the answer, or the default on Enter or with no terminal
   local reply=""
-  if [ -n "$TTY" ]; then printf '%s' "$1" > "$TTY"; IFS= read -r reply < "$TTY" || reply=""; fi
+  # -e: line editing (arrow keys, backspace, Tab completes folder paths); the prompt goes to the terminal, not to the answer
+  if [ -n "$TTY" ]; then IFS= read -e -r -p "$1" reply < "$TTY" 2> "$TTY" || reply=""; fi
+  # whatever escape sequences a terminal without line editing let through
+  reply="$(printf '%s' "$reply" | LC_ALL=C sed 's/\x1b\[[0-9;]*[A-Za-z]//g; s/^[[:space:]]*//; s/[[:space:]]*$//')"
   printf '%s' "${reply:-$2}"
 }
 
