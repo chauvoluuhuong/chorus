@@ -12,6 +12,7 @@ import { buildHandoff } from '../../src/core/handoff.ts';
 import { Store } from '../../src/core/store.ts';
 import type { AgentId } from '../../src/core/types.ts';
 import type { AgentCheck, FastReport } from '@chauvoluuhuong/chorus-core/doctor';
+import { SignIns } from '../../src/serve/signin.ts';
 import { boxLoginCommand, ChorusServer, headlessApp, hostNames, type ServeOpts } from '../../src/serve/server.ts';
 import { NotificationInbox } from '../../src/serve/notifications.ts';
 import { UpdateCheck } from '../../src/serve/updates.ts';
@@ -25,7 +26,7 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const agentCheck = (agent: AgentId, state: AgentCheck['state'], login: AgentCheck['login'] = state === 'needs-login' ? 'no' : 'yes'): AgentCheck => ({ agent, name: agent, state, login, version: '1.0.0', page: '', loginCommand: [agent, 'login'], ms: 1 });
 const fastReport = (agents: AgentCheck[] = (['claude', 'codex', 'agy'] as AgentId[]).map(a => agentCheck(a, 'ready'))): FastReport => ({ node: { version: '22', ok: true }, platform: 'test', agents, ms: 1 });
 
-async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand' | 'pickFolder' | 'sessionExists' | 'host'> = {}) {
+async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand' | 'pickFolder' | 'sessionExists' | 'host' | 'container' | 'signIns'> = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-home-'));
   process.env.CODEX_HOME = home;
   const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-serve-')));
@@ -699,21 +700,29 @@ test('serve: while the window is open only it sizes the agents; a browser tab is
   }
 });
 
-test('serve in the Chorus box: Log in gives the command for the computer\'s terminal (plan part B)', async () => {
+test('serve in a container: Log in runs the sign-in here and the page gets its link; the code goes back to the CLI (plan part B)', async () => {
   assert.equal(boxLoginCommand('claude'), 'docker exec -it -u chorus chorus claude auth login');
   assert.equal(boxLoginCommand('codex', 'box2'), 'docker exec -it -u chorus box2 codex login --device-auth');
-  assert.equal(boxLoginCommand('agy'), 'docker exec -it -u chorus chorus agy');
-  const r = await rig();
-  const was = { box: process.env.CHORUS_BOX, name: process.env.CHORUS_BOX_NAME };
-  process.env.CHORUS_BOX = '1';
-  process.env.CHORUS_BOX_NAME = 'chorus-test';
+  const typed: string[] = [];
+  let print: (d: string) => void = () => {};
+  const signIns = new SignIns({ env: {}, pty: () => ({ pid: 1, onData: cb => void (print = cb), onExit() {}, write: d => void typed.push(d), resize() {}, kill() {} }) });
+  const r = await rig(undefined, undefined, undefined, { container: true, signIns });
   try {
-    const j = await r.api('POST', '/api/doctor/run', { agent: 'codex', action: 'login' });
+    assert.equal(r.srv.state().container, true, 'the page knows');
+    const j = await r.api('POST', '/api/doctor/run', { agent: 'claude', action: 'login' });
     assert.equal(j.status, 200);
-    assert.equal(j.json.terminal, true);
-    assert.equal(j.json.hostCommand, 'docker exec -it -u chorus chorus-test codex login --device-auth');
+    assert.match(j.json.signIn, /^[0-9a-f]{12}$/);
+    assert.equal(j.json.hostCommand, 'docker exec -it -u chorus chorus claude auth login', 'the fallback the popup shows');
+    assert.equal((await r.api('GET', `/api/signin/${j.json.signIn}`)).json.state, 'starting');
+    print("If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?code=true&state=S\r\nPaste code here if prompted > ");
+    const si = (await r.api('GET', `/api/signin/${j.json.signIn}`)).json;
+    assert.equal(si.state, 'waiting');
+    assert.equal(si.url, 'https://claude.com/cai/oauth/authorize?code=true&state=S');
+    assert.deepEqual((await r.api('POST', `/api/signin/${j.json.signIn}/code`, { code: 'XYZ' })).json, { ok: true });
+    assert.deepEqual(typed, ['XYZ\r']);
+    assert.deepEqual((await r.api('POST', `/api/signin/${j.json.signIn}/close`, {})).json, { ok: true });
+    assert.match((await r.api('GET', `/api/signin/${j.json.signIn}`)).json.error, /over/);
   } finally {
-    for (const [k, v] of [['CHORUS_BOX', was.box], ['CHORUS_BOX_NAME', was.name]] as const) v === undefined ? delete process.env[k] : (process.env[k] = v);
     await r.done();
   }
 });

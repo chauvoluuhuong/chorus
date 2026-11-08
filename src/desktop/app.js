@@ -892,8 +892,8 @@ function agentStatus(a, jobs = true) {
     return s('warn', 'Not installed', line, [[`Install${a.install?.version ? ' ' + a.install.version : ''}`, 'doc-run', `${a.agent}:install`, true], ['Open page ↗', 'doc-open', a.agent]]);
   }
   if (a.state === 'needs-login') {
-    // in the Chorus box there is no terminal to open: the command to run in the computer's own terminal
-    if (job?.terminal && job.hostCommand) return s('warn', 'Not logged in', `Run this in your computer's terminal, then check again: ${job.hostCommand}`, [['Copy command', 'doc-copy', job.hostCommand], ['Check again', 'doc-recheck', a.agent, true]]);
+    // in a container Chorus runs the sign-in and the popup shows its link (signInPopup)
+    if (job?.signIn && $('#signin-pop')) return s('plain', 'Signing in…', 'Finish in the sign-in page; the popup has the link.', [], true);
     if (job?.terminal) return s('warn', 'Not logged in', 'Log in in the Terminal window, then check again.', [['Check again', 'doc-recheck', a.agent, true]]);
     return s('warn', 'Not logged in', `Log in to use it here. ${LOGIN_HINT}`, [['Log in', 'doc-run', `${a.agent}:login`, true], ['Check again', 'doc-recheck', a.agent]]);
   }
@@ -908,7 +908,63 @@ function agentStatus(a, jobs = true) {
     return s('bad', `${pass} of ${rs.length} passed`, 'Chats still start; the failed part does not work yet.');
   }
   if (a.state === 'untested') return s('warn', 'New version', `Chorus is tested with ${a.newestTested ?? 'other versions'}; the detailed test checks that ${a.version} works too.`, jobs ? [['Run detailed test', 'doc-run', `${a.agent}:deep`]] : []);
-  return s('ok', 'Ready', a.login === 'yes' ? 'Logged in · a version Chorus is tested with.' : 'A version Chorus is tested with.');
+  // in a container Chorus can't see whether agy is signed in: its Log in is always there
+  const agyLogin = jobs && a.agent === 'agy' && S.state?.container ? [['Log in', 'doc-run', 'agy:login']] : [];
+  return s('ok', 'Ready', a.login === 'yes' ? 'Logged in · a version Chorus is tested with.' : agyLogin.length ? 'A version Chorus is tested with. Chorus can\'t tell here whether it is signed in: Log in if a chat asks you to.' : 'A version Chorus is tested with.', agyLogin);
+}
+
+/* ---------- signing in from the page (Chorus in a container: docs/features/docker-box.md) ---------- */
+
+/**
+ * Chorus runs the CLI's sign-in and reads its link: open it in the tab opened on the click (a tab opened later is blocked as a
+ * pop-up), and show the link again, Codex's one-time code, and a box for the code the sign-in page gives back.
+ */
+async function signInPopup(agent, j, tab) {
+  $('#signin-pop')?.remove();
+  const el = document.createElement('div');
+  el.className = 'scrim';
+  el.id = 'signin-pop';
+  el.innerHTML = `<div class="dialog si-dialog" role="dialog" aria-label="Sign in to ${esc(drName(agent))}"><h2>Sign in to ${esc(drName(agent))}</h2><div class="body" id="si-body"><p class="muted"><span class="spin"></span> Getting the sign-in page…</p></div><div class="foot" id="si-foot"><button class="btn" data-act="si-close">Cancel</button></div></div>`;
+  el.dataset.id = j.signIn;
+  el.dataset.agent = agent;
+  $('#dialogs').append(el);
+  let opened = false;
+  for (;;) {
+    if (!el.isConnected) return tab?.close();
+    const si = await api('GET', `/api/signin/${j.signIn}`).catch(err => ({ error: err.message }));
+    if (!el.isConnected) return;
+    if (si.error || si.state === 'failed') {
+      tab?.close();
+      $('#si-body').innerHTML = `<p>The sign-in stopped${si.error ? `: ${esc(si.error)}` : ''}.</p>${si.output ? `<pre class="si-out">${esc(si.output)}</pre>` : ''}<p class="muted">Or sign in from your computer's terminal:</p>${siCommand(j.hostCommand)}`;
+      $('#si-foot').innerHTML = `<button class="btn" data-act="si-close">Close</button><button class="btn primary" data-act="doc-run" data-arg="${esc(agent)}:login">Try again</button>`;
+      return;
+    }
+    if (si.state === 'done') {
+      $('#si-body').innerHTML = `<p>✔ ${esc(drName(agent))} is signed in.</p>`;
+      $('#si-foot').innerHTML = `<button class="btn primary" data-act="si-close" data-value="done">Done</button>`;
+      return;
+    }
+    if (si.url && !opened) {
+      opened = true;
+      if (tab && !tab.closed) tab.location.href = si.url;
+      else window.open(si.url, '_blank', 'noopener');
+      drawSignIn(si, j);
+    } else if (si.url && si.codeSent && !$('#si-body [data-sent]')) drawSignIn(si, j);
+    await new Promise(r => setTimeout(r, 1000));
+  }
+}
+
+const siCommand = cmd => (cmd ? `<div class="si-row"><code class="mono">${esc(cmd)}</code><button class="btn" data-act="doc-copy" data-arg="${esc(cmd)}">Copy</button></div>` : '');
+
+function drawSignIn(si, j) {
+  const link = `<p>The sign-in page opened in a new tab. Didn't open? <a href="${esc(si.url)}" target="_blank" rel="noopener">Open the sign-in page ↗</a></p>`;
+  const code = si.userCode ? `<p>Enter this code there:</p><div class="si-row"><code class="mono si-code">${esc(si.userCode)}</code><button class="btn" data-act="doc-copy" data-arg="${esc(si.userCode)}">Copy</button></div><p class="muted">This window finishes by itself once you've entered it.</p>` : '';
+  const back = si.codeBack && !si.codeSent ? `<p>${si.codeBack === 'required' ? 'After you approve, the page shows a code. Paste it here:' : 'If the page shows a code, paste it here:'}</p><div class="si-row"><input type="text" class="dlg-input" id="si-code" placeholder="Code from the sign-in page" autocomplete="off" spellcheck="false"><button class="btn primary" data-act="si-code">Sign in</button></div>` : '';
+  const sent = si.codeSent ? `<p data-sent><span class="spin"></span> Code sent. Finishing the sign-in…</p>` : '';
+  $('#si-body').innerHTML = link + code + back + sent + `<details class="si-more"><summary>Sign in from your computer's terminal instead</summary>${siCommand(j.hostCommand)}</details>`;
+  // agy keeps running after it signs in, and what its page asks is not known yet: the user says when it's done
+  $('#si-foot').innerHTML = `<button class="btn" data-act="si-close">Cancel</button>${si.agent === 'agy' ? '<button class="btn primary" data-act="si-close" data-value="done">I\'ve signed in</button>' : ''}`;
+  $('#si-code')?.focus();
 }
 
 const agentPill = st => `<span class="badge ${st.kind}">${st.busy ? '<span class="spin"></span>' : st.kind === 'ok' ? '✔ ' : st.kind === 'warn' || st.kind === 'bad' ? '⚠ ' : ''}${esc(st.label)}</span>`;
@@ -1597,6 +1653,20 @@ document.addEventListener('click', async e => {
       return drawDoctor();
     case 'doc-open':
       return void api('POST', '/api/doctor/open', { agent: arg });
+    case 'si-code': {
+      const pop = $('#signin-pop');
+      const code = $('#si-code')?.value ?? '';
+      const r = await api('POST', `/api/signin/${pop.dataset.id}/code`, { code }).catch(err => ({ error: err.message }));
+      return r.error ? toast(r.error) : undefined;
+    }
+    case 'si-close': {
+      const pop = $('#signin-pop');
+      if (!pop) return;
+      pop.remove();
+      delete S.docJobs[pop.dataset.agent];
+      await api('POST', `/api/signin/${pop.dataset.id}/close`, { done: el.dataset.value === 'done' }).catch(() => {});
+      return drawDoctor();
+    }
     case 'doc-copy':
       return void navigator.clipboard.writeText(arg).then(() => toast('Copied'));
     case 'doc-notnow':
@@ -1607,8 +1677,15 @@ document.addEventListener('click', async e => {
       return drawDoctor();
     case 'doc-run': {
       const [agent, action] = arg.split(':');
+      // in a container the sign-in page opens in a new tab: opened now, on the click, or the browser blocks it as a pop-up
+      const tab = action === 'login' && S.state?.container ? window.open('about:blank', '_blank') : null;
       const j = await api('POST', '/api/doctor/run', { agent, action }).catch(err => (toast(err.message), null));
-      if (!j || j.error) return j?.error && toast(j.error);
+      if (!j || j.error) return tab?.close(), j?.error && toast(j.error);
+      if (j.signIn) {
+        S.docJobs[agent] = j;
+        void signInPopup(agent, j, tab);
+        return drawDoctor();
+      }
       S.docJobs[agent] = j;
       S.docOpen.add(agent);
       S.docRan = false;
@@ -1872,6 +1949,7 @@ document.addEventListener(
           return b.click();
         }
       }
+      if (e.key === 'Enter' && e.target.id === 'si-code') return void $('[data-act="si-code"]')?.click();
       if (e.key === 'Enter' && e.target.closest('.dlg-input') && dlg.dataset.dialog) {
         e.preventDefault();
         return dlg.querySelector('[data-act="dlg-ok"]')?.click();

@@ -68,10 +68,7 @@ show() {
   say "✓ Chorus is running in the box \"$NAME\". Open it in your browser:"
   say "  $url"
   say ""
-  say "  Sign in the AI CLIs from this terminal:"
-  say "    docker exec -it -u chorus $NAME claude auth login"
-  say "    docker exec -it -u chorus $NAME codex login --device-auth"
-  say "    docker exec -it -u chorus $NAME agy"
+  say "  Sign in to Claude Code, Codex and Antigravity in Chorus: click Log in next to each one."
   say "  Stop: docker stop $NAME   ·   Open again: run this command again   ·   Start over: docker rm -f $NAME"
   open_url "$url"
 }
@@ -86,24 +83,35 @@ if docker container inspect "$NAME" >/dev/null 2>&1; then
   exit 0
 fi
 
+# yes <question>: true for yes (Enter, y, yes), false for no (n, no); asks again otherwise. No terminal: yes.
+yes() {
+  local a
+  while :; do
+    a="$(ask "$1 [Y/n] " y)"
+    case "$a" in [Yy]|[Yy][Ee][Ss]) return 0 ;; [Nn]|[Nn][Oo]) return 1 ;; *) say "   Type y for yes or n for no (Enter is yes)." ;; esac
+  done
+}
+
 say ""
-say "Chorus in a Docker box: three questions (press Enter for the default)."
+say "Chorus in a Docker box. A few yes/no questions: Enter means yes."
 say ""
 
 # 1. stable or preview
 if [ -z "$CHANNEL" ]; then
-  case "$(ask "1. Stable or preview? Preview gets every change as soon as it's merged and can break. [stable]: " stable)" in
-    p|P|preview|Preview|2) CHANNEL=preview ;;
-    *) CHANNEL=stable ;;
-  esac
+  say "1. Which version of Chorus?"
+  say "   Stable is the released version. Preview has every change as soon as it's merged, and can break."
+  if yes "   Use the stable version?"; then CHANNEL=stable; else CHANNEL=preview; fi
+  say ""
 fi
 case "$CHANNEL" in preview) ;; stable|production) CHANNEL=stable ;; *) fail "CHORUS_CHANNEL is $CHANNEL; it can be stable or preview." ;; esac
+say "   Chorus version: $CHANNEL"
+say ""
 
 # 2. the folders to share: each appears inside the box at the same path
 FOLDERS=()
 add_folder() {
   local f="${1/#\~/$HOME}"
-  [ -d "$f" ] || { say "   $f is not a folder; skipped."; return 1; }
+  [ -n "$f" ] && [ -d "$f" ] || { say "   \"$1\" is not a folder on this computer. Type a folder's path (Tab completes it)."; return 1; }
   f="$(cd "$f" && pwd -P)"
   FOLDERS+=("$f")
 }
@@ -111,20 +119,22 @@ if [ -n "${CHORUS_SHARE:-}" ]; then
   IFS=':' read -r -a given <<< "$CHORUS_SHARE"
   for f in "${given[@]}"; do add_folder "$f" || true; done
 else
-  until add_folder "$(ask "2. Folder to share with the agents [$HOME]: " "$HOME")"; do :; done
-  while [ -n "$TTY" ]; do
-    more="$(ask "   Share another folder? (Enter for no): " "")"
-    [ -z "$more" ] && break
-    add_folder "$more" || true
-  done
+  say "2. Which folder can the agents work in?"
+  say "   The agents in the box see only the folders you share, at the same path as on this computer."
+  if yes "   Share your whole home folder ($HOME)?"; then
+    FOLDERS+=("$(cd "$HOME" && pwd -P)")
+    say "   Note: the agents can read and change anything in it, keys and settings files included."
+  else
+    until add_folder "$(ask "   Folder to share (for example ~/projects): " "")"; do :; done
+    while [ -n "$TTY" ] && ! yes "   Is that all the folders?"; do
+      until add_folder "$(ask "   Another folder to share: " "")"; do :; done
+    done
+  fi
+  say ""
 fi
 [ "${#FOLDERS[@]}" -gt 0 ] || fail "No folder to share."
-for f in "${FOLDERS[@]}"; do
-  if [ "$f" = "$(cd "$HOME" && pwd -P)" ]; then
-    say "   Note: the agents can read and change anything in your home folder, keys and settings files included."
-    say "   A projects folder is safer: docker rm -f $NAME, then run this again and choose one."
-  fi
-done
+say "   Shared: ${FOLDERS[*]}"
+say ""
 
 # 3. the port, on this computer only
 free() { ! (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
@@ -132,7 +142,12 @@ PORT="${CHORUS_PORT:-}"
 if [ -z "$PORT" ]; then
   default=4318
   while ! free "$default"; do default=$((default + 1)); done
-  PORT="$(ask "3. Port [$default]: " "$default")"
+  say "3. Chorus opens in your browser at http://localhost:$default (only this computer can reach it)."
+  if yes "   Use port $default?"; then PORT=$default
+  else
+    until PORT="$(ask "   Port to use instead (a number, like 4400): " "")"; case "$PORT" in ''|*[!0-9]*) false ;; *) free "$PORT" || { say "   Port $PORT is in use."; false; } ;; esac; do :; done
+  fi
+  say ""
 fi
 case "$PORT" in ''|*[!0-9]*) fail "The port must be a number, like 4318." ;; esac
 free "$PORT" || fail "Port $PORT is in use on this computer. Run this again and choose another."
