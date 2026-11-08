@@ -4,7 +4,7 @@
 //
 // Security: 127.0.0.1 only; a random token (in the first URL, then an HttpOnly SameSite=Strict cookie) on every request;
 // the Host header must be ours (no DNS rebinding); WebSocket upgrades must come from our own origin; writes need X-Chorus: 1.
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -23,12 +23,13 @@ import type { ThreadHost } from '../app/thread-host.ts';
 import { transcriptPath } from '../core/capture.ts';
 import type { ThreadRow } from '../core/store.ts';
 import { buildHandoff, handoffPrompt } from '../core/handoff.ts';
+import { exportAll } from '../core/export.ts';
 import { SKIP_FLAG } from '../core/launch.ts';
 import { defaultOpener } from '../core/opener.ts';
 import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, sourceDir, syncSkills } from '../core/skills.ts';
 import type { AgentId } from '../core/types.ts';
 import { CLIS, type AgentCheck, type DeepReport, type FastReport } from '@chauvoluuhuong/chorus-core/doctor';
-import { check, composeIssue, firstLaunch, ghReady, host, isDue, isIssueKind, ISSUE_KINDS, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, remoteTested, reportDetails, runCommand, runDeep, sendIssue, DOCTOR_DIR } from '../core/doctor.ts';
+import { check, composeIssue, firstLaunch, ghReady, host, isDue, isIssueKind, ISSUE_KINDS, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, remoteTested, reportDetails, runCommand, runDeep, sendIssue, versions, DOCTOR_DIR } from '../core/doctor.ts';
 
 import type { NotificationInbox } from './notifications.ts';
 import { ChatLaunch, ProHost, type ProLoader } from './pro.ts';
@@ -105,6 +106,10 @@ export interface ServeOpts {
   /** the address to listen on: 127.0.0.1 unless `chorus serve --host` asks for another (opt-in: a container, a server). Its name is
    *  then accepted in the Host and Origin checks too; the token is still needed on every request. */
   host?: string;
+  /** where Export writes (tests); the Downloads folder otherwise */
+  exportDir?: string;
+  /** shows an export in the file manager (tests) */
+  onReveal?: (file: string) => void;
   /** fixed token (tests); random otherwise */
   token?: string;
   /** called when the last client asks the server to stop (the desktop window closing) */
@@ -148,6 +153,8 @@ export class ChorusServer {
   readonly c: Controller;
   readonly app: App;
   readonly token: string;
+  /** the last export, for Show in Finder */
+  private lastExport: string | undefined;
   /** what `chorus mcp` holds: it opens /api/pro/mcp/ and nothing else */
   readonly mcpToken = crypto.randomBytes(24).toString('hex');
   readonly pro: ProHost;
@@ -586,6 +593,20 @@ export class ChorusServer {
   private async route(method: string, parts: string[], q: URLSearchParams, b: Record<string, any>): Promise<unknown> {
     const [a, id, sub] = parts;
     const c = this.c;
+    if (a === 'export' && method === 'POST') {
+      // the top bar's Export: everything, in one .zip in Downloads (plan stage 11, free for everyone)
+      if (!id) {
+        try {
+          const r = exportAll({ home: c.store.root, version: versions().chorus, dir: this.o.exportDir });
+          this.lastExport = r.file;
+          return r;
+        } catch (e) {
+          return { error: `Could not export: ${(e as Error).message}` };
+        }
+      }
+      if (id === 'reveal' && this.lastExport) return (this.o.onReveal ?? reveal)(this.lastExport), { ok: true };
+      return undefined;
+    }
     if (a === 'updates') {
       if (method === 'POST' && id === 'skip' && parts.length === 2) { this.o.updates?.skip(); this.pushState(); return { ok: true }; }
       if (method === 'POST' && id === 'open' && parts.length === 2) {
@@ -1172,4 +1193,12 @@ function listFolders(dir: string) {
     /* unreadable: an empty list */
   }
   return { dir: d, parent: path.dirname(d) === d ? null : path.dirname(d), folders };
+}
+
+/** The file manager, at an export: Finder selects it; elsewhere its folder opens. */
+function reveal(file: string) {
+  const [cmd, args] = process.platform === 'darwin' ? ['open', ['-R', file]] : process.platform === 'win32' ? ['explorer', [`/select,${file}`]] : ['xdg-open', [path.dirname(file)]];
+  const p = spawn(cmd as string, args as string[], { stdio: 'ignore', detached: true });
+  p.on('error', () => {});
+  p.unref();
 }

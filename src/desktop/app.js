@@ -504,6 +504,7 @@ function renderChrome() {
     ${S.history.length ? '<button class="btn" data-act="back" title="Back">‹ Back</button>' : ''}
     <div class="crumbs">${crumbs}</div>
     ${waiting ? `<button class="btn waiting" data-act="approvals">! ${waiting} waiting</button>` : ''}
+    <button class="btn export-btn" data-act="export" title="Save all your chats and their files to one .zip in Downloads"${S.exporting ? ' disabled' : ''}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg><span class="export-label">${S.exporting ? 'Exporting…' : 'Export'}</span></button>
     <button class="btn news-toggle" data-act="news-toggle" aria-label="Notifications${st?.notifications?.unread ? `, ${st.notifications.unread} unread` : ''}" aria-expanded="${!$('#news').hidden}" aria-controls="news"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span class="news-label">Notifications</span>${st?.notifications?.unread ? `<span class="news-count">${Math.min(st.notifications.unread, 99)}</span>` : ''}</button>`;
 
   // the controller's warning line (limit, quota, context not loaded), with a button for what it suggests
@@ -1717,6 +1718,25 @@ document.addEventListener('click', async e => {
     case 'news-privacy': return api('POST', '/api/notifications/link', { url: 'https://chorus-cli.web.app/privacy' });
     case 'back':
       return back();
+    case 'export': {
+      // everything, in one .zip in Downloads: free for everyone (2.0 plan stage 11)
+      if (S.exporting) return;
+      S.exporting = true;
+      renderChrome();
+      try {
+        const r = await api('POST', '/api/export');
+        if (r.error) toast(r.error);
+        else toast(`Exported ${r.chats} chat${r.chats === 1 ? '' : 's'} to ${r.file.split('/').pop()} in Downloads (${(r.bytes / 1e6).toFixed(r.bytes < 1e7 ? 1 : 0)} MB)`, { ms: 20000, buttons: '<button class="btn" data-act="export-reveal">Show in Finder</button>' });
+      } catch (e) {
+        toast(`Could not export: ${e.message}`);
+      } finally {
+        S.exporting = false;
+        renderChrome();
+      }
+      return;
+    }
+    case 'export-reveal':
+      return void api('POST', '/api/export/reveal').catch(() => {});
     case 'menu':
       // a narrow window, like a phone through the private link: the sidebar comes over the page
       $('#app').classList.toggle('side-open');

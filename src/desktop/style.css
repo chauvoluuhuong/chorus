@@ -430,7 +430,7 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 .news-detail-head { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); }
 .news-detail-head span { flex: 1; }
 .news-content { display: block; width: 100%; height: min(420px, 58vh); border: 0; background: var(--panel); }
-@media (max-width: 800px) { .news-toggle .news-label { display: none; } }
+@media (max-width: 800px) { .news-toggle .news-label, .export-btn .export-label { display: none; } }
 
 /* Launch-only release notice, using the existing desktop palette. */
 .app-update{display:flex;gap:20px;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
@@ -502,3 +502,5 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 nav button.locked { color: var(--muted); }
 nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
 @media (max-width: 720px) { .plan-cards { grid-template-columns: 1fr; } }
+
+.export-btn { display: inline-flex; align-items: center; gap: 6px; }
