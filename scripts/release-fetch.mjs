@@ -28,4 +28,6 @@ for (const [want, name] of sums) {
 const sh = path.join(siteRoot, 'install.sh');
 fs.writeFileSync(sh, fs.readFileSync(sh, 'utf8').replace(/^VERSION=".*"$/m, `VERSION="${version}"`));
 writeManifest(siteRoot, out, version);
-console.log(`site/install.sh  VERSION=${version} · site/release.json`);
+// the Docker box's launchers: their home is docker/ here, the website serves a copy next to install.sh
+for (const f of ['docker.sh', 'docker.ps1']) fs.copyFileSync(path.join(root, 'docker', f), path.join(siteRoot, f));
+console.log(`site/install.sh  VERSION=${version} · site/release.json · site/docker.sh · site/docker.ps1`);

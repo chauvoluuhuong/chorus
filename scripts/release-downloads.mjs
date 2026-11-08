@@ -191,6 +191,8 @@ if (withApp) {
 if (!outArg) {
   const sh = path.join(siteRoot, 'install.sh');
   fs.writeFileSync(sh, fs.readFileSync(sh, 'utf8').replace(/^VERSION=".*"$/m, `VERSION="${version}"`));
+  // the Docker box's launchers (home: docker/ here), served next to install.sh
+  for (const f of ['docker.sh', 'docker.ps1']) fs.copyFileSync(path.join(root, 'docker', f), path.join(siteRoot, f));
 }
 
 const all = [tgz, ...(withApp ? [zip] : []), ...bundles];
