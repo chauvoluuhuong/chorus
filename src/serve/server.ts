@@ -46,6 +46,16 @@ const VENDOR: Record<string, string> = {
 };
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const DEFAULT_SIZE = { cols: 120, rows: 36 };
+/**
+ * How to sign in an AI CLI inside the Chorus box, from the computer's own terminal: Claude Code prints a link and waits for the code
+ * pasted back; Codex needs --device-auth (its usual sign-in waits for the browser on the box's localhost:1455); agy asks on its first
+ * start. Seen in the box on 2026-11-08 with Claude Code 2.1.310, Codex 0.164.0, agy 1.4.5 (sign-in not completed there yet).
+ */
+export function boxLoginCommand(agent: AgentId, name = 'chorus') {
+  const login = { claude: 'claude auth login', codex: 'codex login --device-auth', agy: 'agy' }[agent];
+  return `docker exec -it -u chorus ${name} ${login}`;
+}
+
 /** --host values that mean every address of this machine */
 const WILDCARD = new Set(['0.0.0.0', '::', '[::]']);
 
@@ -530,6 +540,11 @@ export class ChorusServer {
     const a = this.agentNow(agent) ?? (await this.checkAgents()).report.agents.find(x => x.agent === agent)!;
     const command = action === 'install' ? a.install?.command : action === 'tested' ? a.testedInstall : action === 'login' ? info.login.join(' ') : undefined;
     if (action !== 'deep' && !command) return { error: `nothing to ${action} for ${info.name}` };
+    // the Chorus box (docker/box): no terminal app to open, and a sign-in needs one (a code to paste back), so the Doctor shows the
+    // command to run from the computer's own terminal (plan 2026-11-07 part B)
+    if (action === 'login' && process.env.CHORUS_BOX === '1') {
+      return { id: '', agent, action, command, done: true, ok: false, output: '', results: [], terminal: true, hostCommand: boxLoginCommand(agent, process.env.CHORUS_BOX_NAME) };
+    }
     if (action === 'login' && agent === 'agy') {
       if (!openInTerminal('agy')) return { error: 'agy signs in when it starts: run `agy` once in a terminal' };
       return { id: '', agent, action, command, done: true, ok: true, output: '', results: [], terminal: true };

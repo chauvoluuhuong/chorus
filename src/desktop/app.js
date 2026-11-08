@@ -892,6 +892,8 @@ function agentStatus(a, jobs = true) {
     return s('warn', 'Not installed', line, [[`Install${a.install?.version ? ' ' + a.install.version : ''}`, 'doc-run', `${a.agent}:install`, true], ['Open page ↗', 'doc-open', a.agent]]);
   }
   if (a.state === 'needs-login') {
+    // in the Chorus box there is no terminal to open: the command to run in the computer's own terminal
+    if (job?.terminal && job.hostCommand) return s('warn', 'Not logged in', `Run this in your computer's terminal, then check again: ${job.hostCommand}`, [['Copy command', 'doc-copy', job.hostCommand], ['Check again', 'doc-recheck', a.agent, true]]);
     if (job?.terminal) return s('warn', 'Not logged in', 'Log in in the Terminal window, then check again.', [['Check again', 'doc-recheck', a.agent, true]]);
     return s('warn', 'Not logged in', `Log in to use it here. ${LOGIN_HINT}`, [['Log in', 'doc-run', `${a.agent}:login`, true], ['Check again', 'doc-recheck', a.agent]]);
   }
