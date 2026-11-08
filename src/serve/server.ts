@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -45,6 +46,30 @@ const VENDOR: Record<string, string> = {
 };
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const DEFAULT_SIZE = { cols: 120, rows: 36 };
+/**
+ * How to sign in an AI CLI inside the Chorus box, from the computer's own terminal: Claude Code prints a link and waits for the code
+ * pasted back; Codex needs --device-auth (its usual sign-in waits for the browser on the box's localhost:1455); agy asks on its first
+ * start. Seen in the box on 2026-11-08 with Claude Code 2.1.310, Codex 0.164.0, agy 1.4.5 (sign-in not completed there yet).
+ */
+export function boxLoginCommand(agent: AgentId, name = 'chorus') {
+  const login = { claude: 'claude auth login', codex: 'codex login --device-auth', agy: 'agy' }[agent];
+  return `docker exec -it -u chorus ${name} ${login}`;
+}
+
+/** --host values that mean every address of this machine */
+const WILDCARD = new Set(['0.0.0.0', '::', '[::]']);
+
+/**
+ * The names a request may use for this server, as they appear in a Host header (IPv6 in brackets). 127.0.0.1 and localhost always;
+ * `--host <name>` adds that name; a wildcard (0.0.0.0, ::) adds this machine's own addresses, so another computer can open it by IP.
+ */
+export function hostNames(host?: string, interfaces: ReturnType<typeof os.networkInterfaces> = os.networkInterfaces()): string[] {
+  const names = new Set(['127.0.0.1', 'localhost']);
+  const add = (a: string) => names.add(a.includes(':') && !a.startsWith('[') ? `[${a}]` : a);
+  if (host && WILDCARD.has(host)) for (const list of Object.values(interfaces)) for (const i of list ?? []) add(i.address.split('%')[0]);
+  else if (host) add(host);
+  return [...names];
+}
 const LITERAL = new Set(['POST ui', 'POST folders/pick', 'POST skills/import', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/send']);
 
 /** The App without a terminal: input and output go nowhere, the Controller drives it as usual. */
@@ -75,6 +100,9 @@ export interface ServeOpts {
   onUpdateOpen?: (url: string) => void;
   onNotificationLink?: (url: string) => void;
   port?: number;
+  /** the address to listen on: 127.0.0.1 unless `chorus serve --host` asks for another (opt-in: a container, a server). Its name is
+   *  then accepted in the Host and Origin checks too; the token is still needed on every request. */
+  host?: string;
   /** fixed token (tests); random otherwise */
   token?: string;
   /** called when the last client asks the server to stop (the desktop window closing) */
@@ -118,6 +146,8 @@ export class ChorusServer {
   readonly mcpToken = crypto.randomBytes(24).toString('hex');
   readonly pro: ProHost;
   url = '';
+  /** the names a request may carry in Host and Origin (with our port): 127.0.0.1 and localhost, and what --host added */
+  private hostNames: string[] = ['127.0.0.1', 'localhost'];
   private o: ServeOpts;
   private http: http.Server | undefined;
   private wss: WebSocketServer | undefined;
@@ -228,18 +258,24 @@ export class ChorusServer {
         );
       }
       if (!this.allowed(req) || !this.sameOrigin(req)) return sock.destroy();
-      this.wss!.handleUpgrade(req, sock, head, ws => this.connect(ws));
+      // the native window says so (/ws?window=native): while it is open, only it sets the agents' screen size
+      const native = new URL(req.url ?? '/', 'http://x').searchParams.get('window') === 'native';
+      this.wss!.handleUpgrade(req, sock, head, ws => this.connect(ws, false, native));
     });
     const listen = (p: number) =>
       new Promise<void>((resolve, reject) => {
         this.http!.once('error', reject);
-        this.http!.listen(p, '127.0.0.1', () => resolve());
+        this.http!.listen(p, this.o.host ?? '127.0.0.1', () => resolve());
       });
     // the usual port when it is free, any free one otherwise
     await listen(port).catch(() => listen(0));
-    this.url = `http://127.0.0.1:${(this.http.address() as AddressInfo).port}`;
+    const bound = (this.http.address() as AddressInfo).port;
+    const named = this.o.host && !WILDCARD.has(this.o.host) ? this.o.host : '127.0.0.1';
+    this.url = `http://${named.includes(':') ? `[${named}]` : named}:${bound}`;
+    this.hostNames = hostNames(this.o.host);
     this.ticker = setInterval(() => this.pushState(), 500);
-    fs.writeFileSync(this.serveFile, JSON.stringify({ url: this.url, mcpToken: this.mcpToken }), { mode: 0o600 });
+    // openUrl: the page's address with its token, printed by `chorus` after the window opens (a browser tab on the same Chorus)
+    fs.writeFileSync(this.serveFile, JSON.stringify({ url: this.url, openUrl: this.openUrl, mcpToken: this.mcpToken }), { mode: 0o600 });
     void this.pro.start();
     const tested = JSON.stringify(remoteTested());
     if (this.o.notifications)
@@ -316,7 +352,7 @@ export class ChorusServer {
 
   private hostOk(req: http.IncomingMessage) {
     const port = (this.http?.address() as AddressInfo | null)?.port;
-    return req.headers.host === `127.0.0.1:${port}` || req.headers.host === `localhost:${port}`;
+    return this.hostNames.some(h => req.headers.host === `${h}:${port}`);
   }
 
   /** Cookies are shared by every port of a host: the name carries the port, so two servers (or a restarted one) never mix. */
@@ -340,7 +376,8 @@ export class ChorusServer {
   private sameOrigin(req: http.IncomingMessage) {
     const origin = req.headers.origin;
     // no Origin: not a browser (tests, scripts with the token); a browser must be on our page
-    return !origin || origin === this.url || origin === this.url.replace('127.0.0.1', 'localhost') || origin === 'tauri://localhost';
+    const port = (this.http?.address() as AddressInfo | null)?.port;
+    return !origin || origin === 'tauri://localhost' || this.hostNames.some(h => origin === `http://${h}:${port}`);
   }
 
   /* ---------- HTTP ---------- */
@@ -503,6 +540,11 @@ export class ChorusServer {
     const a = this.agentNow(agent) ?? (await this.checkAgents()).report.agents.find(x => x.agent === agent)!;
     const command = action === 'install' ? a.install?.command : action === 'tested' ? a.testedInstall : action === 'login' ? info.login.join(' ') : undefined;
     if (action !== 'deep' && !command) return { error: `nothing to ${action} for ${info.name}` };
+    // the Chorus box (docker/box): no terminal app to open, and a sign-in needs one (a code to paste back), so the Doctor shows the
+    // command to run from the computer's own terminal (plan 2026-11-07 part B)
+    if (action === 'login' && process.env.CHORUS_BOX === '1') {
+      return { id: '', agent, action, command, done: true, ok: false, output: '', results: [], terminal: true, hostCommand: boxLoginCommand(agent, process.env.CHORUS_BOX_NAME) };
+    }
     if (action === 'login' && agent === 'agy') {
       if (!openInTerminal('agy')) return { error: 'agy signs in when it starts: run `agy` once in a terminal' };
       return { id: '', agent, action, command, done: true, ok: true, output: '', results: [], terminal: true };
@@ -877,9 +919,17 @@ export class ChorusServer {
 
   /* ---------- WebSocket: the agent screens ---------- */
 
-  private connect(ws: WebSocket, remote = false) {
-    const cl = new Client(this, ws, remote);
+  /** Whether this viewer sets the agents' screen size: never through the private link; a browser tab only while no window is open. */
+  private setsSize(cl: Client) {
+    return !cl.remote && (cl.native || ![...this.clients].some(c => c.native));
+  }
+
+  private connect(ws: WebSocket, remote = false, native = false) {
+    const cl = new Client(this, ws, remote, native);
     this.clients.add(cl);
+    // CHORUS_DEBUG_VIEWERS=1: who connects and who sizes the agents (plan 2026-11-07 check A.4)
+    const debug = (what: string) => process.env.CHORUS_DEBUG_VIEWERS && console.error(`viewer ${remote ? 'remote' : native ? 'window' : 'browser tab'}: ${what}`);
+    debug('connected');
     this.lastState = '';
     ws.on('close', () => {
       cl.detach();
@@ -895,17 +945,20 @@ export class ChorusServer {
       const host = typeof m.id === 'string' ? this.app.entry(m.id)?.host : undefined;
       if (m.t === 'attach' && typeof m.id === 'string') {
         // one screen size for every viewer: a phone looks at the agent at the Mac's size and never resizes it (stage 7)
-        if (m.cols > 0 && m.rows > 0 && !cl.remote) this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
+        if (m.cols > 0 && m.rows > 0 && this.setsSize(cl)) this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
+        debug(`attach ${m.cols}x${m.rows}, agents at ${this.size.cols}x${this.size.rows}`);
         if (!this.app.entry(m.id)?.host) this.select(m.id); // a parked chat resumes when you open it
         void cl.attach(m.id);
       } else if (m.t === 'in' && typeof m.data === 'string') {
         if (process.env.CHORUS_DEBUG_INPUT) fs.appendFileSync(process.env.CHORUS_DEBUG_INPUT, JSON.stringify(m.data) + '\n');
         host?.write(m.data);
       }
-      else if (m.t === 'resize' && m.cols > 0 && m.rows > 0 && !cl.remote) {
+      else if (m.t === 'resize' && m.cols > 0 && m.rows > 0 && this.setsSize(cl)) {
         this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
         host?.resize(this.size.cols, this.size.rows);
-      } else if (m.t === 'detach') cl.detach();
+        debug(`resize ${m.cols}x${m.rows}: agents at ${this.size.cols}x${this.size.rows}`);
+      } else if (m.t === 'resize') debug(`resize ${m.cols}x${m.rows} ignored: agents stay at ${this.size.cols}x${this.size.rows}`);
+      else if (m.t === 'detach') cl.detach();
       else if (m.t === 'drop' && typeof m.id === 'string' && Array.isArray(m.paths)) {
         // files dropped on the native window: Tauri gives their full paths (docs/phase5.md §8.3)
         const paths = m.paths.filter((p: unknown): p is string => typeof p === 'string' && path.isAbsolute(p));
@@ -927,10 +980,13 @@ class Client {
   readonly ws: WebSocket;
   /** a device through the private link */
   readonly remote: boolean;
-  constructor(srv: ChorusServer, ws: WebSocket, remote = false) {
+  /** the Chorus window (not a browser tab) */
+  readonly native: boolean;
+  constructor(srv: ChorusServer, ws: WebSocket, remote = false, native = false) {
     this.srv = srv;
     this.ws = ws;
     this.remote = remote;
+    this.native = native;
   }
 
   send(s: string) {

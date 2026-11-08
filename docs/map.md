@@ -9,7 +9,7 @@ touching → its plan and failures. Every fact has one home; other files link to
 | [`roadmap.md`](roadmap.md) | Progress per phase, technical debt TD-1.. | status |
 | [`phase4.md`](phase4.md), [`phase5.md`](phase5.md), [`doctor.md`](doctor.md), [`notifications.md`](notifications.md), [`chorus-core.md`](chorus-core.md), [`ui-plan.md`](ui-plan.md) | Plans and how each part works, written before this layout | plans + features |
 | `plans/<yyyy-mm-dd>-<slug>.md` | The agreed approach of each new feature or fix (from 2026-10-28) | plans |
-| `features/<slug>.md` | What exists and how it works, for features built from now on | features |
+| `features/<slug>.md` | What exists and how it works, for features built from now on ([`docker-box.md`](features/docker-box.md)) | features |
 | [`integrations/`](integrations/) | Verified facts per CLI and the tested versions ([`versions.md`](integrations/versions.md)); lives in chorus-core | integrations |
 | [`testing.md`](testing.md) | Test layers, what runs where, how to run the e2e with the real CLIs | harness |
 | [`proof/`](proof/) | Committed e2e proof per phase (screenshots, reports); per-branch proof is in `.chorus/proof/<branch>/` (gitignored) | harness/evidence |

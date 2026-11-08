@@ -71,10 +71,22 @@ const S = {
 
 /* ---------- the socket ---------- */
 
+// The Chorus window, not a browser tab: the shell opens the page with ?window=native (the address is cleaned later, so it is kept for
+// reloads in this window's session). While the window is open, only it sets the agents' screen size.
+const NATIVE = (() => {
+  let yes = !!(window.__TAURI_INTERNALS__ || window.__TAURI__) || new URLSearchParams(location.search).get('window') === 'native';
+  try {
+    if (yes) sessionStorage.setItem('chorus-window', 'native');
+    else yes = sessionStorage.getItem('chorus-window') === 'native';
+  } catch { /* no storage: the address and the globals decide */ }
+  return yes;
+})();
+
 let ws;
 let outbox = [];
 function connect() {
-  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  // the window says it is the window: while it is open, a browser tab on the same Chorus never resizes the agents
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws${NATIVE ? '?window=native' : ''}`);
   ws.onopen = () => {
     $('#conn').hidden = true;
     for (const m of outbox.splice(0)) ws.send(m);
@@ -880,6 +892,8 @@ function agentStatus(a, jobs = true) {
     return s('warn', 'Not installed', line, [[`Install${a.install?.version ? ' ' + a.install.version : ''}`, 'doc-run', `${a.agent}:install`, true], ['Open page ↗', 'doc-open', a.agent]]);
   }
   if (a.state === 'needs-login') {
+    // in the Chorus box there is no terminal to open: the command to run in the computer's own terminal
+    if (job?.terminal && job.hostCommand) return s('warn', 'Not logged in', `Run this in your computer's terminal, then check again: ${job.hostCommand}`, [['Copy command', 'doc-copy', job.hostCommand], ['Check again', 'doc-recheck', a.agent, true]]);
     if (job?.terminal) return s('warn', 'Not logged in', 'Log in in the Terminal window, then check again.', [['Check again', 'doc-recheck', a.agent, true]]);
     return s('warn', 'Not logged in', `Log in to use it here. ${LOGIN_HINT}`, [['Log in', 'doc-run', `${a.agent}:login`, true], ['Check again', 'doc-recheck', a.agent]]);
   }
@@ -1150,7 +1164,7 @@ async function reportIssue() {
   el.innerHTML = `<div class="dialog dr-dialog" role="dialog"><h2>Report an issue</h2><div class="body"><p class="muted"><span class="spin"></span> Collecting what Chorus knows about this machine…</p></div></div>`;
   $('#dialogs').append(el);
   const client = {
-    window: window.__TAURI_INTERNALS__ || window.__TAURI__ ? 'native' : 'browser',
+    window: NATIVE ? 'native' : 'browser',
     agent: navigator.userAgent,
     screen: `${screen.width}×${screen.height}@${devicePixelRatio}`,
     size: `${innerWidth}×${innerHeight}`,

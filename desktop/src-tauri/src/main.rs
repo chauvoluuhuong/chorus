@@ -41,8 +41,9 @@ fn serve_command() -> Command {
     let bundled = home().join(".chorus/current/bin/chorus");
     let cli = std::env::var("CHORUS_SERVE_CMD").unwrap_or_else(|_| if bundled.exists() { format!("'{}'", bundled.display()) } else { "chorus".into() });
     let mut c = Command::new(shell);
-    // --exit-with-stdin: serve stops when this app's end of the pipe closes, even when the app is killed
-    c.arg("-l").arg("-c").arg(format!("exec {cli} serve --port 0 --exit-with-stdin"));
+    // --exit-with-stdin: serve stops when this app's end of the pipe closes, even when the app is killed.
+    // --port 4318: a steady browser address (`chorus` prints it); serve takes a free port when 4318 is in use
+    c.arg("-l").arg("-c").arg(format!("exec {cli} serve --port 4318 --exit-with-stdin"));
     c.current_dir(home());
     // a parent Claude Code session leaks its session id into children (CLAUDE.md rule 5)
     for k in ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_PID"] {
@@ -111,7 +112,9 @@ fn start_serve(app: &AppHandle) {
             // the first line of `chorus serve` is "chorus serve: <url with the token>"
             if let Some(url) = line.strip_prefix("chorus serve: ") {
                 found = true;
-                if let Ok(u) = Url::parse(url.trim()) {
+                if let Ok(mut u) = Url::parse(url.trim()) {
+                    // the page knows it is the window (not a browser tab): only the window sizes the agents while it is open
+                    u.query_pairs_mut().append_pair("window", "native");
                     let app = app.clone();
                     thread::spawn(move || open_page(&app, u));
                 }

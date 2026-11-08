@@ -12,7 +12,7 @@ import { buildHandoff } from '../../src/core/handoff.ts';
 import { Store } from '../../src/core/store.ts';
 import type { AgentId } from '../../src/core/types.ts';
 import type { AgentCheck, FastReport } from '@chauvoluuhuong/chorus-core/doctor';
-import { ChorusServer, headlessApp, type ServeOpts } from '../../src/serve/server.ts';
+import { boxLoginCommand, ChorusServer, headlessApp, hostNames, type ServeOpts } from '../../src/serve/server.ts';
 import { NotificationInbox } from '../../src/serve/notifications.ts';
 import { UpdateCheck } from '../../src/serve/updates.ts';
 
@@ -25,7 +25,7 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const agentCheck = (agent: AgentId, state: AgentCheck['state'], login: AgentCheck['login'] = state === 'needs-login' ? 'no' : 'yes'): AgentCheck => ({ agent, name: agent, state, login, version: '1.0.0', page: '', loginCommand: [agent, 'login'], ms: 1 });
 const fastReport = (agents: AgentCheck[] = (['claude', 'codex', 'agy'] as AgentId[]).map(a => agentCheck(a, 'ready'))): FastReport => ({ node: { version: '22', ok: true }, platform: 'test', agents, ms: 1 });
 
-async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand' | 'pickFolder' | 'sessionExists'> = {}) {
+async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand' | 'pickFolder' | 'sessionExists' | 'host'> = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-home-'));
   process.env.CODEX_HOME = home;
   const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-serve-')));
@@ -73,8 +73,8 @@ async function rig(seed?: (store: Store, project: string) => void, notifications
 }
 
 /** A desktop window: a socket and the terminal it would draw (replayed screen + live bytes). */
-async function viewer(url: string, token: string, origin?: string) {
-  const ws = new WebSocket(url.replace('http', 'ws') + '/ws', { headers: { authorization: `Bearer ${token}`, ...(origin ? { origin } : {}) } });
+async function viewer(url: string, token: string, origin?: string, query = '') {
+  const ws = new WebSocket(url.replace('http', 'ws') + '/ws' + query, { headers: { authorization: `Bearer ${token}`, ...(origin ? { origin } : {}) } });
   const msgs: any[] = [];
   const term = new VirtualScreen(100, 30);
   ws.on('message', d => {
@@ -600,6 +600,120 @@ test('a chat whose CLI lost its session goes on in the same chat, from its recor
     await v.until(() => r.launches.at(-1)!.resumeId === 'kept-1', 'resumed');
     assert.equal((await r.api('GET', '/api/chats/t_kept')).json.fromRecord, null);
   } finally {
+    await r.done();
+  }
+});
+
+/** A Host header the server answers to with this token: status code only. */
+function statusWithHost(port: string, host: string, token?: string, connectTo = '127.0.0.1') {
+  return new Promise<number | string>(resolve => {
+    const req = http.request({ host: connectTo, port, path: '/api/state', headers: { host, ...(token ? { authorization: `Bearer ${token}` } : {}) } }, res => resolve(res.statusCode ?? 0));
+    req.on('error', e => resolve((e as NodeJS.ErrnoException).code ?? 'error'));
+    req.setTimeout(2000, () => req.destroy(Object.assign(new Error('timeout'), { code: 'TIMEOUT' })));
+    req.end();
+  });
+}
+
+const lanAddress = () => Object.values(os.networkInterfaces()).flat().find(i => i && i.family === 'IPv4' && !i.internal)?.address;
+
+test('serve --host: names it accepts (plan A.8)', () => {
+  assert.deepEqual(hostNames(), ['127.0.0.1', 'localhost']);
+  assert.deepEqual(hostNames('chorus.lan'), ['127.0.0.1', 'localhost', 'chorus.lan']);
+  const nics = { lo: [{ address: '127.0.0.1' }], eth0: [{ address: '172.17.0.2' }, { address: 'fe80::1%eth0' }] } as any;
+  assert.deepEqual(hostNames('0.0.0.0', nics), ['127.0.0.1', 'localhost', '172.17.0.2', '[fe80::1]']);
+  assert.deepEqual(hostNames('::', nics), hostNames('0.0.0.0', nics));
+});
+
+test('serve: without --host only this machine connects; serve.json carries the browser address (plan A.1, A.7)', async () => {
+  const r = await rig();
+  try {
+    const port = new URL(r.url).port;
+    const saved = JSON.parse(fs.readFileSync(path.join(r.store.root, 'serve.json'), 'utf8'));
+    assert.equal(saved.url, r.url);
+    assert.equal(saved.openUrl, r.srv.openUrl);
+    assert.equal((fs.statSync(path.join(r.store.root, 'serve.json')).mode & 0o777).toString(8), '600');
+    const lan = lanAddress();
+    if (lan) assert.equal(await statusWithHost(port, `${lan}:${port}`, r.srv.token, lan), 'ECONNREFUSED', 'nothing listens on the network address');
+  } finally {
+    await r.done();
+  }
+});
+
+test('serve --host 0.0.0.0: reachable by this machine\'s addresses, still a token on every request and our Host only (plan A.6, A.8)', async () => {
+  const r = await rig(undefined, undefined, undefined, { host: '0.0.0.0' });
+  try {
+    const port = new URL(r.url).port;
+    assert.match(r.url, /^http:\/\/127\.0\.0\.1:\d+$/, 'the printed address stays 127.0.0.1 (a published container port)');
+    assert.equal(await statusWithHost(port, `localhost:${port}`, r.srv.token), 200);
+    assert.equal(await statusWithHost(port, `localhost:${port}`), 401, 'no token');
+    assert.equal(await statusWithHost(port, `evil.example:${port}`, r.srv.token), 403, 'a wrong Host');
+    const lan = lanAddress();
+    if (lan) {
+      assert.equal(await statusWithHost(port, `${lan}:${port}`, r.srv.token, lan), 200, 'another computer, by this machine\'s address');
+      assert.equal(await statusWithHost(port, `${lan}:${port}`, undefined, lan), 401, 'still no way in without the token');
+      const ok = await viewer(`http://${lan}:${port}`, r.srv.token, `http://${lan}:${port}`);
+      ok.ws.close();
+    }
+    await assert.rejects(viewer(r.url, r.srv.token, 'https://evil.example'), /HTTP|socket hang up|closed|ECONNRESET/);
+  } finally {
+    await r.done();
+  }
+});
+
+test('serve --host <name>: that name is accepted and printed', async () => {
+  const r = await rig(undefined, undefined, undefined, { host: 'localhost' });
+  try {
+    assert.match(r.url, /^http:\/\/localhost:\d+$/);
+    const port = new URL(r.url).port;
+    assert.equal(await statusWithHost(port, `localhost:${port}`, r.srv.token), 200);
+    assert.equal(await statusWithHost(port, `other.example:${port}`, r.srv.token), 403);
+  } finally {
+    await r.done();
+  }
+});
+
+test('serve: while the window is open only it sizes the agents; a browser tab is a viewer (plan A.4)', async () => {
+  const r = await rig();
+  try {
+    const tab = await viewer(r.url, r.srv.token);
+    const made = await r.api('POST', '/api/chats', { agent: 'claude', folder: r.project, prompt: 'hi' });
+    const id = made.json.id as string;
+    tab.send({ t: 'attach', id, cols: 90, rows: 25 });
+    await tab.until(() => /SIZE 90x25/.test(tab.text()), 'a tab alone sizes the agent');
+    const win = await viewer(r.url, r.srv.token, undefined, '?window=native');
+    win.send({ t: 'attach', id, cols: 100, rows: 30 });
+    await win.until(() => /SIZE 100x30/.test(win.text()), 'the window sizes it');
+    tab.send({ t: 'resize', id, cols: 70, rows: 20 });
+    tab.send({ t: 'attach', id, cols: 71, rows: 21 });
+    await sleep(600);
+    assert.doesNotMatch(win.text(), /SIZE 7[01]x2[01]/, 'the tab does not resize the agent while the window is open');
+    win.send({ t: 'resize', id, cols: 80, rows: 24 });
+    await win.until(() => /SIZE 80x24/.test(win.text()), 'the window still resizes it');
+    win.ws.close();
+    await sleep(200);
+    tab.send({ t: 'resize', id, cols: 60, rows: 20 });
+    await tab.until(() => /SIZE 60x20/.test(tab.text()), 'with the window closed the tab sizes it again');
+    tab.ws.close();
+  } finally {
+    await r.done();
+  }
+});
+
+test('serve in the Chorus box: Log in gives the command for the computer\'s terminal (plan part B)', async () => {
+  assert.equal(boxLoginCommand('claude'), 'docker exec -it -u chorus chorus claude auth login');
+  assert.equal(boxLoginCommand('codex', 'box2'), 'docker exec -it -u chorus box2 codex login --device-auth');
+  assert.equal(boxLoginCommand('agy'), 'docker exec -it -u chorus chorus agy');
+  const r = await rig();
+  const was = { box: process.env.CHORUS_BOX, name: process.env.CHORUS_BOX_NAME };
+  process.env.CHORUS_BOX = '1';
+  process.env.CHORUS_BOX_NAME = 'chorus-test';
+  try {
+    const j = await r.api('POST', '/api/doctor/run', { agent: 'codex', action: 'login' });
+    assert.equal(j.status, 200);
+    assert.equal(j.json.terminal, true);
+    assert.equal(j.json.hostCommand, 'docker exec -it -u chorus chorus-test codex login --device-auth');
+  } finally {
+    for (const [k, v] of [['CHORUS_BOX', was.box], ['CHORUS_BOX_NAME', was.name]] as const) v === undefined ? delete process.env[k] : (process.env[k] = v);
     await r.done();
   }
 });
