@@ -750,3 +750,22 @@ test('serve in a container: links go to the page to open; a missing opener does 
     await r.done();
   }
 });
+
+test('serve: a chat whose folder is not on this computer is shown, not started, and chorus serve goes on (the box crash, 2026-11-08)', async () => {
+  const r = await rig(store => {
+    store.createThread({ id: 't_far', title: 'From the Mac', agent: 'codex', cwd: '/private/var/folders/xx/T/chorus-proof-gone', native_session_id: 'far-1', state: 'waiting' });
+  });
+  try {
+    const v = await viewer(r.url, r.srv.token);
+    await v.until(() => v.state()?.chats.length === 1, 'state');
+    assert.equal((await r.api('POST', '/api/chats/t_far/select')).status, 200);
+    v.send({ t: 'attach', id: 't_far', cols: 100, rows: 30 });
+    await v.until(() => v.msgs.some(m => m.t === 'flash' && /can't open: its folder \/private\/var\/folders\/xx\/T\/chorus-proof-gone is not on this computer/.test(m.text)), 'it says why');
+    await sleep(300);
+    assert.deepEqual(r.launches, [], 'nothing started');
+    assert.equal((await r.api('GET', '/api/state')).status, 200, 'still serving');
+    v.ws.close();
+  } finally {
+    await r.done();
+  }
+});

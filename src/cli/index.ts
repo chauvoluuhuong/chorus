@@ -18,7 +18,7 @@ import { UpdateCheck } from '../serve/updates.ts';
 import { saveRemoteTested, versions } from '../core/doctor.ts';
 import { buildInteractive, mcpCommand } from '../core/launch.ts';
 import { ChatLaunch } from '../serve/pro.ts';
-import { browserOpener, HOST_WARNING, noScreen, noScreenMessage } from './screen.ts';
+import { browserOpener, HOST_WARNING, inContainer, noScreen, noScreenMessage } from './screen.ts';
 import { activityCmd, artifactsCmd, doctorCmd, memoryCmd, showCmd, threadsCmd, traceCmd } from './commands.ts';
 
 const argv = process.argv.slice(2);
@@ -42,7 +42,9 @@ const models = (): Partial<Record<AgentId, string>> => ({ claude: process.env.CH
 function openStore() {
   const home = process.env.CHORUS_HOME ?? (process.env.CHORUS_STORE === 'project' ? undefined : path.join(process.env.HOME ?? '.', '.chorus'));
   const store = new Store(project, { home });
-  store.importLocal(project); // chats recorded before the store was shared
+  // chats recorded before the store was shared; not in a container: its folder is the user's shared home, whose .chorus is the
+  // host's own Chorus, and its chats belong to the host (they were copied into the box, 2026-11-08)
+  if (!(process.env.CHORUS_BOX === '1' || inContainer())) store.importLocal(project);
   return store;
 }
 
@@ -274,6 +276,8 @@ switch (cmd) {
       if (opener) spawn(opener, [srv.openUrl], { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
       else console.log('No browser to open here: open the address above in a browser.');
     }
+    // one failed promise must not stop the server and every chat with it: it is logged and the rest goes on
+    process.on('unhandledRejection', e => console.error('chorus serve: unhandled error', e));
     process.on('SIGINT', quit);
     process.on('SIGTERM', quit);
     process.on('SIGHUP', quit);

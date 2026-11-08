@@ -824,6 +824,14 @@ export class ChorusServer {
   private select(id: string) {
     const at = this.app.entries.findIndex(e => e.id === id);
     if (at < 0) return false;
+    // a parked chat resumes in its folder: when that folder is not here (deleted, or a chat from another computer, as in a box
+    // sharing the user's home), it is shown but not started; starting it failed and stopped chorus serve (2026-11-08)
+    const row = this.c.store.getThread(id);
+    const e = this.app.entries[at];
+    if (!e.host && e.state === 'parked' && row?.cwd && !fs.existsSync(row.cwd)) {
+      this.app.setFlash(`"${row.title}" can't open: its folder ${row.cwd} is not on this computer`);
+      return true;
+    }
     this.app.select(at);
     this.pushState();
     return true;
