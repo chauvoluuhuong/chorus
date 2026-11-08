@@ -1,7 +1,13 @@
 # Chorus in the browser everywhere, and a ready Docker box
 
-Status: **planned** (owner, 2026-11-07; the website's install box and Windows added the same day). Not built. Free features. Part A comes
-first: part B needs it, and part C needs part B's launchers.
+Status: **part A and part B built** on `feature/browser-everywhere` (2026-11-08); part C on chorus-admin `dev`, deployed with the
+owner's OK. Checks and evidence: [features/docker-box.md](../features/docker-box.md) (part B) and [phase5.md](../phase5.md) (part A);
+proof in `.chorus/proof/feature-browser-everywhere/`. Planned by the owner on 2026-11-07 (the website's install box and Windows added
+the same day). Free features. Part A comes first: part B needs it, and part C needs part B's launchers.
+
+Built, part A: A.1 A.2 A.4 A.5 A.6 (on the Mac, and inside the box) A.7 A.8 ✅; A.3 (a Linux desktop) not run. Found while building:
+the window marks itself with `?window=native` (the Tauri globals are not relied on for a page served over http), and in the box the
+Doctor's Log in shows a `docker exec` command (Claude waits for a pasted code; Codex needs `--device-auth`).
 
 ## Outcome
 
