@@ -11,7 +11,7 @@ irm https://chorus-cli.web.app/docker.ps1 | iex                           # Wind
 ```
 
 The launcher asks yes/no questions, Enter meaning yes: **use the stable version?** (no: preview), **share your whole home
-folder?** (no: type folders, Tab completes; "Is that all the folders?"), **use port 4318?** (or the next free one; no: type one).
+folder?** (no: type folders, Tab completes; "Is that all the folders?"), and picks the port itself (4318, or the next free one; `CHORUS_PORT` sets another).
 On Windows a folder can also be picked with B (Browse). It starts the box and opens `http://127.0.0.1:<port>/?token=…` (`localhost`
 on Windows). Run it again to open Chorus again: a stopped box is started, nothing is asked. Start over: `docker rm -f chorus`.
 
@@ -43,7 +43,10 @@ docker exec -it -u chorus chorus agy
 | Launchers | `docker/docker.sh`, `docker/docker.ps1`; served by the website (chorus-admin `site/`) | `docker run -d --name chorus -p 127.0.0.1:<port>:<port> -v chorus-home:/home/chorus -v <folder>:<same path> …` (Windows: `C:\Users\Lan` at `/mnt/c/Users/Lan`). Reads the address from this run's `docker logs` |
 | Build | `.github/workflows/docker.yml` | amd64 + arm64, tags `latest` and the date, on a release tag, on chorus-core's `repository_dispatch: tested-changed`, daily when the tested versions differ from the image's labels (`app.chorus.claude` …), or by hand |
 
-- **`127.0.0.1:` in `-p`**: only this computer reaches the box (checked: the Mac's network address is refused).
+- **The port is open on every address of the computer** (`-p <port>:<port>`), so another computer on the network reaches Chorus
+  too, and Chorus in the box (`serve --host 0.0.0.0`) accepts any address it is reached by. The token in the address guards every
+  request until Chorus has a login (owner's decision, 2026-11-08: no question about it). Before 2026-11-08 the launcher bound
+  127.0.0.1 only.
 - **`chorus-home`** keeps Chorus, its data, the channel and the CLIs' sign-ins across restarts and new images.
 - **Same path inside** for shared folders, so the paths in chats, artifacts and exports match your computer's.
 - Every start runs `install.sh` again (an update on the same channel; it downloads the package even when it is current).
@@ -64,6 +67,6 @@ with a package from `node scripts/release-downloads.mjs --no-app --no-desktop --
 | B.5 | ✅ Claude Code 2.1.310, Codex 0.164.0, agy 1.4.5, auto-update off | `B5-cli-versions.txt` |
 | B.6 | ⏳ Log in in the box opens each CLI's popup with the right link (Claude, agy) and code (Codex), Cancel stops it; a sign-in completed with the owner's accounts not run yet | `signin-*-popup.jpg` |
 | B.7 | ⏳ a file the box writes in the shared folder is owned by the Mac user; a real Claude chat editing it waits for B.6 | `B4-B7-restart-and-files.txt` |
-| B.8 | ✅ the network address is refused | `B8-network-refused.txt` |
+| B.8 | changed (owner, 2026-11-08): the port is open on the network; the token is still required | — |
 | B.9 | ⏳ arm64 ✅ here; amd64 is checked by the workflow's last step | `B5-cli-versions.txt` |
 | B.10–B.12 | ⏳ need Windows; `docker.ps1` parses, and its path mapping is checked in PowerShell | `B10-ps1-paths.txt` |

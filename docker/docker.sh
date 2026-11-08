@@ -62,11 +62,14 @@ show() {
   url="$(address)"
   [ -n "$url" ] || { docker logs --tail 30 "$NAME" >&2 || true; fail "The box did not start Chorus. Its log is above (docker logs $NAME)."; }
   # the port this computer reaches it on (the same number inside and out)
-  port="$(docker port "$NAME" 2>/dev/null | sed -n 's/.*127\.0\.0\.1:\([0-9]*\).*/\1/p' | head -1)"
+  port="$(docker port "$NAME" 2>/dev/null | sed -n 's/.*:\([0-9][0-9]*\)$/\1/p' | head -1)"
   [ -n "$port" ] && url="$(printf '%s' "$url" | sed "s#^http://127\.0\.0\.1:[0-9]*#http://127.0.0.1:$port#")"
+  # this computer's network address, for another computer's browser
+  lan="$( (ipconfig getifaddr en0 || ipconfig getifaddr en1 || hostname -I | awk '{print $1}') 2>/dev/null | head -1)"
   say ""
   say "✓ Chorus is running in the box \"$NAME\". Open it in your browser:"
   say "  $url"
+  [ -n "$lan" ] && say "  From another computer: $(printf '%s' "$url" | sed "s#127\.0\.0\.1#$lan#")"
   say ""
   say "  Sign in to Claude Code, Codex and Antigravity in Chorus: click Log in next to each one."
   say "  Stop: docker stop $NAME   ·   Open again: run this command again   ·   Start over: docker rm -f $NAME"
@@ -137,18 +140,13 @@ fi
 say "   Shared: ${FOLDERS[*]}"
 say ""
 
-# 3. the port, on this computer only
+# the port: 4318, or the next free one (CHORUS_PORT picks another). Open on every address of this computer, so other computers
+# reach Chorus too; the address carries a token, required on every request, until Chorus has a login (owner's decision, 2026-11-08)
 free() { ! (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 PORT="${CHORUS_PORT:-}"
 if [ -z "$PORT" ]; then
-  default=4318
-  while ! free "$default"; do default=$((default + 1)); done
-  say "$((N += 1)). Chorus opens in your browser at http://localhost:$default (only this computer can reach it)."
-  if yes "   Use port $default?"; then PORT=$default
-  else
-    until PORT="$(ask "   Port to use instead (a number, like 4400): " "")"; case "$PORT" in ''|*[!0-9]*) false ;; *) free "$PORT" || { say "   Port $PORT is in use."; false; } ;; esac; do :; done
-  fi
-  say ""
+  PORT=4318
+  while ! free "$PORT"; do PORT=$((PORT + 1)); done
 fi
 case "$PORT" in ''|*[!0-9]*) fail "The port must be a number, like 4318." ;; esac
 free "$PORT" || fail "Port $PORT is in use on this computer. Run this again and choose another."
@@ -157,7 +155,7 @@ say ""
 say "Getting the box ($IMAGE)…"
 docker pull "$IMAGE" >/dev/null 2>&1 || docker image inspect "$IMAGE" >/dev/null 2>&1 || fail "Could not download $IMAGE. Check your internet connection."
 
-ARGS=(run -d --name "$NAME" -p "127.0.0.1:$PORT:$PORT" -v "$VOLUME:/home/chorus" -e "CHORUS_PORT=$PORT" -e "CHORUS_BOX_NAME=$NAME")
+ARGS=(run -d --name "$NAME" -p "$PORT:$PORT" -v "$VOLUME:/home/chorus" -e "CHORUS_PORT=$PORT" -e "CHORUS_BOX_NAME=$NAME")
 [ "$CHANNEL" = preview ] && ARGS+=(-e CHORUS_CHANNEL=preview) || ARGS+=(-e CHORUS_CHANNEL=production)
 SHARED=""
 for f in "${FOLDERS[@]}"; do ARGS+=(-v "$f:$f"); SHARED="${SHARED:+$SHARED:}$f"; done

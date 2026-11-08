@@ -42,7 +42,7 @@ drive it:
 
 | Threat | Guard |
 |---|---|
-| another machine | listens on 127.0.0.1 only; `chorus serve --host <address>` (opt-in, for a container or a server) listens there and also accepts that name (a wildcard: this machine's own addresses) in `Host` and `Origin`, still with the token on every request, and always prints that anyone who can reach the port with the address can run agents |
+| another machine | listens on 127.0.0.1 only; `chorus serve --host <address>` (opt-in, for a container or a server) listens there and also accepts that name in `Host` and `Origin` (a wildcard, 0.0.0.0 or ::, accepts any address the machine is reached by, and a socket's `Origin` must be the address it asked; owner's decision 2026-11-08, until Chorus has a login), still with the token on every request, and always prints that anyone who can reach the port with the address can run agents |
 | any local process or page without the token | 32-byte random token on every request (`Authorization: Bearer`, or the cookie) |
 | DNS rebinding (a page on evil.example resolving to 127.0.0.1) | the `Host` header must be `127.0.0.1:<port>` or `localhost:<port>` |
 | cross-site requests from the user's browser | `HttpOnly; SameSite=Strict` cookie, writes need the `X-Chorus: 1` header (a cross-origin page cannot send it without a preflight that is never allowed) and a same `Origin` |

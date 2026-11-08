@@ -126,18 +126,14 @@ if (Get-Command wsl.exe -ErrorAction SilentlyContinue) {
   }
 }
 
-# 3. the port, on this computer only
+# the port
 function PortFree($p) { -not (Get-NetTCPConnection -State Listen -LocalPort $p -ErrorAction SilentlyContinue) }
+# 4318, or the next free one; open on every address of this computer (the token guards it until Chorus has a login)
 $Port = $env:CHORUS_PORT
 if (-not $Port) {
-  $default = 4318
-  while (-not (PortFree $default)) { $default++ }
-  $N++; Write-Host "$N. Chorus opens in your browser at http://localhost:$default (only this computer can reach it)."
-  if (Yes "   Use port ${default}?") { $Port = "$default" }
-  else {
-    do { $Port = Read-Host '   Port to use instead (a number, like 4400)' } until ($Port -match '^\d+$' -and (PortFree ([int]$Port)))
-  }
-  Write-Host ""
+  $p = 4318
+  while (-not (PortFree $p)) { $p++ }
+  $Port = "$p"
 }
 if ($Port -notmatch '^\d+$') { Fail 'The port must be a number, like 4318.' }
 if (-not (PortFree ([int]$Port))) { Fail "Port $Port is in use on this computer. Run this again and choose another." }
@@ -148,7 +144,7 @@ docker pull $Image *> $null
 if ($LASTEXITCODE -ne 0) { docker image inspect $Image *> $null; if ($LASTEXITCODE -ne 0) { Fail "Could not download $Image. Check your internet connection." } }
 
 $channelEnv = if ($Channel -eq 'preview') { 'preview' } else { 'production' }
-$runArgs = @('run', '-d', '--name', $Name, '-p', "127.0.0.1:${Port}:${Port}", '-v', "${Volume}:/home/chorus", '-e', "CHORUS_PORT=$Port", '-e', "CHORUS_BOX_NAME=$Name", '-e', "CHORUS_CHANNEL=$channelEnv")
+$runArgs = @('run', '-d', '--name', $Name, '-p', "${Port}:${Port}", '-v', "${Volume}:/home/chorus", '-e', "CHORUS_PORT=$Port", '-e', "CHORUS_BOX_NAME=$Name", '-e', "CHORUS_CHANNEL=$channelEnv")
 $shared = @()
 foreach ($f in $Folders) {
   $l = LinuxPath $f

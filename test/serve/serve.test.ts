@@ -640,14 +640,16 @@ test('serve: without --host only this machine connects; serve.json carries the b
   }
 });
 
-test('serve --host 0.0.0.0: reachable by this machine\'s addresses, still a token on every request and our Host only (plan A.6, A.8)', async () => {
+test('serve --host 0.0.0.0: reachable by any address of this machine, still a token on every request, sockets from the same address (plan A.6, A.8)', async () => {
   const r = await rig(undefined, undefined, undefined, { host: '0.0.0.0' });
   try {
     const port = new URL(r.url).port;
     assert.match(r.url, /^http:\/\/127\.0\.0\.1:\d+$/, 'the printed address stays 127.0.0.1 (a published container port)');
     assert.equal(await statusWithHost(port, `localhost:${port}`, r.srv.token), 200);
     assert.equal(await statusWithHost(port, `localhost:${port}`), 401, 'no token');
-    assert.equal(await statusWithHost(port, `evil.example:${port}`, r.srv.token), 403, 'a wrong Host');
+    assert.equal(await statusWithHost(port, `mac.local:${port}`, r.srv.token), 200, 'any name this machine is reached by (owner, 2026-11-08)');
+    assert.equal(await statusWithHost(port, `mac.local:${port}`), 401, 'still the token');
+    await assert.rejects(viewer(r.url, r.srv.token, `http://mac.local:${port}`), /HTTP|socket hang up|closed|ECONNRESET/, 'a socket from another address than the one asked');
     const lan = lanAddress();
     if (lan) {
       assert.equal(await statusWithHost(port, `${lan}:${port}`, r.srv.token, lan), 200, 'another computer, by this machine\'s address');

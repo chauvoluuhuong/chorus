@@ -364,6 +364,9 @@ export class ChorusServer {
   /* ---------- auth ---------- */
 
   private hostOk(req: http.IncomingMessage) {
+    // --host 0.0.0.0 (the Chorus box): any address this machine is reached by (a LAN address, a host name); the token guards every
+    // request until Chorus has a login (owner's decision, 2026-11-08)
+    if (this.o.host && WILDCARD.has(this.o.host)) return !!req.headers.host;
     const port = (this.http?.address() as AddressInfo | null)?.port;
     return this.hostNames.some(h => req.headers.host === `${h}:${port}`);
   }
@@ -390,6 +393,8 @@ export class ChorusServer {
     const origin = req.headers.origin;
     // no Origin: not a browser (tests, scripts with the token); a browser must be on our page
     const port = (this.http?.address() as AddressInfo | null)?.port;
+    // any address allowed (--host 0.0.0.0): the page must still be ours, at the very address it was asked by
+    if (this.o.host && WILDCARD.has(this.o.host)) return !origin || origin === `http://${req.headers.host}`;
     return !origin || origin === 'tauri://localhost' || this.hostNames.some(h => origin === `http://${h}:${port}`);
   }
 
