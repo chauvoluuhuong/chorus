@@ -4,12 +4,13 @@
 //
 // Security: 127.0.0.1 only; a random token (in the first URL, then an HttpOnly SameSite=Strict cookie) on every request;
 // the Host header must be ours (no DNS rebinding); WebSocket upgrades must come from our own origin; writes need X-Chorus: 1.
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import { createRequire } from 'node:module';
 import type { AddressInfo } from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -22,15 +23,18 @@ import type { ThreadHost } from '../app/thread-host.ts';
 import { transcriptPath } from '../core/capture.ts';
 import type { ThreadRow } from '../core/store.ts';
 import { buildHandoff, handoffPrompt } from '../core/handoff.ts';
+import { exportAll } from '../core/export.ts';
 import { SKIP_FLAG } from '../core/launch.ts';
 import { defaultOpener } from '../core/opener.ts';
 import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, sourceDir, syncSkills } from '../core/skills.ts';
 import type { AgentId } from '../core/types.ts';
 import { CLIS, type AgentCheck, type DeepReport, type FastReport } from '@chauvoluuhuong/chorus-core/doctor';
-import { check, composeIssue, firstLaunch, ghReady, host, isDue, isIssueKind, ISSUE_KINDS, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, remoteTested, reportDetails, runCommand, runDeep, sendIssue, DOCTOR_DIR } from '../core/doctor.ts';
+import { check, composeIssue, firstLaunch, ghReady, host, isDue, isIssueKind, ISSUE_KINDS, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, remoteTested, reportDetails, runCommand, runDeep, sendIssue, versions, DOCTOR_DIR } from '../core/doctor.ts';
 
 import type { NotificationInbox } from './notifications.ts';
 import { ChatLaunch, ProHost, type ProLoader } from './pro.ts';
+import { SignIns } from './signin.ts';
+import { inContainer } from '../cli/screen.ts';
 import type { UpdateCheck } from './updates.ts';
 import type { ChatStart } from '@chauvoluuhuong/chorus-core/pro-loader';
 
@@ -45,6 +49,30 @@ const VENDOR: Record<string, string> = {
 };
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const DEFAULT_SIZE = { cols: 120, rows: 36 };
+/**
+ * How to sign in an AI CLI inside the Chorus box, from the computer's own terminal: Claude Code prints a link and waits for the code
+ * pasted back; Codex needs --device-auth (its usual sign-in waits for the browser on the box's localhost:1455); agy asks on its first
+ * start. Seen in the box on 2026-11-08 with Claude Code 2.1.310, Codex 0.164.0, agy 1.4.5 (sign-in not completed there yet).
+ */
+export function boxLoginCommand(agent: AgentId, name = 'chorus') {
+  const login = { claude: 'claude auth login', codex: 'codex login --device-auth', agy: 'agy' }[agent];
+  return `docker exec -it -u chorus ${name} ${login}`;
+}
+
+/** --host values that mean every address of this machine */
+const WILDCARD = new Set(['0.0.0.0', '::', '[::]']);
+
+/**
+ * The names a request may use for this server, as they appear in a Host header (IPv6 in brackets). 127.0.0.1 and localhost always;
+ * `--host <name>` adds that name; a wildcard (0.0.0.0, ::) adds this machine's own addresses, so another computer can open it by IP.
+ */
+export function hostNames(host?: string, interfaces: ReturnType<typeof os.networkInterfaces> = os.networkInterfaces()): string[] {
+  const names = new Set(['127.0.0.1', 'localhost']);
+  const add = (a: string) => names.add(a.includes(':') && !a.startsWith('[') ? `[${a}]` : a);
+  if (host && WILDCARD.has(host)) for (const list of Object.values(interfaces)) for (const i of list ?? []) add(i.address.split('%')[0]);
+  else if (host) add(host);
+  return [...names];
+}
 const LITERAL = new Set(['POST ui', 'POST folders/pick', 'POST skills/import', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/send']);
 
 /** The App without a terminal: input and output go nowhere, the Controller drives it as usual. */
@@ -75,6 +103,13 @@ export interface ServeOpts {
   onUpdateOpen?: (url: string) => void;
   onNotificationLink?: (url: string) => void;
   port?: number;
+  /** the address to listen on: 127.0.0.1 unless `chorus serve --host` asks for another (opt-in: a container, a server). Its name is
+   *  then accepted in the Host and Origin checks too; the token is still needed on every request. */
+  host?: string;
+  /** where Export writes (tests); the Downloads folder otherwise */
+  exportDir?: string;
+  /** shows an export in the file manager (tests) */
+  onReveal?: (file: string) => void;
   /** fixed token (tests); random otherwise */
   token?: string;
   /** called when the last client asks the server to stop (the desktop window closing) */
@@ -90,6 +125,10 @@ export interface ServeOpts {
   openLink?: (url: string) => void;
   /** the system's folder picker (tests); the real one otherwise */
   pickFolder?: typeof pickFolder;
+  /** runs the CLIs' sign-ins in a container (tests: a fake PTY); the real one otherwise */
+  signIns?: SignIns;
+  /** Chorus runs in a container (tests); CHORUS_BOX=1 or /.dockerenv otherwise */
+  container?: boolean;
   /** whether the CLI still has a chat's session (tests); its transcript on disk otherwise */
   sessionExists?: (row: ThreadRow) => boolean;
 }
@@ -114,10 +153,17 @@ export class ChorusServer {
   readonly c: Controller;
   readonly app: App;
   readonly token: string;
+  /** the last export, for Show in Finder */
+  private lastExport: string | undefined;
   /** what `chorus mcp` holds: it opens /api/pro/mcp/ and nothing else */
   readonly mcpToken = crypto.randomBytes(24).toString('hex');
   readonly pro: ProHost;
   url = '';
+  /** in a container (the Chorus box): the CLIs sign in from the page (signin.ts), not in a terminal */
+  readonly container: boolean;
+  readonly signIns: SignIns;
+  /** the names a request may carry in Host and Origin (with our port): 127.0.0.1 and localhost, and what --host added */
+  private hostNames: string[] = ['127.0.0.1', 'localhost'];
   private o: ServeOpts;
   private http: http.Server | undefined;
   private wss: WebSocketServer | undefined;
@@ -150,7 +196,10 @@ export class ChorusServer {
     this.c = o.controller;
     this.app = o.controller.app;
     this.token = o.token ?? crypto.randomBytes(24).toString('hex');
-    this.pro = new ProHost({ homeDir: this.c.store.root, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.c.approvalItems('all').map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; } }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
+    this.container = o.container ?? (process.env.CHORUS_BOX === '1' || inContainer());
+    // a sign-in that finished: check again, so the Doctor shows the agent ready
+    this.signIns = o.signIns ?? new SignIns({ onChange: s => { if (s.state === 'done') void this.checkAgents({ quiet: true }).catch(e => this.noteError('doctor check', e)); } });
+    this.pro = new ProHost({ homeDir: this.c.store.root, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.c.approvalItems('all').map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))] }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     if (o.chatLaunch) o.chatLaunch.host = this.pro;
     this.bridge();
   }
@@ -220,19 +269,32 @@ export class ChorusServer {
     this.http = http.createServer((req, res) => void this.handle(req, res).catch(e => (this.noteError(`${req.method} ${req.url?.split('?')[0]}`, e), send(res, 500, { error: String((e as Error)?.message ?? e) }))));
     this.wss = new WebSocketServer({ noServer: true });
     this.http.on('upgrade', (req, sock, head) => {
+      if (this.isRemote(req)) {
+        // another device, through the private link: only one this Mac allowed, from its own page (stage 7)
+        return void this.pro.remote({ method: 'GET', url: req.url ?? '/', headers: req.headers }).then(
+          d => (d && 'pass' in d && d.origins.includes(String(req.headers.origin ?? '')) ? this.wss!.handleUpgrade(req, sock, head, ws => this.connect(ws, true)) : sock.destroy()),
+          () => sock.destroy(),
+        );
+      }
       if (!this.allowed(req) || !this.sameOrigin(req)) return sock.destroy();
-      this.wss!.handleUpgrade(req, sock, head, ws => this.connect(ws));
+      // the native window says so (/ws?window=native): while it is open, only it sets the agents' screen size
+      const native = new URL(req.url ?? '/', 'http://x').searchParams.get('window') === 'native';
+      this.wss!.handleUpgrade(req, sock, head, ws => this.connect(ws, false, native));
     });
     const listen = (p: number) =>
       new Promise<void>((resolve, reject) => {
         this.http!.once('error', reject);
-        this.http!.listen(p, '127.0.0.1', () => resolve());
+        this.http!.listen(p, this.o.host ?? '127.0.0.1', () => resolve());
       });
     // the usual port when it is free, any free one otherwise
     await listen(port).catch(() => listen(0));
-    this.url = `http://127.0.0.1:${(this.http.address() as AddressInfo).port}`;
+    const bound = (this.http.address() as AddressInfo).port;
+    const named = this.o.host && !WILDCARD.has(this.o.host) ? this.o.host : '127.0.0.1';
+    this.url = `http://${named.includes(':') ? `[${named}]` : named}:${bound}`;
+    this.hostNames = hostNames(this.o.host);
     this.ticker = setInterval(() => this.pushState(), 500);
-    fs.writeFileSync(this.serveFile, JSON.stringify({ url: this.url, mcpToken: this.mcpToken }), { mode: 0o600 });
+    // openUrl: the page's address with its token, printed by `chorus` after the window opens (a browser tab on the same Chorus)
+    fs.writeFileSync(this.serveFile, JSON.stringify({ url: this.url, openUrl: this.openUrl, mcpToken: this.mcpToken }), { mode: 0o600 });
     void this.pro.start();
     const tested = JSON.stringify(remoteTested());
     if (this.o.notifications)
@@ -291,6 +353,7 @@ export class ChorusServer {
   close() {
     this.closed = true;
     this.pro.close();
+    this.signIns.close();
     try {
       if ((JSON.parse(fs.readFileSync(this.serveFile, 'utf8')) as { url: string }).url === this.url) fs.rmSync(this.serveFile);
     } catch {
@@ -308,8 +371,11 @@ export class ChorusServer {
   /* ---------- auth ---------- */
 
   private hostOk(req: http.IncomingMessage) {
+    // --host 0.0.0.0 (the Chorus box): any address this machine is reached by (a LAN address, a host name); the token guards every
+    // request until Chorus has a login (owner's decision, 2026-11-08)
+    if (this.o.host && WILDCARD.has(this.o.host)) return !!req.headers.host;
     const port = (this.http?.address() as AddressInfo | null)?.port;
-    return req.headers.host === `127.0.0.1:${port}` || req.headers.host === `localhost:${port}`;
+    return this.hostNames.some(h => req.headers.host === `${h}:${port}`);
   }
 
   /** Cookies are shared by every port of a host: the name carries the port, so two servers (or a restarted one) never mix. */
@@ -333,13 +399,17 @@ export class ChorusServer {
   private sameOrigin(req: http.IncomingMessage) {
     const origin = req.headers.origin;
     // no Origin: not a browser (tests, scripts with the token); a browser must be on our page
-    return !origin || origin === this.url || origin === this.url.replace('127.0.0.1', 'localhost') || origin === 'tauri://localhost';
+    const port = (this.http?.address() as AddressInfo | null)?.port;
+    // any address allowed (--host 0.0.0.0): the page must still be ours, at the very address it was asked by
+    if (this.o.host && WILDCARD.has(this.o.host)) return !origin || origin === `http://${req.headers.host}`;
+    return !origin || origin === 'tauri://localhost' || this.hostNames.some(h => origin === `http://${h}:${port}`);
   }
 
   /* ---------- HTTP ---------- */
 
   private async handle(req: http.IncomingMessage, res: http.ServerResponse) {
     const u = new URL(req.url ?? '/', this.url);
+    if (this.isRemote(req)) return this.remoteHttp(req, res, u);
     if (!this.hostOk(req)) return send(res, 403, { error: 'wrong host' });
     // the first visit carries the token in the URL: the page comes with it in a cookie and drops it from the address bar.
     // No redirect: a window that navigates here from another origin (the desktop app's tauri://) is a cross-site
@@ -355,6 +425,38 @@ export class ChorusServer {
     if (req.method === 'GET' && u.pathname === '/api/pro/signed-in') return this.signedIn(res, u);
     if (!this.allowed(req)) return send(res, 401, { error: 'open the address chorus serve printed (it carries the token)' });
     if (req.method !== 'GET' && (req.headers['x-chorus'] !== '1' || !this.sameOrigin(req))) return send(res, 403, { error: 'missing X-Chorus header' });
+    return this.authed(req, res, u);
+  }
+
+  /**
+   * Came through a proxy (Tailscale Serve or Funnel) or for another host name. chorus serve still listens on 127.0.0.1 only; such a request
+   * goes to the optional module, which lets a device this Mac allowed in, or answers itself. With no module there is nothing to reach.
+   */
+  isRemote(req: http.IncomingMessage) {
+    const h = req.headers;
+    return !!(h['x-forwarded-for'] || h['forwarded'] || h['tailscale-user-login'] || h['tailscale-funnel-request']) || (!!h.host && !this.hostOk(req));
+  }
+
+  private async remoteHttp(req: http.IncomingMessage, res: http.ServerResponse, u: URL) {
+    const withBody = req.method === 'POST' && (u.pathname === '/mcp' || u.pathname.startsWith('/mcp/') || u.pathname.startsWith('/_remote/'));
+    const body = withBody ? await readRaw(req, 1_000_000).catch(() => undefined) : undefined;
+    if (withBody && !body) return send(res, 413, { error: 'too large' });
+    // for the Tailscale probe (docs/integrations/tailscale.md): which headers a proxied request carries, cookies and keys left out
+    if (process.env.CHORUS_PRO_LOG) console.error(`[pro] remote ${req.method} ${u.pathname} ${JSON.stringify(Object.fromEntries(Object.entries(req.headers).filter(([k]) => !['cookie', 'authorization'].includes(k))))}`);
+    const d = await this.pro.remote({ method: req.method ?? 'GET', url: req.url ?? '/', headers: req.headers, body });
+    if (!d) return this.hostOk(req) ? send(res, 404, { error: 'not found' }) : send(res, 403, { error: 'wrong host' });
+    if ('answer' in d) {
+      res.writeHead(d.answer.status, d.answer.headers ?? {});
+      return res.end(d.answer.body ?? '');
+    }
+    if (req.method !== 'GET' && (req.headers['x-chorus'] !== '1' || !d.origins.includes(String(req.headers.origin ?? '')))) return send(res, 403, { error: 'missing X-Chorus header' });
+    // which devices may come in is decided on the Mac itself, never from a device
+    if (u.pathname === '/api/pro/remote' && req.method !== 'GET') return send(res, 403, { error: 'Change remote access on the Mac itself.' });
+    return this.authed(req, res, u);
+  }
+
+  /** Past the checks: a request from this Mac's window, or from a device it allowed. */
+  private async authed(req: http.IncomingMessage, res: http.ServerResponse, u: URL) {
     if (!u.pathname.startsWith('/api/')) return this.file(u.pathname, res);
     if (u.pathname.startsWith('/api/pro/')) return this.proHttp(req, res, u);
     // a dropped file with no path (a browser gives the bytes only, or an image dragged from a page): the raw bytes, its name in
@@ -379,7 +481,7 @@ export class ChorusServer {
   }
 
   private async proMcp(req: http.IncomingMessage, res: http.ServerResponse, route: string) {
-    if (req.method === 'GET' && route === 'tools') return send(res, 200, { tools: await this.pro.mcpTools() });
+    if (req.method === 'GET' && route === 'tools') return send(res, 200, { tools: await this.pro.mcpTools(new URL(req.url ?? '/', 'http://x').searchParams.get('app') === '1') });
     if (req.method === 'POST' && route === 'call') {
       const b = await readJson(req);
       if (process.env.CHORUS_PRO_LOG) console.error(`[pro] mcp ${String(b.name)} thread ${String(b.threadId)}`);
@@ -418,8 +520,9 @@ export class ChorusServer {
       const state = crypto.randomBytes(24).toString('base64url');
       this.tries.set(state, Date.now() + 30 * 60_000);
       const url = `${tryUrl}?${new URLSearchParams({ state, port: new URL(this.url).port })}`;
-      (this.o.openLink ?? openUrl)(url);
-      return send(res, 200, { ok: true, url });
+      // in a container the browser is on another computer: the page opens it
+      if (!this.container) (this.o.openLink ?? openUrl)(url);
+      return send(res, 200, { ok: true, url, ...(this.container ? { open: url } : {}) });
     }
     if (req.method === 'GET' && route === 'plans') {
       // the Welcome screen's words come from the backend (no sales text in this repo); fetched once, only when it shows
@@ -454,6 +557,14 @@ export class ChorusServer {
     fs.createReadStream(file).pipe(res);
   }
 
+  /** A web page for the user: opened here in their browser, or, in a container (their browser is on the host), handed to the page,
+   *  which opens it (`open` in the answer; api() in app.js). */
+  private openLink(url: string, opener: (url: string) => void = openUrl) {
+    if (this.container) return { ok: true, open: url };
+    opener(url);
+    return { ok: true };
+  }
+
   /** Every operation of the desktop. Returns undefined for an unknown route (404). */
   /** Start what the user clicked in the doctor popup: install (pinned to the newest tested version when it can be), the
    *  tested version, a sign-in, or the deeper test. Only commands from the install table run here. */
@@ -463,6 +574,13 @@ export class ChorusServer {
     const a = this.agentNow(agent) ?? (await this.checkAgents()).report.agents.find(x => x.agent === agent)!;
     const command = action === 'install' ? a.install?.command : action === 'tested' ? a.testedInstall : action === 'login' ? info.login.join(' ') : undefined;
     if (action !== 'deep' && !command) return { error: `nothing to ${action} for ${info.name}` };
+    // the Chorus box (docker/box): no terminal app to open, and a sign-in needs one (a code to paste back), so the Doctor shows the
+    // command to run from the computer's own terminal (plan 2026-11-07 part B)
+    if (action === 'login' && this.container) {
+      // the sign-in runs here and the page opens its link (signin.ts); the docker exec command stays as the fallback it shows
+      const si = this.signIns.start(agent);
+      return { id: '', agent, action, command, done: true, ok: false, output: '', results: [], signIn: si.id, hostCommand: boxLoginCommand(agent, process.env.CHORUS_BOX_NAME) };
+    }
     if (action === 'login' && agent === 'agy') {
       if (!openInTerminal('agy')) return { error: 'agy signs in when it starts: run `agy` once in a terminal' };
       return { id: '', agent, action, command, done: true, ok: true, output: '', results: [], terminal: true };
@@ -489,13 +607,35 @@ export class ChorusServer {
   private async route(method: string, parts: string[], q: URLSearchParams, b: Record<string, any>): Promise<unknown> {
     const [a, id, sub] = parts;
     const c = this.c;
+    if (a === 'export' && method === 'POST') {
+      // the top bar's Export: everything, in one .zip in Downloads (plan stage 11, free for everyone)
+      if (!id) {
+        try {
+          const r = exportAll({ home: c.store.root, version: versions().chorus, dir: this.o.exportDir });
+          this.lastExport = r.file;
+          return r;
+        } catch (e) {
+          return { error: `Could not export: ${(e as Error).message}` };
+        }
+      }
+      if (id === 'reveal' && this.lastExport) return (this.o.onReveal ?? reveal)(this.lastExport), { ok: true };
+      return undefined;
+    }
     if (a === 'updates') {
       if (method === 'POST' && id === 'skip' && parts.length === 2) { this.o.updates?.skip(); this.pushState(); return { ok: true }; }
       if (method === 'POST' && id === 'open' && parts.length === 2) {
         const url = this.o.updates?.updateUrl();
         if (!url) return { error: 'No update is available for this platform' };
-        (this.o.onUpdateOpen ?? openUrl)(url); return { ok: true };
+        return this.openLink(url, this.o.onUpdateOpen);
       }
+      return undefined;
+    }
+    if (a === 'signin') {
+      // the sign-in Chorus runs for the page in a container: its link, its code, the code typed back, closing it
+      const si = id ? this.signIns.get(id) : undefined;
+      if (method === 'GET' && parts.length === 2) return si ?? { error: 'This sign-in is over. Click Log in again.' };
+      if (method === 'POST' && sub === 'code' && parts.length === 3) return si ? this.signIns.sendCode(id, String(b.code ?? '')) : { error: 'This sign-in is over. Click Log in again.' };
+      if (method === 'POST' && sub === 'close' && parts.length === 3) { this.signIns.cancel(id, !!b.done); void this.checkAgents({ quiet: true }).catch(e => this.noteError('doctor check', e)); return { ok: true }; }
       return undefined;
     }
     if (a === 'notifications') {
@@ -504,7 +644,7 @@ export class ChorusServer {
       if (method === 'POST' && id === 'read-all' && parts.length === 2) { inbox?.markAllRead(); this.pushState(); return inbox?.snapshot() ?? { items: [], unread: 0 }; }
       if (method === 'POST' && id === 'link' && parts.length === 2) {
         if (typeof b.url !== 'string' || !inbox?.allowsLink(typeof b.id === 'string' ? b.id : undefined, b.url)) return { error: 'This link is not in the notification' };
-        (this.o.onNotificationLink ?? openUrl)(b.url); return { ok: true };
+        return this.openLink(b.url, this.o.onNotificationLink);
       }
       if (method === 'POST' && sub === 'open' && parts.length === 3 && inbox?.content(id)) {
         void inbox.opened(id).catch(() => {}); this.pushState(); return { item: inbox.content(id), inbox: inbox.snapshot() };
@@ -649,8 +789,7 @@ export class ChorusServer {
       case 'POST doctor/open': {
         const a = b.agent as AgentId;
         if (!CLIS[a]) return { error: 'unknown agent' };
-        openUrl(CLIS[a].page);
-        return { ok: true };
+        return this.openLink(CLIS[a].page);
       }
       case 'POST doctor/run':
         return this.doctorRun(b.agent as AgentId, b.action);
@@ -685,6 +824,14 @@ export class ChorusServer {
   private select(id: string) {
     const at = this.app.entries.findIndex(e => e.id === id);
     if (at < 0) return false;
+    // a parked chat resumes in its folder: when that folder is not here (deleted, or a chat from another computer, as in a box
+    // sharing the user's home), it is shown but not started; starting it failed and stopped chorus serve (2026-11-08)
+    const row = this.c.store.getThread(id);
+    const e = this.app.entries[at];
+    if (!e.host && e.state === 'parked' && row?.cwd && !fs.existsSync(row.cwd)) {
+      this.app.setFlash(`"${row.title}" can't open: its folder ${row.cwd} is not on this computer`);
+      return true;
+    }
     this.app.select(at);
     this.pushState();
     return true;
@@ -722,6 +869,8 @@ export class ChorusServer {
     });
     return {
       project: c.project,
+      // in a container: the Doctor signs the CLIs in from the page, and offers agy's sign-in even when it looks ready
+      container: this.container,
       update: this.o.updates?.snapshot() ?? null,
       notifications: this.o.notifications?.summary() ?? { unread: 0, checkedAt: null, checking: false, offline: false },
       current: this.app.current?.id ?? null,
@@ -837,9 +986,17 @@ export class ChorusServer {
 
   /* ---------- WebSocket: the agent screens ---------- */
 
-  private connect(ws: WebSocket) {
-    const cl = new Client(this, ws);
+  /** Whether this viewer sets the agents' screen size: never through the private link; a browser tab only while no window is open. */
+  private setsSize(cl: Client) {
+    return !cl.remote && (cl.native || ![...this.clients].some(c => c.native));
+  }
+
+  private connect(ws: WebSocket, remote = false, native = false) {
+    const cl = new Client(this, ws, remote, native);
     this.clients.add(cl);
+    // CHORUS_DEBUG_VIEWERS=1: who connects and who sizes the agents (plan 2026-11-07 check A.4)
+    const debug = (what: string) => process.env.CHORUS_DEBUG_VIEWERS && console.error(`viewer ${remote ? 'remote' : native ? 'window' : 'browser tab'}: ${what}`);
+    debug('connected');
     this.lastState = '';
     ws.on('close', () => {
       cl.detach();
@@ -854,17 +1011,21 @@ export class ChorusServer {
       }
       const host = typeof m.id === 'string' ? this.app.entry(m.id)?.host : undefined;
       if (m.t === 'attach' && typeof m.id === 'string') {
-        if (m.cols > 0 && m.rows > 0) this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
+        // one screen size for every viewer: a phone looks at the agent at the Mac's size and never resizes it (stage 7)
+        if (m.cols > 0 && m.rows > 0 && this.setsSize(cl)) this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
+        debug(`attach ${m.cols}x${m.rows}, agents at ${this.size.cols}x${this.size.rows}`);
         if (!this.app.entry(m.id)?.host) this.select(m.id); // a parked chat resumes when you open it
         void cl.attach(m.id);
       } else if (m.t === 'in' && typeof m.data === 'string') {
         if (process.env.CHORUS_DEBUG_INPUT) fs.appendFileSync(process.env.CHORUS_DEBUG_INPUT, JSON.stringify(m.data) + '\n');
         host?.write(m.data);
       }
-      else if (m.t === 'resize' && m.cols > 0 && m.rows > 0) {
+      else if (m.t === 'resize' && m.cols > 0 && m.rows > 0 && this.setsSize(cl)) {
         this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
         host?.resize(this.size.cols, this.size.rows);
-      } else if (m.t === 'detach') cl.detach();
+        debug(`resize ${m.cols}x${m.rows}: agents at ${this.size.cols}x${this.size.rows}`);
+      } else if (m.t === 'resize') debug(`resize ${m.cols}x${m.rows} ignored: agents stay at ${this.size.cols}x${this.size.rows}`);
+      else if (m.t === 'detach') cl.detach();
       else if (m.t === 'drop' && typeof m.id === 'string' && Array.isArray(m.paths)) {
         // files dropped on the native window: Tauri gives their full paths (docs/phase5.md §8.3)
         const paths = m.paths.filter((p: unknown): p is string => typeof p === 'string' && path.isAbsolute(p));
@@ -884,9 +1045,15 @@ class Client {
   private gen = 0;
   private srv: ChorusServer;
   readonly ws: WebSocket;
-  constructor(srv: ChorusServer, ws: WebSocket) {
+  /** a device through the private link */
+  readonly remote: boolean;
+  /** the Chorus window (not a browser tab) */
+  readonly native: boolean;
+  constructor(srv: ChorusServer, ws: WebSocket, remote = false, native = false) {
     this.srv = srv;
     this.ws = ws;
+    this.remote = remote;
+    this.native = native;
   }
 
   send(s: string) {
@@ -1047,4 +1214,12 @@ function listFolders(dir: string) {
     /* unreadable: an empty list */
   }
   return { dir: d, parent: path.dirname(d) === d ? null : path.dirname(d), folders };
+}
+
+/** The file manager, at an export: Finder selects it; elsewhere its folder opens. */
+function reveal(file: string) {
+  const [cmd, args] = process.platform === 'darwin' ? ['open', ['-R', file]] : process.platform === 'win32' ? ['explorer', [`/select,${file}`]] : ['xdg-open', [path.dirname(file)]];
+  const p = spawn(cmd as string, args as string[], { stdio: 'ignore', detached: true });
+  p.on('error', () => {});
+  p.unref();
 }

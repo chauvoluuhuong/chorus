@@ -17,10 +17,20 @@ fn home() -> PathBuf {
     std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"))
 }
 
+fn chorus_dir() -> PathBuf {
+    std::env::var_os("CHORUS_HOME").map(PathBuf::from).unwrap_or_else(|| home().join(".chorus"))
+}
+
 fn log_file() -> PathBuf {
-    let dir = std::env::var_os("CHORUS_HOME").map(PathBuf::from).unwrap_or_else(|| home().join(".chorus"));
+    let dir = chorus_dir();
     let _ = fs::create_dir_all(&dir);
     dir.join("desktop.log")
+}
+
+/// Remote access is on with "Keep Chorus running when its window is closed" (stage 7): `chorus serve` writes this file. Closing the
+/// window then only hides it, so the agents and the private link go on; quitting from the menu still stops everything.
+fn keep_running() -> bool {
+    fs::read_to_string(chorus_dir().join("desktop.json")).map(|s| s.split_whitespace().collect::<String>().contains("\"keepRunning\":true")).unwrap_or(false)
 }
 
 /// `chorus serve` through the user's login shell, so it finds `chorus`, `node` and the agents on the PATH their terminal has
@@ -31,8 +41,9 @@ fn serve_command() -> Command {
     let bundled = home().join(".chorus/current/bin/chorus");
     let cli = std::env::var("CHORUS_SERVE_CMD").unwrap_or_else(|_| if bundled.exists() { format!("'{}'", bundled.display()) } else { "chorus".into() });
     let mut c = Command::new(shell);
-    // --exit-with-stdin: serve stops when this app's end of the pipe closes, even when the app is killed
-    c.arg("-l").arg("-c").arg(format!("exec {cli} serve --port 0 --exit-with-stdin"));
+    // --exit-with-stdin: serve stops when this app's end of the pipe closes, even when the app is killed.
+    // --port 4318: a steady browser address (`chorus` prints it); serve takes a free port when 4318 is in use
+    c.arg("-l").arg("-c").arg(format!("exec {cli} serve --port 4318 --exit-with-stdin"));
     c.current_dir(home());
     // a parent Claude Code session leaks its session id into children (CLAUDE.md rule 5)
     for k in ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_PID"] {
@@ -101,7 +112,9 @@ fn start_serve(app: &AppHandle) {
             // the first line of `chorus serve` is "chorus serve: <url with the token>"
             if let Some(url) = line.strip_prefix("chorus serve: ") {
                 found = true;
-                if let Ok(u) = Url::parse(url.trim()) {
+                if let Ok(mut u) = Url::parse(url.trim()) {
+                    // the page knows it is the window (not a browser tab): only the window sizes the agents while it is open
+                    u.query_pairs_mut().append_pair("window", "native");
                     let app = app.clone();
                     thread::spawn(move || open_page(&app, u));
                 }
@@ -188,6 +201,20 @@ fn main() {
         .expect("error while building the Chorus window")
         .run(|app, event| match event {
             RunEvent::Exit => stop_serve(app),
+            RunEvent::WindowEvent { label, event: WindowEvent::CloseRequested { api, .. }, .. } if keep_running() => {
+                api.prevent_close();
+                if let Some(w) = app.get_webview_window(&label) {
+                    let _ = w.hide();
+                }
+            }
+            // the Dock icon clicked while the window is hidden
+            #[cfg(target_os = "macos")]
+            RunEvent::Reopen { .. } => {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            }
             RunEvent::WindowEvent { label, event: WindowEvent::DragDrop(d), .. } => forward_drop(app, &label, &d),
             _ => {}
         });

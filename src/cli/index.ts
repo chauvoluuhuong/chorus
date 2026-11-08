@@ -18,6 +18,7 @@ import { UpdateCheck } from '../serve/updates.ts';
 import { saveRemoteTested, versions } from '../core/doctor.ts';
 import { buildInteractive, mcpCommand } from '../core/launch.ts';
 import { ChatLaunch } from '../serve/pro.ts';
+import { browserOpener, HOST_WARNING, inContainer, noScreen, noScreenMessage } from './screen.ts';
 import { activityCmd, artifactsCmd, doctorCmd, memoryCmd, showCmd, threadsCmd, traceCmd } from './commands.ts';
 
 const argv = process.argv.slice(2);
@@ -41,7 +42,9 @@ const models = (): Partial<Record<AgentId, string>> => ({ claude: process.env.CH
 function openStore() {
   const home = process.env.CHORUS_HOME ?? (process.env.CHORUS_STORE === 'project' ? undefined : path.join(process.env.HOME ?? '.', '.chorus'));
   const store = new Store(project, { home });
-  store.importLocal(project); // chats recorded before the store was shared
+  // chats recorded before the store was shared; not in a container: its folder is the user's shared home, whose .chorus is the
+  // host's own Chorus, and its chats belong to the host (they were copied into the box, 2026-11-08)
+  if (!(process.env.CHORUS_BOX === '1' || inContainer())) store.importLocal(project);
   return store;
 }
 
@@ -72,8 +75,35 @@ async function app(start: (c: Controller) => Promise<void> | void, opts: { newCh
   process.exit(0);
 }
 
-/** A screen to open a window on: always on macOS; on Linux an X11 or Wayland session (not over plain SSH or on a server). */
-const hasDisplay = () => process.platform !== 'linux' || !!(process.env.DISPLAY || process.env.WAYLAND_DISPLAY);
+/** A screen to open a window on: a Mac (not over SSH), a Linux X11 or Wayland session; not a container or a server (screen.ts). */
+const hasDisplay = () => !noScreen();
+
+/** Where `chorus serve` writes serve.json: the same folder openStore() uses. */
+const chorusHome = () => process.env.CHORUS_HOME ?? (process.env.CHORUS_STORE === 'project' ? path.join(project, '.chorus') : path.join(process.env.HOME ?? '.', '.chorus'));
+
+/**
+ * The browser address of the Chorus the window started (or the one already open): `serve.json` written by its `chorus serve`, once
+ * that server answers. Up to 20 s; undefined when none came up (a stale file of a server that is gone is not enough).
+ */
+async function servedUrl(ms = 20_000): Promise<string | undefined> {
+  const file = path.join(chorusHome(), 'serve.json');
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) {
+    try {
+      const j = JSON.parse(fs.readFileSync(file, 'utf8')) as { url?: string; openUrl?: string };
+      // any answer (401 without the token) means it is up
+      if (j.url && j.openUrl && (await fetch(j.url + '/api/state', { signal: AbortSignal.timeout(1000) }).then(() => true, () => false))) return j.openUrl;
+    } catch { /* not written yet */ }
+    await new Promise(r => setTimeout(r, 300));
+  }
+  return undefined;
+}
+
+/** After the window opens: the same Chorus in a browser (plan part A.1). */
+async function printBrowserAddress() {
+  const url = await servedUrl();
+  console.log(url ? `Chorus is open. In a browser too: ${url}` : `Chorus is opening. Its browser address will be in ${path.join(chorusHome(), 'serve.json')} (openUrl).`);
+}
 
 /** The native window on Linux: CHORUS_DESKTOP_APP, the installer's package (desktop/ next to bin/), else this checkout's build. */
 function linuxDesktopBin(repo: string) {
@@ -92,8 +122,11 @@ function missingLibs(bin: string) {
 
 const WEBKIT_HINT = 'Install WebKitGTK 4.1 for the Chorus window: Ubuntu/Debian `sudo apt install libwebkit2gtk-4.1-0`, Fedora `sudo dnf install webkit2gtk4.1`, Arch `sudo pacman -S webkit2gtk-4.1`.';
 
-const cmd = argv[0] ?? (invokedAs.startsWith('chorus-cli') ? 'app' : hasDisplay() ? 'desktop' : 'app');
-if (argv[0] === undefined && cmd === 'app' && !invokedAs.startsWith('chorus-cli')) console.error('no display here: opening Chorus in this terminal (chorus-cli)');
+// no command (only flags, e.g. `chorus --host 0.0.0.0`): the window with a screen, else Chorus for a browser (plan part A.4); `chorus-cli`
+// opens the terminal app
+const given = argv[0] && !argv[0].startsWith('--') ? argv[0] : undefined;
+const headless = !given && !invokedAs.startsWith('chorus-cli') && !hasDisplay();
+const cmd = given ?? (invokedAs.startsWith('chorus-cli') ? 'app' : headless ? 'serve' : 'desktop');
 switch (cmd) {
   case 'app':
     await app(() => {}, { newChat: true });
@@ -230,11 +263,21 @@ switch (cmd) {
       try { updates = new UpdateCheck({ directory: path.join(process.env.CHORUS_HOME ?? path.join(os.homedir(), '.chorus'), 'updates'), version: versions().chorus }); }
       catch { /* Keep the app available if update preferences cannot be read. */ }
     }
-    const srv = (server = new ChorusServer({ controller: c, port: Number(flag('port') ?? 4318), onQuit: quit, notifications, updates, chatLaunch }));
+    // --host: opt-in, for a container or a server; 127.0.0.1 otherwise
+    const host = flag('host');
+    const srv = (server = new ChorusServer({ controller: c, port: Number(flag('port') ?? process.env.CHORUS_PORT ?? 4318), host, onQuit: quit, notifications, updates, chatLaunch }));
     await srv.start();
     // the first line is read by the desktop shell: keep its shape
-    console.log(`chorus serve: ${srv.openUrl}`);
-    if (argv.includes('--open')) spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [srv.openUrl], { stdio: 'ignore', detached: true }).unref();
+    if (headless) console.log(noScreenMessage(srv.openUrl, noScreen(), host));
+    else console.log(`chorus serve: ${srv.openUrl}`);
+    if (host) console.log(`Listening on ${host}. ${HOST_WARNING}`);
+    if (argv.includes('--open')) {
+      const opener = browserOpener();
+      if (opener) spawn(opener, [srv.openUrl], { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
+      else console.log('No browser to open here: open the address above in a browser.');
+    }
+    // one failed promise must not stop the server and every chat with it: it is logged and the rest goes on
+    process.on('unhandledRejection', e => console.error('chorus serve: unhandled error', e));
     process.on('SIGINT', quit);
     process.on('SIGTERM', quit);
     process.on('SIGHUP', quit);
@@ -256,23 +299,30 @@ switch (cmd) {
     const appDir = path.join(repo, 'desktop/src-tauri/target/release/bundle/macos/Chorus.app');
     const linuxBin = process.platform === 'linux' ? linuxDesktopBin(repo) : undefined;
     const missing = linuxBin ? missingLibs(linuxBin) : [];
-    if (process.platform === 'darwin' && installed) {
+    // CHORUS_DESKTOP_DEV=1: this checkout's build even when an app is installed (it then runs this checkout's `chorus serve`)
+    if (process.platform === 'darwin' && installed && process.env.CHORUS_DESKTOP_DEV !== '1') {
       spawn('open', [installed], { stdio: 'ignore', detached: true }).unref();
       console.log(`opened ${installed}`);
+      await printBrowserAddress();
     } else if (process.platform === 'darwin' && fs.existsSync(appDir)) {
       const bin = path.join(appDir, 'Contents/MacOS', fs.readdirSync(path.join(appDir, 'Contents/MacOS'))[0]);
       const env = { ...process.env, CHORUS_SERVE_CMD: serveCmd };
-      spawn(bin, [], { stdio: 'ignore', detached: true, env }).unref();
+      // already open: bring it forward (`open` focuses a running app), as the installed app does, instead of a second window
+      const running = (() => { try { execFileSync('pgrep', ['-f', bin], { stdio: 'ignore' }); return true; } catch { return false; } })();
+      if (running) spawn('open', [appDir], { stdio: 'ignore', detached: true }).unref();
+      else spawn(bin, [], { stdio: 'ignore', detached: true, env }).unref();
       console.log(`opened ${appDir}`);
+      await printBrowserAddress();
     } else if (linuxBin && hasDisplay() && !missing.length) {
       // one window: a second start brings the open one to the front (single-instance plugin in desktop/)
       spawn(linuxBin, [], { stdio: 'ignore', detached: true, env: { ...process.env, CHORUS_SERVE_CMD: serveCmd } }).unref();
       console.log('opened Chorus');
+      await printBrowserAddress();
     } else {
       if (process.platform === 'darwin') console.log('no desktop app installed (npm run install:global builds and installs it): opening the page in the browser');
       else if (linuxBin && missing.length) console.log(`The Chorus window needs ${missing.join(', ')}. ${WEBKIT_HINT}\nUntil then: opening Chorus in your browser`);
       else console.log('opening Chorus in your browser');
-      spawn(process.execPath, [import.meta.filename, 'serve', '--open', ...argv.slice(1)], { stdio: 'inherit' }).on('exit', code => process.exit(code ?? 0));
+      spawn(process.execPath, [import.meta.filename, 'serve', '--open', ...(given ? argv.slice(1) : argv)], { stdio: 'inherit' }).on('exit', code => process.exit(code ?? 0));
       await new Promise(() => {});
     }
     break;

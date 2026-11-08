@@ -21,6 +21,12 @@ async function api(method, url, body) {
     pageError(`${method} ${url.split('?')[0]}: ${j.error || `HTTP ${r.status}`}`);
     throw new Error(j.error || `HTTP ${r.status}`);
   }
+  // a page the server can't open itself (Chorus in a container): this browser opens it, or says where it is
+  if (typeof j.open === 'string' && /^https:\/\//.test(j.open)) {
+    const w = window.open(j.open, '_blank');
+    if (w) w.opener = null;
+    else toast('The browser blocked the new tab.', { ms: 20000, buttons: `<a class="btn" href="${esc(j.open)}" target="_blank" rel="noopener">Open the page ↗</a>` });
+  }
   return j;
 }
 
@@ -47,7 +53,6 @@ const S = {
   // projects taken off the sidebar: folder -> ids of the chats it had then. Only the sidebar forgets them (chats and folder stay);
   // a chat that is new since then brings the project back.
   hidden: JSON.parse(localStorage.getItem('chorus.hidden') || '{}'),
-  asked: new Set(),
   detail: {},
   drawerData: null,
   actFilter: 'all',
@@ -72,10 +77,22 @@ const S = {
 
 /* ---------- the socket ---------- */
 
+// The Chorus window, not a browser tab: the shell opens the page with ?window=native (the address is cleaned later, so it is kept for
+// reloads in this window's session). While the window is open, only it sets the agents' screen size.
+const NATIVE = (() => {
+  let yes = !!(window.__TAURI_INTERNALS__ || window.__TAURI__) || new URLSearchParams(location.search).get('window') === 'native';
+  try {
+    if (yes) sessionStorage.setItem('chorus-window', 'native');
+    else yes = sessionStorage.getItem('chorus-window') === 'native';
+  } catch { /* no storage: the address and the globals decide */ }
+  return yes;
+})();
+
 let ws;
 let outbox = [];
 function connect() {
-  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  // the window says it is the window: while it is open, a browser tab on the same Chorus never resizes the agents
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws${NATIVE ? '?window=native' : ''}`);
   ws.onopen = () => {
     $('#conn').hidden = true;
     for (const m of outbox.splice(0)) ws.send(m);
@@ -149,16 +166,7 @@ function onState(st) {
   S.state = st;
   if (JSON.stringify(previousNews) !== JSON.stringify(st.notifications) && !$('#news').hidden && !S.newsDetail) void loadNews();
   if (!S.homeGuess) S.homeGuess = st.project.split('/').slice(0, 3).join('/');
-  // a request on a chat you are not looking at: a toast with the answer buttons (the CLI app's flash and bell)
-  for (const a of st.approvals) {
-    const key = a.id + '|' + a.what;
-    if (S.asked.has(key)) continue;
-    S.asked.add(key);
-    if (!first && !(S.view.name === 'chat' && S.view.id === a.id) && !inNeedsYou(a)) askToast(a);
-  }
-  dropNeedsYouToasts();
-  // the toast of a request goes when the request does (answered here, in the agent, or elsewhere)
-  for (const [k, el] of askToasts) if (!st.approvals.some(a => a.id + '|' + a.what === k)) (el.remove(), askToasts.delete(k));
+  // a request no longer pops up at the bottom (owner, 2026-11-07): it waits in Approvals and the top bar's "waiting" button
   if (S.view.name === 'chat' && !st.chats.some(c => c.id === S.view.id)) {
     S.history = [];
     return go({ name: 'new' }, false);
@@ -272,12 +280,12 @@ function drawTermOver() {
 /* ---------- navigation ---------- */
 
 function go(view, push = true) {
+  $('#app').classList.remove('side-open');
   if (push && S.view && JSON.stringify(S.view) !== JSON.stringify(view)) S.history.push(S.view);
   S.history = S.history.slice(-30);
   S.view = view;
   S.drawerData = null;
   if (view.name === 'pro-ended' && !S.endedSeen) (S.endedSeen = true), remember('ended', true);
-  dropNeedsYouToasts();
   // the address keeps the screen, so a reload comes back to it
   history.replaceState(null, '', `#/${view.name}${view.id ? `/${view.id}` : view.from ? `/from/${view.from}` : view.folder ? `/in/${encodeURIComponent(view.folder)}` : ''}`);
   if (view.name !== 'chat') detachTerm();
@@ -497,10 +505,12 @@ function renderChrome() {
   else if (v.name === 'pro') crumbs = window.choruspro?.crumbs?.(v.id) ?? '';
   else crumbs = `<span class="here">${{ approvals: 'Approvals', memory: 'Memory', skills: 'Skills', doctor: 'Doctor' }[v.name] ?? ''}</span>`;
   $('#top').innerHTML = `
+    <button class="icon-btn menu-btn" data-act="menu" aria-label="Chats and projects" aria-expanded="${$('#app').classList.contains('side-open')}">☰</button>
     ${$('#app').classList.contains('side-off') ? `<button class="icon-btn" data-act="sidebar" title="Show the sidebar (${MOD}B)">⇥</button>` : ''}
     ${S.history.length ? '<button class="btn" data-act="back" title="Back">‹ Back</button>' : ''}
     <div class="crumbs">${crumbs}</div>
     ${waiting ? `<button class="btn waiting" data-act="approvals">! ${waiting} waiting</button>` : ''}
+    <button class="btn export-btn" data-act="export" title="Save all your chats and their files to one .zip in Downloads"${S.exporting ? ' disabled' : ''}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg><span class="export-label">${S.exporting ? 'Exporting…' : 'Export'}</span></button>
     <button class="btn news-toggle" data-act="news-toggle" aria-label="Notifications${st?.notifications?.unread ? `, ${st.notifications.unread} unread` : ''}" aria-expanded="${!$('#news').hidden}" aria-controls="news"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span class="news-label">Notifications</span>${st?.notifications?.unread ? `<span class="news-count">${Math.min(st.notifications.unread, 99)}</span>` : ''}</button>`;
 
   // the controller's warning line (limit, quota, context not loaded), with a button for what it suggests
@@ -889,6 +899,8 @@ function agentStatus(a, jobs = true) {
     return s('warn', 'Not installed', line, [[`Install${a.install?.version ? ' ' + a.install.version : ''}`, 'doc-run', `${a.agent}:install`, true], ['Open page ↗', 'doc-open', a.agent]]);
   }
   if (a.state === 'needs-login') {
+    // in a container Chorus runs the sign-in and the popup shows its link (signInPopup)
+    if (job?.signIn && $('#signin-pop')) return s('plain', 'Signing in…', 'Finish in the sign-in page; the popup has the link.', [], true);
     if (job?.terminal) return s('warn', 'Not logged in', 'Log in in the Terminal window, then check again.', [['Check again', 'doc-recheck', a.agent, true]]);
     return s('warn', 'Not logged in', `Log in to use it here. ${LOGIN_HINT}`, [['Log in', 'doc-run', `${a.agent}:login`, true], ['Check again', 'doc-recheck', a.agent]]);
   }
@@ -903,7 +915,63 @@ function agentStatus(a, jobs = true) {
     return s('bad', `${pass} of ${rs.length} passed`, 'Chats still start; the failed part does not work yet.');
   }
   if (a.state === 'untested') return s('warn', 'New version', `Chorus is tested with ${a.newestTested ?? 'other versions'}; the detailed test checks that ${a.version} works too.`, jobs ? [['Run detailed test', 'doc-run', `${a.agent}:deep`]] : []);
-  return s('ok', 'Ready', a.login === 'yes' ? 'Logged in · a version Chorus is tested with.' : 'A version Chorus is tested with.');
+  // in a container Chorus can't see whether agy is signed in: its Log in is always there
+  const agyLogin = jobs && a.agent === 'agy' && S.state?.container ? [['Log in', 'doc-run', 'agy:login']] : [];
+  return s('ok', 'Ready', a.login === 'yes' ? 'Logged in · a version Chorus is tested with.' : agyLogin.length ? 'A version Chorus is tested with. Chorus can\'t tell here whether it is signed in: Log in if a chat asks you to.' : 'A version Chorus is tested with.', agyLogin);
+}
+
+/* ---------- signing in from the page (Chorus in a container: docs/features/docker-box.md) ---------- */
+
+/**
+ * Chorus runs the CLI's sign-in and reads its link: open it in the tab opened on the click (a tab opened later is blocked as a
+ * pop-up), and show the link again, Codex's one-time code, and a box for the code the sign-in page gives back.
+ */
+async function signInPopup(agent, j, tab) {
+  $('#signin-pop')?.remove();
+  const el = document.createElement('div');
+  el.className = 'scrim';
+  el.id = 'signin-pop';
+  el.innerHTML = `<div class="dialog si-dialog" role="dialog" aria-label="Sign in to ${esc(drName(agent))}"><h2>Sign in to ${esc(drName(agent))}</h2><div class="body" id="si-body"><p class="muted"><span class="spin"></span> Getting the sign-in page…</p></div><div class="foot" id="si-foot"><button class="btn" data-act="si-close">Cancel</button></div></div>`;
+  el.dataset.id = j.signIn;
+  el.dataset.agent = agent;
+  $('#dialogs').append(el);
+  let opened = false;
+  for (;;) {
+    if (!el.isConnected) return tab?.close();
+    const si = await api('GET', `/api/signin/${j.signIn}`).catch(err => ({ error: err.message }));
+    if (!el.isConnected) return;
+    if (si.error || si.state === 'failed') {
+      tab?.close();
+      $('#si-body').innerHTML = `<p>The sign-in stopped${si.error ? `: ${esc(si.error)}` : ''}.</p>${si.output ? `<pre class="si-out">${esc(si.output)}</pre>` : ''}<p class="muted">Or sign in from your computer's terminal:</p>${siCommand(j.hostCommand)}`;
+      $('#si-foot').innerHTML = `<button class="btn" data-act="si-close">Close</button><button class="btn primary" data-act="doc-run" data-arg="${esc(agent)}:login">Try again</button>`;
+      return;
+    }
+    if (si.state === 'done') {
+      $('#si-body').innerHTML = `<p>✔ ${esc(drName(agent))} is signed in.</p>`;
+      $('#si-foot').innerHTML = `<button class="btn primary" data-act="si-close" data-value="done">Done</button>`;
+      return;
+    }
+    if (si.url && !opened) {
+      opened = true;
+      if (tab && !tab.closed) tab.location.href = si.url;
+      else window.open(si.url, '_blank', 'noopener');
+      drawSignIn(si, j);
+    } else if (si.url && si.codeSent && !$('#si-body [data-sent]')) drawSignIn(si, j);
+    await new Promise(r => setTimeout(r, 1000));
+  }
+}
+
+const siCommand = cmd => (cmd ? `<div class="si-row"><code class="mono">${esc(cmd)}</code><button class="btn" data-act="doc-copy" data-arg="${esc(cmd)}">Copy</button></div>` : '');
+
+function drawSignIn(si, j) {
+  const link = `<p>The sign-in page opened in a new tab. Didn't open? <a href="${esc(si.url)}" target="_blank" rel="noopener">Open the sign-in page ↗</a></p>`;
+  const code = si.userCode ? `<p>Enter this code there:</p><div class="si-row"><code class="mono si-code">${esc(si.userCode)}</code><button class="btn" data-act="doc-copy" data-arg="${esc(si.userCode)}">Copy</button></div><p class="muted">This window finishes by itself once you've entered it.</p>` : '';
+  const back = si.codeBack && !si.codeSent ? `<p>${si.codeBack === 'required' ? 'After you approve, the page shows a code. Paste it here:' : 'If the page shows a code, paste it here:'}</p><div class="si-row"><input type="text" class="dlg-input" id="si-code" placeholder="Code from the sign-in page" autocomplete="off" spellcheck="false"><button class="btn primary" data-act="si-code">Sign in</button></div>` : '';
+  const sent = si.codeSent ? `<p data-sent><span class="spin"></span> Code sent. Finishing the sign-in…</p>` : '';
+  $('#si-body').innerHTML = link + code + back + sent + `<details class="si-more"><summary>Sign in from your computer's terminal instead</summary>${siCommand(j.hostCommand)}</details>`;
+  // agy keeps running after it signs in, and what its page asks is not known yet: the user says when it's done
+  $('#si-foot').innerHTML = `<button class="btn" data-act="si-close">Cancel</button>${si.agent === 'agy' ? '<button class="btn primary" data-act="si-close" data-value="done">I\'ve signed in</button>' : ''}`;
+  $('#si-code')?.focus();
 }
 
 const agentPill = st => `<span class="badge ${st.kind}">${st.busy ? '<span class="spin"></span>' : st.kind === 'ok' ? '✔ ' : st.kind === 'warn' || st.kind === 'bad' ? '⚠ ' : ''}${esc(st.label)}</span>`;
@@ -1159,7 +1227,7 @@ async function reportIssue() {
   el.innerHTML = `<div class="dialog dr-dialog" role="dialog"><h2>Report an issue</h2><div class="body"><p class="muted"><span class="spin"></span> Collecting what Chorus knows about this machine…</p></div></div>`;
   $('#dialogs').append(el);
   const client = {
-    window: window.__TAURI_INTERNALS__ || window.__TAURI__ ? 'native' : 'browser',
+    window: NATIVE ? 'native' : 'browser',
     agent: navigator.userAgent,
     screen: `${screen.width}×${screen.height}@${devicePixelRatio}`,
     size: `${innerWidth}×${innerHeight}`,
@@ -1523,23 +1591,6 @@ function toast(text, opts = {}) {
   setTimeout(() => el.remove(), opts.ms ?? 4000);
   return el;
 }
-const askToasts = new Map();
-/** On a project's Portal, a teammate's request is under Needs you already: no toast for it. */
-const dropNeedsYouToasts = () => { for (const [k, el] of askToasts) if (inNeedsYou({ id: k.split('|')[0] })) (el.remove(), askToasts.delete(k)); };
-const inNeedsYou = a => S.view.name === 'pro' && String(S.view.id ?? '').startsWith('portal~') && !!window.choruspro?.hidesChat?.(a.id);
-function askToast(a) {
-  const ask = a.kind === 'ask';
-  const el = toast(`${AGENT[a.agent]?.name ?? a.agent} in "${a.title}" asks${ask ? ' you' : ''}: ${ask ? a.question : a.what.split(' · ').slice(-1)[0]}`, {
-    cls: 'ask',
-    ms: 10 * 60 * 1000,
-    buttons: ask
-      ? `${optionButtons({ ...a, options: a.options.slice(0, 3) })}<button class="btn" data-act="chat" data-arg="${esc(a.id)}">Open</button>`
-      : `<button class="btn" data-act="approve" data-arg="${esc(a.id)}">Approve</button><button class="btn" data-act="deny" data-arg="${esc(a.id)}">Deny</button><button class="btn" data-act="chat" data-arg="${esc(a.id)}">Open</button>`,
-  });
-  el?.addEventListener('click', e => e.target.closest('[data-act]') && setTimeout(() => el.remove(), 0));
-  askToasts.set(a.id + '|' + a.what, el);
-}
-
 /* ---------- input ---------- */
 
 document.addEventListener('click', async e => {
@@ -1609,6 +1660,20 @@ document.addEventListener('click', async e => {
       return drawDoctor();
     case 'doc-open':
       return void api('POST', '/api/doctor/open', { agent: arg });
+    case 'si-code': {
+      const pop = $('#signin-pop');
+      const code = $('#si-code')?.value ?? '';
+      const r = await api('POST', `/api/signin/${pop.dataset.id}/code`, { code }).catch(err => ({ error: err.message }));
+      return r.error ? toast(r.error) : undefined;
+    }
+    case 'si-close': {
+      const pop = $('#signin-pop');
+      if (!pop) return;
+      pop.remove();
+      delete S.docJobs[pop.dataset.agent];
+      await api('POST', `/api/signin/${pop.dataset.id}/close`, { done: el.dataset.value === 'done' }).catch(() => {});
+      return drawDoctor();
+    }
     case 'doc-copy':
       return void navigator.clipboard.writeText(arg).then(() => toast('Copied'));
     case 'doc-notnow':
@@ -1619,8 +1684,15 @@ document.addEventListener('click', async e => {
       return drawDoctor();
     case 'doc-run': {
       const [agent, action] = arg.split(':');
+      // in a container the sign-in page opens in a new tab: opened now, on the click, or the browser blocks it as a pop-up
+      const tab = action === 'login' && S.state?.container ? window.open('about:blank', '_blank') : null;
       const j = await api('POST', '/api/doctor/run', { agent, action }).catch(err => (toast(err.message), null));
-      if (!j || j.error) return j?.error && toast(j.error);
+      if (!j || j.error) return tab?.close(), j?.error && toast(j.error);
+      if (j.signIn) {
+        S.docJobs[agent] = j;
+        void signInPopup(agent, j, tab);
+        return drawDoctor();
+      }
       S.docJobs[agent] = j;
       S.docOpen.add(agent);
       S.docRan = false;
@@ -1652,6 +1724,29 @@ document.addEventListener('click', async e => {
     case 'news-privacy': return api('POST', '/api/notifications/link', { url: 'https://chorus-cli.web.app/privacy' });
     case 'back':
       return back();
+    case 'export': {
+      // everything, in one .zip in Downloads: free for everyone (2.0 plan stage 11)
+      if (S.exporting) return;
+      S.exporting = true;
+      renderChrome();
+      try {
+        const r = await api('POST', '/api/export');
+        if (r.error) toast(r.error);
+        else toast(`Exported ${r.chats} chat${r.chats === 1 ? '' : 's'} to ${r.file.split('/').pop()} in Downloads (${(r.bytes / 1e6).toFixed(r.bytes < 1e7 ? 1 : 0)} MB)`, { ms: 20000, buttons: '<button class="btn" data-act="export-reveal">Show in Finder</button>' });
+      } catch (e) {
+        toast(`Could not export: ${e.message}`);
+      } finally {
+        S.exporting = false;
+        renderChrome();
+      }
+      return;
+    }
+    case 'export-reveal':
+      return void api('POST', '/api/export/reveal').catch(() => {});
+    case 'menu':
+      // a narrow window, like a phone through the private link: the sidebar comes over the page
+      $('#app').classList.toggle('side-open');
+      return renderChrome();
     case 'sidebar':
       $('#app').classList.toggle('side-off');
       renderChrome();
@@ -1880,6 +1975,7 @@ document.addEventListener(
           return b.click();
         }
       }
+      if (e.key === 'Enter' && e.target.id === 'si-code') return void $('[data-act="si-code"]')?.click();
       if (e.key === 'Enter' && e.target.closest('.dlg-input') && dlg.dataset.dialog) {
         e.preventDefault();
         return dlg.querySelector('[data-act="dlg-ok"]')?.click();

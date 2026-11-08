@@ -16,10 +16,13 @@ The website ([chorus-cli.web.app](https://chorus-cli.web.app/)) has the download
 ```bash
 curl -fsSL https://chorus-cli.web.app/install.sh | sh                        # production
 curl -fsSL https://chorus-cli.web.app/install.sh | bash -s -- --preview      # newest preview
+curl -fsSL https://chorus-cli.web.app/docker.sh | bash                       # in a Docker box, in your browser (macOS, Linux)
+irm https://chorus-cli.web.app/docker.ps1 | iex                              # in a Docker box on Windows (PowerShell)
 ```
 
-`chorus` opens the desktop app. `chorus-cli` opens the terminal app (on hold, see Contributing), which is also what
-`chorus` opens on Linux with no display, as over SSH.
+`chorus` opens the desktop app and prints the address of the same Chorus in a browser. With no screen (a container, SSH, a
+server) it runs Chorus for a browser and prints the address; `chorus serve --host 0.0.0.0` lets another computer reach it.
+`chorus-cli` opens the terminal app (on hold, see Contributing). The Docker box: [docs/features/docker-box.md](docs/features/docker-box.md).
 
 ## Why
 

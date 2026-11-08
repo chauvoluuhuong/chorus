@@ -12,7 +12,8 @@ import { buildHandoff } from '../../src/core/handoff.ts';
 import { Store } from '../../src/core/store.ts';
 import type { AgentId } from '../../src/core/types.ts';
 import type { AgentCheck, FastReport } from '@chauvoluuhuong/chorus-core/doctor';
-import { ChorusServer, headlessApp, type ServeOpts } from '../../src/serve/server.ts';
+import { SignIns } from '../../src/serve/signin.ts';
+import { boxLoginCommand, ChorusServer, headlessApp, hostNames, type ServeOpts } from '../../src/serve/server.ts';
 import { NotificationInbox } from '../../src/serve/notifications.ts';
 import { UpdateCheck } from '../../src/serve/updates.ts';
 
@@ -25,7 +26,7 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const agentCheck = (agent: AgentId, state: AgentCheck['state'], login: AgentCheck['login'] = state === 'needs-login' ? 'no' : 'yes'): AgentCheck => ({ agent, name: agent, state, login, version: '1.0.0', page: '', loginCommand: [agent, 'login'], ms: 1 });
 const fastReport = (agents: AgentCheck[] = (['claude', 'codex', 'agy'] as AgentId[]).map(a => agentCheck(a, 'ready'))): FastReport => ({ node: { version: '22', ok: true }, platform: 'test', agents, ms: 1 });
 
-async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand' | 'pickFolder' | 'sessionExists'> = {}) {
+async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand' | 'pickFolder' | 'sessionExists' | 'host' | 'container' | 'signIns'> = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-home-'));
   process.env.CODEX_HOME = home;
   const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-serve-')));
@@ -73,8 +74,8 @@ async function rig(seed?: (store: Store, project: string) => void, notifications
 }
 
 /** A desktop window: a socket and the terminal it would draw (replayed screen + live bytes). */
-async function viewer(url: string, token: string, origin?: string) {
-  const ws = new WebSocket(url.replace('http', 'ws') + '/ws', { headers: { authorization: `Bearer ${token}`, ...(origin ? { origin } : {}) } });
+async function viewer(url: string, token: string, origin?: string, query = '') {
+  const ws = new WebSocket(url.replace('http', 'ws') + '/ws' + query, { headers: { authorization: `Bearer ${token}`, ...(origin ? { origin } : {}) } });
   const msgs: any[] = [];
   const term = new VirtualScreen(100, 30);
   ws.on('message', d => {
@@ -599,6 +600,171 @@ test('a chat whose CLI lost its session goes on in the same chat, from its recor
     v.send({ t: 'attach', id: 't_kept', cols: 100, rows: 30 });
     await v.until(() => r.launches.at(-1)!.resumeId === 'kept-1', 'resumed');
     assert.equal((await r.api('GET', '/api/chats/t_kept')).json.fromRecord, null);
+  } finally {
+    await r.done();
+  }
+});
+
+/** A Host header the server answers to with this token: status code only. */
+function statusWithHost(port: string, host: string, token?: string, connectTo = '127.0.0.1') {
+  return new Promise<number | string>(resolve => {
+    const req = http.request({ host: connectTo, port, path: '/api/state', headers: { host, ...(token ? { authorization: `Bearer ${token}` } : {}) } }, res => resolve(res.statusCode ?? 0));
+    req.on('error', e => resolve((e as NodeJS.ErrnoException).code ?? 'error'));
+    req.setTimeout(2000, () => req.destroy(Object.assign(new Error('timeout'), { code: 'TIMEOUT' })));
+    req.end();
+  });
+}
+
+const lanAddress = () => Object.values(os.networkInterfaces()).flat().find(i => i && i.family === 'IPv4' && !i.internal)?.address;
+
+test('serve --host: names it accepts (plan A.8)', () => {
+  assert.deepEqual(hostNames(), ['127.0.0.1', 'localhost']);
+  assert.deepEqual(hostNames('chorus.lan'), ['127.0.0.1', 'localhost', 'chorus.lan']);
+  const nics = { lo: [{ address: '127.0.0.1' }], eth0: [{ address: '172.17.0.2' }, { address: 'fe80::1%eth0' }] } as any;
+  assert.deepEqual(hostNames('0.0.0.0', nics), ['127.0.0.1', 'localhost', '172.17.0.2', '[fe80::1]']);
+  assert.deepEqual(hostNames('::', nics), hostNames('0.0.0.0', nics));
+});
+
+test('serve: without --host only this machine connects; serve.json carries the browser address (plan A.1, A.7)', async () => {
+  const r = await rig();
+  try {
+    const port = new URL(r.url).port;
+    const saved = JSON.parse(fs.readFileSync(path.join(r.store.root, 'serve.json'), 'utf8'));
+    assert.equal(saved.url, r.url);
+    assert.equal(saved.openUrl, r.srv.openUrl);
+    assert.equal((fs.statSync(path.join(r.store.root, 'serve.json')).mode & 0o777).toString(8), '600');
+    const lan = lanAddress();
+    if (lan) assert.equal(await statusWithHost(port, `${lan}:${port}`, r.srv.token, lan), 'ECONNREFUSED', 'nothing listens on the network address');
+  } finally {
+    await r.done();
+  }
+});
+
+test('serve --host 0.0.0.0: reachable by any address of this machine, still a token on every request, sockets from the same address (plan A.6, A.8)', async () => {
+  const r = await rig(undefined, undefined, undefined, { host: '0.0.0.0' });
+  try {
+    const port = new URL(r.url).port;
+    assert.match(r.url, /^http:\/\/127\.0\.0\.1:\d+$/, 'the printed address stays 127.0.0.1 (a published container port)');
+    assert.equal(await statusWithHost(port, `localhost:${port}`, r.srv.token), 200);
+    assert.equal(await statusWithHost(port, `localhost:${port}`), 401, 'no token');
+    assert.equal(await statusWithHost(port, `mac.local:${port}`, r.srv.token), 200, 'any name this machine is reached by (owner, 2026-11-08)');
+    assert.equal(await statusWithHost(port, `mac.local:${port}`), 401, 'still the token');
+    await assert.rejects(viewer(r.url, r.srv.token, `http://mac.local:${port}`), /HTTP|socket hang up|closed|ECONNRESET/, 'a socket from another address than the one asked');
+    const lan = lanAddress();
+    if (lan) {
+      assert.equal(await statusWithHost(port, `${lan}:${port}`, r.srv.token, lan), 200, 'another computer, by this machine\'s address');
+      assert.equal(await statusWithHost(port, `${lan}:${port}`, undefined, lan), 401, 'still no way in without the token');
+      const ok = await viewer(`http://${lan}:${port}`, r.srv.token, `http://${lan}:${port}`);
+      ok.ws.close();
+    }
+    await assert.rejects(viewer(r.url, r.srv.token, 'https://evil.example'), /HTTP|socket hang up|closed|ECONNRESET/);
+  } finally {
+    await r.done();
+  }
+});
+
+test('serve --host <name>: that name is accepted and printed', async () => {
+  const r = await rig(undefined, undefined, undefined, { host: 'localhost' });
+  try {
+    assert.match(r.url, /^http:\/\/localhost:\d+$/);
+    const port = new URL(r.url).port;
+    assert.equal(await statusWithHost(port, `localhost:${port}`, r.srv.token), 200);
+    assert.equal(await statusWithHost(port, `other.example:${port}`, r.srv.token), 403);
+  } finally {
+    await r.done();
+  }
+});
+
+test('serve: while the window is open only it sizes the agents; a browser tab is a viewer (plan A.4)', async () => {
+  const r = await rig();
+  try {
+    const tab = await viewer(r.url, r.srv.token);
+    const made = await r.api('POST', '/api/chats', { agent: 'claude', folder: r.project, prompt: 'hi' });
+    const id = made.json.id as string;
+    tab.send({ t: 'attach', id, cols: 90, rows: 25 });
+    await tab.until(() => /SIZE 90x25/.test(tab.text()), 'a tab alone sizes the agent');
+    const win = await viewer(r.url, r.srv.token, undefined, '?window=native');
+    win.send({ t: 'attach', id, cols: 100, rows: 30 });
+    await win.until(() => /SIZE 100x30/.test(win.text()), 'the window sizes it');
+    tab.send({ t: 'resize', id, cols: 70, rows: 20 });
+    tab.send({ t: 'attach', id, cols: 71, rows: 21 });
+    await sleep(600);
+    assert.doesNotMatch(win.text(), /SIZE 7[01]x2[01]/, 'the tab does not resize the agent while the window is open');
+    win.send({ t: 'resize', id, cols: 80, rows: 24 });
+    await win.until(() => /SIZE 80x24/.test(win.text()), 'the window still resizes it');
+    win.ws.close();
+    await sleep(200);
+    tab.send({ t: 'resize', id, cols: 60, rows: 20 });
+    await tab.until(() => /SIZE 60x20/.test(tab.text()), 'with the window closed the tab sizes it again');
+    tab.ws.close();
+  } finally {
+    await r.done();
+  }
+});
+
+test('serve in a container: Log in runs the sign-in here and the page gets its link; the code goes back to the CLI (plan part B)', async () => {
+  assert.equal(boxLoginCommand('claude'), 'docker exec -it -u chorus chorus claude auth login');
+  assert.equal(boxLoginCommand('codex', 'box2'), 'docker exec -it -u chorus box2 codex login --device-auth');
+  const typed: string[] = [];
+  let print: (d: string) => void = () => {};
+  const signIns = new SignIns({ env: {}, pty: () => ({ pid: 1, onData: cb => void (print = cb), onExit() {}, write: d => void typed.push(d), resize() {}, kill() {} }) });
+  const r = await rig(undefined, undefined, undefined, { container: true, signIns });
+  try {
+    assert.equal(r.srv.state().container, true, 'the page knows');
+    const j = await r.api('POST', '/api/doctor/run', { agent: 'claude', action: 'login' });
+    assert.equal(j.status, 200);
+    assert.match(j.json.signIn, /^[0-9a-f]{12}$/);
+    assert.equal(j.json.hostCommand, 'docker exec -it -u chorus chorus claude auth login', 'the fallback the popup shows');
+    assert.equal((await r.api('GET', `/api/signin/${j.json.signIn}`)).json.state, 'starting');
+    print("If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?code=true&state=S\r\nPaste code here if prompted > ");
+    const si = (await r.api('GET', `/api/signin/${j.json.signIn}`)).json;
+    assert.equal(si.state, 'waiting');
+    assert.equal(si.url, 'https://claude.com/cai/oauth/authorize?code=true&state=S');
+    assert.deepEqual((await r.api('POST', `/api/signin/${j.json.signIn}/code`, { code: 'XYZ' })).json, { ok: true });
+    assert.deepEqual(typed, ['XYZ\r']);
+    assert.deepEqual((await r.api('POST', `/api/signin/${j.json.signIn}/close`, {})).json, { ok: true });
+    assert.match((await r.api('GET', `/api/signin/${j.json.signIn}`)).json.error, /over/);
+  } finally {
+    await r.done();
+  }
+});
+
+test('serve in a container: links go to the page to open; a missing opener does not stop chorus serve (2026-11-08 crash)', async () => {
+  // what crashed the box: openUrl with no xdg-open/open on the PATH emitted an unhandled spawn error
+  const { openUrl } = await import('../../src/core/doctor.ts');
+  const path0 = process.env.PATH;
+  process.env.PATH = '/nonexistent';
+  try {
+    openUrl('https://example.com/');
+    await sleep(300);
+  } finally {
+    process.env.PATH = path0;
+  }
+  const r = await rig(undefined, undefined, undefined, { container: true });
+  try {
+    const j = await r.api('POST', '/api/doctor/open', { agent: 'codex' });
+    assert.equal(j.status, 200);
+    assert.match(j.json.open, /^https:\/\//, 'the page opens it');
+    assert.deepEqual(r.notificationLinks, [], 'nothing opened on the server');
+  } finally {
+    await r.done();
+  }
+});
+
+test('serve: a chat whose folder is not on this computer is shown, not started, and chorus serve goes on (the box crash, 2026-11-08)', async () => {
+  const r = await rig(store => {
+    store.createThread({ id: 't_far', title: 'From the Mac', agent: 'codex', cwd: '/private/var/folders/xx/T/chorus-proof-gone', native_session_id: 'far-1', state: 'waiting' });
+  });
+  try {
+    const v = await viewer(r.url, r.srv.token);
+    await v.until(() => v.state()?.chats.length === 1, 'state');
+    assert.equal((await r.api('POST', '/api/chats/t_far/select')).status, 200);
+    v.send({ t: 'attach', id: 't_far', cols: 100, rows: 30 });
+    await v.until(() => v.msgs.some(m => m.t === 'flash' && /can't open: its folder \/private\/var\/folders\/xx\/T\/chorus-proof-gone is not on this computer/.test(m.text)), 'it says why');
+    await sleep(300);
+    assert.deepEqual(r.launches, [], 'nothing started');
+    assert.equal((await r.api('GET', '/api/state')).status, 200, 'still serving');
+    v.ws.close();
   } finally {
     await r.done();
   }

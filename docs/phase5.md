@@ -8,7 +8,7 @@ graphical UI, over `chorus serve`, no business logic of its own. E2E proof with 
 
 ```
 Chorus.app (desktop/, Tauri, 4.9 MB)          a window; no logic
-  └─ $SHELL -l -c 'chorus serve --port 0 --exit-with-stdin'
+  └─ $SHELL -l -c 'chorus serve --port 4318 --exit-with-stdin'
        chorus serve (src/serve/server.ts)     the same Controller as the CLI app, without a terminal
          ├─ ThreadHost × N                    the agents in PTYs (claude, codex, agy), virtual screens
          ├─ Tailer, approvals, handoff …      unchanged (src/app/controller.ts)
@@ -29,7 +29,11 @@ Chorus.app (desktop/, Tauri, 4.9 MB)          a window; no logic
 - **Only one terminal answers.** The server's virtual screen already answers the agent's terminal queries (cursor position,
   device attributes, colours). The window's xterm registers handlers that swallow those queries, otherwise each answer would
   reach the agent twice and appear as typed text.
-- **Size.** The window's terminal size is the size of every agent screen (one window at a time is the expected use).
+- **Size.** The window's terminal size is the size of every agent screen (one window at a time is the expected use). The window
+  opens the page with `?window=native` and says so on its socket (`/ws?window=native`): while it is open, a browser tab on the same
+  Chorus is a viewer that never resizes the agents; with no window, a tab sizes them (2026-11-08, plan
+  [2026-11-07-browser-everywhere-and-docker](plans/2026-11-07-browser-everywhere-and-docker.md)). `CHORUS_DEBUG_VIEWERS=1` logs who
+  connects and who sizes.
 
 ## 2. Security of the local API
 
@@ -38,7 +42,7 @@ drive it:
 
 | Threat | Guard |
 |---|---|
-| another machine | listens on 127.0.0.1 only |
+| another machine | listens on 127.0.0.1 only; `chorus serve --host <address>` (opt-in, for a container or a server) listens there and also accepts that name in `Host` and `Origin` (a wildcard, 0.0.0.0 or ::, accepts any address the machine is reached by, and a socket's `Origin` must be the address it asked; owner's decision 2026-11-08, until Chorus has a login), still with the token on every request, and always prints that anyone who can reach the port with the address can run agents |
 | any local process or page without the token | 32-byte random token on every request (`Authorization: Bearer`, or the cookie) |
 | DNS rebinding (a page on evil.example resolving to 127.0.0.1) | the `Host` header must be `127.0.0.1:<port>` or `localhost:<port>` |
 | cross-site requests from the user's browser | `HttpOnly; SameSite=Strict` cookie, writes need the `X-Chorus: 1` header (a cross-origin page cannot send it without a preflight that is never allowed) and a same `Origin` |
@@ -62,12 +66,15 @@ request (seen on the first build: the window showed the 401 JSON).
 The shell holds no logic, so the cheap one wins. Users of Chorus already have Node 22+ (Codex is an npm install; `chorus` is
 an npm package, D1/P4.8); a Node single executable (147 MB) can be put inside the bundle later for users without Node.
 
-How the shell starts the server: `$SHELL -l -c 'exec chorus serve --port 0 --exit-with-stdin'` in the home folder, so a
+How the shell starts the server: `$SHELL -l -c 'exec chorus serve --port 4318 --exit-with-stdin'` (a steady browser address;
+serve takes a free port when 4318 is in use; the token is new on every start) in the home folder, so a
 Finder-launched app gets the PATH of the user's terminal (`chorus`, `node`, `claude`, `codex`, `agy`). It reads the first
 line (`chorus serve: <url>`) and navigates the window there. It holds the server's stdin open and never writes to it:
 `--exit-with-stdin` makes the server stop with its agents when the app is gone, even after `kill -9` of the app
 (checked). On a normal quit it sends SIGTERM first. Logs: `~/.chorus/desktop.log`. `CHORUS_SERVE_CMD` replaces `chorus`
-(development: `chorus desktop` passes this checkout), `CHORUS_PROJECT` sets the project folder.
+(development: `chorus desktop` passes this checkout), `CHORUS_PROJECT` sets the project folder. `serve.json` (0600) carries
+`openUrl`, the page's address with its token: `chorus` waits for it (up to 20 s) after opening the window and prints
+`Chorus is open. In a browser too: <address>`, also when the window was already open.
 
 ## 4. The window
 
@@ -93,10 +100,14 @@ The address keeps the screen (`#/chat/<id>`), so a reload or a restarted server 
 ## 5. Commands
 
 ```bash
-chorus serve [--port N] [--open]     # the local API and the page; prints "chorus serve: <url>"; --fake-agents for UI work
+chorus serve [--port N] [--open] [--host ADDR]   # the local API and the page; prints "chorus serve: <url>"; --fake-agents for UI work;
+                                     # --open is skipped when nothing here can open a browser; --host is opt-in (see §2)
 npm run install:global               # chorus on the PATH (npm link) + Chorus.app built and copied to /Applications (--no-app: CLI only)
-chorus                               # = chorus desktop: the installed app, else this checkout's build, else the page in the browser
-chorus-cli                           # the CLI app instead (= chorus app; also what chorus opens on Linux with no display)
+chorus                               # = chorus desktop: the installed app, else this checkout's build, else the page in the browser;
+                                     # prints the browser address too. No screen (a container, SSH, Linux without X11/Wayland):
+                                     # serves for a browser and prints the address (src/cli/screen.ts)
+CHORUS_DESKTOP_DEV=1 chorus          # this checkout's build even when Chorus.app is installed
+chorus-cli                           # the CLI app instead (= chorus app)
 cd desktop && npm install && npm run build   # only builds desktop/src-tauri/target/release/bundle/macos/Chorus.app
 npm run proof:desktop                # Phase 5 e2e proof with screenshots (real Claude + Codex, ~10 min)
 ```
@@ -127,7 +138,8 @@ the legacy keys (TD-5).
   (each resumes a parked chat on its own). Not guarded yet.
 - Linux (2026-10-26): the same shell, built in Ubuntu 22.04 (WebKitGTK 4.1, glibc 2.35) by `scripts/release-downloads.mjs` and
   shipped in the Linux packages as `desktop/chorus-desktop`; install.sh adds a menu entry and opens it. One window per user
-  (single-instance plugin). Missing WebKitGTK (found with `ldd`) falls back to the browser, no display to the CLI app.
+  (single-instance plugin). Missing WebKitGTK (found with `ldd`) falls back to the browser; no display serves for a browser and
+  prints the address (it opened the CLI app until 2026-11-08).
 - The Windows shell is not built or tested (TD-6). The Tauri config has the icons for it.
 - No signing/notarisation yet (needed before release, with D4).
 - Desktop notifications for a background approval (the window shows a toast; the OS notification centre is not used).
