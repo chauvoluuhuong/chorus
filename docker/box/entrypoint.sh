@@ -75,10 +75,8 @@ if [ -n "$URL" ]; then
   say "Open Chorus in your browser:"
   say "  $URL"
   say ""
-  say "Sign in the AI CLIs from your computer's terminal:"
-  say "  docker exec -it -u chorus $NAME claude auth login"
-  say "  docker exec -it -u chorus $NAME codex login --device-auth"
-  say "  docker exec -it -u chorus $NAME agy"
+  say "Sign in to Claude Code, Codex and Antigravity in Chorus: click Log in next to each one."
+  say "  (or from your computer's terminal: docker exec -it -u chorus $NAME claude auth login | codex login --device-auth | agy)"
   say "The address again: docker logs $NAME"
   [ -n "$SHARED" ] && say "Shared with the box: ${SHARED//:/, }"
 fi

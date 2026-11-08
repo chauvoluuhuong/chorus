@@ -32,6 +32,8 @@ import { check, composeIssue, firstLaunch, ghReady, host, isDue, isIssueKind, IS
 
 import type { NotificationInbox } from './notifications.ts';
 import { ChatLaunch, ProHost, type ProLoader } from './pro.ts';
+import { SignIns } from './signin.ts';
+import { inContainer } from '../cli/screen.ts';
 import type { UpdateCheck } from './updates.ts';
 import type { ChatStart } from '@chauvoluuhuong/chorus-core/pro-loader';
 
@@ -118,6 +120,10 @@ export interface ServeOpts {
   openLink?: (url: string) => void;
   /** the system's folder picker (tests); the real one otherwise */
   pickFolder?: typeof pickFolder;
+  /** runs the CLIs' sign-ins in a container (tests: a fake PTY); the real one otherwise */
+  signIns?: SignIns;
+  /** Chorus runs in a container (tests); CHORUS_BOX=1 or /.dockerenv otherwise */
+  container?: boolean;
   /** whether the CLI still has a chat's session (tests); its transcript on disk otherwise */
   sessionExists?: (row: ThreadRow) => boolean;
 }
@@ -146,6 +152,9 @@ export class ChorusServer {
   readonly mcpToken = crypto.randomBytes(24).toString('hex');
   readonly pro: ProHost;
   url = '';
+  /** in a container (the Chorus box): the CLIs sign in from the page (signin.ts), not in a terminal */
+  readonly container: boolean;
+  readonly signIns: SignIns;
   /** the names a request may carry in Host and Origin (with our port): 127.0.0.1 and localhost, and what --host added */
   private hostNames: string[] = ['127.0.0.1', 'localhost'];
   private o: ServeOpts;
@@ -180,6 +189,9 @@ export class ChorusServer {
     this.c = o.controller;
     this.app = o.controller.app;
     this.token = o.token ?? crypto.randomBytes(24).toString('hex');
+    this.container = o.container ?? (process.env.CHORUS_BOX === '1' || inContainer());
+    // a sign-in that finished: check again, so the Doctor shows the agent ready
+    this.signIns = o.signIns ?? new SignIns({ onChange: s => { if (s.state === 'done') void this.checkAgents({ quiet: true }).catch(e => this.noteError('doctor check', e)); } });
     this.pro = new ProHost({ homeDir: this.c.store.root, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.c.approvalItems('all').map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))] }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     if (o.chatLaunch) o.chatLaunch.host = this.pro;
     this.bridge();
@@ -334,6 +346,7 @@ export class ChorusServer {
   close() {
     this.closed = true;
     this.pro.close();
+    this.signIns.close();
     try {
       if ((JSON.parse(fs.readFileSync(this.serveFile, 'utf8')) as { url: string }).url === this.url) fs.rmSync(this.serveFile);
     } catch {
@@ -542,8 +555,10 @@ export class ChorusServer {
     if (action !== 'deep' && !command) return { error: `nothing to ${action} for ${info.name}` };
     // the Chorus box (docker/box): no terminal app to open, and a sign-in needs one (a code to paste back), so the Doctor shows the
     // command to run from the computer's own terminal (plan 2026-11-07 part B)
-    if (action === 'login' && process.env.CHORUS_BOX === '1') {
-      return { id: '', agent, action, command, done: true, ok: false, output: '', results: [], terminal: true, hostCommand: boxLoginCommand(agent, process.env.CHORUS_BOX_NAME) };
+    if (action === 'login' && this.container) {
+      // the sign-in runs here and the page opens its link (signin.ts); the docker exec command stays as the fallback it shows
+      const si = this.signIns.start(agent);
+      return { id: '', agent, action, command, done: true, ok: false, output: '', results: [], signIn: si.id, hostCommand: boxLoginCommand(agent, process.env.CHORUS_BOX_NAME) };
     }
     if (action === 'login' && agent === 'agy') {
       if (!openInTerminal('agy')) return { error: 'agy signs in when it starts: run `agy` once in a terminal' };
@@ -578,6 +593,14 @@ export class ChorusServer {
         if (!url) return { error: 'No update is available for this platform' };
         (this.o.onUpdateOpen ?? openUrl)(url); return { ok: true };
       }
+      return undefined;
+    }
+    if (a === 'signin') {
+      // the sign-in Chorus runs for the page in a container: its link, its code, the code typed back, closing it
+      const si = id ? this.signIns.get(id) : undefined;
+      if (method === 'GET' && parts.length === 2) return si ?? { error: 'This sign-in is over. Click Log in again.' };
+      if (method === 'POST' && sub === 'code' && parts.length === 3) return si ? this.signIns.sendCode(id, String(b.code ?? '')) : { error: 'This sign-in is over. Click Log in again.' };
+      if (method === 'POST' && sub === 'close' && parts.length === 3) { this.signIns.cancel(id, !!b.done); void this.checkAgents({ quiet: true }).catch(e => this.noteError('doctor check', e)); return { ok: true }; }
       return undefined;
     }
     if (a === 'notifications') {
@@ -804,6 +827,8 @@ export class ChorusServer {
     });
     return {
       project: c.project,
+      // in a container: the Doctor signs the CLIs in from the page, and offers agy's sign-in even when it looks ready
+      container: this.container,
       update: this.o.updates?.snapshot() ?? null,
       notifications: this.o.notifications?.summary() ?? { unread: 0, checkedAt: null, checking: false, offline: false },
       current: this.app.current?.id ?? null,

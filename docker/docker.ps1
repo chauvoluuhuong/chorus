@@ -34,10 +34,7 @@ function Show-Chorus {
   Write-Host "Chorus is running in the box `"$Name`". Open it in your browser:" -ForegroundColor Green
   Write-Host "  $url"
   Write-Host ""
-  Write-Host "  Sign in the AI CLIs from this window:"
-  Write-Host "    docker exec -it -u chorus $Name claude auth login"
-  Write-Host "    docker exec -it -u chorus $Name codex login --device-auth"
-  Write-Host "    docker exec -it -u chorus $Name agy"
+  Write-Host "  Sign in to Claude Code, Codex and Antigravity in Chorus: click Log in next to each one."
   Write-Host "  Stop: docker stop $Name   Open again: run this command again   Start over: docker rm -f $Name"
   if (-not $env:CHORUS_NO_OPEN) { Start-Process $url }
 }
@@ -50,17 +47,31 @@ if ($LASTEXITCODE -eq 0) {
   return
 }
 
+# Yes: true for yes (Enter, y, yes), false for no (n, no); asks again otherwise
+function Yes($q) {
+  while ($true) {
+    $a = (Read-Host "$q [Y/n]").Trim()
+    if ($a -match '^(|y|yes)$') { return $true }
+    if ($a -match '^(n|no)$') { return $false }
+    Write-Host '   Type y for yes or n for no (Enter is yes).'
+  }
+}
+
 Write-Host ""
-Write-Host 'Chorus in a Docker box: a few questions (press Enter for the default).'
+Write-Host 'Chorus in a Docker box. A few yes/no questions: Enter means yes.'
 Write-Host ""
 
 # 1. stable or preview
 $Channel = $env:CHORUS_CHANNEL
 if (-not $Channel) {
-  $a = Read-Host "1. Stable or preview? Preview gets every change as soon as it's merged and can break. [stable]"
-  $Channel = if ($a -match '^(p|preview|2)$') { 'preview' } else { 'stable' }
+  Write-Host '1. Which version of Chorus?'
+  Write-Host "   Stable is the released version. Preview has every change as soon as it's merged, and can break."
+  $Channel = if (Yes '   Use the stable version?') { 'stable' } else { 'preview' }
+  Write-Host ""
 }
 switch -regex ($Channel) { '^preview$' { $Channel = 'preview' } '^(stable|production)$' { $Channel = 'stable' } default { Fail "CHORUS_CHANNEL is $Channel; it can be stable or preview." } }
+Write-Host "   Chorus version: $Channel"
+Write-Host ""
 
 # 2. the folders to share, each at its Linux path inside the box
 function Pick-Folder {
@@ -79,6 +90,7 @@ function LinuxPath($full) {
 }
 $Folders = @()
 function Add-Folder($answer) {
+  if (-not $answer) { Write-Host '   Type a folder path, or B to pick it in a window.'; return $false }
   if ($answer -match '^(b|browse|browse\.\.\.)$') { $answer = Pick-Folder; if (-not $answer) { return $false } }
   if (-not (Test-Path -LiteralPath $answer -PathType Container)) { Write-Host "   $answer is not a folder."; return $false }
   $full = (Resolve-Path -LiteralPath $answer).ProviderPath.TrimEnd('\')
@@ -88,23 +100,22 @@ function Add-Folder($answer) {
 if ($env:CHORUS_SHARE) {
   foreach ($f in $env:CHORUS_SHARE.Split(';')) { if ($f) { Add-Folder $f | Out-Null } }
 } else {
-  do {
-    $a = Read-Host "2. Folder to share with the agents: Enter for $HOME, a path, or B to browse"
-    if (-not $a) { $a = $HOME }
-  } until (Add-Folder $a)
-  while ($true) {
-    $more = Read-Host '   Share another folder? A path, B to browse, or Enter for no'
-    if (-not $more) { break }
-    Add-Folder $more | Out-Null
+  Write-Host '2. Which folder can the agents work in?'
+  Write-Host '   The agents in the box see only the folders you share.'
+  if (Yes "   Share your whole home folder ($HOME)?") {
+    Add-Folder $HOME | Out-Null
+    Write-Host '   Note: the agents can read and change anything in it, keys and settings files included.'
+  } else {
+    do { $a = Read-Host '   Folder to share: type its path, or B to pick it in a window' } until (Add-Folder $a)
+    while (-not (Yes '   Is that all the folders?')) {
+      do { $a = Read-Host '   Another folder: type its path, or B to pick it in a window' } until (Add-Folder $a)
+    }
   }
+  Write-Host ""
 }
 if ($Folders.Count -eq 0) { Fail 'No folder to share.' }
-foreach ($f in $Folders) {
-  if ($f -eq $HOME.TrimEnd('\')) {
-    Write-Host '   Note: the agents can read and change anything in your home folder, keys and settings files included.'
-    Write-Host "   A projects folder is safer: docker rm -f $Name, then run this again and choose one."
-  }
-}
+Write-Host "   Shared: $($Folders -join ', ')"
+Write-Host ""
 # big projects are faster inside WSL than on C:, which Linux reads across the Windows boundary
 if (Get-Command wsl.exe -ErrorAction SilentlyContinue) {
   $distros = (wsl.exe -l -q 2>$null) -replace "`0", '' | Where-Object { $_ -and $_ -notmatch '^docker-desktop' }
@@ -120,8 +131,12 @@ $Port = $env:CHORUS_PORT
 if (-not $Port) {
   $default = 4318
   while (-not (PortFree $default)) { $default++ }
-  $Port = Read-Host "3. Port [$default]"
-  if (-not $Port) { $Port = "$default" }
+  Write-Host "3. Chorus opens in your browser at http://localhost:$default (only this computer can reach it)."
+  if (Yes "   Use port ${default}?") { $Port = "$default" }
+  else {
+    do { $Port = Read-Host '   Port to use instead (a number, like 4400)' } until ($Port -match '^\d+$' -and (PortFree ([int]$Port)))
+  }
+  Write-Host ""
 }
 if ($Port -notmatch '^\d+$') { Fail 'The port must be a number, like 4318.' }
 if (-not (PortFree ([int]$Port))) { Fail "Port $Port is in use on this computer. Run this again and choose another." }

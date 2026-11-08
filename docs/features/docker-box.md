@@ -10,17 +10,28 @@ curl -fsSL https://chorus-cli.web.app/docker.sh | bash                    # macO
 irm https://chorus-cli.web.app/docker.ps1 | iex                           # Windows (Docker Desktop with WSL 2)
 ```
 
-The launcher asks **stable or preview**, the **folders to share** (Enter: your home folder, with a warning; on Windows also
-Browse…, and "Share another folder?" until no) and the **port** (4318, or the next free one). It starts the box and opens
-`http://127.0.0.1:<port>/?token=…` (`localhost` on Windows). Run it again to open Chorus again: a stopped box is started, nothing is
-asked. Start over: `docker rm -f chorus`.
+The launcher asks yes/no questions, Enter meaning yes: **use the stable version?** (no: preview), **share your whole home
+folder?** (no: type folders, Tab completes; "Is that all the folders?"), **use port 4318?** (or the next free one; no: type one).
+On Windows a folder can also be picked with B (Browse). It starts the box and opens `http://127.0.0.1:<port>/?token=…` (`localhost`
+on Windows). Run it again to open Chorus again: a stopped box is started, nothing is asked. Start over: `docker rm -f chorus`.
 
-Sign in the AI CLIs from your computer's terminal (the Doctor in the box shows the same command with a Copy button):
+**Signing in the AI CLIs** happens in Chorus: in a container (`CHORUS_BOX=1` or `/.dockerenv`), the Doctor's **Log in** runs the
+CLI's own sign-in inside the box (`src/serve/signin.ts`, in a PTY), opens its sign-in page in a new tab (opened on the click, so the
+browser doesn't block it), and shows a popup with the link again in case the tab didn't open:
+
+| CLI | What runs | The popup |
+|---|---|---|
+| Claude Code | `claude auth login` | the link, and a box for the code the page shows after you approve; the code is typed into the CLI |
+| Codex | `codex login --device-auth` (its usual login waits for a browser on the box's localhost:1455) | the link and the one-time code to enter there; it finishes by itself |
+| agy | `agy`, Google OAuth picked in its menu | the link (taken whole from its hyperlink), a box for a code if the page shows one, and **I've signed in** (agy keeps running after it signs in) |
+
+Chorus can't see agy's sign-in state in the box, so agy's card always has **Log in**. Cancel stops the sign-in in the box. The
+fallback, also under "Sign in from your computer's terminal instead" in the popup:
 
 ```bash
-docker exec -it -u chorus chorus claude auth login           # prints a link; paste the code back
-docker exec -it -u chorus chorus codex login --device-auth   # its usual login waits for a browser on the box's localhost:1455
-docker exec -it -u chorus chorus agy                         # asks on its first start
+docker exec -it -u chorus chorus claude auth login
+docker exec -it -u chorus chorus codex login --device-auth
+docker exec -it -u chorus chorus agy
 ```
 
 ## How it works
@@ -51,7 +62,7 @@ with a package from `node scripts/release-downloads.mjs --no-app --no-desktop --
 | B.2, B.3 | ✅ preview installs through install.sh, the address opens in the Mac's browser, the Doctor sees the three CLIs | `B2-box-log.txt`, `B2-B3-box-in-browser-doctor.jpg` |
 | B.4 | ✅ restart: nothing asked, channel, CLI files and database kept; fresh address (a stale-token bug fixed) | `B4-B7-restart-and-files.txt`, `B4-restart-address.txt` |
 | B.5 | ✅ Claude Code 2.1.310, Codex 0.164.0, agy 1.4.5, auto-update off | `B5-cli-versions.txt` |
-| B.6 | ⏳ sign-in prompts seen (Claude: link + code; Codex: `--device-auth`); a real sign-in needs the owner's accounts | — |
+| B.6 | ⏳ Log in in the box opens each CLI's popup with the right link (Claude, agy) and code (Codex), Cancel stops it; a sign-in completed with the owner's accounts not run yet | `signin-*-popup.jpg` |
 | B.7 | ⏳ a file the box writes in the shared folder is owned by the Mac user; a real Claude chat editing it waits for B.6 | `B4-B7-restart-and-files.txt` |
 | B.8 | ✅ the network address is refused | `B8-network-refused.txt` |
 | B.9 | ⏳ arm64 ✅ here; amd64 is checked by the workflow's last step | `B5-cli-versions.txt` |
