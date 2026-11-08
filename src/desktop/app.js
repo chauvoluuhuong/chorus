@@ -21,6 +21,12 @@ async function api(method, url, body) {
     pageError(`${method} ${url.split('?')[0]}: ${j.error || `HTTP ${r.status}`}`);
     throw new Error(j.error || `HTTP ${r.status}`);
   }
+  // a page the server can't open itself (Chorus in a container): this browser opens it, or says where it is
+  if (typeof j.open === 'string' && /^https:\/\//.test(j.open)) {
+    const w = window.open(j.open, '_blank');
+    if (w) w.opener = null;
+    else toast('The browser blocked the new tab.', { ms: 20000, buttons: `<a class="btn" href="${esc(j.open)}" target="_blank" rel="noopener">Open the page ↗</a>` });
+  }
   return j;
 }
 

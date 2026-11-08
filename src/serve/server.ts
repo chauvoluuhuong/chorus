@@ -371,6 +371,9 @@ export class ChorusServer {
   /* ---------- auth ---------- */
 
   private hostOk(req: http.IncomingMessage) {
+    // --host 0.0.0.0 (the Chorus box): any address this machine is reached by (a LAN address, a host name); the token guards every
+    // request until Chorus has a login (owner's decision, 2026-11-08)
+    if (this.o.host && WILDCARD.has(this.o.host)) return !!req.headers.host;
     const port = (this.http?.address() as AddressInfo | null)?.port;
     return this.hostNames.some(h => req.headers.host === `${h}:${port}`);
   }
@@ -397,6 +400,8 @@ export class ChorusServer {
     const origin = req.headers.origin;
     // no Origin: not a browser (tests, scripts with the token); a browser must be on our page
     const port = (this.http?.address() as AddressInfo | null)?.port;
+    // any address allowed (--host 0.0.0.0): the page must still be ours, at the very address it was asked by
+    if (this.o.host && WILDCARD.has(this.o.host)) return !origin || origin === `http://${req.headers.host}`;
     return !origin || origin === 'tauri://localhost' || this.hostNames.some(h => origin === `http://${h}:${port}`);
   }
 
@@ -515,8 +520,9 @@ export class ChorusServer {
       const state = crypto.randomBytes(24).toString('base64url');
       this.tries.set(state, Date.now() + 30 * 60_000);
       const url = `${tryUrl}?${new URLSearchParams({ state, port: new URL(this.url).port })}`;
-      (this.o.openLink ?? openUrl)(url);
-      return send(res, 200, { ok: true, url });
+      // in a container the browser is on another computer: the page opens it
+      if (!this.container) (this.o.openLink ?? openUrl)(url);
+      return send(res, 200, { ok: true, url, ...(this.container ? { open: url } : {}) });
     }
     if (req.method === 'GET' && route === 'plans') {
       // the Welcome screen's words come from the backend (no sales text in this repo); fetched once, only when it shows
@@ -549,6 +555,14 @@ export class ChorusServer {
     if (!file || !fs.existsSync(file) || !fs.statSync(file).isFile()) return send(res, 404, { error: 'not found' });
     res.writeHead(200, { 'content-type': TYPES[path.extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-store' });
     fs.createReadStream(file).pipe(res);
+  }
+
+  /** A web page for the user: opened here in their browser, or, in a container (their browser is on the host), handed to the page,
+   *  which opens it (`open` in the answer; api() in app.js). */
+  private openLink(url: string, opener: (url: string) => void = openUrl) {
+    if (this.container) return { ok: true, open: url };
+    opener(url);
+    return { ok: true };
   }
 
   /** Every operation of the desktop. Returns undefined for an unknown route (404). */
@@ -612,7 +626,7 @@ export class ChorusServer {
       if (method === 'POST' && id === 'open' && parts.length === 2) {
         const url = this.o.updates?.updateUrl();
         if (!url) return { error: 'No update is available for this platform' };
-        (this.o.onUpdateOpen ?? openUrl)(url); return { ok: true };
+        return this.openLink(url, this.o.onUpdateOpen);
       }
       return undefined;
     }
@@ -630,7 +644,7 @@ export class ChorusServer {
       if (method === 'POST' && id === 'read-all' && parts.length === 2) { inbox?.markAllRead(); this.pushState(); return inbox?.snapshot() ?? { items: [], unread: 0 }; }
       if (method === 'POST' && id === 'link' && parts.length === 2) {
         if (typeof b.url !== 'string' || !inbox?.allowsLink(typeof b.id === 'string' ? b.id : undefined, b.url)) return { error: 'This link is not in the notification' };
-        (this.o.onNotificationLink ?? openUrl)(b.url); return { ok: true };
+        return this.openLink(b.url, this.o.onNotificationLink);
       }
       if (method === 'POST' && sub === 'open' && parts.length === 3 && inbox?.content(id)) {
         void inbox.opened(id).catch(() => {}); this.pushState(); return { item: inbox.content(id), inbox: inbox.snapshot() };
@@ -775,8 +789,7 @@ export class ChorusServer {
       case 'POST doctor/open': {
         const a = b.agent as AgentId;
         if (!CLIS[a]) return { error: 'unknown agent' };
-        openUrl(CLIS[a].page);
-        return { ok: true };
+        return this.openLink(CLIS[a].page);
       }
       case 'POST doctor/run':
         return this.doctorRun(b.agent as AgentId, b.action);
