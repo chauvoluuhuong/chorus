@@ -60,11 +60,12 @@ function Yes($q) {
 Write-Host ""
 Write-Host 'Chorus in a Docker box. A few yes/no questions: Enter means yes.'
 Write-Host ""
+$N = 0  # questions are numbered as they are asked
 
 # 1. stable or preview
 $Channel = $env:CHORUS_CHANNEL
 if (-not $Channel) {
-  Write-Host '1. Which version of Chorus?'
+  $N++; Write-Host "$N. Which version of Chorus?"
   Write-Host "   Stable is the released version. Preview has every change as soon as it's merged, and can break."
   $Channel = if (Yes '   Use the stable version?') { 'stable' } else { 'preview' }
   Write-Host ""
@@ -100,7 +101,7 @@ function Add-Folder($answer) {
 if ($env:CHORUS_SHARE) {
   foreach ($f in $env:CHORUS_SHARE.Split(';')) { if ($f) { Add-Folder $f | Out-Null } }
 } else {
-  Write-Host '2. Which folder can the agents work in?'
+  $N++; Write-Host "$N. Which folder can the agents work in?"
   Write-Host '   The agents in the box see only the folders you share.'
   if (Yes "   Share your whole home folder ($HOME)?") {
     Add-Folder $HOME | Out-Null
@@ -131,7 +132,7 @@ $Port = $env:CHORUS_PORT
 if (-not $Port) {
   $default = 4318
   while (-not (PortFree $default)) { $default++ }
-  Write-Host "3. Chorus opens in your browser at http://localhost:$default (only this computer can reach it)."
+  $N++; Write-Host "$N. Chorus opens in your browser at http://localhost:$default (only this computer can reach it)."
   if (Yes "   Use port ${default}?") { $Port = "$default" }
   else {
     do { $Port = Read-Host '   Port to use instead (a number, like 4400)' } until ($Port -match '^\d+$' -and (PortFree ([int]$Port)))

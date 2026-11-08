@@ -249,7 +249,8 @@ export function sendIssue(title: string, body: string, file: string): { via: 'gh
 
 export function openUrl(url: string) {
   const cmd = process.platform === 'darwin' ? 'open' : 'xdg-open';
-  spawn(cmd, [url], { stdio: 'ignore', detached: true }).unref();
+  // no opener here (a container, a server): nothing opens, and chorus serve must not stop over it (it did, 2026-11-08)
+  spawn(cmd, [url], { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
 }
 
 /** agy has no login command: its first start signs in, so it starts in a Terminal window (macOS) where the user can do it. */

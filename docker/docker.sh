@@ -95,10 +95,11 @@ yes() {
 say ""
 say "Chorus in a Docker box. A few yes/no questions: Enter means yes."
 say ""
+N=0  # questions are numbered as they are asked (--preview skips the first)
 
 # 1. stable or preview
 if [ -z "$CHANNEL" ]; then
-  say "1. Which version of Chorus?"
+  say "$((N += 1)). Which version of Chorus?"
   say "   Stable is the released version. Preview has every change as soon as it's merged, and can break."
   if yes "   Use the stable version?"; then CHANNEL=stable; else CHANNEL=preview; fi
   say ""
@@ -119,7 +120,7 @@ if [ -n "${CHORUS_SHARE:-}" ]; then
   IFS=':' read -r -a given <<< "$CHORUS_SHARE"
   for f in "${given[@]}"; do add_folder "$f" || true; done
 else
-  say "2. Which folder can the agents work in?"
+  say "$((N += 1)). Which folder can the agents work in?"
   say "   The agents in the box see only the folders you share, at the same path as on this computer."
   if yes "   Share your whole home folder ($HOME)?"; then
     FOLDERS+=("$(cd "$HOME" && pwd -P)")
@@ -142,7 +143,7 @@ PORT="${CHORUS_PORT:-}"
 if [ -z "$PORT" ]; then
   default=4318
   while ! free "$default"; do default=$((default + 1)); done
-  say "3. Chorus opens in your browser at http://localhost:$default (only this computer can reach it)."
+  say "$((N += 1)). Chorus opens in your browser at http://localhost:$default (only this computer can reach it)."
   if yes "   Use port $default?"; then PORT=$default
   else
     until PORT="$(ask "   Port to use instead (a number, like 4400): " "")"; case "$PORT" in ''|*[!0-9]*) false ;; *) free "$PORT" || { say "   Port $PORT is in use."; false; } ;; esac; do :; done

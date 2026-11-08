@@ -726,3 +726,25 @@ test('serve in a container: Log in runs the sign-in here and the page gets its l
     await r.done();
   }
 });
+
+test('serve in a container: links go to the page to open; a missing opener does not stop chorus serve (2026-11-08 crash)', async () => {
+  // what crashed the box: openUrl with no xdg-open/open on the PATH emitted an unhandled spawn error
+  const { openUrl } = await import('../../src/core/doctor.ts');
+  const path0 = process.env.PATH;
+  process.env.PATH = '/nonexistent';
+  try {
+    openUrl('https://example.com/');
+    await sleep(300);
+  } finally {
+    process.env.PATH = path0;
+  }
+  const r = await rig(undefined, undefined, undefined, { container: true });
+  try {
+    const j = await r.api('POST', '/api/doctor/open', { agent: 'codex' });
+    assert.equal(j.status, 200);
+    assert.match(j.json.open, /^https:\/\//, 'the page opens it');
+    assert.deepEqual(r.notificationLinks, [], 'nothing opened on the server');
+  } finally {
+    await r.done();
+  }
+});
