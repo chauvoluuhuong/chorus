@@ -3,7 +3,7 @@
 import { exclude } from '@chauvoluuhuong/chorus-core';
 import type { AgentId } from '../core/types.ts';
 import { syncSkills } from '../core/skills.ts';
-import { activatePro, isLocked, loadPro, proDev, proLinks, signInPro, type ChatExtras, type LoadResult, type McpToolDef, type ProCtx, type ProHandler, type ProModule, type RemoteDecision, type RemoteRequest } from '@chauvoluuhuong/chorus-core/pro-loader';
+import { activatePro, isLocked, loadPro, proDev, proLinks, recheckPro, signInPro, upgradePro, type ChatExtras, type LoadResult, type McpToolDef, type ProCtx, type ProHandler, type ProModule, type RemoteDecision, type RemoteRequest } from '@chauvoluuhuong/chorus-core/pro-loader';
 
 export interface ProLoader {
   load(ctx: ProCtx, onChange: (r: LoadResult) => void): Promise<LoadResult>;
@@ -12,6 +12,10 @@ export interface ProLoader {
   signIn?(ctx: ProCtx, code: string, state: string, onChange: (r: LoadResult) => void): Promise<LoadResult>;
   /** the sign-up page and the first-launch words */
   links?(): { tryUrl: string; plansUrl: string };
+  /** Upgrade's payment link for the signed-in account (plan stage 8); `signIn` when there is no account here yet */
+  upgrade?(ctx: ProCtx, port?: number): Promise<{ url?: string; pro?: boolean; error?: string; signIn?: boolean }>;
+  /** after paying: the licence as the server signs it now */
+  recheck?(ctx: ProCtx, onChange: (r: LoadResult) => void): Promise<LoadResult>;
   dev: boolean;
 }
 
@@ -30,7 +34,7 @@ export class ChatLaunch {
   }
 }
 
-const realLoader: ProLoader = { load: loadPro, activate: activatePro, signIn: signInPro, links: proLinks, dev: proDev };
+const realLoader: ProLoader = { load: loadPro, activate: activatePro, signIn: signInPro, links: proLinks, upgrade: upgradePro, recheck: recheckPro, dev: proDev };
 
 export interface ProStatus {
   unlocked: boolean;
@@ -106,6 +110,24 @@ export class ProHost {
 
   links() {
     return this.loader.links?.() ?? { tryUrl: '', plansUrl: '' };
+  }
+
+  /** Upgrade: the payment link the server makes for this account. Nothing here changes until the server says it was paid. */
+  async upgrade(port?: number): Promise<{ url?: string; pro?: boolean; error?: string; signIn?: boolean }> {
+    await this.ready;
+    return this.loader.upgrade ? this.loader.upgrade(this.ctx, port) : { error: 'Upgrading is not available in this build.' };
+  }
+
+  /** Asks the server for the licence again (after paying). Unreachable keeps what runs; anything else replaces it. */
+  async recheck(): Promise<ProStatus> {
+    await this.ready;
+    if (!this.loader.recheck) return this.status();
+    const r = await this.loader.recheck(this.ctx, this.use).catch((e: Error): LoadResult => ({ locked: 'damaged', message: e.message }));
+    if (isLocked(r) && r.locked === 'unreachable' && this.module) return { ...this.status(), message: r.message ?? 'Chorus could not reach its server.' };
+    if (isLocked(r) && r.locked === 'no-licence') return this.status();
+    this.module?.dispose();
+    this.use(r);
+    return this.status();
   }
 
   /** `path` is what follows /api/pro/. */
