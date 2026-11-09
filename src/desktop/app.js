@@ -298,6 +298,7 @@ function go(view, push = true) {
   renderChrome();
   renderDoctorDot();
   renderView();
+  doctorWhenReady();
 }
 function back() {
   const v = S.history.pop();
@@ -343,6 +344,7 @@ async function onProStatus(st) {
   drawPlanBanner();
   if (S.view.name !== 'chat') renderView();
   planScreens();
+  doctorWhenReady();
 }
 
 function unlockHtml() {
@@ -361,6 +363,8 @@ const daysLeft = iso => Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / D
 // no paid code on this install: what a Community user sees (a dev build adds Unlock for a test key)
 const community = () => !!S.pro && !S.pro.unlocked;
 const upgrade = () => toast('Upgrade is coming soon.');
+/** The Pro gates by id, as Admin › Free and Pro names them (chorus-admin server/gates.mjs; their lines stay in the backend). */
+const GATE_NAMES = { portal: 'Open the Portal', instructions: 'Edit instructions', actions: 'Create and edit actions', processes: 'Edit processes', failures: 'Add failure notes', 'teammate.create': 'Create a new teammate', remote: 'Use remote access' };
 
 /** First launch, or a trial that just ended: the screen that says so, once. */
 function planScreens() {
@@ -398,8 +402,10 @@ function welcomeHtml() {
     void api('GET', '/api/pro/plans').then(w => { planWords = w; if (S.view.name === 'welcome') renderView(); }, () => { planWords = { offline: true }; renderView(); });
   }
   const w = planWords && !planWords.offline ? planWords : null;
-  const card = (c, pro) => `<div class="plan-card${pro ? ' pro' : ''}"><h2>${esc(c?.name ?? (pro ? 'Pro' : 'Community'))}${pro && c?.badge ? ` <span class="badge acc">${esc(c.badge)}</span>` : ''}</h2><div class="muted">${esc(c?.sub ?? (pro ? 'Everything in Community, plus more' : 'Free'))}</div>
-    <ul>${(c?.items ?? []).map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+  // the backend's features (a name and its line), else its plain items; offline, Pro lists the gates' names
+  const list = (c, pro) => c?.features ? c.features.map(f => `<li><div><b>${esc(f.name)}</b>${f.detail ? `<span>${esc(f.detail)}</span>` : ''}</div></li>`) : (c?.items ?? (pro ? Object.values(GATE_NAMES) : [])).map(i => `<li>${esc(i)}</li>`);
+  const card = (c, pro) => `<div class="plan-card${pro ? ' pro' : ''}"><h2>${esc(c?.name ?? (pro ? 'Pro' : 'Community'))}${pro && c?.badge ? ` <span class="badge acc">${esc(c.badge)}</span>` : ''}</h2><div class="muted">${esc(c?.sub ?? (pro ? 'Everything in Community, plus' : 'Free'))}</div>
+    <ul>${list(c, pro).join('')}</ul>
     <button class="btn${pro ? ' primary' : ''} wide" data-act="${pro ? 'plan-try' : 'plan-community'}">${esc(c?.button ?? (pro ? 'Try Pro free' : 'Keep Community'))}</button><div class="fine">${esc(c?.fine ?? '')}</div></div>`;
   return `<div class="page welcome"><h1>${esc(w?.title ?? 'Welcome to Chorus')}</h1><p class="lead">${esc(w?.lede ?? 'Start free, or try Pro. You can change your mind any time.')}</p>
     ${planWords === null ? '<p class="muted" role="status" style="text-align:center">Loading…</p>' : `<div class="plan-cards">${card(w?.community, false)}${card(w?.pro, true)}</div>`}</div>`;
@@ -409,8 +415,9 @@ const tryingHtml = () => `<div class="page welcome center"><div class="big">↗<
 const startedHtml = () => `<div class="page welcome center"><div class="big">✓</div><h1>Your Pro trial has started</h1><p class="lead">${S.pro?.ends ? `${daysLeft(S.pro.ends)} days from today. ` : ''}Your first step is meeting your teammates.</p>
   <div class="row-c"><button class="btn primary" data-act="pro-view" data-arg="teammates">Meet your teammates</button><button class="btn" data-act="new">Start a chat</button></div></div>`;
 function endedHtml() {
-  const names = { portal: 'Open the Portal', 'teammate.create': 'Create a new teammate' }, off = (S.pro?.locked ?? []).filter(g => names[g]).map(g => `<b>${esc(names[g])}</b>`);
-  return `<div class="page welcome center"><h1>Your Pro trial has ended</h1><p class="lead">You keep your teammates, plans, Workers and tasks.${off.length ? ` These now need Pro: ${off.join(' and ')}.` : ' Everything keeps working.'}</p>
+  const off = (S.pro?.locked ?? []).filter(g => GATE_NAMES[g]).map(g => `<b>${esc(GATE_NAMES[g])}</b>`);
+  const listed = off.length > 1 ? `${off.slice(0, -1).join(', ')} and ${off.at(-1)}` : off[0];
+  return `<div class="page welcome center"><h1>Your Pro trial has ended</h1><p class="lead">You keep the Planner, your plans and tasks, and Workers that run the steps.${off.length ? ` These now need Pro: ${listed}.` : ' Everything keeps working.'}</p>
     <div class="row-c"><button class="btn primary" data-act="plan-upgrade">Upgrade</button><button class="btn" data-act="pro-view" data-arg="teammates">Open Teammates</button></div></div>`;
 }
 
@@ -833,13 +840,23 @@ const drAgent = agent => drAgents()?.find(a => a.agent === agent);
 async function firstDoctor() {
   try {
     const { first } = await api('GET', '/api/doctor/first');
-    if (first) openDoctorPopup();
+    if (first) (S.doctorWaits = true), doctorWhenReady();
     const d = await loadDoctor();
-    if (first || d.due) openDoctorPopup();
+    if (first || d.due) (S.doctorWaits = true), doctorWhenReady();
     else renderDoctorDot();
   } catch {
     /* the app works without the doctor */
   }
+}
+
+/** First launch: the Welcome's choice (Community or Pro) comes first, then the Doctor (owner, 2026-11-09). While the plan is not
+ *  known yet, or the Welcome or "Finish in your browser" is in front, or a Community first launch is about to show the Welcome,
+ *  the Doctor waits; go() and the plan's status call this again. */
+const welcomePending = () => (S.pro === undefined && !S.proFailed) || ['welcome', 'trying'].includes(S.view.name) || (community() && S.welcome === undefined && S.view.name === 'new');
+function doctorWhenReady() {
+  if (!S.doctorWaits || welcomePending()) return;
+  S.doctorWaits = false;
+  openDoctorPopup();
 }
 
 /** What the Doctor shows besides the agents' status: Chorus's version, the latest releases, the detailed tests on file. */
@@ -2044,6 +2061,10 @@ function fromHash() {
 }
 
 connect();
-void api('GET', '/api/pro/status').then(onProStatus, () => {});
+void api('GET', '/api/pro/status').then(onProStatus, () => {
+  // no plan to read: no Welcome either, so the Doctor goes on as before
+  S.proFailed = true;
+  doctorWhenReady();
+});
 renderChrome();
 go(fromHash(), false);

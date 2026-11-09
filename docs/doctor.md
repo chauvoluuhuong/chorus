@@ -289,7 +289,11 @@ reason), `doctor.log`, and `<cli>/<case>/` with the evidence of §4.1 rule 8. Th
   `--version` at start, as the app does now). A CLI newly installed or removed counts.
 - Never otherwise: no popup on a normal start. The Doctor page in the sidebar foot runs it any time.
 
-It opens over the window as soon as the page loads, with the fast check (§2), which is done in a few seconds. When every CLI is
+On a first launch the Welcome's choice (Community or Pro) comes first: the popup waits while the Welcome or "Finish in your
+browser" is in front, and opens once the user keeps Community, says Not now, or comes back signed in (owner, 2026-11-09;
+`doctorWhenReady()` in `src/desktop/app.js`, `npm run proof:first-run`). If the plan can't be read, it opens as before.
+
+Otherwise it opens over the window as soon as the page loads, with the fast check (§2), which is done in a few seconds. When every CLI is
 Ready the popup says so and closes itself after 2 s (or on **Continue**). For an untested version it asks before the deeper test
 (the turns are on the user's plan); **Continue** is always there, the test keeps running behind, and its result goes to the
 Doctor page and to a dot on the sidebar's Doctor button (amber while running, red with the count of failures, none when all pass).
