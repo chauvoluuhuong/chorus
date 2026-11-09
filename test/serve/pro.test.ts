@@ -171,6 +171,47 @@ test('Try Pro: the sign-up page opens in the browser, comes back once with a cod
   }
 });
 
+test('Upgrade: the payment page opens in the browser; the way back and Check again ask the server, which alone makes it Pro (plan stage 8)', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-'));
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-p-'));
+  const store = new Store(project, { home });
+  const trial = { ...stand, entitled: { plan: 'trial', locked: [], ends: '2026-11-18T00:00:00.000Z' } };
+  const pro = { ...stand, entitled: { plan: 'pro', locked: [] } };
+  const server = { paid: false, down: false, ports: [] as (number | undefined)[] };
+  const proLoader: ProLoader = {
+    dev: false, load: async () => trial, activate: async () => LOCKED,
+    upgrade: async (_c, port) => (server.ports.push(port), { url: 'https://pay.example/pay/checkout?a=ann' }),
+    recheck: async () => (server.down ? { locked: 'unreachable', message: 'offline' } : server.paid ? pro : trial),
+  };
+  const opened: string[] = [];
+  const c = new Controller({ project, store, app: headlessApp(), opener: async () => ({ ok: true }), launcher: (_a, o) => ({ bin: process.execPath, args: [], cwd: o.cwd }) });
+  const srv = new ChorusServer({ controller: c, token: 'a'.repeat(48), check: async () => ({ node: { version: '22', ok: true }, platform: 't', agents: [], ms: 1 }), proLoader, openLink: u => opened.push(u) });
+  const url = await srv.start(0);
+  const post = async (route: string) => (await fetch(`${url}/api/pro/${route}`, { method: 'POST', headers: { authorization: `Bearer ${srv.token}`, 'x-chorus': '1' } })).json();
+  try {
+    assert.equal((await post('upgrade')).url, 'https://pay.example/pay/checkout?a=ann');
+    assert.deepEqual(opened, ['https://pay.example/pay/checkout?a=ann']);
+    assert.deepEqual(server.ports, [Number(new URL(url).port)], 'the payment page can link back to this app');
+    // not paid yet: Check again keeps the trial
+    assert.equal((await post('recheck')).plan, 'trial');
+    // offline: what runs keeps running
+    server.down = true;
+    const off = await post('recheck');
+    assert.deepEqual([off.unlocked, off.plan, off.message], [true, 'trial', 'offline']);
+    server.down = false;
+    // paid: the browser comes back with no token; the page asks the server and says what it answered
+    server.paid = true;
+    const back = await fetch(`${url}/api/pro/paid`);
+    assert.match(await back.text(), /You have Chorus Pro/);
+    const st = await (await fetch(`${url}/api/pro/status`, { headers: { authorization: `Bearer ${srv.token}` } })).json();
+    assert.equal(st.plan, 'pro');
+  } finally {
+    srv.close();
+    c.stop();
+    store.close();
+  }
+});
+
 /* ---------- stage 7: requests through the private link go to the module ---------- */
 
 const remoteStand: ProModule = {

@@ -423,6 +423,8 @@ export class ChorusServer {
     // the browser coming back from sign-up (plan stage 6): another browser, so no token cookie; the single-use state it carries,
     // made by an authenticated Try Pro, is what lets it in
     if (req.method === 'GET' && u.pathname === '/api/pro/signed-in') return this.signedIn(res, u);
+    // the browser coming back from the payment page (plan stage 8): it only makes the app ask the server again, so it needs no token
+    if (req.method === 'GET' && u.pathname === '/api/pro/paid') return this.paid(res);
     if (!this.allowed(req)) return send(res, 401, { error: 'open the address chorus serve printed (it carries the token)' });
     if (req.method !== 'GET' && (req.headers['x-chorus'] !== '1' || !this.sameOrigin(req))) return send(res, 403, { error: 'missing X-Chorus header' });
     return this.authed(req, res, u);
@@ -510,6 +512,17 @@ export class ChorusServer {
     page('You\'re signed in', 'Go back to Chorus: it is ready. You can close this tab.');
   }
 
+  private lastPaid = 0;
+
+  /** Back from paying: ask the server, once every few seconds at most, and say what it answered. The page changes nothing itself. */
+  private async paid(res: http.ServerResponse) {
+    const st = Date.now() - this.lastPaid < 3000 ? this.pro.status() : ((this.lastPaid = Date.now()), await this.pro.recheck());
+    this.broadcast({ t: 'pro-status', status: st });
+    const pro = st.unlocked && st.plan === 'pro';
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chorus</title><style>:root{color-scheme:light dark}body{margin:0;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:light-dark(#faf9f5,#262624);color:light-dark(#141413,#f5f4ee)}main{max-width:420px;margin:12vh auto;padding:26px;border:1px solid light-dark(#e5e2d9,#3c3b38);border-radius:16px;background:light-dark(#fff,#30302e);text-align:center}h1{font:400 26px/1.2 Georgia,serif;margin:0 0 8px}p{margin:0;color:light-dark(#73726c,#a6a39a)}</style><main>${pro ? '<h1>You have Chorus Pro</h1><p>Thank you. Go back to Chorus: it is ready. You can close this tab.</p>' : '<h1>Not confirmed yet</h1><p>The payment can take a few seconds to confirm. Go back to Chorus and choose <b>Check again</b>.</p>'}</main>`);
+  }
+
   /** /api/pro/*: the status and Unlock always answer; everything else is the module's, or 402 from ProHost. */
   private async proHttp(req: http.IncomingMessage, res: http.ServerResponse, u: URL) {
     const route = u.pathname.slice(9);
@@ -533,6 +546,13 @@ export class ChorusServer {
       return send(res, 200, this.plansWords ?? { offline: true });
     }
     if (req.method === 'GET' && route === 'status') return send(res, 200, this.pro.status());
+    if (req.method === 'POST' && route === 'upgrade') {
+      // Upgrade (plan stage 8): the server's payment page in the user's own browser; it links back to /api/pro/paid
+      const r = await this.pro.upgrade(Number(new URL(this.url).port) || undefined);
+      if (r.url) (this.o.openLink ?? openUrl)(r.url);
+      return send(res, 200, r);
+    }
+    if (req.method === 'POST' && route === 'recheck') return send(res, 200, await this.pro.recheck());
     if (req.method === 'POST' && route === 'activate') return send(res, 200, await this.pro.activate(String((await readJson(req)).key ?? '')));
     if (req.method === 'GET' && (route === 'ui.js' || route === 'ui.css')) {
       const ui = await this.pro.ui();

@@ -340,6 +340,8 @@ async function onProStatus(st) {
   }
   window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: () => { renderChrome(); fillChatSlots(); if (S.view.name === 'new' || S.view.name === 'approvals') renderView(); }, doctor: () => go({ name: 'doctor' }), toast, openChat: id => go({ name: 'chat', id }), upgrade, back: () => history.length && go(S.history.pop() ?? { name: 'new' }, false) });
   if (S.view.name === 'pro' && !st.unlocked) return go({ name: 'new' });
+  // back from paying (the browser's link to /api/pro/paid, or Check again): the server's answer, never the browser's word
+  if (S.view.name === 'paying' && st.plan === 'pro') return go({ name: 'pro-paid' });
   renderChrome();
   drawPlanBanner();
   if (S.view.name !== 'chat') renderView();
@@ -355,14 +357,35 @@ function unlockHtml() {
 }
 
 /* ---------- the plan: Welcome, Try Pro, the plan box, the trial banners (chorus-core plan stage 6) ---------- */
-// The words of the Welcome screen come from the backend (/api/pro/plans), so no sales text sits in this repo. Community has no paid
-// code at all; signing up opens /try in the user's own browser, which comes back to /api/pro/signed-in with a one-time code.
+// The words of the Welcome screen come from the backend (/api/pro/plans), so no sales text sits in this repo. Community runs the module
+// with every Pro gate locked (its own token, no account); signing up opens /try in the user's own browser, which comes back to
+// /api/pro/signed-in with a one-time code, and the account's licence replaces the Community one.
 
 const DAY = 86_400_000;
 const daysLeft = iso => Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / DAY));
 // no paid code on this install: what a Community user sees (a dev build adds Unlock for a test key)
-const community = () => !!S.pro && !S.pro.unlocked;
-const upgrade = () => toast('Upgrade is coming soon.');
+// Community: no account. Since 2026-11-09 it runs the module too (plan `community`, every Pro gate locked: it plans and runs steps);
+// with no connection on its first launch it has no paid code, as before
+const community = () => !!S.pro && (!S.pro.unlocked || S.pro.plan === 'community');
+// Upgrade (chorus-core plan stage 8): the backend's payment page opens in the user's own browser (prices live there, not here). Only the
+// server's signed licence makes this install Pro: the page that comes back, or Check again, asks it.
+async function upgrade() {
+  const r = await api('POST', '/api/pro/upgrade').catch(err => ({ error: err.message }));
+  if (r.signIn) {
+    // no account on this install yet: sign in first; an email whose trial was used comes back with Upgrade
+    const t = await api('POST', '/api/pro/try').catch(err => ({ error: err.message }));
+    if (t.error) return toast(t.error);
+    return go({ name: 'trying' });
+  }
+  if (r.error) return toast(r.error);
+  go({ name: r.pro ? 'pro-paid' : 'paying' });
+}
+async function recheck() {
+  const st = await api('POST', '/api/pro/recheck').catch(err => ({ error: err.message }));
+  if (st.error) return toast(st.error);
+  await onProStatus(st);
+  if (st.plan !== 'pro') toast(st.message || 'Not confirmed yet. A payment can take a few seconds: try again in a moment.');
+}
 /** The Pro gates by id, as Admin › Free and Pro names them (chorus-admin server/gates.mjs; their lines stay in the backend). */
 const GATE_NAMES = { portal: 'Open the Portal', instructions: 'Edit instructions', actions: 'Create and edit actions', processes: 'Edit processes', failures: 'Add failure notes', 'teammate.create': 'Create a new teammate', remote: 'Use remote access' };
 
@@ -377,7 +400,7 @@ function planBox() {
   const p = S.pro;
   if (!p) return '';
   const box = (title, sub, button = '', warn = false) => `<div class="plan-box"><b>${esc(title)}</b><span class="${warn ? 'warn' : 'muted'}">${esc(sub)}</span>${button}</div>`;
-  if (!p.unlocked) return box('Community', 'Free, as today', '<button class="btn" data-act="plan-welcome">Try Pro</button>');
+  if (community()) return box('Community', 'Free', '<button class="btn" data-act="plan-welcome">Try Pro</button>');
   if (p.plan === 'trial') {
     const n = daysLeft(p.ends);
     return box('Pro trial', `${n} day${n === 1 ? '' : 's'} left`, n <= 3 ? '<button class="btn primary" data-act="plan-upgrade">Upgrade</button>' : '', n <= 3);
@@ -412,6 +435,10 @@ function welcomeHtml() {
 }
 const tryingHtml = () => `<div class="page welcome center"><div class="big">↗</div><h1>Finish in your browser</h1><p class="lead">Sign in with Google or your email on the page that opened. Chorus picks it up here when you're done.</p>
   <div class="row-c"><button class="btn" data-act="plan-try">Open the page again</button><button class="btn" data-act="plan-community">Not now</button></div></div>`;
+const payingHtml = () => `<div class="page welcome center"><div class="big">↗</div><h1>Finish paying in your browser</h1><p class="lead">Choose how to pay on the page that opened. Chorus shows Pro here once the payment is confirmed, usually within a few seconds.</p>
+  <div class="row-c"><button class="btn primary" data-act="plan-recheck">Check again</button><button class="btn" data-act="plan-upgrade">Open the page again</button><button class="btn" data-act="new">Not now</button></div></div>`;
+const paidHtml = () => `<div class="page welcome center"><div class="big">✓</div><h1>You have Chorus Pro</h1><p class="lead">Thank you for supporting Chorus. Pro is yours on up to three of your computers.</p>
+  <div class="row-c"><button class="btn primary" data-act="pro-view" data-arg="teammates">Open Teammates</button><button class="btn" data-act="new">Start a chat</button></div></div>`;
 const startedHtml = () => `<div class="page welcome center"><div class="big">✓</div><h1>Your Pro trial has started</h1><p class="lead">${S.pro?.ends ? `${daysLeft(S.pro.ends)} days from today. ` : ''}Your first step is meeting your teammates.</p>
   <div class="row-c"><button class="btn primary" data-act="pro-view" data-arg="teammates">Meet your teammates</button><button class="btn" data-act="new">Start a chat</button></div></div>`;
 function endedHtml() {
@@ -543,7 +570,7 @@ function renderView() {
   // the module's page keeps its own state: a push of the app's state must not rebuild it
   const slot = el.querySelector('[data-pro-slot="view"]');
   if (v.name === 'pro' && slot?.dataset.id === v.id) return;
-  el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml, unlock: unlockHtml, welcome: welcomeHtml, trying: tryingHtml, 'pro-started': startedHtml, 'pro-ended': endedHtml, pro: () => `<div data-pro-slot="view" data-id="${esc(v.id ?? '')}" style="height:100%"></div>` }[v.name]?.() ?? '';
+  el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml, unlock: unlockHtml, welcome: welcomeHtml, trying: tryingHtml, paying: payingHtml, 'pro-paid': paidHtml, 'pro-started': startedHtml, 'pro-ended': endedHtml, pro: () => `<div data-pro-slot="view" data-id="${esc(v.id ?? '')}" style="height:100%"></div>` }[v.name]?.() ?? '';
   fillSlots();
   if (v.name === 'new') {
     const ta = $('#nc-prompt');
@@ -617,7 +644,14 @@ function newChatHtml() {
   const perms = [[false, 'Ask me', 'The agent asks before it edits files or runs commands; you answer here or in Approvals.'], [true, 'Skip permission prompts', `Starts ${AGENT[f.agent].name} with ${a.skipFlag}. Nothing from this chat reaches Approvals.`]]
     .map(([v, t, d]) => `<button class="${f.skip === v ? 'on' : ''}" data-act="nc-skip" data-arg="${v ? 1 : 0}"><span class="nc-mi${v ? ' bad' : ''}">${v ? '⚠' : '✓'} ${t}</span><span class="nc-sub">${esc(d)}</span></button>`)
     .join('');
-  const engine = T?.info ? `<span class="nc-info">${esc(T.info)}</span>` : `${pk('model', modelLabel, 'nc-dim', false, models)}${pk('perm', f.skip ? '⚠ Skip permissions' : 'Ask before acting', f.skip ? 'nc-danger' : 'nc-dim', false, perms)}`;
+  // a teammate: its model is its own, but its permissions are chosen again for this chat, starting from the teammate's setting
+  const tAgent = T?.agent && AGENT[T.agent] ? T.agent : f.agent;
+  const tPerms = [[false, 'Ask me', 'The agent asks before it edits files or runs commands; you answer here or in Approvals.'], [true, 'Skip permission prompts', `Starts ${AGENT[tAgent].name} with ${S.info.agents.find(x => x.id === tAgent)?.skipFlag ?? 'its skip flag'}. Nothing from this chat reaches Approvals.`]]
+    .map(([v, t, d]) => `<button class="${T?.skip === v ? 'on' : ''}" data-act="pro-nc" data-arg="skip:${v ? 1 : 0}"><span class="nc-mi${v ? ' bad' : ''}">${v ? '⚠' : '✓'} ${t}</span><span class="nc-sub">${esc(d)}</span></button>`)
+    .join('');
+  const engine = T?.info
+    ? `<span class="nc-info">${esc(T.info)}</span>${typeof T.skip === 'boolean' ? pk('perm', T.skip ? '⚠ Skip permissions' : 'Ask before acting', T.skip ? 'nc-danger' : 'nc-dim', false, tPerms) : ''}`
+    : `${pk('model', modelLabel, 'nc-dim', false, models)}${pk('perm', f.skip ? '⚠ Skip permissions' : 'Ask before acting', f.skip ? 'nc-danger' : 'nc-dim', false, perms)}`;
   return `<div class="page nc-wrap">
     <h1 class="nc-h">${src ? 'Continue with another agent' : 'What are we working on?'}</h1>
     ${src ? `<p class="nc-src">Continues <b>${esc(src.title)}</b> <span class="badge ${esc(src.agent)}">${esc(AGENT[src.agent]?.name ?? src.agent)}</span>. The new agent loads its record through the Chorus MCP server and waits for your OK.</p>` : ''}
@@ -1653,6 +1687,8 @@ document.addEventListener('click', async e => {
     }
     case 'plan-upgrade':
       return upgrade();
+    case 'plan-recheck':
+      return recheck();
     case 'plan-later':
       S.bannerDay = new Date().toDateString();
       remember('banner', S.bannerDay);
@@ -2066,7 +2102,7 @@ function fromHash() {
   if (name === 'new' && a === 'from' && b) return { name, from: b };
   if (name === 'new' && a === 'in' && b) return { name, folder: decodeURIComponent(b) };
   if (name === 'pro' && a) return { name, id: a };
-  if (['approvals', 'memory', 'skills', 'doctor', 'unlock', 'welcome', 'trying', 'pro-started', 'pro-ended'].includes(name)) return { name };
+  if (['approvals', 'memory', 'skills', 'doctor', 'unlock', 'welcome', 'trying', 'paying', 'pro-paid', 'pro-started', 'pro-ended'].includes(name)) return { name };
   return { name: 'new' };
 }
 
