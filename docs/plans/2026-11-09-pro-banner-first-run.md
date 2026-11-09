@@ -1,6 +1,6 @@
 # Fix: what Free and Pro give, and the first-launch order
 
-Status: **part A built**, 2026-11-09 (approved by the owner: "implement the all the plans"). Part B is a separate task. Mockup: `docs/mockups/pro-first-run.html` in chorus-core (private: it holds the Welcome's Pro words, which live in the backend).
+Status: **built**, 2026-11-09 (approved by the owner: "implement the all the plans"; part B on "just finish what we plan"). Mockup: `docs/mockups/pro-first-run.html` in chorus-core (private: it holds the Welcome's Pro words, which live in the backend).
 
 ## Outcome (owner, 2026-11-09)
 
@@ -47,7 +47,8 @@ Status: **part A built**, 2026-11-09 (approved by the owner: "implement the all 
   offline names; the trial-ended text; `.plan-card ul { align-content: start }`. The Community sidebar's locked items stay.
   Docs: `docs/doctor.md` §6.1, `docs/phase5.md`.
 
-**B. Community gets the Pro bundle** (separate task): the backend gives each Community install an anonymous approval with every
+**B. Community gets the Pro bundle** (built 2026-11-09: chorus-admin `POST /v1/licence/community`, chorus-core loader
+`joinCommunity()`, the app's `community()` reads plan `community`): the backend gives each Community install an anonymous approval with every
 Pro gate locked, so Community downloads the same obfuscated, per-install bundle. When it is live, the Community card gets
 "The Planner plans your work" and "Steps run on their own".
 
