@@ -641,7 +641,14 @@ function newChatHtml() {
   const perms = [[false, 'Ask me', 'The agent asks before it edits files or runs commands; you answer here or in Approvals.'], [true, 'Skip permission prompts', `Starts ${AGENT[f.agent].name} with ${a.skipFlag}. Nothing from this chat reaches Approvals.`]]
     .map(([v, t, d]) => `<button class="${f.skip === v ? 'on' : ''}" data-act="nc-skip" data-arg="${v ? 1 : 0}"><span class="nc-mi${v ? ' bad' : ''}">${v ? '⚠' : '✓'} ${t}</span><span class="nc-sub">${esc(d)}</span></button>`)
     .join('');
-  const engine = T?.info ? `<span class="nc-info">${esc(T.info)}</span>` : `${pk('model', modelLabel, 'nc-dim', false, models)}${pk('perm', f.skip ? '⚠ Skip permissions' : 'Ask before acting', f.skip ? 'nc-danger' : 'nc-dim', false, perms)}`;
+  // a teammate: its model is its own, but its permissions are chosen again for this chat, starting from the teammate's setting
+  const tAgent = T?.agent && AGENT[T.agent] ? T.agent : f.agent;
+  const tPerms = [[false, 'Ask me', 'The agent asks before it edits files or runs commands; you answer here or in Approvals.'], [true, 'Skip permission prompts', `Starts ${AGENT[tAgent].name} with ${S.info.agents.find(x => x.id === tAgent)?.skipFlag ?? 'its skip flag'}. Nothing from this chat reaches Approvals.`]]
+    .map(([v, t, d]) => `<button class="${T?.skip === v ? 'on' : ''}" data-act="pro-nc" data-arg="skip:${v ? 1 : 0}"><span class="nc-mi${v ? ' bad' : ''}">${v ? '⚠' : '✓'} ${t}</span><span class="nc-sub">${esc(d)}</span></button>`)
+    .join('');
+  const engine = T?.info
+    ? `<span class="nc-info">${esc(T.info)}</span>${typeof T.skip === 'boolean' ? pk('perm', T.skip ? '⚠ Skip permissions' : 'Ask before acting', T.skip ? 'nc-danger' : 'nc-dim', false, tPerms) : ''}`
+    : `${pk('model', modelLabel, 'nc-dim', false, models)}${pk('perm', f.skip ? '⚠ Skip permissions' : 'Ask before acting', f.skip ? 'nc-danger' : 'nc-dim', false, perms)}`;
   return `<div class="page nc-wrap">
     <h1 class="nc-h">${src ? 'Continue with another agent' : 'What are we working on?'}</h1>
     ${src ? `<p class="nc-src">Continues <b>${esc(src.title)}</b> <span class="badge ${esc(src.agent)}">${esc(AGENT[src.agent]?.name ?? src.agent)}</span>. The new agent loads its record through the Chorus MCP server and waits for your OK.</p>` : ''}
