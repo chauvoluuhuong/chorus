@@ -1,7 +1,7 @@
 # The Chorus box (Docker)
 
 Chorus in a clean Linux container, opened in your browser, on macOS, Linux and Windows. Plan:
-[2026-11-07-browser-everywhere-and-docker](../plans/2026-11-07-browser-everywhere-and-docker.md), part B. Built 2026-11-08.
+plan 2026-11-07-browser-everywhere-and-docker (private), part B. Built 2026-11-08.
 
 ## Use
 

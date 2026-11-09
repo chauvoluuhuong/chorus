@@ -32,7 +32,7 @@ Chorus.app (desktop/, Tauri, 4.9 MB)          a window; no logic
 - **Size.** The window's terminal size is the size of every agent screen (one window at a time is the expected use). The window
   opens the page with `?window=native` and says so on its socket (`/ws?window=native`): while it is open, a browser tab on the same
   Chorus is a viewer that never resizes the agents; with no window, a tab sizes them (2026-11-08, plan
-  [2026-11-07-browser-everywhere-and-docker](plans/2026-11-07-browser-everywhere-and-docker.md)). `CHORUS_DEBUG_VIEWERS=1` logs who
+  plan 2026-11-07-browser-everywhere-and-docker, private). `CHORUS_DEBUG_VIEWERS=1` logs who
   connects and who sizes.
 
 ## 2. Security of the local API
