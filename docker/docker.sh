@@ -3,7 +3,7 @@
 #   curl -fsSL https://chorus-cli.web.app/docker.sh | bash                    (add -s -- --preview for preview)
 # Asks three things (stable or preview, the folder to share, the port), then starts ghcr.io/chauvoluuhuong/chorus-box. Run it again to
 # open Chorus again: the box is started if it is stopped, and nothing is asked. To start over: docker rm -f chorus
-# Plan: docs/plans/2026-11-07-browser-everywhere-and-docker.md, part B. The image: docker/box/.
+# Feature: docs/features/docker-box.md. The image: docker/box/.
 # Options (environment): CHORUS_CHANNEL=stable|preview, CHORUS_SHARE (folder, or several joined by ':'), CHORUS_PORT, CHORUS_NAME
 # (default chorus), CHORUS_VOLUME (the box's home, default chorus-home), CHORUS_NO_OPEN=1, CHORUS_BOX_IMAGE (another image), CHORUS_BOX_DOCKER_ARGS (more `docker run` arguments, for testing).
 set -euo pipefail

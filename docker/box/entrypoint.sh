@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The Chorus box's start (docker/box/Dockerfile; plan docs/plans/2026-11-07-browser-everywhere-and-docker.md, part B):
+# The Chorus box's start (docker/box/Dockerfile; docs/features/docker-box.md):
 #   1. as root: give the `chorus` user your user and group id (HOST_UID, HOST_GID: the launcher sets them on a Linux host, so files
 #      the agents write in a shared folder stay yours), then drop to that user. Agents never run as root.
 #   2. stable or preview: CHORUS_CHANNEL, else the answer kept in the volume, else asked once (docker run -it), else stable.

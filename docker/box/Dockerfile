@@ -1,6 +1,6 @@
 # The Chorus box: a clean Debian 12 with the AI CLIs at the newest versions Chorus has tested. Chorus itself is installed when the box
 # starts, on the channel you pick (stable or preview), by the same install.sh everyone uses (docker/box/entrypoint.sh).
-# Plan: docs/plans/2026-11-07-browser-everywhere-and-docker.md, part B. Built by .github/workflows/docker.yml:
+# Feature: docs/features/docker-box.md. Built by .github/workflows/docker.yml:
 #   docker build $(node docker/box/tested.mjs --build-args ../chorus-core/src/tested.json) -t chorus-box docker/box
 FROM node:22-bookworm-slim
 
