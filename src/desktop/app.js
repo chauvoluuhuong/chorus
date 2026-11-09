@@ -517,6 +517,7 @@ function renderChrome() {
     ${S.history.length ? '<button class="btn" data-act="back" title="Back">‹ Back</button>' : ''}
     <div class="crumbs">${crumbs}</div>
     ${waiting ? `<button class="btn waiting" data-act="approvals">! ${waiting} waiting</button>` : ''}
+    ${st?.update ? `<button class="btn update-btn" data-act="update-toggle" aria-expanded="${!$('#app-update').hidden}" aria-controls="app-update" title="Chorus ${esc(st.update.version)} is available">↑ <span class="update-label">Update to </span>${esc(st.update.version)}</button>` : ''}
     <button class="btn export-btn" data-act="export" title="Save all your chats and their files to one .zip in Downloads"${S.exporting ? ' disabled' : ''}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg><span class="export-label">${S.exporting ? 'Exporting…' : 'Export'}</span></button>
     <button class="btn news-toggle" data-act="news-toggle" aria-label="Notifications${st?.notifications?.unread ? `, ${st.notifications.unread} unread` : ''}" aria-expanded="${!$('#news').hidden}" aria-controls="news"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span class="news-label">Notifications</span>${st?.notifications?.unread ? `<span class="news-count">${Math.min(st.notifications.unread, 99)}</span>` : ''}</button>`;
 
@@ -1547,13 +1548,17 @@ document.addEventListener('drop', async e => {
 });
 
 
-/* ---------- app updates: state comes from the single launch check ---------- */
+/* ---------- app updates: state comes from the single launch check. A button in the top bar opens this popover ---------- */
 function renderUpdate(update) {
   const box = $('#app-update');
+  if (!update) box.hidden = true;
   if (box.dataset.version === (update?.version ?? '')) return;
-  box.dataset.version = update?.version ?? ''; box.hidden = !update;
+  box.dataset.version = update?.version ?? '';
   if (!update) { box.replaceChildren(); return; }
   box.innerHTML = `<div><strong>Chorus ${esc(update.version)} is available</strong><p>You have ${esc(update.currentVersion)}. Use the official installer to update Chorus, then restart the app.</p></div><div class="app-update-actions"><button class="btn" data-act="update-skip">Skip this version</button><button class="btn primary" data-act="update-open">Update Chorus</button></div>`;
+}
+function closeUpdate() {
+  $('#app-update').hidden = true; renderChrome();
 }
 
 /* ---------- notifications: all reads are local, with no fetch-again or timer path ---------- */
@@ -1728,8 +1733,10 @@ document.addEventListener('click', async e => {
       el.closest('.scrim')?.remove();
       return toast(r.error ? `Not sent: ${r.error}` : r.via === 'gh' ? `Issue created: ${r.url}` : 'Opened GitHub; the report is on your clipboard: paste it as the description');
     }
-    case 'update-skip': return api('POST', '/api/updates/skip', {});
+    case 'update-toggle': $('#app-update').hidden = !$('#app-update').hidden; return renderChrome();
+    case 'update-skip': closeUpdate(); return api('POST', '/api/updates/skip', {});
     case 'update-open': {
+      closeUpdate();
       const result = await api('POST', '/api/updates/open', {});
       return toast(result.error || 'Update instructions opened in your browser. Run the installer, then restart Chorus.');
     }
