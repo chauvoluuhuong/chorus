@@ -298,6 +298,7 @@ function go(view, push = true) {
   renderChrome();
   renderDoctorDot();
   renderView();
+  doctorWhenReady();
 }
 function back() {
   const v = S.history.pop();
@@ -345,6 +346,7 @@ async function onProStatus(st) {
   drawPlanBanner();
   if (S.view.name !== 'chat') renderView();
   planScreens();
+  doctorWhenReady();
 }
 
 function unlockHtml() {
@@ -381,6 +383,8 @@ async function recheck() {
   await onProStatus(st);
   if (st.plan !== 'pro') toast(st.message || 'Not confirmed yet. A payment can take a few seconds: try again in a moment.');
 }
+/** The Pro gates by id, as Admin › Free and Pro names them (chorus-admin server/gates.mjs; their lines stay in the backend). */
+const GATE_NAMES = { portal: 'Open the Portal', instructions: 'Edit instructions', actions: 'Create and edit actions', processes: 'Edit processes', failures: 'Add failure notes', 'teammate.create': 'Create a new teammate', remote: 'Use remote access' };
 
 /** First launch, or a trial that just ended: the screen that says so, once. */
 function planScreens() {
@@ -418,8 +422,10 @@ function welcomeHtml() {
     void api('GET', '/api/pro/plans').then(w => { planWords = w; if (S.view.name === 'welcome') renderView(); }, () => { planWords = { offline: true }; renderView(); });
   }
   const w = planWords && !planWords.offline ? planWords : null;
-  const card = (c, pro) => `<div class="plan-card${pro ? ' pro' : ''}"><h2>${esc(c?.name ?? (pro ? 'Pro' : 'Community'))}${pro && c?.badge ? ` <span class="badge acc">${esc(c.badge)}</span>` : ''}</h2><div class="muted">${esc(c?.sub ?? (pro ? 'Everything in Community, plus more' : 'Free'))}</div>
-    <ul>${(c?.items ?? []).map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+  // the backend's features (a name and its line), else its plain items; offline, Pro lists the gates' names
+  const list = (c, pro) => c?.features ? c.features.map(f => `<li><div><b>${esc(f.name)}</b>${f.detail ? `<span>${esc(f.detail)}</span>` : ''}</div></li>`) : (c?.items ?? (pro ? Object.values(GATE_NAMES) : [])).map(i => `<li>${esc(i)}</li>`);
+  const card = (c, pro) => `<div class="plan-card${pro ? ' pro' : ''}"><h2>${esc(c?.name ?? (pro ? 'Pro' : 'Community'))}${pro && c?.badge ? ` <span class="badge acc">${esc(c.badge)}</span>` : ''}</h2><div class="muted">${esc(c?.sub ?? (pro ? 'Everything in Community, plus' : 'Free'))}</div>
+    <ul>${list(c, pro).join('')}</ul>
     <button class="btn${pro ? ' primary' : ''} wide" data-act="${pro ? 'plan-try' : 'plan-community'}">${esc(c?.button ?? (pro ? 'Try Pro free' : 'Keep Community'))}</button><div class="fine">${esc(c?.fine ?? '')}</div></div>`;
   return `<div class="page welcome"><h1>${esc(w?.title ?? 'Welcome to Chorus')}</h1><p class="lead">${esc(w?.lede ?? 'Start free, or try Pro. You can change your mind any time.')}</p>
     ${planWords === null ? '<p class="muted" role="status" style="text-align:center">Loading…</p>' : `<div class="plan-cards">${card(w?.community, false)}${card(w?.pro, true)}</div>`}</div>`;
@@ -433,8 +439,9 @@ const paidHtml = () => `<div class="page welcome center"><div class="big">✓</d
 const startedHtml = () => `<div class="page welcome center"><div class="big">✓</div><h1>Your Pro trial has started</h1><p class="lead">${S.pro?.ends ? `${daysLeft(S.pro.ends)} days from today. ` : ''}Your first step is meeting your teammates.</p>
   <div class="row-c"><button class="btn primary" data-act="pro-view" data-arg="teammates">Meet your teammates</button><button class="btn" data-act="new">Start a chat</button></div></div>`;
 function endedHtml() {
-  const names = { portal: 'Open the Portal', 'teammate.create': 'Create a new teammate' }, off = (S.pro?.locked ?? []).filter(g => names[g]).map(g => `<b>${esc(names[g])}</b>`);
-  return `<div class="page welcome center"><h1>Your Pro trial has ended</h1><p class="lead">You keep your teammates, plans, Workers and tasks.${off.length ? ` These now need Pro: ${off.join(' and ')}.` : ' Everything keeps working.'}</p>
+  const off = (S.pro?.locked ?? []).filter(g => GATE_NAMES[g]).map(g => `<b>${esc(GATE_NAMES[g])}</b>`);
+  const listed = off.length > 1 ? `${off.slice(0, -1).join(', ')} and ${off.at(-1)}` : off[0];
+  return `<div class="page welcome center"><h1>Your Pro trial has ended</h1><p class="lead">You keep the Planner, your plans and tasks, and Workers that run the steps.${off.length ? ` These now need Pro: ${listed}.` : ' Everything keeps working.'}</p>
     <div class="row-c"><button class="btn primary" data-act="plan-upgrade">Upgrade</button><button class="btn" data-act="pro-view" data-arg="teammates">Open Teammates</button></div></div>`;
 }
 
@@ -534,6 +541,7 @@ function renderChrome() {
     ${S.history.length ? '<button class="btn" data-act="back" title="Back">‹ Back</button>' : ''}
     <div class="crumbs">${crumbs}</div>
     ${waiting ? `<button class="btn waiting" data-act="approvals">! ${waiting} waiting</button>` : ''}
+    ${st?.update ? `<button class="btn update-btn" data-act="update-toggle" aria-expanded="${!$('#app-update').hidden}" aria-controls="app-update" title="Chorus ${esc(st.update.version)} is available">↑ <span class="update-label">Update to </span>${esc(st.update.version)}</button>` : ''}
     <button class="btn export-btn" data-act="export" title="Save all your chats and their files to one .zip in Downloads"${S.exporting ? ' disabled' : ''}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg><span class="export-label">${S.exporting ? 'Exporting…' : 'Export'}</span></button>
     <button class="btn news-toggle" data-act="news-toggle" aria-label="Notifications${st?.notifications?.unread ? `, ${st.notifications.unread} unread` : ''}" aria-expanded="${!$('#news').hidden}" aria-controls="news"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span class="news-label">Notifications</span>${st?.notifications?.unread ? `<span class="news-count">${Math.min(st.notifications.unread, 99)}</span>` : ''}</button>`;
 
@@ -857,13 +865,26 @@ const drAgent = agent => drAgents()?.find(a => a.agent === agent);
 async function firstDoctor() {
   try {
     const { first } = await api('GET', '/api/doctor/first');
-    if (first) openDoctorPopup();
+    if (first) (S.doctorWaits = true), doctorWhenReady();
     const d = await loadDoctor();
-    if (first || d.due) openDoctorPopup();
+    // once per launch: a popup the user already closed stays closed when the details arrive late
+    if ((first || d.due) && !S.doctorOpened) (S.doctorWaits = true), doctorWhenReady();
+    else if ($('#doctor-pop')) drawDoctor();
     else renderDoctorDot();
   } catch {
     /* the app works without the doctor */
   }
+}
+
+/** First launch: the Welcome's choice (Community or Pro) comes first, then the Doctor (owner, 2026-11-09). While the plan is not
+ *  known yet, or the Welcome or "Finish in your browser" is in front, or a Community first launch is about to show the Welcome,
+ *  the Doctor waits; go() and the plan's status call this again. */
+const welcomePending = () => (S.pro === undefined && !S.proFailed) || ['welcome', 'trying'].includes(S.view.name) || (community() && S.welcome === undefined && S.view.name === 'new');
+function doctorWhenReady() {
+  if (!S.doctorWaits || welcomePending()) return;
+  S.doctorWaits = false;
+  S.doctorOpened = true;
+  openDoctorPopup();
 }
 
 /** What the Doctor shows besides the agents' status: Chorus's version, the latest releases, the detailed tests on file. */
@@ -1551,13 +1572,17 @@ document.addEventListener('drop', async e => {
 });
 
 
-/* ---------- app updates: state comes from the single launch check ---------- */
+/* ---------- app updates: state comes from the single launch check. A button in the top bar opens this popover ---------- */
 function renderUpdate(update) {
   const box = $('#app-update');
+  if (!update) box.hidden = true;
   if (box.dataset.version === (update?.version ?? '')) return;
-  box.dataset.version = update?.version ?? ''; box.hidden = !update;
+  box.dataset.version = update?.version ?? '';
   if (!update) { box.replaceChildren(); return; }
   box.innerHTML = `<div><strong>Chorus ${esc(update.version)} is available</strong><p>You have ${esc(update.currentVersion)}. Use the official installer to update Chorus, then restart the app.</p></div><div class="app-update-actions"><button class="btn" data-act="update-skip">Skip this version</button><button class="btn primary" data-act="update-open">Update Chorus</button></div>`;
+}
+function closeUpdate() {
+  $('#app-update').hidden = true; renderChrome();
 }
 
 /* ---------- notifications: all reads are local, with no fetch-again or timer path ---------- */
@@ -1734,8 +1759,10 @@ document.addEventListener('click', async e => {
       el.closest('.scrim')?.remove();
       return toast(r.error ? `Not sent: ${r.error}` : r.via === 'gh' ? `Issue created: ${r.url}` : 'Opened GitHub; the report is on your clipboard: paste it as the description');
     }
-    case 'update-skip': return api('POST', '/api/updates/skip', {});
+    case 'update-toggle': $('#app-update').hidden = !$('#app-update').hidden; return renderChrome();
+    case 'update-skip': closeUpdate(); return api('POST', '/api/updates/skip', {});
     case 'update-open': {
+      closeUpdate();
       const result = await api('POST', '/api/updates/open', {});
       return toast(result.error || 'Update instructions opened in your browser. Run the installer, then restart Chorus.');
     }
@@ -2070,6 +2097,10 @@ function fromHash() {
 }
 
 connect();
-void api('GET', '/api/pro/status').then(onProStatus, () => {});
+void api('GET', '/api/pro/status').then(onProStatus, () => {
+  // no plan to read: no Welcome either, so the Doctor goes on as before
+  S.proFailed = true;
+  doctorWhenReady();
+});
 renderChrome();
 go(fromHash(), false);
