@@ -433,8 +433,17 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 @media (max-width: 800px) { .news-toggle .news-label, .export-btn .export-label { display: none; } }
 
 /* Launch-only release notice, using the existing desktop palette. */
-.app-update{display:flex;gap:20px;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
-.app-update[hidden]{display:none}.app-update strong{font-weight:600}.app-update p{margin:5px 0 0;font-size:12px;color:var(--muted)}.app-update-actions{display:flex;gap:8px;flex-shrink:0}@media(max-width:900px){.app-update{align-items:flex-start;flex-direction:column;gap:12px}}
+/* the Update button in the top bar opens this popover (it used to be a banner across the page) */
+#main{position:relative}
+.update-btn{background:var(--accent-soft);border-color:transparent;color:var(--accent);font-weight:600}
+.update-btn:hover{background:var(--accent-soft);filter:brightness(.97)}
+.app-update{position:absolute;right:16px;top:50px;z-index:40;width:min(360px,calc(100% - 32px));display:flex;flex-direction:column;gap:12px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow)}
+.app-update[hidden]{display:none}.app-update strong{font-weight:600}.app-update p{margin:5px 0 0;font-size:12.5px;color:var(--muted)}.app-update-actions{display:flex;gap:8px;justify-content:flex-end}
+@media(max-width:700px){.update-btn .update-label{display:none}}
+/* a task in the sidebar: Details opens its page (a click on the row opens its last chat) */
+.chat-row .tk-det{flex:none;border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:0 6px;font-size:11px;color:var(--muted);opacity:0}
+.chat-row:hover .tk-det,.chat-row.on .tk-det,.chat-row.here .tk-det,.chat-row:focus-visible .tk-det{opacity:1}
+.chat-row .tk-det:hover{color:var(--accent);border-color:var(--accent)}
 [data-pro-slot]:empty:not([data-pro-slot="view"]):not([data-pro-slot="chat-side"]):not([data-pro-slot="approvals"]) { display: none; }
 [data-pro-slot="chat-side"] { flex: none; }
 [data-pro-slot="approvals"] { display: block; } /* a shadow root counts as :empty */
