@@ -842,7 +842,9 @@ async function firstDoctor() {
     const { first } = await api('GET', '/api/doctor/first');
     if (first) (S.doctorWaits = true), doctorWhenReady();
     const d = await loadDoctor();
-    if (first || d.due) (S.doctorWaits = true), doctorWhenReady();
+    // once per launch: a popup the user already closed stays closed when the details arrive late
+    if ((first || d.due) && !S.doctorOpened) (S.doctorWaits = true), doctorWhenReady();
+    else if ($('#doctor-pop')) drawDoctor();
     else renderDoctorDot();
   } catch {
     /* the app works without the doctor */
@@ -856,6 +858,7 @@ const welcomePending = () => (S.pro === undefined && !S.proFailed) || ['welcome'
 function doctorWhenReady() {
   if (!S.doctorWaits || welcomePending()) return;
   S.doctorWaits = false;
+  S.doctorOpened = true;
   openDoctorPopup();
 }
 

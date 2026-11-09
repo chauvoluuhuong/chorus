@@ -79,6 +79,25 @@ await click('#fr-foot button', /start using Chorus|Continue/);
 check('the Doctor closes into New chat', await until(async () => !(await doctorOpen()) && (await view()) === 'new', 5000));
 await shot('new-chat', 'Chorus, ready.');
 
+console.log('First launch again, clicking fast: the Doctor opens once');
+{
+  // a fresh home; the user picks and closes at once, before the Doctor's details are loaded: it must not come back
+  serve!.kill('SIGTERM');
+  await sleep(800);
+  const fresh = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-first-'));
+  Object.assign(env, { CHORUS_HOME: path.join(fresh, 'chorus'), CHORUS_DOCTOR_HOME: fresh });
+  await cdp('Page.navigate', { url: await startServe() });
+  await until(async () => (await view()) === 'welcome', 15_000, 100);
+  await click('.plan-card button', /Keep Community/);
+  await until(() => js<boolean>('!!document.querySelector("#fr-foot button.primary:not([disabled])")'), 15_000, 100);
+  await click('#fr-foot button', /start using Chorus|Continue/);
+  await sleep(5000);
+  check('a closed Doctor stays closed', !(await doctorOpen()));
+  serve!.kill('SIGTERM');
+  await sleep(800);
+  Object.assign(env, { CHORUS_HOME: path.join(home, 'chorus'), CHORUS_DOCTOR_HOME: home });
+}
+
 console.log('Second launch: same home');
 serve!.kill('SIGTERM');
 await sleep(800);
