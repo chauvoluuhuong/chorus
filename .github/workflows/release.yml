@@ -171,3 +171,59 @@ jobs:
           [ "$newest" = "$V" ] || { echo "v$newest is newer than v$V: the rolling preview stays"; exit 0; }
           gh release delete preview --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes 2>/dev/null || true
           gh release create preview dl/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Chorus $V (preview)" --notes-file notes.md --prerelease --latest=false
+
+  # The paid bundle (chorus-core `npm run build:pro`, release mode) goes to the licence backend's private bucket, which hands it to every
+  # install at its next launch. Keyless: GitHub signs in to Google Cloud with Workload Identity, trusted only for this workflow on a pushed
+  # v… tag of this repository (not a fork), as a service account that can write to that one bucket. The ids are repository variables
+  # (set once by chorus-admin's scripts/setup-pro-publish.sh), so they never appear here. Without them the job says so and stops.
+  pro-bundle:
+    needs: version
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Publishing is set up
+        id: ready
+        # this repo's logs are public: the cloud ids are masked before anything can print them
+        run: |
+          for v in "${{ vars.GCP_PRO_PROVIDER }}" "${{ vars.GCP_PRO_SERVICE_ACCOUNT }}" "${{ vars.GCP_PRO_BUCKET }}"; do [ -n "$v" ] && echo "::add-mask::$v"; done
+          if [ -z "${{ vars.GCP_PRO_PROVIDER }}" ] || [ -z "${{ vars.GCP_PRO_SERVICE_ACCOUNT }}" ] || [ -z "${{ vars.GCP_PRO_BUCKET }}" ]; then
+            echo "::warning::The paid bundle was not published: run chorus-admin's scripts/setup-pro-publish.sh once"; echo "ok=false" >> "$GITHUB_OUTPUT"
+          else echo "ok=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Check out chorus-core (private)
+        if: steps.ready.outputs.ok == 'true'
+        uses: actions/checkout@v5
+        with:
+          repository: chauvoluuhuong/chorus-core
+          ref: ${{ env.CORE_REF }}
+          ssh-key: ${{ secrets.CHORUS_CORE_DEPLOY_KEY }}
+          path: chorus-core
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        if: steps.ready.outputs.ok == 'true'
+        with:
+          node-version: 22
+      - name: Build the paid bundle (release mode, no test key)
+        if: steps.ready.outputs.ok == 'true'
+        working-directory: chorus-core
+        run: |
+          npm ci --no-fund --no-audit --loglevel=error
+          npm run build:pro
+          node -e "const m = require('./dist-pro/pro.json'); if (!/^\d+\.\d+\.\d+\+[0-9a-f]{12}$/.test(m.version)) throw new Error('unexpected bundle version ' + m.version); console.log('bundle', m.version)"
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        if: steps.ready.outputs.ok == 'true'
+        with:
+          workload_identity_provider: ${{ vars.GCP_PRO_PROVIDER }}
+          service_account: ${{ vars.GCP_PRO_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        if: steps.ready.outputs.ok == 'true'
+      - name: Publish to the licence backend's bucket
+        if: steps.ready.outputs.ok == 'true'
+        working-directory: chorus-core
+        # the code first, then the file that names its version: the backend reads both, and a new version only counts once both are there
+        run: |
+          gcloud storage cp dist-pro/pro.js "gs://${{ vars.GCP_PRO_BUCKET }}/current/pro.js"
+          gcloud storage cp dist-pro/pro.json "gs://${{ vars.GCP_PRO_BUCKET }}/current/pro.json"
+          echo "### Paid bundle published: $(node -p "require('./dist-pro/pro.json').version")" >> "$GITHUB_STEP_SUMMARY"
