@@ -532,7 +532,11 @@ export class ChorusServer {
       if (!tryUrl) return send(res, 200, { error: 'Pro sign-up is not available in this build' });
       const state = crypto.randomBytes(24).toString('base64url');
       this.tries.set(state, Date.now() + 30 * 60_000);
-      const url = `${tryUrl}?${new URLSearchParams({ state, port: new URL(this.url).port })}`;
+      // then=upgrade: Buy Pro, so the page comes back to payment after signing in (plan 2026-11-09)
+      const body: Record<string, unknown> = await readJson(req).catch(() => ({}));
+      const q: Record<string, string> = { state, port: new URL(this.url).port };
+      if (body.then === 'upgrade') q.then = 'upgrade';
+      const url = `${tryUrl}?${new URLSearchParams(q)}`;
       // in a container the browser is on another computer: the page opens it
       if (!this.container) (this.o.openLink ?? openUrl)(url);
       return send(res, 200, { ok: true, url, ...(this.container ? { open: url } : {}) });

@@ -3,7 +3,7 @@
 import { exclude } from '@chauvoluuhuong/chorus-core';
 import type { AgentId } from '../core/types.ts';
 import { syncSkills } from '../core/skills.ts';
-import { activatePro, isLocked, loadPro, proDev, proLinks, recheckPro, signInPro, upgradePro, type ChatExtras, type LoadResult, type McpToolDef, type ProCtx, type ProHandler, type ProModule, type RemoteDecision, type RemoteRequest } from '@chauvoluuhuong/chorus-core/pro-loader';
+import { accountPro, activatePro, isLocked, loadPro, proDev, proLinks, recheckPro, signInPro, upgradePro, type ChatExtras, type LoadResult, type McpToolDef, type ProCtx, type ProHandler, type ProModule, type RemoteDecision, type RemoteRequest } from '@chauvoluuhuong/chorus-core/pro-loader';
 
 export interface ProLoader {
   load(ctx: ProCtx, onChange: (r: LoadResult) => void): Promise<LoadResult>;
@@ -14,6 +14,8 @@ export interface ProLoader {
   links?(): { tryUrl: string; plansUrl: string };
   /** Upgrade's payment link for the signed-in account (plan stage 8); `signIn` when there is no account here yet */
   upgrade?(ctx: ProCtx, port?: number): Promise<{ url?: string; pro?: boolean; error?: string; signIn?: boolean }>;
+  /** the signed-in account's email, as the backend last sent it (plan box, 2026-11-09) */
+  account?(ctx: ProCtx): { email: string } | undefined;
   /** after paying: the licence as the server signs it now */
   recheck?(ctx: ProCtx, onChange: (r: LoadResult) => void): Promise<LoadResult>;
   dev: boolean;
@@ -34,7 +36,7 @@ export class ChatLaunch {
   }
 }
 
-const realLoader: ProLoader = { load: loadPro, activate: activatePro, signIn: signInPro, links: proLinks, upgrade: upgradePro, recheck: recheckPro, dev: proDev };
+const realLoader: ProLoader = { load: loadPro, activate: activatePro, signIn: signInPro, links: proLinks, account: accountPro, upgrade: upgradePro, recheck: recheckPro, dev: proDev };
 
 export interface ProStatus {
   unlocked: boolean;
@@ -46,6 +48,8 @@ export interface ProStatus {
   plan?: string;
   ends?: string;
   locked?: string[];
+  /** the signed-in account's email, for the plan box; none for Community */
+  email?: string;
 }
 
 const LOCKED = { status: 402, json: { locked: true } };
@@ -96,7 +100,8 @@ export class ProHost {
     const r = this.result;
     if (isLocked(r)) return { unlocked: false, dev: this.loader.dev, reason: r.locked, message: r.message };
     const e = r.entitled;
-    return { unlocked: true, dev: this.loader.dev, version: r.version, ...(e ? { plan: e.plan, ends: e.ends, locked: e.locked } : {}) };
+    const email = e && e.plan !== 'community' ? this.loader.account?.(this.ctx)?.email : undefined;
+    return { unlocked: true, dev: this.loader.dev, version: r.version, ...(e ? { plan: e.plan, ends: e.ends, locked: e.locked } : {}), ...(email ? { email } : {}) };
   }
 
   /** Back from the browser with the one-time code: the account's licence, activated here (plan stage 6). */

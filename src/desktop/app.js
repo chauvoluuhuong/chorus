@@ -372,8 +372,8 @@ const community = () => !!S.pro && (!S.pro.unlocked || S.pro.plan === 'community
 async function upgrade() {
   const r = await api('POST', '/api/pro/upgrade').catch(err => ({ error: err.message }));
   if (r.signIn) {
-    // no account on this install yet: sign in first; an email whose trial was used comes back with Upgrade
-    const t = await api('POST', '/api/pro/try').catch(err => ({ error: err.message }));
+    // no account on this install yet: sign in first, then straight on to payment (then=upgrade)
+    const t = await api('POST', '/api/pro/try', { then: 'upgrade' }).catch(err => ({ error: err.message }));
     if (t.error) return toast(t.error);
     return go({ name: 'trying' });
   }
@@ -399,14 +399,17 @@ function planScreens() {
 function planBox() {
   const p = S.pro;
   if (!p) return '';
-  const box = (title, sub, button = '', warn = false) => `<div class="plan-box"><b>${esc(title)}</b><span class="${warn ? 'warn' : 'muted'}">${esc(sub)}</span>${button}</div>`;
-  if (community()) return box('Community', 'Free', '<button class="btn" data-act="plan-welcome">Try Pro</button>');
+  // Upgrade is there whenever there is something to buy, from a trial's first day (plan 2026-11-09); the email says which account
+  const who = p.email ? `<span class="who" title="Signed in as ${esc(p.email)}">${esc(p.email)}</span>` : '';
+  const up = '<button class="btn primary" data-act="plan-upgrade">Upgrade</button>';
+  const box = (title, sub, button = '', warn = false) => `<div class="plan-box"><b>${esc(title)}</b><span class="${warn ? 'warn' : 'muted'}">${esc(sub)}</span>${who}${button}</div>`;
+  if (community()) return box('Community', 'Free', '<button class="btn" data-act="plan-welcome">Try Pro free</button><button class="btn primary" data-act="plan-buy">Buy Pro</button>');
   if (p.plan === 'trial') {
     const n = daysLeft(p.ends);
-    return box('Pro trial', `${n} day${n === 1 ? '' : 's'} left`, n <= 3 ? '<button class="btn primary" data-act="plan-upgrade">Upgrade</button>' : '', n <= 3);
+    return box('Pro trial', `${n} day${n === 1 ? '' : 's'} left`, up, n <= 3);
   }
-  if (p.plan === 'free') return box('No Pro', 'Your trial ended', '<button class="btn primary" data-act="plan-upgrade">Upgrade</button>');
-  if (p.plan === 'pro') return box('Pro', 'Thank you');
+  if (p.plan === 'free') return box('No Pro', 'Your trial ended', up);
+  if (p.plan === 'pro') return box('Pro', 'For life · thank you');
   return '';
 }
 
@@ -1686,6 +1689,7 @@ document.addEventListener('click', async e => {
       return go({ name: 'trying' });
     }
     case 'plan-upgrade':
+    case 'plan-buy':
       return upgrade();
     case 'plan-recheck':
       return recheck();
