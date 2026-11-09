@@ -189,6 +189,9 @@ jobs:
         # this repo's logs are public: the cloud ids are masked before anything can print them
         run: |
           for v in "${{ vars.GCP_PRO_PROVIDER }}" "${{ vars.GCP_PRO_SERVICE_ACCOUNT }}" "${{ vars.GCP_PRO_BUCKET }}"; do [ -n "$v" ] && echo "::add-mask::$v"; done
+          # and the project id and number inside them: the Google Cloud steps print them on their own
+          sa="${{ vars.GCP_PRO_SERVICE_ACCOUNT }}"; project="${sa#*@}"; project="${project%%.*}"; [ -n "$project" ] && echo "::add-mask::$project"
+          number=$(echo "${{ vars.GCP_PRO_PROVIDER }}" | sed -n 's#^projects/\([0-9]*\)/.*#\1#p'); [ -n "$number" ] && echo "::add-mask::$number"
           if [ -z "${{ vars.GCP_PRO_PROVIDER }}" ] || [ -z "${{ vars.GCP_PRO_SERVICE_ACCOUNT }}" ] || [ -z "${{ vars.GCP_PRO_BUCKET }}" ]; then
             echo "::warning::The paid bundle was not published: run chorus-admin's scripts/setup-pro-publish.sh once"; echo "ok=false" >> "$GITHUB_OUTPUT"
           else echo "ok=true" >> "$GITHUB_OUTPUT"; fi
