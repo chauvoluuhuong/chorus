@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       core_ref:
-        description: chorus-core branch, tag or commit to bundle (default the CHORUS_CORE_REF variable, else dev)
+        description: chorus-core branch, tag or commit to bundle (default the CHORUS_CORE_REF variable, else main for a production tag and dev otherwise)
         required: false
 
 permissions:
@@ -34,7 +34,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  CORE_REF: ${{ inputs.core_ref || vars.CHORUS_CORE_REF || 'dev' }}
+  # a production tag builds chorus-core's main (what was merged with the release); previews and test runs build its dev
+  CORE_REF: ${{ inputs.core_ref || vars.CHORUS_CORE_REF || (github.ref_type == 'tag' && !contains(github.ref_name, '-preview.') && 'main') || 'dev' }}
 
 jobs:
   version:
@@ -229,10 +230,13 @@ jobs:
       - name: Publish to the licence backend's bucket
         if: steps.ready.outputs.ok == 'true'
         working-directory: chorus-core
-        # the code first, then the file that names its version: the backend reads both, and a new version only counts once both are there
+        # the code first, then the file that names its version: the backend reads both, and a new version only counts once both are there.
+        # A preview tag fills preview/, which only preview apps get; a production tag fills current/, which every other app gets
+        # (chorus-admin server/index.mjs), so a preview never changes the paid code production users run.
         env:
           BUCKET: ${{ secrets.GCP_PRO_BUCKET }}
+          FOLDER: ${{ needs.version.outputs.channel == 'production' && 'current' || 'preview' }}
         run: |
-          gcloud storage cp dist-pro/pro.js "gs://$BUCKET/current/pro.js"
-          gcloud storage cp dist-pro/pro.json "gs://$BUCKET/current/pro.json"
-          echo "### Paid bundle published: $(node -p "require('./dist-pro/pro.json').version")" >> "$GITHUB_STEP_SUMMARY"
+          gcloud storage cp dist-pro/pro.js "gs://$BUCKET/$FOLDER/pro.js"
+          gcloud storage cp dist-pro/pro.json "gs://$BUCKET/$FOLDER/pro.json"
+          echo "### Paid bundle published to $FOLDER/: $(node -p "require('./dist-pro/pro.json').version")" >> "$GITHUB_STEP_SUMMARY"

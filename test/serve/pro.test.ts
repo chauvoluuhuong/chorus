@@ -1,4 +1,5 @@
 // The optional module's seam with a stand-in module: what the page and `chorus mcp` see locked and unlocked.
+import { versions } from '../../src/core/doctor.ts';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -49,6 +50,23 @@ async function rig(first: LoadResult = LOCKED) {
   };
   return { srv, api, tools, home, project, change: (r: LoadResult) => changed(r), close: () => (srv.close(), c.stop(), store.close()) };
 }
+
+test('the loader is told the app\'s version, so a preview gets the preview paid build', async () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-p-'));
+  const store = new Store(project, { home: fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-')) });
+  let seen: ProCtx | undefined;
+  const proLoader: ProLoader = { dev: false, load: async c => ((seen = c), LOCKED), activate: async () => LOCKED };
+  const c = new Controller({ project, store, app: headlessApp(), opener: async () => ({ ok: true }), launcher: (_a, o) => ({ bin: process.execPath, args: [], cwd: o.cwd }) });
+  const srv = new ChorusServer({ controller: c, token: 'a'.repeat(48), check: async () => ({ node: { version: '22', ok: true }, platform: 't', agents: [], ms: 1 }), proLoader });
+  await srv.start(0);
+  await new Promise(x => setTimeout(x, 20));
+  try {
+    assert.equal(seen?.appVersion, versions().chorus);
+    assert.match(seen?.appVersion ?? '', /^\d+\.\d+\.\d+/);
+  } finally {
+    srv.close(); c.stop(); store.close();
+  }
+});
 
 test('locked: status says why, the module\'s addresses answer 402, no tools', async () => {
   const r = await rig();
