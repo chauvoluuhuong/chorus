@@ -174,8 +174,8 @@ jobs:
 
   # The paid bundle (chorus-core `npm run build:pro`, release mode) goes to the licence backend's private bucket, which hands it to every
   # install at its next launch. Keyless: GitHub signs in to Google Cloud with Workload Identity, trusted only for this workflow on a pushed
-  # v… tag of this repository (not a fork), as a service account that can write to that one bucket. The ids are repository variables
-  # (set once by chorus-admin's scripts/setup-pro-publish.sh), so they never appear here. Without them the job says so and stops.
+  # v… tag of this repository (not a fork), as a service account that can write to that one bucket. The ids are repository secrets
+  # (set once by chorus-admin's scripts/setup-pro-publish.sh), so they never appear here or in the logs. Without them the job says so and stops.
   pro-bundle:
     needs: version
     if: github.ref_type == 'tag'
@@ -186,15 +186,19 @@ jobs:
     steps:
       - name: Publishing is set up
         id: ready
-        # this repo's logs are public: the cloud ids are masked before anything can print them
+        # the ids are repository secrets, so GitHub hides them everywhere in this public log (variables would be printed in the script
+        # itself); the project id and number inside them are masked too, since the Google Cloud steps print those on their own
+        env:
+          PROVIDER: ${{ secrets.GCP_PRO_PROVIDER }}
+          SA: ${{ secrets.GCP_PRO_SERVICE_ACCOUNT }}
+          BUCKET: ${{ secrets.GCP_PRO_BUCKET }}
         run: |
-          for v in "${{ vars.GCP_PRO_PROVIDER }}" "${{ vars.GCP_PRO_SERVICE_ACCOUNT }}" "${{ vars.GCP_PRO_BUCKET }}"; do [ -n "$v" ] && echo "::add-mask::$v"; done
-          # and the project id and number inside them: the Google Cloud steps print them on their own
-          sa="${{ vars.GCP_PRO_SERVICE_ACCOUNT }}"; project="${sa#*@}"; project="${project%%.*}"; [ -n "$project" ] && echo "::add-mask::$project"
-          number=$(echo "${{ vars.GCP_PRO_PROVIDER }}" | sed -n 's#^projects/\([0-9]*\)/.*#\1#p'); [ -n "$number" ] && echo "::add-mask::$number"
-          if [ -z "${{ vars.GCP_PRO_PROVIDER }}" ] || [ -z "${{ vars.GCP_PRO_SERVICE_ACCOUNT }}" ] || [ -z "${{ vars.GCP_PRO_BUCKET }}" ]; then
-            echo "::warning::The paid bundle was not published: run chorus-admin's scripts/setup-pro-publish.sh once"; echo "ok=false" >> "$GITHUB_OUTPUT"
-          else echo "ok=true" >> "$GITHUB_OUTPUT"; fi
+          if [ -z "$PROVIDER" ] || [ -z "$SA" ] || [ -z "$BUCKET" ]; then
+            echo "::warning::The paid bundle was not published: run chorus-admin's scripts/setup-pro-publish.sh once"; echo "ok=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          project="${SA#*@}"; project="${project%%.*}"; echo "::add-mask::$project"
+          number=$(printf '%s' "$PROVIDER" | sed -n 's#^projects/\([0-9]*\)/.*#\1#p'); [ -n "$number" ] && echo "::add-mask::$number"
+          echo "ok=true" >> "$GITHUB_OUTPUT"
       - name: Check out chorus-core (private)
         if: steps.ready.outputs.ok == 'true'
         uses: actions/checkout@v5
@@ -218,15 +222,17 @@ jobs:
       - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         if: steps.ready.outputs.ok == 'true'
         with:
-          workload_identity_provider: ${{ vars.GCP_PRO_PROVIDER }}
-          service_account: ${{ vars.GCP_PRO_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_PRO_PROVIDER }}
+          service_account: ${{ secrets.GCP_PRO_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
         if: steps.ready.outputs.ok == 'true'
       - name: Publish to the licence backend's bucket
         if: steps.ready.outputs.ok == 'true'
         working-directory: chorus-core
         # the code first, then the file that names its version: the backend reads both, and a new version only counts once both are there
+        env:
+          BUCKET: ${{ secrets.GCP_PRO_BUCKET }}
         run: |
-          gcloud storage cp dist-pro/pro.js "gs://${{ vars.GCP_PRO_BUCKET }}/current/pro.js"
-          gcloud storage cp dist-pro/pro.json "gs://${{ vars.GCP_PRO_BUCKET }}/current/pro.json"
+          gcloud storage cp dist-pro/pro.js "gs://$BUCKET/current/pro.js"
+          gcloud storage cp dist-pro/pro.json "gs://$BUCKET/current/pro.json"
           echo "### Paid bundle published: $(node -p "require('./dist-pro/pro.json').version")" >> "$GITHUB_STEP_SUMMARY"
