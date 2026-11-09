@@ -340,6 +340,8 @@ async function onProStatus(st) {
   }
   window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: () => { renderChrome(); fillChatSlots(); if (S.view.name === 'new' || S.view.name === 'approvals') renderView(); }, doctor: () => go({ name: 'doctor' }), toast, openChat: id => go({ name: 'chat', id }), upgrade, back: () => history.length && go(S.history.pop() ?? { name: 'new' }, false) });
   if (S.view.name === 'pro' && !st.unlocked) return go({ name: 'new' });
+  // back from paying (the browser's link to /api/pro/paid, or Check again): the server's answer, never the browser's word
+  if (S.view.name === 'paying' && st.plan === 'pro') return go({ name: 'pro-paid' });
   renderChrome();
   drawPlanBanner();
   if (S.view.name !== 'chat') renderView();
@@ -362,7 +364,25 @@ const DAY = 86_400_000;
 const daysLeft = iso => Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / DAY));
 // no paid code on this install: what a Community user sees (a dev build adds Unlock for a test key)
 const community = () => !!S.pro && !S.pro.unlocked;
-const upgrade = () => toast('Upgrade is coming soon.');
+// Upgrade (chorus-core plan stage 8): the backend's payment page opens in the user's own browser (prices live there, not here). Only the
+// server's signed licence makes this install Pro: the page that comes back, or Check again, asks it.
+async function upgrade() {
+  const r = await api('POST', '/api/pro/upgrade').catch(err => ({ error: err.message }));
+  if (r.signIn) {
+    // no account on this install yet: sign in first; an email whose trial was used comes back with Upgrade
+    const t = await api('POST', '/api/pro/try').catch(err => ({ error: err.message }));
+    if (t.error) return toast(t.error);
+    return go({ name: 'trying' });
+  }
+  if (r.error) return toast(r.error);
+  go({ name: r.pro ? 'pro-paid' : 'paying' });
+}
+async function recheck() {
+  const st = await api('POST', '/api/pro/recheck').catch(err => ({ error: err.message }));
+  if (st.error) return toast(st.error);
+  await onProStatus(st);
+  if (st.plan !== 'pro') toast(st.message || 'Not confirmed yet. A payment can take a few seconds: try again in a moment.');
+}
 /** The Pro gates by id, as Admin › Free and Pro names them (chorus-admin server/gates.mjs; their lines stay in the backend). */
 const GATE_NAMES = { portal: 'Open the Portal', instructions: 'Edit instructions', actions: 'Create and edit actions', processes: 'Edit processes', failures: 'Add failure notes', 'teammate.create': 'Create a new teammate', remote: 'Use remote access' };
 
@@ -412,6 +432,10 @@ function welcomeHtml() {
 }
 const tryingHtml = () => `<div class="page welcome center"><div class="big">↗</div><h1>Finish in your browser</h1><p class="lead">Sign in with Google or your email on the page that opened. Chorus picks it up here when you're done.</p>
   <div class="row-c"><button class="btn" data-act="plan-try">Open the page again</button><button class="btn" data-act="plan-community">Not now</button></div></div>`;
+const payingHtml = () => `<div class="page welcome center"><div class="big">↗</div><h1>Finish paying in your browser</h1><p class="lead">Choose how to pay on the page that opened. Chorus shows Pro here once the payment is confirmed, usually within a few seconds.</p>
+  <div class="row-c"><button class="btn primary" data-act="plan-recheck">Check again</button><button class="btn" data-act="plan-upgrade">Open the page again</button><button class="btn" data-act="new">Not now</button></div></div>`;
+const paidHtml = () => `<div class="page welcome center"><div class="big">✓</div><h1>You have Chorus Pro</h1><p class="lead">Thank you for supporting Chorus. Pro is yours on up to three of your computers.</p>
+  <div class="row-c"><button class="btn primary" data-act="pro-view" data-arg="teammates">Open Teammates</button><button class="btn" data-act="new">Start a chat</button></div></div>`;
 const startedHtml = () => `<div class="page welcome center"><div class="big">✓</div><h1>Your Pro trial has started</h1><p class="lead">${S.pro?.ends ? `${daysLeft(S.pro.ends)} days from today. ` : ''}Your first step is meeting your teammates.</p>
   <div class="row-c"><button class="btn primary" data-act="pro-view" data-arg="teammates">Meet your teammates</button><button class="btn" data-act="new">Start a chat</button></div></div>`;
 function endedHtml() {
@@ -543,7 +567,7 @@ function renderView() {
   // the module's page keeps its own state: a push of the app's state must not rebuild it
   const slot = el.querySelector('[data-pro-slot="view"]');
   if (v.name === 'pro' && slot?.dataset.id === v.id) return;
-  el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml, unlock: unlockHtml, welcome: welcomeHtml, trying: tryingHtml, 'pro-started': startedHtml, 'pro-ended': endedHtml, pro: () => `<div data-pro-slot="view" data-id="${esc(v.id ?? '')}" style="height:100%"></div>` }[v.name]?.() ?? '';
+  el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml, unlock: unlockHtml, welcome: welcomeHtml, trying: tryingHtml, paying: payingHtml, 'pro-paid': paidHtml, 'pro-started': startedHtml, 'pro-ended': endedHtml, pro: () => `<div data-pro-slot="view" data-id="${esc(v.id ?? '')}" style="height:100%"></div>` }[v.name]?.() ?? '';
   fillSlots();
   if (v.name === 'new') {
     const ta = $('#nc-prompt');
@@ -1653,6 +1677,8 @@ document.addEventListener('click', async e => {
     }
     case 'plan-upgrade':
       return upgrade();
+    case 'plan-recheck':
+      return recheck();
     case 'plan-later':
       S.bannerDay = new Date().toDateString();
       remember('banner', S.bannerDay);
@@ -2066,7 +2092,7 @@ function fromHash() {
   if (name === 'new' && a === 'from' && b) return { name, from: b };
   if (name === 'new' && a === 'in' && b) return { name, folder: decodeURIComponent(b) };
   if (name === 'pro' && a) return { name, id: a };
-  if (['approvals', 'memory', 'skills', 'doctor', 'unlock', 'welcome', 'trying', 'pro-started', 'pro-ended'].includes(name)) return { name };
+  if (['approvals', 'memory', 'skills', 'doctor', 'unlock', 'welcome', 'trying', 'paying', 'pro-paid', 'pro-started', 'pro-ended'].includes(name)) return { name };
   return { name: 'new' };
 }
 
