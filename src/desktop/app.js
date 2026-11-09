@@ -357,13 +357,16 @@ function unlockHtml() {
 }
 
 /* ---------- the plan: Welcome, Try Pro, the plan box, the trial banners (chorus-core plan stage 6) ---------- */
-// The words of the Welcome screen come from the backend (/api/pro/plans), so no sales text sits in this repo. Community has no paid
-// code at all; signing up opens /try in the user's own browser, which comes back to /api/pro/signed-in with a one-time code.
+// The words of the Welcome screen come from the backend (/api/pro/plans), so no sales text sits in this repo. Community runs the module
+// with every Pro gate locked (its own token, no account); signing up opens /try in the user's own browser, which comes back to
+// /api/pro/signed-in with a one-time code, and the account's licence replaces the Community one.
 
 const DAY = 86_400_000;
 const daysLeft = iso => Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / DAY));
 // no paid code on this install: what a Community user sees (a dev build adds Unlock for a test key)
-const community = () => !!S.pro && !S.pro.unlocked;
+// Community: no account. Since 2026-11-09 it runs the module too (plan `community`, every Pro gate locked: it plans and runs steps);
+// with no connection on its first launch it has no paid code, as before
+const community = () => !!S.pro && (!S.pro.unlocked || S.pro.plan === 'community');
 // Upgrade (chorus-core plan stage 8): the backend's payment page opens in the user's own browser (prices live there, not here). Only the
 // server's signed licence makes this install Pro: the page that comes back, or Check again, asks it.
 async function upgrade() {
@@ -397,7 +400,7 @@ function planBox() {
   const p = S.pro;
   if (!p) return '';
   const box = (title, sub, button = '', warn = false) => `<div class="plan-box"><b>${esc(title)}</b><span class="${warn ? 'warn' : 'muted'}">${esc(sub)}</span>${button}</div>`;
-  if (!p.unlocked) return box('Community', 'Free, as today', '<button class="btn" data-act="plan-welcome">Try Pro</button>');
+  if (community()) return box('Community', 'Free', '<button class="btn" data-act="plan-welcome">Try Pro</button>');
   if (p.plan === 'trial') {
     const n = daysLeft(p.ends);
     return box('Pro trial', `${n} day${n === 1 ? '' : 's'} left`, n <= 3 ? '<button class="btn primary" data-act="plan-upgrade">Upgrade</button>' : '', n <= 3);
