@@ -212,6 +212,30 @@ test('Upgrade: the payment page opens in the browser; the way back and Check aga
   }
 });
 
+test('plan box: the status names the signed-in email, and Buy Pro signs in on the way to payment (plan 2026-11-09)', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-'));
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-p-'));
+  const store = new Store(project, { home });
+  const trial = { ...stand, entitled: { plan: 'trial', locked: [], ends: '2026-11-18T00:00:00.000Z' } };
+  const proLoader: ProLoader = { dev: false, load: async () => trial, activate: async () => LOCKED, account: () => ({ email: 'ann@example.com' }), links: () => ({ tryUrl: 'https://chorus-cli.web.app/try', plansUrl: '' }) };
+  const opened: string[] = [];
+  const c = new Controller({ project, store, app: headlessApp(), opener: async () => ({ ok: true }), launcher: (_a, o) => ({ bin: process.execPath, args: [], cwd: o.cwd }) });
+  const srv = new ChorusServer({ controller: c, token: 'a'.repeat(48), check: async () => ({ node: { version: '22', ok: true }, platform: 't', agents: [], ms: 1 }), proLoader, openLink: u => opened.push(u) });
+  const url = await srv.start(0);
+  const h = { authorization: `Bearer ${srv.token}`, 'x-chorus': '1', 'content-type': 'application/json' };
+  try {
+    const st = await (await fetch(`${url}/api/pro/status`, { headers: h })).json();
+    assert.deepEqual([st.plan, st.email], ['trial', 'ann@example.com']);
+    await fetch(`${url}/api/pro/try`, { method: 'POST', headers: h, body: JSON.stringify({ then: 'upgrade' }) });
+    await fetch(`${url}/api/pro/try`, { method: 'POST', headers: h });
+    assert.deepEqual(opened.map(u => new URL(u).searchParams.get('then')), ['upgrade', null]);
+  } finally {
+    srv.close();
+    c.stop();
+    store.close();
+  }
+});
+
 /* ---------- stage 7: requests through the private link go to the module ---------- */
 
 const remoteStand: ProModule = {
