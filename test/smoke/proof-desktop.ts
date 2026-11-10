@@ -6,6 +6,7 @@
 // window (desktop/, Tauri) starting its own `chorus serve`. Every step saves a screenshot to docs/proof/phase5/.
 //
 //   node test/smoke/proof-desktop.ts [--out docs/proof/phase5] [--open]
+//   node test/smoke/proof-desktop.ts --sizes [--before <ref>|none] [--open]: the three sizes instead (test/smoke/proof-sizes.ts)
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -17,6 +18,9 @@ import { Store } from '../../src/core/store.ts';
 import { pdf, png } from './sample-files.mjs';
 import { openChrome, sleep } from './chrome.ts';
 import { openReport, writeReport } from './report.ts';
+
+// --sizes: every screen at a phone, a tablet and a desktop size instead (test/smoke/proof-sizes.ts, fake agents)
+if (process.argv.includes('--sizes')) await import('./proof-sizes.ts');
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const CLI = path.join(ROOT, 'src/cli/index.ts');
