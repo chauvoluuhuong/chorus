@@ -1,4 +1,4 @@
-# The Chorus box image, ghcr.io/chauvoluuhuong/chorus-box (docker/box/; plan docs/plans/2026-11-07-browser-everywhere-and-docker.md,
+# The Chorus box image, ghcr.io/chauvoluuhuong/chorus-box (docker/box/; docs/features/docker-box.md,
 # part B), for linux/amd64 and linux/arm64. The AI CLIs in it are the newest versions in chorus-core's src/tested.json; Chorus itself
 # is installed when the box starts, on the channel the user picks, so a Chorus release does not need a new image.
 # Built and pushed, tagged `latest` and with the date:

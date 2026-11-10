@@ -1,4 +1,4 @@
-// Is there a screen to open the Chorus window (or a browser) on? docs/plans/2026-11-07-browser-everywhere-and-docker.md, part A.
+// Is there a screen to open the Chorus window (or a browser) on? private plan 2026-11-07-browser-everywhere-and-docker (part A).
 import fs from 'node:fs';
 import path from 'node:path';
 
