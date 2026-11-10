@@ -189,6 +189,30 @@ test('Try Pro: the sign-up page opens in the browser, comes back once with a cod
   }
 });
 
+test('Upgrade on an account that already paid takes the paid licence at once, so the app stops offering Upgrade (2026-11-10)', async () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-p-'));
+  const store = new Store(project, { home: fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-')) });
+  const trial = { ...stand, entitled: { plan: 'trial', locked: [], ends: '2026-11-18T00:00:00.000Z' } };
+  const pro = { ...stand, entitled: { plan: 'pro', locked: [] } };
+  let rechecked = 0;
+  // the app started on the trial licence it had saved; the server already has the payment
+  const proLoader: ProLoader = { dev: false, load: async () => trial, activate: async () => LOCKED, upgrade: async () => ({ url: 'https://pay.example/pay/checkout?a=ann', pro: true }), recheck: async () => (rechecked++, pro) };
+  const c = new Controller({ project, store, app: headlessApp(), opener: async () => ({ ok: true }), launcher: (_a, o) => ({ bin: process.execPath, args: [], cwd: o.cwd }) });
+  const srv = new ChorusServer({ controller: c, token: 'a'.repeat(48), check: async () => ({ node: { version: '22', ok: true }, platform: 't', agents: [], ms: 1 }), proLoader, openLink: () => {} });
+  const url = await srv.start(0);
+  const call = async (method: string, route: string) => (await fetch(`${url}/api/pro/${route}`, { method, headers: { authorization: `Bearer ${srv.token}`, 'x-chorus': '1' } })).json();
+  try {
+    assert.equal((await call('GET', 'status')).plan, 'trial');
+    assert.equal((await call('POST', 'upgrade')).pro, true);
+    assert.equal(rechecked, 1, 'the server was asked for the paid licence');
+    assert.equal((await call('GET', 'status')).plan, 'pro');
+  } finally {
+    srv.close();
+    c.stop();
+    store.close();
+  }
+});
+
 test('Upgrade: the payment page opens in the browser; the way back and Check again ask the server, which alone makes it Pro (plan stage 8)', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-'));
   const project = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-p-'));

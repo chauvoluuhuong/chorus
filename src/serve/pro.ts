@@ -120,7 +120,11 @@ export class ProHost {
   /** Upgrade: the payment link the server makes for this account. Nothing here changes until the server says it was paid. */
   async upgrade(port?: number): Promise<{ url?: string; pro?: boolean; error?: string; signIn?: boolean }> {
     await this.ready;
-    return this.loader.upgrade ? this.loader.upgrade(this.ctx, port) : { error: 'Upgrading is not available in this build.' };
+    if (!this.loader.upgrade) return { error: 'Upgrading is not available in this build.' };
+    const r = await this.loader.upgrade(this.ctx, port);
+    // already paid, while this app still runs its older licence: take the paid one now, so the plan box says Pro (2026-11-10)
+    if (r.pro) await this.recheck();
+    return r;
   }
 
   /** Asks the server for the licence again (after paying). Unreachable keeps what runs; anything else replaces it. */
