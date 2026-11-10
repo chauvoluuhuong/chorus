@@ -78,8 +78,8 @@ line (`chorus serve: <url>`) and navigates the window there. It holds the server
 
 ## 4. The window
 
-Built in the look of [archive/ui-mockup-v3.html](archive/ui-mockup-v3.html) (warm neutrals, serif headings, dark mode follows the
-system), with the screens of the CLI app ([mockups/chorus-cli.html](mockups/chorus-cli.html)) and the agent colours of the CLI:
+Built in the look of `@workspace/mockups/ui-mockup-v3.html` (private) (warm neutrals, serif headings, dark mode follows the
+system), with the screens of the CLI app (`@workspace/mockups/chorus-cli.html` (private)) and the agent colours of the CLI:
 
 | Screen | What it does | API |
 |---|---|---|
@@ -146,7 +146,7 @@ the legacy keys (TD-5).
 
 ## 8. A chat inside a project, agy's input at the bottom, dropped files, approval cards
 
-Asked for on 2026-10-22, built the same day. Mockup: `docs/mockups/chorus-cli.html` scenes 01 and 04. Proof: steps 1b and 5b of
+Asked for on 2026-10-22, built the same day. Mockup: `@workspace/mockups/chorus-cli.html` scenes 01 and 04. Proof: steps 1b and 5b of
 `npm run proof:desktop` (`docs/proof/phase5/`): **53/54** with Claude Code 2.1.308 and Codex 0.163.0, every new check passing. The
 one failure is step 5's "Artifacts lists … the files the tools wrote": in that run Claude wrote `calc.js` with a shell command,
 which the adapters do not see as a file change (TD-3); it passed in the run before.

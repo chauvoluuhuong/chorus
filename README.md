@@ -110,8 +110,6 @@ files on a Mac (needs Docker and the Tauri toolchain); `npm run release:fetch` p
 | [docs/testing.md](docs/testing.md) | Test layers, what runs in the cloud vs on your Mac |
 | [docs/phase5.md](docs/phase5.md) | The desktop app |
 | [docs/integrations/](docs/integrations/README.md) | Verified facts per CLI: flags, events, paths, token usage, gotchas |
-| [docs/mockups/chorus-cli.html](docs/mockups/chorus-cli.html) | Clickable mockup of the terminal app |
-| [docs/archive/](docs/archive/) | v1 product concept, brainstorm and UI mockup (reference) |
 
 ## Repository layout
 
