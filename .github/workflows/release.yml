@@ -237,7 +237,13 @@ jobs:
         env:
           BUCKET: ${{ secrets.GCP_PRO_BUCKET }}
           FOLDER: ${{ needs.version.outputs.channel == 'production' && 'current' || 'current/preview' }}
+        # Through the Storage upload API, not `gcloud storage cp`: cp lists the bucket first when the file is new, and this account may
+        # only create objects under current/ (no listing). The token is masked, and the answer goes nowhere.
         run: |
-          gcloud storage cp dist-pro/pro.js "gs://$BUCKET/$FOLDER/pro.js"
-          gcloud storage cp dist-pro/pro.json "gs://$BUCKET/$FOLDER/pro.json"
+          TOKEN=$(gcloud auth print-access-token); echo "::add-mask::$TOKEN"
+          up() { name=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$FOLDER/$1")
+            curl -sSf -o /dev/null -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: $2" --data-binary @"dist-pro/$1" \
+              "https://storage.googleapis.com/upload/storage/v1/b/$BUCKET/o?uploadType=media&name=$name"; }
+          up pro.js application/javascript
+          up pro.json application/json
           echo "### Paid bundle published to $FOLDER/: $(node -p "require('./dist-pro/pro.json').version")" >> "$GITHUB_STEP_SUMMARY"
