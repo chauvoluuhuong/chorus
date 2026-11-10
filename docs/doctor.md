@@ -36,7 +36,7 @@ method, a different login or plan.
 
 | Entry | What happens |
 |---|---|
-| `site/install.sh` (curl), `packages/installer` (`npx`), the Homebrew cask | No doctor in the terminal: the installer only opens the app (macOS) or says `chorus desktop` (Linux), and the app runs the check on first launch (`docs/mockups/desktop-first-run.html`) |
+| `site/install.sh` (curl), `packages/installer` (`npx`), the Homebrew cask | No doctor in the terminal: the installer only opens the app (macOS) or says `chorus desktop` (Linux), and the app runs the check on first launch (`@workspace/mockups/desktop-first-run.html`) |
 | **Desktop app**, first launch, and after an update of Chorus, chorus-core or an installed CLI | The doctor popup opens with the fast check (§6) |
 | `npm install -g @chauvoluuhuong/chorus` | No postinstall prompt (npm hides output, no TTY). The first `chorus` run with no `~/.chorus/doctor/last.json` runs the fast check |
 | By hand | the desktop's Doctor page, or `chorus doctor` any time; flags in §8 |
@@ -369,7 +369,7 @@ server's answer is the one the Report uses too, and `chorus doctor` runs its own
 
 ### 6.6 Before building
 
-The popup, its row states, the Doctor page and the report dialog go into a mockup first (`docs/mockups/`, the desktop's look),
+The popup, its row states, the Doctor page and the report dialog go into a mockup first (`@workspace/mockups/` (private), the desktop's look),
 and the build is compared with it scene by scene. The desktop e2e proof (`npm run proof:desktop`) gets new steps: a fresh
 `CHORUS_HOME` opens the popup and every tested CLI is Ready in under 5 s; a CLI hidden from `PATH` shows Not installed with its
 command; a CLI shown as an untested version runs the deeper test with real Claude and Codex; a forced failure shows Problem, offers
