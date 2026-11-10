@@ -10,6 +10,28 @@ const isMac = /Mac/.test(navigator.platform);
 const MOD = isMac ? '⌘' : 'Ctrl+';
 // drawn, not typed: a "+" character sits on the font's baseline and looks off-centre in the circle
 const PLUS = '<svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true"><path d="M5 1v8M1 5h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+const svg = d => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICON = {
+  home: svg('<path d="M4 11.5 12 4l8 7.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/>'),
+  chats: svg('<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z"/>'),
+  plus: svg('<path d="M12 5v14M5 12h14" stroke-width="2.4"/>'),
+  approvals: svg('<path d="M6 21V4.5M6 5h11l-2 4 2 4H6"/>'),
+  more: svg('<circle cx="5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="19" cy="12" r="1.3" fill="currentColor"/>'),
+  bell: svg('<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>'),
+  up: svg('<path d="M12 19V5M6 11l6-6 6 6" stroke-width="2.2"/>'),
+};
+
+/* ---------- three sizes (docs/features/responsive.md): phone ≤ 640 · tablet 641–1024 · desktop ≥ 1025 ----------
+   Written on <html data-size>: the contract with the optional module, which picks its phone renderings from it. */
+const MQ_PHONE = matchMedia('(max-width: 640px)');
+const MQ_TABLET = matchMedia('(max-width: 1024px)');
+const MQ_TOUCH = matchMedia('(hover: none), (pointer: coarse)');
+const sizeNow = () => (MQ_PHONE.matches ? 'phone' : MQ_TABLET.matches ? 'tablet' : 'desktop');
+document.documentElement.dataset.size = sizeNow();
+/** The phone's own places, reached from the tab bar; on wider screens the sidebar holds them and they open New chat. */
+const PHONE_ROOTS = ['home', 'chats', 'approvals', 'more'];
+const startView = () => ({ name: S.size === 'phone' ? 'home' : 'new' });
+
 const home = () => (S.info?.home || S.homeGuess || '');
 const tilde = p => (home() && p?.startsWith(home()) ? '~' + p.slice(home().length) : p ?? '');
 const base = p => (p || '').replace(/\/+$/, '').split('/').pop() || '/';
@@ -73,6 +95,11 @@ const S = {
   homeGuess: '',
   news: null,
   newsDetail: null,
+  size: sizeNow(),
+  // a phone: the Chats tab's search, filter and project; the ⋯ sheet; a task chat's tab (Chat, Steps, Plan)
+  cl: { q: '', filter: 'all', proj: '', focus: false },
+  sheet: null,
+  chatTab: 'chat',
 };
 
 /* ---------- the socket ---------- */
@@ -169,7 +196,7 @@ function onState(st) {
   // a request no longer pops up at the bottom (owner, 2026-11-07): it waits in Approvals and the top bar's "waiting" button
   if (S.view.name === 'chat' && !st.chats.some(c => c.id === S.view.id)) {
     S.history = [];
-    return go({ name: 'new' }, false);
+    return go(startView(), false);
   }
   showDialogs(st.dialogs);
   // first load: the doctor's popup when this is a first launch or something was updated (docs/doctor.md §6.1)
@@ -178,7 +205,8 @@ function onState(st) {
   if (doctorChanged) drawDoctor();
   else renderDoctorDot();
   if (S.view.name === 'chat') renderChatParts();
-  else if (S.view.name === 'approvals' && !$('#view').contains(document.activeElement?.closest('.note-input, .other-input'))) renderView();
+  else if (['approvals', 'home'].includes(S.view.name) && !$('#view').contains(document.activeElement?.closest('.note-input, .other-input'))) renderView();
+  else if (S.view.name === 'chats' || S.view.name === 'more') renderView();
   else if (S.view.name === 'new' && S.form) renderAgentsOnly();
 }
 
@@ -281,6 +309,11 @@ function drawTermOver() {
 
 function go(view, push = true) {
   $('#app').classList.remove('side-open');
+  // Home, Chats and More are a phone's: on a wider screen the sidebar holds what they show
+  if (S.size !== 'phone' && ['home', 'chats', 'more'].includes(view.name)) view = { name: 'new' };
+  if (view.name === 'chat' && !(S.view.name === 'chat' && S.view.id === view.id)) S.chatTab = 'chat';
+  S.sheet = null;
+  drawSheet();
   if (push && S.view && JSON.stringify(S.view) !== JSON.stringify(view)) S.history.push(S.view);
   S.history = S.history.slice(-30);
   S.view = view;
@@ -303,7 +336,30 @@ function go(view, push = true) {
 function back() {
   const v = S.history.pop();
   if (v) go(v, false);
+  else if (S.size === 'phone') go({ name: 'home' }, false);
 }
+
+/** The window crossed 640 or 1024 px (a phone turned, a window resized): the same screen, drawn for the new size. */
+function onSize() {
+  const was = S.size;
+  S.size = sizeNow();
+  if (was === S.size) return;
+  document.documentElement.dataset.size = S.size;
+  $('#app').classList.remove('side-open');
+  S.sheet = null;
+  drawSheet();
+  if (S.size !== 'phone') document.documentElement.classList.remove('kb');
+  if (S.size !== 'phone' && ['home', 'chats', 'more'].includes(S.view.name)) return go({ name: 'new' }, false);
+  renderChrome();
+  renderDoctorDot();
+  if (S.view.name === 'chat') renderChatParts();
+  else renderView();
+  setTimeout(refit, 60);
+}
+MQ_PHONE.addEventListener('change', onSize);
+MQ_TABLET.addEventListener('change', onSize);
+// the on-screen keyboard: a phone's tab bar steps aside while it is up
+window.visualViewport?.addEventListener('resize', () => document.documentElement.classList.toggle('kb', S.size === 'phone' && innerHeight - visualViewport.height > 140));
 
 /* ---------- the optional module: slots stay empty unless it is unlocked ---------- */
 
@@ -320,7 +376,12 @@ function fillChatSlots() {
 function fillSlots() {
   for (const el of document.querySelectorAll('[data-pro-slot]')) {
     if (window.choruspro) window.choruspro.render(el.dataset.proSlot, el, { ...el.dataset, view: S.view.id, id: S.view.id, open: S.view.name === 'chat' ? S.view.id : '', project: S.form?.folder ?? S.state?.project, cwd: el.dataset.cwd ?? S.state?.chats.find(c => c.id === el.dataset.chat)?.cwd, chatRow: S.state?.chats.find(c => c.id === el.dataset.chat), chats: S.state?.chats });
-    else if (el.dataset.proSlot === 'nav') {
+    else if (el.dataset.proSlot === 'nav' && el.dataset.part) {
+      // a phone's More: the same locked items as rows (Team), Remote access locked too (This Mac)
+      const row = (ic, t, act) => `<button class="mrow locked" data-act="${act}"><span class="ico">${ic}</span>${t}<span class="val"${act === 'unlock' ? '' : ' aria-label="Pro only"'}>${act === 'unlock' ? '' : '🔒'}</span><span class="chev">›</span></button>`;
+      const team = (community() ? [['☺', 'Teammates', 'plan-welcome'], ['⇢', 'Processes', 'plan-welcome']] : []).concat(S.pro?.dev ? [['⚿', 'Unlock', 'unlock']] : []);
+      el.innerHTML = (el.dataset.part === 'team' ? team : community() ? [['⇆', 'Remote access', 'plan-welcome']] : []).map(r => row(...r)).join('');
+    } else if (el.dataset.proSlot === 'nav') {
       // Community: the Pro items show, locked; a click offers the trial. A dev build also has Unlock (a test key)
       const lock = community() ? [['☺', 'Teammates'], ['⇢', 'Processes']].map(([ic, t]) => `<button class="locked" data-act="plan-welcome" title="Pro only"><span class="ico">${ic}</span>${t}<span class="lock" aria-label="Pro only">🔒</span></button>`).join('') : '';
       el.innerHTML = lock + (S.pro?.dev ? `<button class="${S.view.name === 'unlock' ? 'on' : ''}" data-act="unlock"><span class="ico">⚿</span>Unlock</button>` : '');
@@ -338,8 +399,8 @@ async function onProStatus(st) {
       document.head.append(Object.assign(document.createElement('link'), { id: 'pro-css', rel: 'stylesheet', href: '/api/pro/ui.css' }), js);
     });
   }
-  window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: () => { renderChrome(); fillChatSlots(); if (S.view.name === 'new' || S.view.name === 'approvals') renderView(); }, doctor: () => go({ name: 'doctor' }), toast, openChat: id => go({ name: 'chat', id }), upgrade, back: () => history.length && go(S.history.pop() ?? { name: 'new' }, false) });
-  if (S.view.name === 'pro' && !st.unlocked) return go({ name: 'new' });
+  window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: () => { renderChrome(); fillChatSlots(); if (['new', 'approvals', 'home', 'more'].includes(S.view.name)) renderView(); else if (S.view.name === 'chat') renderChatParts(); }, doctor: () => go({ name: 'doctor' }), toast, openChat: id => go({ name: 'chat', id }), upgrade, back: () => history.length && go(S.history.pop() ?? startView(), false) });
+  if (S.view.name === 'pro' && !st.unlocked) return go(startView());
   // back from paying (the browser's link to /api/pro/paid, or Check again): the server's answer, never the browser's word
   if (S.view.name === 'paying' && st.plan === 'pro') return go({ name: 'pro-paid' });
   renderChrome();
@@ -391,7 +452,7 @@ const GATE_NAMES = { portal: 'Open the Portal', instructions: 'Edit instructions
 
 /** First launch, or a trial that just ended: the screen that says so, once. */
 function planScreens() {
-  if (!S.pro || !S.state || S.view.name !== 'new') return;
+  if (!S.pro || !S.state || !['new', 'home'].includes(S.view.name)) return;
   if (community() && S.welcome === undefined) return go({ name: 'welcome' });
   if (S.pro.plan === 'free' && !S.endedSeen) return go({ name: 'pro-ended' });
 }
@@ -489,40 +550,54 @@ function chatsByProject() {
   return groups;
 }
 
-function renderChrome() {
-  const st = S.state;
-  // chats' requests and Chorus's own (a plan to approve, work to check)
-  const waiting = (st?.approvals.length ?? 0) + (window.choruspro?.needsCount?.() ?? 0);
+/** The project tree of the sidebar, and of a phone's Chats tab. `keep`: only these chats, and only projects that have one. */
+function treeHtml(keep) {
   const v = S.view;
-  const on = n => (v.name === n ? ' on' : '');
   let tree = '';
-  for (const [cwd, chats] of chatsByProject()) {
-    const folded = S.folded.has(cwd);
-    const bang = chats.filter(c => c.state === 'approval').length;
+  for (const [cwd, all] of chatsByProject()) {
+    const chats = keep ? all.filter(keep) : all;
+    if (keep && !chats.length) continue;
+    const folded = S.folded.has(cwd) && !keep;
+    const bang = all.filter(c => c.state === 'approval').length;
     // the project in front: the chat you look at is in it, or the New chat form starts there. Its ＋ always shows; others on hover.
     const here = (v.name === 'chat' && chats.some(c => c.id === v.id)) || (v.name === 'new' && !v.from && (S.form?.folder ?? v.folder) === cwd);
     tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-rm" data-act="rm-project" data-arg="${esc(cwd)}" title="Remove from the sidebar (the folder and its chats are kept)" aria-label="Remove ${esc(base(cwd))} from the sidebar">×</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button></div>`;
     if (folded) continue;
-    tree += `<div data-pro-slot="project" data-cwd="${esc(cwd)}"></div>`;
+    if (!keep) tree += `<div data-pro-slot="project" data-cwd="${esc(cwd)}"></div>`;
     for (const c of chats) {
-      if (window.choruspro?.hidesChat?.(c.id)) continue; // shown under its task
+      if (!keep && window.choruspro?.hidesChat?.(c.id)) continue; // shown under its task
       const child = c.parentId && chats.some(p => p.id === c.parentId);
       tree += `<button class="chat-row${child ? ' child' : ''}${v.name === 'chat' && v.id === c.id ? ' on' : ''}" data-act="chat" data-arg="${esc(c.id)}" title="${esc(c.title)} · ${esc(AGENT[c.agent]?.name ?? c.agent)} · ${esc(STATE_LABEL[c.state] ?? '')}">
         ${child ? '<span class="arrow">↳</span>' : ''}<span class="dot ${esc(c.state)}"></span><span class="t">${esc(c.title)}</span><span class="badge mini ${esc(c.agent)}">${esc(AGENT[c.agent]?.letter ?? '?')}</span></button>`;
     }
   }
-  if (!tree) tree = '<div class="faint" style="padding:8px 18px;font-size:13px">No chats yet.</div>';
-  // each agent as the doctor's last check saw it; a click opens Doctor
-  const agentFoot = Object.keys(AGENT)
-    .map(a => {
-      const i = drAgent(a) ?? { agent: a };
-      const st = agentStatus(i, false);
-      const hint = i.state === 'needs-login' ? ' · logged in already? Check again in Doctor' : '';
-      return `<span class="foot-agent" data-act="doctor" title="${esc(`${AGENT[a].name} ${i.version ?? ''} · ${st.label}${hint}`)}"><span class="badge mini ${a}">${AGENT[a].letter}</span> ${agentMark(i, st)}</span>`;
-    })
-    .join(' ');
-  $('#side').innerHTML = `
-    <div class="brand"><span class="logo"><i></i><i></i><i></i></span><b>Chorus</b><button class="icon-btn" data-act="sidebar" title="Hide the sidebar (${MOD}B)">⇤</button></div>
+  return tree;
+}
+
+/** Chats' requests and Chorus's own (a plan to approve, work to check). */
+const waitingCount = () => (S.state?.approvals.length ?? 0) + (window.choruspro?.needsCount?.() ?? 0);
+
+function renderChrome() {
+  const st = S.state;
+  const waiting = waitingCount();
+  const v = S.view;
+  const on = n => (v.name === n ? ' on' : '');
+  // a phone has no sidebar: Home, Chats and More hold its parts
+  if (S.size === 'phone') {
+    if ($('#side').innerHTML) $('#side').innerHTML = '';
+  } else {
+    const tree = treeHtml() || '<div class="faint" style="padding:8px 18px;font-size:13px">No chats yet.</div>';
+    // each agent as the doctor's last check saw it; a click opens Doctor
+    const agentFoot = Object.keys(AGENT)
+      .map(a => {
+        const i = drAgent(a) ?? { agent: a };
+        const st = agentStatus(i, false);
+        const hint = i.state === 'needs-login' ? ' · logged in already? Check again in Doctor' : '';
+        return `<span class="foot-agent" data-act="doctor" title="${esc(`${AGENT[a].name} ${i.version ?? ''} · ${st.label}${hint}`)}"><span class="badge mini ${a}">${AGENT[a].letter}</span> ${agentMark(i, st)}</span>`;
+      })
+      .join(' ');
+    $('#side').innerHTML = `
+    <div class="brand"><span class="logo"><i></i><i></i><i></i></span><b>Chorus</b><button class="icon-btn" data-act="sidebar" title="${S.size === 'desktop' ? `Hide the sidebar (${MOD}B)` : 'Close'}" aria-label="${S.size === 'desktop' ? 'Hide the sidebar' : 'Close the sidebar'}">⇤</button></div>
     <nav class="nav">
       <button class="new${v.name === 'new' && !v.from && !v.folder ? ' on' : ''}" data-act="new"><span class="plus">${PLUS}</span>New chat<kbd style="margin-left:auto">${MOD}N</kbd></button>
       <button class="${on('approvals').trim()}" data-act="approvals"><span class="ico">⚑</span>Approvals${waiting ? `<span class="count">${waiting}</span>` : ''}</button>
@@ -534,22 +609,32 @@ function renderChrome() {
     <div class="side-head">PROJECTS<button data-act="add-project" title="Start a chat in another folder">+ add</button></div>
     <div class="tree">${tree}</div>
     ${planBox()}<div class="side-foot">${agentFoot}<span style="flex:1"></span><button data-act="doctor">Doctor</button></div>`;
+  }
 
   const chat = v.name === 'chat' ? st?.chats.find(c => c.id === v.id) : undefined;
-  let crumbs = '';
-  if (chat) crumbs = `<a data-act="fold-open" data-arg="${esc(chat.cwd)}">${esc(base(chat.cwd))}</a><span class="sep">›</span><span class="here">${window.choruspro?.chatCrumb?.(chat.id) ?? esc(chat.title)}</span>`;
-  else if (v.name === 'new') crumbs = `<span>${esc(base(S.form?.folder ?? st?.project ?? ''))}</span><span class="sep">›</span><span class="here">${v.from ? 'Hand off' : 'New chat'}</span>`;
-  else if (v.name === 'pro') crumbs = window.choruspro?.crumbs?.(v.id) ?? '';
-  else crumbs = `<span class="here">${{ approvals: 'Approvals', memory: 'Memory', skills: 'Skills', doctor: 'Doctor' }[v.name] ?? ''}</span>`;
-  $('#top').innerHTML = `
+  if (S.size === 'phone') {
+    $('#top').className = PHONE_ROOTS.includes(v.name) ? 'root' : '';
+    $('#top').innerHTML = phoneTop(chat);
+  } else {
+    // a tablet: icon buttons (whole words on a desktop, written as they always were)
+    const wide = S.size === 'desktop';
+    let crumbs = '';
+    if (chat) crumbs = `<a data-act="fold-open" data-arg="${esc(chat.cwd)}">${esc(base(chat.cwd))}</a><span class="sep">›</span><span class="here">${window.choruspro?.chatCrumb?.(chat.id) ?? esc(chat.title)}</span>`;
+    else if (v.name === 'new') crumbs = `<span>${esc(base(S.form?.folder ?? st?.project ?? ''))}</span><span class="sep">›</span><span class="here">${v.from ? 'Hand off' : 'New chat'}</span>`;
+    else if (v.name === 'pro') crumbs = window.choruspro?.crumbs?.(v.id) ?? '';
+    else crumbs = `<span class="here">${{ approvals: 'Approvals', memory: 'Memory', skills: 'Skills', doctor: 'Doctor' }[v.name] ?? ''}</span>`;
+    $('#top').className = '';
+    $('#top').innerHTML = `
     <button class="icon-btn menu-btn" data-act="menu" aria-label="Chats and projects" aria-expanded="${$('#app').classList.contains('side-open')}">☰</button>
-    ${$('#app').classList.contains('side-off') ? `<button class="icon-btn" data-act="sidebar" title="Show the sidebar (${MOD}B)">⇥</button>` : ''}
-    ${S.history.length ? '<button class="btn" data-act="back" title="Back">‹ Back</button>' : ''}
+    ${$('#app').classList.contains('side-off') && S.size === 'desktop' ? `<button class="icon-btn" data-act="sidebar" title="Show the sidebar (${MOD}B)">⇥</button>` : ''}
+    ${S.history.length ? `<button class="btn" data-act="back" title="Back" aria-label="Back">${wide ? '‹ Back' : '‹'}</button>` : ''}
     <div class="crumbs">${crumbs}</div>
-    ${waiting ? `<button class="btn waiting" data-act="approvals">! ${waiting} waiting</button>` : ''}
+    ${waiting ? `<button class="btn waiting" data-act="approvals" aria-label="${waiting} waiting">! ${waiting}${wide ? ' waiting' : ''}</button>` : ''}
     ${st?.update ? `<button class="btn update-btn" data-act="update-toggle" aria-expanded="${!$('#app-update').hidden}" aria-controls="app-update" title="Chorus ${esc(st.update.version)} is available">↑ <span class="update-label">Update to </span>${esc(st.update.version)}</button>` : ''}
-    <button class="btn export-btn" data-act="export" title="Save all your chats and their files to one .zip in Downloads"${S.exporting ? ' disabled' : ''}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg><span class="export-label">${S.exporting ? 'Exporting…' : 'Export'}</span></button>
+    <button class="btn export-btn" data-act="export" title="Save all your chats and their files to one .zip in Downloads" aria-label="Export"${S.exporting ? ' disabled' : ''}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg><span class="export-label">${S.exporting ? 'Exporting…' : 'Export'}</span></button>
     <button class="btn news-toggle" data-act="news-toggle" aria-label="Notifications${st?.notifications?.unread ? `, ${st.notifications.unread} unread` : ''}" aria-expanded="${!$('#news').hidden}" aria-controls="news"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span class="news-label">Notifications</span>${st?.notifications?.unread ? `<span class="news-count">${Math.min(st.notifications.unread, 99)}</span>` : ''}</button>`;
+  }
+  renderTabs(waiting);
 
   // the controller's warning line (limit, quota, context not loaded), with a button for what it suggests
   const notice = plainText(st?.notice ?? '');
@@ -564,6 +649,54 @@ function renderChrome() {
   fillSlots();
 }
 
+/** A phone's top bar: ‹ Back (not on the four places of the tab bar), the screen's title, at most two icons. */
+function phoneTop(chat) {
+  const v = S.view, st = S.state;
+  const root = PHONE_ROOTS.includes(v.name);
+  const unread = st?.notifications?.unread ?? 0;
+  const ico = (act, label, inner, arg = '') => `<button class="icon-btn ph-ico" data-act="${act}"${arg ? ` data-arg="${esc(arg)}"` : ''} aria-label="${esc(label)}">${inner}</button>`;
+  let title = '';
+  let icons = '';
+  if (v.name === 'home') {
+    title = '<span class="logo"><i></i><i></i><i></i></span>Chorus';
+    if (st?.update) icons += ico('update-toggle', `Chorus ${st.update.version} is available`, `${ICON.up}<span class="n acc">1</span>`);
+    icons += ico('news-toggle', `Notifications${unread ? `, ${unread} unread` : ''}`, `${ICON.bell}${unread ? `<span class="n">${Math.min(unread, 99)}</span>` : ''}`);
+  } else if (v.name === 'chats') {
+    title = 'Chats';
+    icons = ico('add-project', 'Add a project', '＋');
+  } else if (v.name === 'chat') {
+    title = esc(chat?.title ?? '');
+    icons = chat ? ico('chat-menu', 'This chat: hand off, artifacts, activity, record, delete', '⋯') : '';
+  } else if (v.name === 'memory') {
+    title = v.rec ? esc(S.mem.items.find(i => i.id === v.rec)?.title ?? 'Memory') : 'Memory';
+  } else if (v.name === 'pro') {
+    const t = document.createElement('template');
+    t.innerHTML = window.choruspro?.crumbs?.(v.id) ?? '';
+    title = esc(t.content.querySelector('.here')?.textContent ?? '');
+  } else {
+    title = { approvals: 'Approvals', more: 'More', new: v.from ? 'Hand off' : 'New chat', skills: 'Skills', doctor: 'Doctor', unlock: 'Unlock' }[v.name] ?? '';
+  }
+  return `${root ? '' : ico('back', 'Back', '‹')}<div class="ph-title">${title}</div>${icons}`;
+}
+
+/** A phone's tab bar: Home · Chats · a round ＋ (New chat) · Approvals · More. */
+function renderTabs(waiting) {
+  const el = $('#tabs');
+  if (S.size !== 'phone') {
+    if (el.innerHTML) el.innerHTML = '';
+    return;
+  }
+  const v = S.view, pro = v.name === 'pro' ? String(v.id ?? '') : '';
+  const here = {
+    home: v.name === 'home' || pro.startsWith('portal'),
+    chats: v.name === 'chats' || v.name === 'chat' || /^(task|chat|howrun)~/.test(pro),
+    approvals: v.name === 'approvals',
+    more: ['more', 'memory', 'skills', 'doctor', 'unlock'].includes(v.name) || /^(teammates|processes|remote)/.test(pro),
+  };
+  const t = (id, label, n = 0) => `<button class="${here[id] ? 'on' : ''}" data-act="tab" data-arg="${id}"${here[id] ? ' aria-current="page"' : ''}>${ICON[id]}${label}${n ? `<span class="n">${Math.min(n, 99)}</span>` : ''}</button>`;
+  el.innerHTML = `${t('home', 'Home')}${t('chats', 'Chats')}<button class="newtab" data-act="new" aria-label="New chat">${ICON.plus}</button>${t('approvals', 'Approvals', waiting)}${t('more', 'More')}`;
+}
+
 /* ---------- views ---------- */
 
 function renderView() {
@@ -573,11 +706,21 @@ function renderView() {
   // the module's page keeps its own state: a push of the app's state must not rebuild it
   const slot = el.querySelector('[data-pro-slot="view"]');
   if (v.name === 'pro' && slot?.dataset.id === v.id) return;
-  el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml, unlock: unlockHtml, welcome: welcomeHtml, trying: tryingHtml, paying: payingHtml, 'pro-paid': paidHtml, 'pro-started': startedHtml, 'pro-ended': endedHtml, pro: () => `<div data-pro-slot="view" data-id="${esc(v.id ?? '')}" style="height:100%"></div>` }[v.name]?.() ?? '';
+  const scroll = el.scrollTop;
+  el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml, unlock: unlockHtml, welcome: welcomeHtml, trying: tryingHtml, paying: payingHtml, 'pro-paid': paidHtml, 'pro-started': startedHtml, 'pro-ended': endedHtml, home: homeHtml, chats: chatsHtml, more: moreHtml, pro: () => `<div data-pro-slot="view" data-id="${esc(v.id ?? '')}" style="height:100%"></div>` }[v.name]?.() ?? '';
+  // a state push redraws a phone's Home and Chats: where you were stays (another screen starts at its top)
+  if (['home', 'chats', 'more', 'approvals'].includes(v.name) && el.dataset.v === v.name) el.scrollTop = scroll;
+  el.dataset.v = v.name;
   fillSlots();
+  // a phone does not open the keyboard by itself
   if (v.name === 'new') {
     const ta = $('#nc-prompt');
-    if (ta && !v.from) ta.focus();
+    if (ta && !v.from && !MQ_TOUCH.matches) ta.focus();
+  }
+  if (v.name === 'chats' && S.cl.focus) {
+    const q = $('#cl-q');
+    q?.focus();
+    q?.setSelectionRange(q.value.length, q.value.length);
   }
   if (v.name === 'memory') {
     const q = $('#mem-q');
@@ -586,6 +729,80 @@ function renderView() {
       q.setSelectionRange(q.value.length, q.value.length);
     }
   }
+}
+
+/* ---------- a phone's Home, Chats and More: the sidebar's parts, each a place of the tab bar ---------- */
+
+const chatSub = c => `${esc(base(c.cwd))} · ${esc(STATE_LABEL[c.state] ?? c.state)}`;
+/** Home answers "what needs me, what is running" first: a one-tap composer, three counts, the requests with their answers, the
+ *  chats active now, the projects. */
+function homeHtml() {
+  const st = S.state;
+  const chats = st?.chats ?? [];
+  const asks = st?.approvals ?? [];
+  const need = waitingCount();
+  const working = chats.filter(c => c.state === 'busy' || c.state === 'starting').length;
+  const turn = chats.filter(c => c.state === 'idle').length;
+  const stat = (cls, v, k, filter) => `<button class="hm-stat${cls}" data-act="${filter ? 'cl-filter' : 'approvals'}" data-arg="${filter}"><span class="v">${v}</span><span class="k">${k}</span></button>`;
+  const ORDER = { approval: 0, busy: 1, starting: 1, idle: 2 };
+  const active = chats.filter(c => c.state in ORDER).sort((a, b) => ORDER[a.state] - ORDER[b.state]).slice(0, 6);
+  const row = c => `<button class="hm-row" data-act="chat" data-arg="${esc(c.id)}"><span class="dot ${esc(c.state)}"></span><span class="tx"><b>${esc(c.title)}</b><span>${chatSub(c)}</span></span><span class="badge mini ${esc(c.agent)}">${esc(AGENT[c.agent]?.letter ?? '?')}</span><span class="chev">›</span></button>`;
+  const projects = [...chatsByProject()].map(([cwd, cs]) => {
+    const bang = cs.filter(c => c.state === 'approval').length;
+    return `<button class="card hm-proj" data-act="proj-open" data-arg="${esc(cwd)}"><b><span>${esc(base(cwd))}</span>${bang ? `<i>!${bang}</i>` : ''}</b><span class="sub">${cs.length} chat${cs.length === 1 ? '' : 's'}</span><span class="dots">${cs.slice(0, 8).map(c => `<span class="dot ${esc(c.state)}"></span>`).join('')}</span></button>`;
+  }).join('');
+  return `<div class="hm">
+    <button class="hm-ask" data-act="new">What are we working on?<span class="go">${ICON.up}</span></button>
+    <div class="hm-stats">${stat(need ? ' need' : '', need, 'need you', '')}${stat('', working, '<span class="dot busy"></span>working', 'working')}${stat('', turn, '<span class="dot idle"></span>your turn', 'turn')}</div>
+    <div><div class="hm-h">Needs you${need ? `<button data-act="approvals">See all ${need}</button>` : ''}</div>
+      ${asks.length ? `<div class="card list hm-need">${asks.slice(0, 3).map(approvalItem).join('')}</div>` : ''}${proSlot('home')}
+      ${need ? '' : '<div class="card empty">Nothing is waiting for you.</div>'}</div>
+    <div><div class="hm-h">Active now<button data-act="tab" data-arg="chats">All chats</button></div>
+      ${active.length ? `<div class="card">${active.map(row).join('')}</div>` : '<div class="card empty">No agent is working right now.</div>'}</div>
+    <div><div class="hm-h">Projects<button data-act="add-project">＋ Add</button></div>
+      ${projects ? `<div class="hm-projs">${projects}</div>` : '<div class="card empty">No projects yet: start a chat in a folder.</div>'}</div>
+  </div>`;
+}
+
+const CHAT_FILTERS = [
+  ['all', 'All', () => true],
+  ['needs', 'Needs you', c => c.state === 'approval'],
+  ['working', 'Working', c => c.state === 'busy' || c.state === 'starting'],
+  ['turn', 'Your turn', c => c.state === 'idle'],
+  ['resting', 'Resting', c => c.state === 'parked' || c.state === 'ended'],
+];
+/** Chats: the sidebar's project tree (tasks and hand-offs included), with search and filters. */
+function chatsHtml() {
+  const f = S.cl;
+  const q = f.q.trim().toLowerCase();
+  const match = c => (!f.proj || c.cwd === f.proj) && (!q || c.title.toLowerCase().includes(q) || base(c.cwd).toLowerCase().includes(q));
+  const chats = (S.state?.chats ?? []).filter(match);
+  const pick = (CHAT_FILTERS.find(x => x[0] === f.filter) ?? CHAT_FILTERS[0])[2];
+  const filtered = f.filter !== 'all' || !!q || !!f.proj;
+  const tree = filtered ? treeHtml(c => match(c) && pick(c)) : treeHtml();
+  return `<div class="cl"><div class="find"><input id="cl-q" type="search" data-input="cl-q" placeholder="Search chats" aria-label="Search chats" value="${esc(f.q)}"></div>
+    ${f.proj ? `<div class="cl-proj">In <b>${esc(base(f.proj))}</b><button class="btn" data-act="cl-proj" data-arg="">✕ All projects</button></div>` : ''}
+    <div class="filt" role="tablist">${CHAT_FILTERS.map(([id, label, test]) => `<button class="${f.filter === id ? 'on' : ''}" data-act="cl-filter" data-arg="${id}" role="tab" aria-selected="${f.filter === id}">${label} · ${chats.filter(test).length}</button>`).join('')}</div>
+    <div class="tree">${tree || `<div class="empty">${filtered ? 'No chat matches.' : 'No chats yet.'}</div>`}</div></div>`;
+}
+
+/** More: everything that is not a chat, grouped, each row with its state. */
+function moreHtml() {
+  const st = S.state;
+  const r = (act, ic, t, val = '') => `<button class="mrow" data-act="${act}"><span class="ico">${ic}</span>${t}<span class="val">${val}</span><span class="chev">›</span></button>`;
+  const marks = Object.keys(AGENT).map(a => { const i = drAgent(a) ?? { agent: a }; return `<span class="badge mini ${a}">${AGENT[a].letter}</span>${agentMark(i, agentStatus(i, false))}`; }).join(' ');
+  const unread = st?.notifications?.unread ?? 0;
+  const on = S.skills?.items?.filter(s => s.on).length;
+  const c = S.doctor?.chorus;
+  // a paid bundle older than this page draws its sidebar items whole: they go in Team, as they come
+  const parts = !window.choruspro || !!window.choruspro.sideTabs;
+  return `<div class="more">
+    <div><div class="hm-h">Library</div><div class="card">${r('memory', '◫', 'Memory')}${r('skills', '✦', 'Skills', on != null ? `${on} on` : '')}</div></div>
+    <div><div class="hm-h">Team</div><div class="card">${parts ? proSlot('nav', ' data-part="team"') : proSlot('nav', ' class="nav old-nav"')}</div></div>
+    <div><div class="hm-h">This Mac</div><div class="card">${parts ? proSlot('nav', ' data-part="mac"') : ''}${r('doctor', '✚', 'Doctor', marks)}${r('news-toggle', '♢', 'Notifications', unread ? `${unread} new` : '')}${r('export', '⤓', S.exporting ? 'Exporting…' : 'Export all chats', 'to Downloads')}${st?.update ? r('update-toggle', '↑', `Update to ${esc(st.update.version)}`) : ''}</div></div>
+    ${planBox() ? `<div><div class="hm-h">Plan</div>${planBox()}</div>` : ''}
+    ${c ? `<div class="ver">${esc(c.app.replace(/^chorus/, 'Chorus'))} · core ${esc(c.core)}</div>` : ''}
+  </div>`;
 }
 
 /* New chat: agent, model, effort, folder, skip permissions, and (here only) a first message */
@@ -635,7 +852,7 @@ function newChatHtml() {
   if (!efforts.includes(f.effort)) f.effort = efforts[0];
   const recent = [...new Set([...(S.info.recent ?? []), S.info.computer])].filter(Boolean);
   const m = S.ncMenu;
-  const menu = (id, body) => (m === id ? `<div class="nc-menu" role="menu">${body}</div>` : '');
+  const menu = (id, body) => (m === id ? `<div class="nc-menu" role="menu"><div class="grab"></div>${body}</div>` : '');
   const pk = (id, label, cls = '', dis = false, body = '') => `<span class="nc-pk-wrap"><button class="nc-pk ${cls}" data-act="nc-menu" data-arg="${id}" aria-expanded="${m === id}"${dis ? ' disabled' : ''}>${label}</button>${menu(id, body)}</span>`;
   const agentLabel = `<span class="badge mini ${f.agent}">${AGENT[f.agent].letter}</span>${AGENT[f.agent].name}`;
   // the optional module adds who and what; without it the first picker is the agent
@@ -671,7 +888,7 @@ function newChatHtml() {
       ${f.skip && !T?.info ? `<div class="nc-warn">⚠ Starts ${esc(AGENT[f.agent].name)} with <code>${esc(a.skipFlag)}</code>: it won't stop to ask before editing files or running commands, and nothing from this chat reaches Approvals.</div>` : ''}
       ${f.error ? `<div class="nc-warn">${esc(f.error)}</div>` : ''}
     </div>
-    <p class="nc-hint">${src ? 'The old chat stays as it is; the new one shows under it with ↳.' : T?.hint || `${MOD}↵ sends · you talk to the agent in its own screen`}</p>
+    <p class="nc-hint">${src ? 'The old chat stays as it is; the new one shows under it with ↳.' : T?.hint || `${MQ_TOUCH.matches ? '' : `${MOD}↵ sends · `}you talk to the agent in its own screen`}</p>
   </div>`;
 }
 
@@ -706,6 +923,8 @@ async function startChat() {
 
 /** The system's own picker (pick or make a folder anywhere); the dialog below only where the system has none. */
 async function pickFolder(dir, then) {
+  // a phone or a tablet (through the private link): the Mac's own picker would open on the Mac, out of reach
+  if (MQ_TOUCH.matches && !NATIVE) return openBrowse(dir, then);
   let r;
   try {
     r = await api('POST', '/api/folders/pick', { dir });
@@ -751,32 +970,27 @@ async function loadDecided() {
   if (S.view.name === 'approvals') renderView();
 }
 
-function approvalsHtml() {
-  const st = S.state;
-  const cur = st?.chats.find(c => c.id === st.current);
-  const all = st?.approvals ?? [];
-  const items = S.scope === 'all' || !cur ? all : all.filter(a => a.cwd === cur.cwd);
-  const wait = since => { const s = Date.now() / 1000 - since; return s < 60 ? `${Math.max(0, Math.round(s))}s` : `${Math.round(s / 60)}m`; };
-  const riskBadge = r => (r ? `<span class="badge ${r.level === 'err' ? 'bad' : r.level === 'warn' ? 'warn' : 'plain'}">${esc(r.label)}</span>` : '');
-  return `<div class="page"><h1>Approvals</h1><p class="lead">What your agents are asking for, from every chat: their permission prompts (answering types the agent's own key) and the questions they put to you through Chorus (your choice and note become your next message to that agent). You do not have to switch to the chat.</p>
-    <div class="toolbar"><div class="seg"><button class="${S.scope === 'all' ? 'on' : ''}" data-act="scope" data-arg="all">All projects</button><button class="${S.scope === 'this' ? 'on' : ''}" data-act="scope" data-arg="this">This project</button></div><span class="grow"></span><span class="muted">${all.length + (window.choruspro?.needsCount?.() ?? 0)} waiting</span></div>
-    ${proSlot('approvals', ` data-scope="${esc(S.scope)}" data-cwd="${esc(cur?.cwd ?? '')}"`)}
-    ${window.choruspro ? '<div class="section-title" style="margin-top:4px">From chats</div>' : ''}
-    <div class="card list">${
-      items.length
-        ? items
-            .map(
-              a => `<div class="item"><div class="head"><span class="dot approval"></span><span class="t">${esc(a.title)}</span><span class="badge ${esc(a.agent)}">${esc(AGENT[a.agent]?.name ?? a.agent)}</span><span class="faint">${esc(base(a.cwd))} · waiting ${wait(a.since)}</span><span style="flex:1"></span>${riskBadge(a.risk)}</div>
+const waitFor = since => { const s = Date.now() / 1000 - since; return s < 60 ? `${Math.max(0, Math.round(s))}s` : `${Math.round(s / 60)}m`; };
+const riskBadge = r => (r ? `<span class="badge ${r.level === 'err' ? 'bad' : r.level === 'warn' ? 'warn' : 'plain'}">${esc(r.label)}</span>` : '');
+/** One request from a chat, with its answers: Approvals, and a phone's Home. */
+const approvalItem = a => `<div class="item"><div class="head"><span class="dot approval"></span><span class="t">${esc(a.title)}</span><span class="badge ${esc(a.agent)}">${esc(AGENT[a.agent]?.name ?? a.agent)}</span><span class="faint">${esc(base(a.cwd))} · waiting ${waitFor(a.since)}</span><span style="flex:1"></span>${riskBadge(a.risk)}</div>
           ${
             a.kind === 'ask'
               ? `${askCard(a)}<div class="acts"><span style="flex:1"></span><button class="btn" data-act="chat" data-arg="${esc(a.id)}">Open chat ›</button></div>`
               : `<div class="what">${esc(a.what)}</div>
           <div class="acts"><button class="btn good" data-act="approve" data-arg="${esc(a.id)}">✓ Approve</button><button class="btn danger" data-act="deny" data-arg="${esc(a.id)}">✕ Deny</button><span style="flex:1"></span><button class="btn" data-act="chat" data-arg="${esc(a.id)}">Open chat ›</button></div>`
-          }</div>`,
-            )
-            .join('')
-        : '<div class="empty">Nothing is waiting for you.</div>'
-    }</div>
+          }</div>`;
+
+function approvalsHtml() {
+  const st = S.state;
+  const cur = st?.chats.find(c => c.id === st.current);
+  const all = st?.approvals ?? [];
+  const items = S.scope === 'all' || !cur ? all : all.filter(a => a.cwd === cur.cwd);
+  return `<div class="page"><h1 class="ph-hide">Approvals</h1><p class="lead">What your agents are asking for, from every chat: their permission prompts (answering types the agent's own key) and the questions they put to you through Chorus (your choice and note become your next message to that agent). You do not have to switch to the chat.</p>
+    <div class="toolbar"><div class="seg"><button class="${S.scope === 'all' ? 'on' : ''}" data-act="scope" data-arg="all">All projects</button><button class="${S.scope === 'this' ? 'on' : ''}" data-act="scope" data-arg="this">This project</button></div><span class="grow"></span><span class="muted">${all.length + (window.choruspro?.needsCount?.() ?? 0)} waiting</span></div>
+    ${proSlot('approvals', ` data-scope="${esc(S.scope)}" data-cwd="${esc(cur?.cwd ?? '')}"`)}
+    ${window.choruspro ? '<div class="section-title" style="margin-top:4px">From chats</div>' : ''}
+    <div class="card list">${items.length ? items.map(approvalItem).join('') : '<div class="empty">Nothing is waiting for you.</div>'}</div>
     <div class="section-title">Decided today</div>
     <div class="card list">${S.decided.length ? S.decided.map(d => `<div class="item"><div class="head"><span class="badge ${d.decision === 'approved' ? 'ok' : 'bad'}">${esc(d.decision)}</span><span class="badge ${esc(d.agent)}">${esc(AGENT[d.agent]?.letter ?? '')}</span><span class="mono" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.what)}</span><span class="faint">${esc(d.time)}</span></div></div>`).join('') : '<div class="empty">No answers yet today.</div>'}</div></div>`;
 }
@@ -807,6 +1021,9 @@ async function loadMemory() {
 
 function memoryHtml() {
   const m = S.mem;
+  // a phone: the list, and a record as its own step (‹ Back returns to the list)
+  const step = S.size === 'phone' ? (S.view.rec ? 'record' : 'list') : '';
+  if (step === 'record') m.sel = S.view.rec;
   const sel = m.items.find(i => i.id === m.sel);
   const rows = m.items
     .map(i => `<div class="item${i.id === m.sel ? ' sel' : ''}" data-act="mem-sel" data-arg="${esc(i.id)}"><div class="head">${i.child ? '<span class="faint">↳</span>' : ''}<span class="t">${esc(i.title)}</span><span class="badge mini ${esc(i.agent)}">${esc(AGENT[i.agent]?.letter ?? '')}</span><span style="flex:1"></span><span class="faint" style="font-size:12px">${esc(i.ago)}</span></div><div class="muted" style="font-size:12.5px">${esc(i.project)} · ${i.turns} turn${i.turns === 1 ? '' : 's'}</div></div>`)
@@ -818,9 +1035,10 @@ function memoryHtml() {
       <div class="form-foot" style="padding:0 16px 16px;flex-wrap:wrap"><button class="btn primary" data-act="chat" data-arg="${esc(sel.id)}">Open chat</button><button class="btn" data-act="handoff" data-arg="${esc(sel.id)}">Continue with another agent</button><button class="btn" data-act="mem-record" data-arg="${esc(sel.id)}">${m.record?.id === sel.id ? 'Hide' : 'What an agent reads'}</button><span style="flex:1"></span><button class="btn danger" data-act="delete" data-arg="${esc(sel.id)}">Delete</button></div>
       ${m.record?.id === sel.id ? `<pre class="record" style="border-top:1px solid var(--line)">${esc(m.record.text)}</pre>` : ''}</div>`
     : '';
-  return `<div class="page" style="max-width:1100px"><h1>Memory</h1><p class="lead">Every chat Chorus recorded, in every project: what an agent gets from <span class="mono">get_handoff_context</span> when it continues one. Stored in <span class="mono">${esc(m.where)}</span>.</p>
+  if (step === 'record') return `<div class="page">${detail || '<div class="card empty">This chat is no longer in Memory.</div>'}</div>`;
+  return `<div class="page" style="max-width:1100px"><h1 class="ph-hide">Memory</h1><p class="lead">Every chat Chorus recorded, in every project: what an agent gets from <span class="mono">get_handoff_context</span> when it continues one. Stored in <span class="mono">${esc(m.where)}</span>.</p>
     <div class="toolbar"><input id="mem-q" type="search" placeholder="Search titles, questions, answers, files…" value="${esc(m.q)}" data-input="mem-q" style="max-width:420px"><span class="grow"></span><span class="muted">${m.items.length} chat${m.items.length === 1 ? '' : 's'}</span></div>
-    ${m.items.length ? `<div class="mem"><div class="card list rows">${rows}</div>${detail}</div>` : `<div class="card empty">${m.q ? 'Nothing matches.' : 'Nothing recorded yet.'}</div>`}</div>`;
+    ${m.items.length ? `<div class="mem"><div class="card list rows">${rows}</div>${step === 'list' ? '' : detail}</div>` : `<div class="card empty">${m.q ? 'Nothing matches.' : 'Nothing recorded yet.'}</div>`}</div>`;
 }
 
 /* Skills: one library for the three agents */
@@ -836,8 +1054,8 @@ async function loadSkills() {
 
 function skillsHtml() {
   const k = S.skills;
-  if (!k) return '<div class="page"><h1>Skills</h1><p class="lead">Loading…</p></div>';
-  return `<div class="page"><h1>Skills</h1><p class="lead">One library for Claude Code, Codex and Antigravity: a skill turned on here is linked into each agent's own skills folder when a chat starts. Library: <span class="mono">${esc(k.where)}</span></p>
+  if (!k) return '<div class="page"><h1 class="ph-hide">Skills</h1><p class="lead">Loading…</p></div>';
+  return `<div class="page"><h1 class="ph-hide">Skills</h1><p class="lead">One library for Claude Code, Codex and Antigravity: a skill turned on here is linked into each agent's own skills folder when a chat starts. Library: <span class="mono">${esc(k.where)}</span></p>
     <div class="toolbar"><span class="grow"></span><button class="btn" data-act="sk-new">+ New skill</button></div>
     <div class="card list">${k.items.length ? k.items.map(s => `<div class="item skill"><input type="checkbox" class="switch" data-change="sk-toggle" data-arg="${esc(s.folder)}"${s.on ? ' checked' : ''} aria-label="${esc(s.name)} on or off"><div class="grow"><div style="font-weight:600">${esc(s.name)}</div><div class="muted" style="font-size:13px">${esc(s.description)}</div></div><button class="btn" data-act="sk-edit" data-arg="${esc(s.folder)}">Edit</button></div>`).join('') : '<div class="empty">No skills in the library yet.</div>'}</div>
     <div class="section-title">Found in the agents' own folders</div>
@@ -892,7 +1110,7 @@ async function firstDoctor() {
 /** First launch: the Welcome's choice (Community or Pro) comes first, then the Doctor (owner, 2026-11-09). While the plan is not
  *  known yet, or the Welcome or "Finish in your browser" is in front, or a Community first launch is about to show the Welcome,
  *  the Doctor waits; go() and the plan's status call this again. */
-const welcomePending = () => (S.pro === undefined && !S.proFailed) || ['welcome', 'trying'].includes(S.view.name) || (community() && S.welcome === undefined && S.view.name === 'new');
+const welcomePending = () => (S.pro === undefined && !S.proFailed) || ['welcome', 'trying'].includes(S.view.name) || (community() && S.welcome === undefined && ['new', 'home'].includes(S.view.name));
 function doctorWhenReady() {
   if (!S.doctorWaits || welcomePending()) return;
   S.doctorWaits = false;
@@ -1187,7 +1405,7 @@ function drAppLine() {
 }
 
 function doctorHtml() {
-  return `<div class="page"><h1>Doctor</h1><p class="lead">Your AI coding CLIs: are they installed, on a version Chorus is tested with, and logged in.</p>
+  return `<div class="page"><h1 class="ph-hide">Doctor</h1><p class="lead">Your AI coding CLIs: are they installed, on a version Chorus is tested with, and logged in.</p>
     ${drAppLine()}${drRunLine()}${drBanner()}${doctorRows()}</div>`;
 }
 
@@ -1312,8 +1530,8 @@ async function reportIssue() {
 
 function renderChat() {
   const id = S.view.id;
-  $('#view').innerHTML = `<div class="chat"><div class="chat-head" id="chat-head"></div>${proSlot('chat-actions', ` data-chat="${esc(id)}"`)}<div id="chat-banners"></div>
-    <div class="chat-body"><div class="term-wrap" id="term-slot"><div class="term-over" id="term-over" hidden></div></div><aside class="drawer" id="drawer" hidden></aside>${proSlot('chat-side', ` data-chat="${esc(id)}"`)}</div></div>`;
+  $('#view').innerHTML = `<div class="chat"><div class="chat-head" id="chat-head"></div>${proSlot('chat-actions', ` data-chat="${esc(id)}"`)}<div id="chat-banners"></div><div class="chat-tabs" id="chat-tabs" hidden></div>
+    <div class="chat-body tab-chat" id="chat-body"><div class="term-wrap" id="term-slot"><div class="term-over" id="term-over" hidden></div></div><div class="drawer-scrim" data-act="drawer-close"></div><aside class="drawer" id="drawer" hidden></aside>${proSlot('chat-side', ` data-chat="${esc(id)}"`)}</div></div>`;
   $('#term-slot').prepend(termEl);
   fillSlots();
   if (!termOpened) {
@@ -1337,20 +1555,48 @@ function meter(pct) {
   return `<span class="meter ${p >= 90 ? 'bad' : p >= 75 ? 'warn' : ''}" title="plan usage (5 h window)"><span class="bar"><i style="width:${Math.min(100, p)}%"></i></span>5h ${p}%</span>`;
 }
 
+/** A phone's ⋯ for the chat in front: its details, and what the header holds on wider screens. */
+function drawSheet() {
+  $('#sheet')?.remove();
+  const c = S.sheet === 'chat' && S.view.name === 'chat' ? S.state?.chats.find(x => x.id === S.view.id) : null;
+  if (!c) return void (S.sheet = null);
+  const el = document.createElement('div');
+  el.id = 'sheet';
+  el.className = 'sheet-wrap';
+  el.innerHTML = `<div class="sheet" role="dialog" aria-label="This chat"><div class="grab"></div>
+    <div class="sh-meta"><div><span class="badge ${esc(c.agent)}">${esc(AGENT[c.agent]?.name ?? c.agent)}</span> ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}${c.skip ? ' <span class="badge warn">skip</span>' : ''}</div><div class="mono path">${esc(tilde(c.cwd))}</div>${meter(c.usage)}</div>
+    <button data-act="handoff" data-arg="${esc(c.id)}"><span class="i">⇄</span>Hand off to another agent</button>
+    <button data-act="drawer-to" data-arg="artifacts"><span class="i">▤</span>Artifacts${c.artifacts ? ` <span class="badge plain">${c.artifacts}</span>` : ''}</button>
+    <button data-act="drawer-to" data-arg="activity"><span class="i">≋</span>Activity</button>
+    <button data-act="drawer-to" data-arg="record"><span class="i">◫</span>Record</button>
+    <button class="danger" data-act="delete" data-arg="${esc(c.id)}"><span class="i">🗑</span>Delete this chat</button></div>`;
+  document.body.append(el);
+}
+
 function renderChatParts() {
   const c = S.state?.chats.find(x => x.id === S.view.id);
   const head = $('#chat-head');
   if (!c || !head) return;
   const d = S.detail[c.id];
+  // the labels go on a tablet (icons stay, with the meter) and the buttons go into the ⋯ sheet on a phone
   head.innerHTML = `<span class="badge ${esc(c.agent)}">${esc(AGENT[c.agent]?.name ?? c.agent)}</span>
     <div class="meta"><span class="dot ${esc(c.state)}"></span><span>${esc(STATE_LABEL[c.state] ?? c.state)}</span>
-      ${c.model || c.effort ? `<span>· ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}</span>` : ''}${c.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${meter(c.usage)}
+      ${c.model || c.effort ? `<span class="model">· ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}</span>` : ''}${c.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${meter(c.usage)}
       <span class="mono faint path" title="${esc(c.cwd)}">‎${esc(tilde(c.cwd))}‎</span>${c.toast ? `<span class="badge ok">${esc(c.toast)}</span>` : ''}</div>
-    <button class="btn" data-act="handoff" data-arg="${esc(c.id)}" title="Continue this chat with another agent">⇄ Hand off</button>
-    <button class="btn${S.drawer === 'artifacts' ? ' on' : ''}" data-act="drawer" data-arg="artifacts">Artifacts${c.artifacts ? ` <span class="badge plain">${c.artifacts}</span>` : ''}</button>
-    <button class="btn${S.drawer === 'activity' ? ' on' : ''}" data-act="drawer" data-arg="activity">Activity</button>
-    <button class="btn${S.drawer === 'record' ? ' on' : ''}" data-act="drawer" data-arg="record">Record</button>
-    <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat">🗑</button>`;
+    <button class="btn" data-act="handoff" data-arg="${esc(c.id)}" title="Continue this chat with another agent" aria-label="Hand off">${S.size === 'desktop' ? '⇄ Hand off' : '⇄'}</button>
+    <button class="btn${S.drawer === 'artifacts' ? ' on' : ''}" data-act="drawer" data-arg="artifacts" title="Artifacts" aria-label="Artifacts"><span class="ic-only">▤</span><span class="lbl">Artifacts</span>${c.artifacts ? ` <span class="badge plain">${c.artifacts}</span>` : ''}</button>
+    <button class="btn${S.drawer === 'activity' ? ' on' : ''}" data-act="drawer" data-arg="activity" title="Activity" aria-label="Activity"><span class="ic-only">≋</span><span class="lbl">Activity</span></button>
+    <button class="btn${S.drawer === 'record' ? ' on' : ''}" data-act="drawer" data-arg="record" title="Record" aria-label="Record"><span class="ic-only">◫</span><span class="lbl">Record</span></button>
+    <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat" aria-label="Delete this chat">🗑</button>`;
+  // a phone: a task chat's panel is tabs beside the chat (Chat · Steps · Plan), one shown at a time
+  const tabs = S.size === 'phone' ? window.choruspro?.sideTabs?.(c.id) : null;
+  if (!tabs) S.chatTab = 'chat';
+  const tabsEl = $('#chat-tabs');
+  tabsEl.hidden = !tabs;
+  tabsEl.innerHTML = tabs ? `<div class="seg" role="tablist">${[['chat', 'Chat'], ...tabs].map(([k, label]) => `<button class="${S.chatTab === k ? 'on' : ''}" data-act="chat-tab" data-arg="${esc(k)}" role="tab" aria-selected="${S.chatTab === k}">${esc(label)}</button>`).join('')}</div>` : '';
+  $('#chat-body').className = `chat-body tab-${S.chatTab}`;
+  const side = $('#view [data-pro-slot="chat-side"]');
+  if (side) side.dataset.tab = S.size === 'phone' && S.chatTab !== 'chat' ? S.chatTab : '';
   fillSlots();
   let banners = '';
   for (const ask of S.state.approvals.filter(a => a.id === c.id)) {
@@ -1396,8 +1642,10 @@ async function loadDrawer() {
 
 function drawerHtml(c) {
   const dd = S.drawerData;
-  const title = { artifacts: 'Artifacts', activity: 'Activity', record: 'Record' }[S.drawer];
-  const head = `<div class="drawer-head"><span class="grow">${title}</span><button class="icon-btn" data-act="drawer" data-arg="${S.drawer}" title="Close">✕</button></div>`;
+  const NAMES = { artifacts: 'Artifacts', activity: 'Activity', record: 'Record' };
+  // a phone: a bottom sheet with a grabber, and the three drawers as tabs in its head
+  const seg = `<span class="seg drawer-seg">${Object.entries(NAMES).map(([k, n]) => `<button class="${S.drawer === k ? 'on' : ''}" data-act="drawer-to" data-arg="${k}">${n}</button>`).join('')}</span>`;
+  const head = `<div class="grab"></div><div class="drawer-head"><span class="grow title">${NAMES[S.drawer]}</span>${seg}<button class="icon-btn" data-act="drawer" data-arg="${S.drawer}" title="Close" aria-label="Close">✕</button></div>`;
   if (!dd || dd.id !== c.id || dd.kind !== S.drawer) return head + '<div class="drawer-body"><div class="empty">Loading…</div></div>';
   const x = dd.data;
   if (S.drawer === 'artifacts') {
@@ -1405,7 +1653,7 @@ function drawerHtml(c) {
       ? x.items.map(a => `<div class="art"><div class="name">${esc(a.path)}</div><div class="faint" style="font-size:12px">v${a.versions.length} · ${esc(a.ago)}</div><div class="acts"><button class="btn primary" data-act="art-open" data-arg="${esc(a.path)}">Open</button><button class="btn" data-act="art-folder" data-arg="${esc(a.path)}">Show in folder</button><button class="btn" data-act="copy" data-arg="${esc(a.abs)}">Copy path</button></div></div>`).join('')
       : '<div class="empty">No artifacts yet. Files the agent writes into this chat\'s artifacts folder show up here and open in the browser, reloading while the agent edits them.</div>';
     const files = x.files.length ? `<div class="section-title" style="margin:16px 16px 6px">Files written by tools</div><div class="calls" style="padding:0 16px 16px">${x.files.map(f => `<div>${esc(tilde(f))}</div>`).join('')}</div>` : '';
-    return head + `<div class="drawer-body"><div class="mono faint" style="padding:10px 16px;border-bottom:1px solid var(--line)">${esc(tilde(x.folder))}/</div>${items}${files}</div>`;
+    return head + `<div class="drawer-body"><div class="mono faint" style="padding:10px 16px;border-bottom:1px solid var(--line);overflow-wrap:anywhere">${esc(tilde(x.folder))}/</div>${items}${files}</div>`;
   }
   if (S.drawer === 'activity') {
     const kinds = ['all', 'tool', 'mcp', 'approval', 'file', 'usage'];
@@ -1655,11 +1903,28 @@ function toast(text, opts = {}) {
 }
 /* ---------- input ---------- */
 
+/** Esc on a dialog, or a tap on the dim area around a phone's sheet: cancel it the way its own Cancel does. */
+function dismissDialog(dlg, tap = false) {
+  if (dlg.dataset.dialog) return void api('POST', `/api/dialogs/${dlg.dataset.dialog}`, { value: null }).then(() => dlg.remove());
+  dlg.querySelector(`[data-x="cancel"], [data-act="br-cancel"]${tap ? ', [data-act="doc-issue-cancel"]' : ''}`)?.click();
+}
+
 document.addEventListener('click', async e => {
-  if (S.ncMenu && !e.target.closest('.nc-pk-wrap')) {
+  // a phone's picker menu is a sheet: its dim area (the wrapper's ::before) closes it too
+  if (S.ncMenu && (!e.target.closest('.nc-pk-wrap') || e.target.classList.contains('nc-pk-wrap'))) {
     S.ncMenu = null;
-    if (!e.target.closest('[data-act]')) return renderView();
+    if (!e.target.closest('[data-act]') || e.target.classList.contains('nc-pk-wrap')) return renderView();
   }
+  // the ⋯ sheet: a tap on the dim area closes it, a row does its action and closes it
+  if (e.target.id === 'sheet') {
+    S.sheet = null;
+    return drawSheet();
+  }
+  if (e.target.closest('#sheet [data-act]')) {
+    S.sheet = null;
+    drawSheet();
+  }
+  if (S.size === 'phone' && e.target.classList?.contains('scrim') && e.target.closest('#dialogs')) return dismissDialog(e.target, true);
   const el = e.target.closest('[data-act]');
   if (!el) return;
   const act = el.dataset.act;
@@ -1668,6 +1933,35 @@ document.addEventListener('click', async e => {
   switch (act) {
     case 'new':
       return go({ name: 'new' });
+    case 'tab':
+      // a place of the tab bar starts its own history: ‹ Back leads up to it, not across tabs
+      S.history = [];
+      return go({ name: arg }, false);
+    case 'cl-filter':
+      S.cl.filter = arg || 'all';
+      S.cl.focus = false;
+      if (S.view.name === 'chats') return renderView();
+      S.history = [];
+      return go({ name: 'chats' }, false);
+    case 'cl-proj':
+      S.cl.proj = arg;
+      return renderView();
+    case 'proj-open':
+      // a project on Home: its Portal with the module, else its chats
+      if (window.choruspro) return go({ name: 'pro', id: `portal~${encodeURIComponent(arg)}` });
+      S.cl = { ...S.cl, proj: arg, filter: 'all', q: '' };
+      S.history = [];
+      return go({ name: 'chats' }, false);
+    case 'chat-menu':
+      S.sheet = 'chat';
+      return drawSheet();
+    case 'chat-tab':
+      S.chatTab = arg;
+      renderChatParts();
+      return setTimeout(refit, 30);
+    case 'menu-close':
+      $('#app').classList.remove('side-open');
+      return renderChrome();
     case 'new-in':
       return go({ name: 'new', folder: arg });
     case 'approvals':
@@ -1682,7 +1976,7 @@ document.addEventListener('click', async e => {
     case 'plan-community':
       remember('welcome', 'community');
       S.welcome = 'community';
-      return go({ name: 'new' });
+      return go(startView());
     case 'plan-try': {
       const r = await api('POST', '/api/pro/try').catch(err => ({ error: err.message }));
       if (r.error) return toast(r.error);
@@ -1796,6 +2090,7 @@ document.addEventListener('click', async e => {
       if (S.exporting) return;
       S.exporting = true;
       renderChrome();
+      if (S.view.name === 'more') renderView();
       try {
         const r = await api('POST', '/api/export');
         if (r.error) toast(r.error);
@@ -1805,6 +2100,7 @@ document.addEventListener('click', async e => {
       } finally {
         S.exporting = false;
         renderChrome();
+        if (S.view.name === 'more') renderView();
       }
       return;
     }
@@ -1815,6 +2111,11 @@ document.addEventListener('click', async e => {
       $('#app').classList.toggle('side-open');
       return renderChrome();
     case 'sidebar':
+      // narrower than a desktop the sidebar comes over the page: its ⇤ closes it
+      if (S.size !== 'desktop') {
+        $('#app').classList.remove('side-open');
+        return renderChrome();
+      }
       $('#app').classList.toggle('side-off');
       renderChrome();
   renderDoctorDot();
@@ -1827,13 +2128,15 @@ document.addEventListener('click', async e => {
       }
       S.folded.has(arg) ? S.folded.delete(arg) : S.folded.add(arg);
       remember('folded', [...S.folded]);
-      return renderChrome();
+      renderChrome();
+      return S.view.name === 'chats' ? renderView() : undefined;
     case 'rm-project': {
       S.hidden[arg] = (S.state?.chats ?? []).filter(c => c.cwd === arg).map(c => c.id);
       remember('hidden', S.hidden);
       const open = S.view.name === 'chat' && S.state?.chats.find(c => c.id === S.view.id)?.cwd === arg;
-      if (open) return go({ name: 'new' });
-      return renderChrome();
+      if (open) return go(startView());
+      renderChrome();
+      return S.view.name === 'chats' || S.view.name === 'home' ? renderView() : undefined;
     }
     case 'fold-open':
       S.folded.delete(arg);
@@ -1873,7 +2176,10 @@ document.addEventListener('click', async e => {
     case 'delete':
       return api('DELETE', `/api/chats/${arg}`).catch(err => toast(err.message));
     case 'drawer':
-      S.drawer = S.drawer === arg ? null : arg;
+    case 'drawer-to':
+    case 'drawer-close':
+      // drawer-to: always that drawer (a phone's ⋯ sheet and the drawer's own tabs); drawer-close: the dim area around it
+      S.drawer = act === 'drawer-close' ? null : act === 'drawer-to' || S.drawer !== arg ? arg : null;
       S.drawerData = null;
       remember('drawer', S.drawer ?? '');
       renderChatParts();
@@ -1952,6 +2258,8 @@ document.addEventListener('click', async e => {
     case 'mem-sel':
       S.mem.sel = arg;
       S.mem.focus = false;
+      // a phone: the record is its own step, so ‹ Back returns to the list
+      if (S.size === 'phone') return go({ name: 'memory', rec: arg });
       return renderView();
     case 'mem-record':
       if (S.mem.record?.id === arg) S.mem.record = null;
@@ -2014,6 +2322,10 @@ document.addEventListener('input', e => {
     case 'nc-prompt':
       S.form.prompt = el.value;
       return;
+    case 'cl-q':
+      S.cl.q = el.value;
+      S.cl.focus = true;
+      return renderView();
     case 'mem-q':
       S.mem.q = el.value;
       S.mem.focus = true;
@@ -2031,8 +2343,7 @@ document.addEventListener(
     if (dlg) {
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (dlg.dataset.dialog) return void api('POST', `/api/dialogs/${dlg.dataset.dialog}`, { value: null }).then(() => dlg.remove());
-        return dlg.querySelector('[data-x="cancel"], [data-act="br-cancel"]')?.click();
+        return dismissDialog(dlg);
       }
       if (dlg.dataset.dialog && !e.target.closest('input')) {
         const key = e.key === 'Enter' ? '\r' : e.key;
@@ -2048,6 +2359,11 @@ document.addEventListener(
         return dlg.querySelector('[data-act="dlg-ok"]')?.click();
       }
       return;
+    }
+    if (e.key === 'Escape' && $('#sheet')) {
+      e.preventDefault();
+      S.sheet = null;
+      return drawSheet();
     }
     if (mod && e.key.toLowerCase() === 'n') {
       e.preventDefault();
@@ -2106,8 +2422,8 @@ function fromHash() {
   if (name === 'new' && a === 'from' && b) return { name, from: b };
   if (name === 'new' && a === 'in' && b) return { name, folder: decodeURIComponent(b) };
   if (name === 'pro' && a) return { name, id: a };
-  if (['approvals', 'memory', 'skills', 'doctor', 'unlock', 'welcome', 'trying', 'paying', 'pro-paid', 'pro-started', 'pro-ended'].includes(name)) return { name };
-  return { name: 'new' };
+  if (['approvals', 'memory', 'skills', 'doctor', 'unlock', 'welcome', 'trying', 'paying', 'pro-paid', 'pro-started', 'pro-ended', 'home', 'chats', 'more'].includes(name)) return { name };
+  return name === 'new' ? { name } : startView();
 }
 
 connect();
