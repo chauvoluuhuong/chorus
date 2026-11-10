@@ -1,7 +1,7 @@
 # Phase 4 plan: the `chorus` CLI app
 
 Status: **P4.1–P4.8 built**; the e2e proof with screenshots is in [proof/phase4/README.md](proof/phase4/README.md) (`npm run proof`). Goal and proof: [architecture.md §2](architecture.md#phase-4--chorus-cli-app),
-mockup: [mockups/chorus-cli.html](mockups/chorus-cli.html).
+mockup: `@workspace/mockups/chorus-cli.html` (private).
 
 ## 1. Decision D1: TypeScript or Rust for the app
 
@@ -93,7 +93,7 @@ resize, quit).
 
 ### Look and screens of the mockup (P4.9, first pass)
 
-Built to match `docs/mockups/chorus-cli.html`, scene by scene (colors are the mockup's: Claude orange, Codex blue,
+Built to match `@workspace/mockups/chorus-cli.html`, scene by scene (colors are the mockup's: Claude orange, Codex blue,
 agy green, Chorus teal):
 
 | Mockup scene | In the app |
@@ -126,7 +126,7 @@ reports plan usage in the headless stream, not in the transcript).
 passes no flag) and **Folder** (text, default = this project, checked to exist). Enter starts the agent in that
 folder with the Chorus MCP server attached; you then talk to the agent in its own screen, and the thread takes the
 name of your first message. `chorus new --agent claude --model sonnet --folder ~/x` skips the form. Code: `App.form`,
-`Controller.newThreadForm`, `src/app/models.ts`. Mockup scene: `docs/mockups/chorus-cli.html` → "New thread".
+`Controller.newThreadForm`, `src/app/models.ts`. Mockup scene: `@workspace/mockups/chorus-cli.html` → "New thread".
 
 ### P4.2–P4.7 as built
 

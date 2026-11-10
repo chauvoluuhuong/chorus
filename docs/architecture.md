@@ -106,7 +106,7 @@ result. Plus fast tests with a fake agent for every tool.
 
 Plan, spike results and the D1 decision: [phase4.md](phase4.md).
 
-The terminal app from the [mockup](mockups/chorus-cli.html): thread sidebar, the real agent screen
+The terminal app from the mockup (`@workspace/mockups/chorus-cli.html` (private)): thread sidebar, the real agent screen
 in the middle, status line, handoff, memory view, and display of tool calls, artifacts and
 **approvals** (badge, sidebar `!`, inbox).
 
@@ -125,7 +125,7 @@ between them, hand off, answer an approval from the inbox, see an artifact liste
 ### Phase 5 · Desktop app
 
 The same operations with a graphical UI, over `chorus serve` (a local API exposed by the CLI).
-No business logic of its own. Design reference: [archive/ui-mockup-v3.html](archive/ui-mockup-v3.html).
+No business logic of its own. Design reference: `@workspace/mockups/ui-mockup-v3.html` (private).
 
 **As built** ([phase5.md](phase5.md)): `chorus serve` hosts the CLI app's Controller without a terminal and exposes it as a
 token-protected HTTP + WebSocket API on 127.0.0.1; the window is a web page (xterm.js draws each agent's own screen) inside a
