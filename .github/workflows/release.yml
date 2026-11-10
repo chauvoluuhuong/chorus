@@ -231,11 +231,12 @@ jobs:
         if: steps.ready.outputs.ok == 'true'
         working-directory: chorus-core
         # the code first, then the file that names its version: the backend reads both, and a new version only counts once both are there.
-        # A preview tag fills preview/, which only preview apps get; a production tag fills current/, which every other app gets
-        # (chorus-admin server/index.mjs), so a preview never changes the paid code production users run.
+        # A preview tag fills current/preview/, which only preview apps get; a production tag fills current/, which every other app
+        # gets (chorus-admin server/index.mjs), so a preview never changes the paid code production users run. Both sit under current/,
+        # the only place the publishing account may write.
         env:
           BUCKET: ${{ secrets.GCP_PRO_BUCKET }}
-          FOLDER: ${{ needs.version.outputs.channel == 'production' && 'current' || 'preview' }}
+          FOLDER: ${{ needs.version.outputs.channel == 'production' && 'current' || 'current/preview' }}
         run: |
           gcloud storage cp dist-pro/pro.js "gs://$BUCKET/$FOLDER/pro.js"
           gcloud storage cp dist-pro/pro.json "gs://$BUCKET/$FOLDER/pro.json"
