@@ -20,7 +20,7 @@ Any AI you choose. All your work in one place. Grows with you. Always yours.
 
 Pick what you want to see: plan and run a task, hand off a chat, build your team or watch a project. A few clicks each, and the app points at every one. No install, no AI called.
 
-[![Try Chorus: click to start the guided tour](docs/media/try-chorus.png)](https://chorus-cli.web.app/try/)
+[![Try Chorus: click to start the guided tour](docs/media/try-chorus.png)](https://chorus-cli.web.app/tour)
 
 ## Handoff: switch agents without losing anything
 
