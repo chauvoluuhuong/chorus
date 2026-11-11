@@ -1,15 +1,66 @@
 # 🎵 Chorus
 
-> Work across AI coding CLIs (Claude Code, Codex, Antigravity) as easily as in one: hand work
-> from one agent to another without losing context, keep every thread in one place, and see what
-> the agents do and make.
+**We're building the best place to work with AI.**<br>
+Any AI you choose. All your work in one place. Grows with you. Always yours.
 
 **Website: [chorus-cli.web.app](https://chorus-cli.web.app/)**
 
-Chorus is a desktop app (macOS and Linux) with the `chorus` command. The window runs `chorus serve` and shows every
-thread, tool call, approval and artifact; the agents themselves stay the real CLIs.
+- **The real CLI, untouched.** Claude Code, Codex and Antigravity run as themselves, with every command, shortcut and feature you know. You keep working the way you already do; Chorus adds what's around it.
+- **No more ten terminal windows.** Every session sits in one sidebar.
+- **No more tab-hopping to catch approvals.** The agent that's waiting comes to you.
+- **Think with the strongest model, build with a cheap one.** Plan on maximum effort, then hand the build to a faster model that costs less.
+- **Never start from zero.** When a plan limit hits, another agent picks up where the first one stopped.
+- **Run your work, not your windows.** Projects, goals and tasks show what's planned, what's moving and what's done.
+- **Agents that learn from mistakes.** When something fails, Chorus records what went wrong, so the next agent doesn't repeat it.
+- **One memory, one set of skills.** What one agent learns, every agent knows.
+
+![Teammates, actions and processes; start a chat with a teammate or any agent; the Planner makes a task with steps; Workers run it; the Portal shows goals and failures](docs/media/teammates.gif)
+
+### Try it in your browser
+
+Pick what you want to see: plan and run a task, hand off a chat, build your team or watch a project. A few clicks each, and the app points at every one. No install, no AI called.
+
+[![Try Chorus: click to start the guided tour](docs/media/try-chorus.png)](https://chorus-cli.web.app/try/)
+
+## Handoff: switch agents without losing anything
+
+**When**
+- **Your plan limit hits mid-task.** Hand off and keep going. The context comes from Chorus, not from the agent that stopped.
+- **You want a second opinion.** Let another model review what this one built.
+- **You want the right model for each step.** Plan with the strongest model, then hand the build to a cheaper, faster one.
+
+**Why.** No more copy-pasting context or explaining the task again. The new agent starts out knowing what was asked, what was decided, which files changed, what the tests said, and what's still open.
+
+**How.** Click **⇄ Hand off** in any chat and pick who goes on:
+- **A teammate.** It can take over the chat, or run one of its actions (Create plan, Review changes...) in a linked thread while your chat goes on.
+- **Any AI model on its own.** Claude Code, Codex or Antigravity, with no teammate and no instructions: it just takes over.
+
+Either way the new thread loads the chat's record through the Chorus MCP server, sums up what it learned, and waits for your OK. The old chat stays as it was; switch back anytime.
+
+## Your process: define how work gets done, then let it run
+
+You set up your way of working once: **who** does the work (teammates), **what** each one knows how to do (actions), and **what comes next** after each job (the process). Then you plan a task, and the process carries it from step to step on its own.
+
+- **Teammate:** instructions + an agent + a model and effort + skills + permissions + actions. The **Planner** and one **Worker** per installed CLI come with Chorus; add your own (a Designer, a Reviewer, anyone your work needs).
+- **Action:** a job a teammate knows how to do: its instructions, **what happens next**, and whether it asks you first. Most are a button in every chat; some start by themselves, like *Resolve conflict*.
+- **Process:** the chain you get by following "what happens next". Each link is a handoff: the next teammate starts from the record of the work before it (the goal, what was decided, what changed, what's left), so it always has enough context to begin. Nothing to configure: change an action and the process follows.
+
+  `Planner: Create plan → you approve → Workers: Do step → Planner: Review changes → you accept`
+- **Task:** what a process works on. The Planner turns your request into a task with steps (how to do each, how to check it), then each step goes to a Worker in its own work session, handed from teammate to teammate. You only step in where an action asks you to.
+
+## Projects: you steer, your agents grow
+
+Each project folder gets a **Portal**: one page that answers *what needs me?* and *are we on track?*
+
+- **Needs you:** every question, plan to approve and piece of work to check, from every agent, in one list.
+- **Board:** each task moves on its own through Planning → Ready → Doing → To check → Done, live while the agents work. Open a task for what it is, when it counts as done, and every chat that worked on it.
+- **Goals:** what a group of tasks is for, with its progress. Name one yourself, or let the Planner group the tasks and ask you before it creates a goal.
+- **Failures:** when you deny a request, send work back or reject a plan, Chorus records what went wrong and a lesson to learn from it. One click **teaches the teammate** (the lesson goes into its instructions), **adds it to project memory**, or **makes it a task**. The next agent starts from what the last one got wrong, so your team gets better the more you use it.
 
 ## Install
+
+Chorus is a desktop app (macOS and Linux) with the `chorus` command. The window runs `chorus serve` and shows every
+thread, tool call, approval and artifact; the agents themselves stay the real CLIs.
 
 The website ([chorus-cli.web.app](https://chorus-cli.web.app/)) has the downloads and the install script. Needs at least one of `claude`, `codex`, `agy` installed and logged in (`chorus doctor` checks).
 
@@ -23,22 +74,6 @@ irm https://chorus-cli.web.app/docker.ps1 | iex                              # i
 `chorus` opens the desktop app and prints the address of the same Chorus in a browser. With no screen (a container, SSH, a
 server) it runs Chorus for a browser and prints the address; `chorus serve --host 0.0.0.0` lets another computer reach it.
 `chorus-cli` opens the terminal app (on hold, see Contributing). The Docker box: [docs/features/docker-box.md](docs/features/docker-box.md).
-
-## Why
-
-AI CLIs are powerful but siloed. When one hits its plan limit or you want another model's take,
-you copy-paste context by hand, and the plans, mockups and reports each agent produced are
-scattered. Chorus keeps one **thread** of work across agents:
-
-- **Handoff:** open a new thread with another agent. Its first prompt tells it to load the
-  previous thread through the `chorus` MCP tool `get_handoff_context` and confirm in a few
-  bullets what it learned. Works even when the first agent has hit its plan limit.
-- **All threads in one place:** several agents run at once in a sidebar like tabs; switch
-  instantly and see which one is waiting for you.
-- **Artifacts:** non-code files go to `.chorus/threads/<id>/artifacts/` and are easy to open.
-- **Skills:** one set of skills, synced to every CLI and used by each agent.
-- **Transparency:** you work in the real CLI; Chorus shows tool calls, approvals and
-  artifacts, and records everything for debugging.
 
 ## Use it
 
