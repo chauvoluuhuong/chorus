@@ -2,6 +2,7 @@
 // call. The agents run in the server's PTYs; their own screens are drawn here with xterm.js.
 /* global Terminal, FitAddon */
 import { shortCheckPassed } from './doctor-popup.js';
+import { askWho } from './ask-label.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -1668,9 +1669,12 @@ function drawDock(c, force = false) {
   const el = $('#ask-dock');
   if (!el) return;
   const a = S.state.approvals.filter(x => x.id === c.id && x.kind === 'ask').sort((x, y) => (x.since ?? 0) - (y.since ?? 0)).at(-1);
-  const who = esc(AGENT[c.agent]?.name ?? c.agent);
+  // a task chat names its teammate, with its agent's mark (UC-14); a plain chat its agent (UC-06). Redrawn when the module's data
+  // arrives (its refresh redraws the chat), so a card drawn before that gets the teammate's name then
+  const w = askWho(c, window.choruspro, AGENT), who = esc(w.name);
+  const mark = w.teammate ? `<span class="badge mini ${esc(w.agent)}">${esc(AGENT[w.agent]?.letter ?? '?')}</span>` : '';
   const fold = a && S.askFold.has(a.request);
-  const html = !a ? '' : `<div class="ask-dock${fold ? ' min' : ''}" role="region" aria-label="${who} asks you"><div class="ask-who"><b>${who} asks you</b>${fold ? `<span class="ask-line">${esc(a.question)}</span>` : '<span class="grow"></span>'}<button class="btn ask-fold" data-act="ask-fold" data-arg="${esc(a.request)}" title="${fold ? 'Open the card' : 'Fold to one line'}" aria-expanded="${!fold}">${fold ? '▴ Open' : '▾ Fold'}</button></div>${fold ? '' : `<div class="ask-body">${askCard(a, true)}</div>`}</div>`;
+  const html = !a ? '' : `<div class="ask-dock${fold ? ' min' : ''}" role="region" aria-label="${who} asks you"><div class="ask-who">${mark}<b>${who} asks you</b>${fold ? `<span class="ask-line">${esc(a.question)}</span>` : '<span class="grow"></span>'}<button class="btn ask-fold" data-act="ask-fold" data-arg="${esc(a.request)}" title="${fold ? 'Open the card' : 'Fold to one line'}" aria-expanded="${!fold}">${fold ? '▴ Open' : '▾ Fold'}</button></div>${fold ? '' : `<div class="ask-body">${askCard(a, true)}</div>`}</div>`;
   // typing a note or your own answer: the card waits (a click on Fold or Show more redraws it at once)
   if (el.dataset.html === html || (!force && el.contains(document.activeElement) && a)) return;
   el.innerHTML = html;
@@ -2543,7 +2547,7 @@ setInterval(() => {
 window.addEventListener('unhandledrejection', e => toast(String(e.reason?.message ?? e.reason)));
 
 // for the e2e proof and for debugging from the developer tools
-window.chorus = { S, term, go, renderUpdate, renderChrome };
+window.chorus = { S, term, go, renderUpdate, renderChrome, renderChatParts };
 
 // the token came in the address (chorus serve printed it); it is a cookie now, so it leaves the address bar
 if (location.search) history.replaceState(null, '', '/' + location.hash);

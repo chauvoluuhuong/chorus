@@ -92,6 +92,7 @@ export default async function (c: any) {
   const cards = await js(`document.querySelectorAll('#view .ask-dock').length`);
   // 3 lines at this width: no Show more (it shows once the column is narrower, in the task chat below)
   const more = await js(`!document.querySelector('#ask-dock .ask-more').hidden`);
+  const plainLabel = await js(`document.querySelector('#ask-dock .ask-who b')?.textContent`);
   const dockBox = await box('#ask-dock .ask-dock'), col2 = await box('#chat-col');
   const look = await js(`(() => { const d = document.querySelector('#ask-dock .ask-dock'), s = getComputedStyle(d), b = getComputedStyle(d.querySelector('.ask-who b')); return { bg: s.backgroundColor, border: s.borderTopColor + ' ' + s.borderTopWidth, label: b.color, accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(), panel: getComputedStyle(document.documentElement).getPropertyValue('--panel').trim() }; })()`);
   await chrome.shot('app-card', 'An ask card, docked in the chat: options, Other…, note, Fold');
@@ -113,8 +114,8 @@ export default async function (c: any) {
   const stillFolded = await js(`!!document.querySelector('#ask-dock .ask-dock.min')`);
   await chrome.click('#ask-dock [data-act="ask-fold"]');
   check('c.3', 'Asked twice in one chat: only the newest card shows; it docks over the bottom of the chat column (panel colour, accent border and "asks you" label); Show more only when the details pass 3 lines; Fold to one line is remembered; a click on the card does not close the sidebar',
-    first === Q1 && second && asks === 1 && cards === 1 && other && !more && !!dockBox && !!col2 && dockBox.r <= col2.r && dockBox.b <= col2.b && folded && stillFolded && cardClickKeeps === 'drawer:record',
-    JSON.stringify({ first, second, asks, cards, other, more, dockBox, col2, folded, stillFolded, cardClickKeeps, look }), ['app-card.png', 'app-card-folded.png']);
+    first === Q1 && second && asks === 1 && cards === 1 && other && !more && plainLabel === 'Claude Code asks you' && !!dockBox && !!col2 && dockBox.r <= col2.r && dockBox.b <= col2.b && folded && stillFolded && cardClickKeeps === 'drawer:record',
+    JSON.stringify({ first, second, asks, cards, other, more, plainLabel, dockBox, col2, folded, stillFolded, cardClickKeeps, look }), ['app-card.png', 'app-card-folded.png']);
 
   /* ---------- a task chat: Task open at first, the card beside it; Task stays open on a screen click; closed: full width ---------- */
   const mk = await r.api('POST', '/api/pro/dev/task', { project, title: 'CSV export of orders', description: 'Admins download the orders they filtered as a CSV, same columns as the table.', doneWhen: 'A filtered list downloads as a CSV with the same rows.', steps: [{ title: 'Export button', howToDo: 'Button next to the filters; downloads with the current filters.', howToCheck: 'Component test; a screenshot of the page.', files: ['src/pages/orders.tsx'], assignee: 'worker-claude' }] });
@@ -136,6 +137,14 @@ export default async function (c: any) {
   await sleep(800);
   const taskStart = { sidebar: await sidebar(), lit: await lit(), title: await js(`document.querySelector('#task-side .task-head .title')?.textContent`), border: await js(`getComputedStyle(document.querySelector('#task-side [data-pro-slot="chat-side"]').shadowRoot.querySelector('.res')).borderLeftWidth`) };
   const dockT = await box('#ask-dock .ask-dock'), sideT = await box('#task-side');
+  // the teammate's name (UC-14), and it comes in when the module's data arrives after the card is drawn
+  const mateName = (((await tasks()).find((t: any) => t.id === task)?.sessions ?? []).find((s: any) => s.thread_id === thread)?.teammate ?? '') as string;
+  const mates = ((await r.state()) ?? {}).mates ?? [];
+  const teammate = mates.find((m: any) => m.id === mateName)?.name ?? mateName;
+  const taskLabel = await js(`document.querySelector('#ask-dock .ask-who b')?.textContent`);
+  const mark = await js(`document.querySelector('#ask-dock .ask-who .badge.mini')?.textContent ?? ''`);
+  const late = await js(`(() => { const p = window.choruspro, f = p.chatTeammate; p.chatTeammate = () => null; window.chorus.renderChatParts(); const before = document.querySelector('#ask-dock .ask-who b').textContent; p.chatTeammate = f; window.chorus.renderChatParts(); return [before, document.querySelector('#ask-dock .ask-who b').textContent]; })()`);
+  const labelOk = !!teammate && taskLabel === `${teammate} asks you` && mark === 'C' && late[0] === 'Claude Code asks you' && late[1] === taskLabel;
   const moreT = await js(`!document.querySelector('#ask-dock .ask-more').hidden`);
   await chrome.click('#ask-dock .ask-more');
   const openedT = await js(`!document.querySelector('#ask-dock .what > div').classList.contains('clamp') && document.querySelector('#ask-dock .ask-more').textContent === 'Show less'`);
@@ -157,9 +166,9 @@ export default async function (c: any) {
   await open(thread);
   const taskAgain = await sidebar();
   await chrome.click('#chat-head [data-act="side"][data-arg="task"]');
-  check('c.4', 'A task chat has Task first among Task · Artifacts · Activity · Record and starts with Task open (title row, ✕; the panel draws no frame of its own); the card\'s details pass 3 lines in the narrower column: Show more opens them; the card stays over the chat column; a click in the screen keeps Task open; Task again closes the sidebar and the chat and card take the full width (the terminal refits); what was open is remembered per chat',
-    taskStart.sidebar === 'task' && JSON.stringify(taskStart.lit) === '["task"]' && taskStart.title === 'Task' && taskStart.border === '0px' && moreT && openedT && !!dockT && !!sideT && dockT.r <= sideT.l && taskStays === 'task' && closedT === 'closed' && !!dockWide && dockWide.r > dockT.r + 300 && cols1 > cols0 && !moreWide && plainAgain === 'closed' && taskAgain === 'closed',
-    JSON.stringify({ taskStart, moreT, openedT, dockT, sideT, taskStays, closedT, dockWide, moreWide, cols0, cols1, plainAgain, taskAgain }), ['app-task-ask.png', 'app-sidebar-closed.png']);
+  check('c.4', 'A task chat has Task first among Task · Artifacts · Activity · Record and starts with Task open (title row, ✕; the panel draws no frame of its own); the card names the teammate with its agent\'s mark, also when the module\'s data comes after the card; the card\'s details pass 3 lines in the narrower column: Show more opens them; the card stays over the chat column; a click in the screen keeps Task open; Task again closes the sidebar and the chat and card take the full width (the terminal refits); what was open is remembered per chat',
+    taskStart.sidebar === 'task' && JSON.stringify(taskStart.lit) === '["task"]' && taskStart.title === 'Task' && taskStart.border === '0px' && labelOk && moreT && openedT && !!dockT && !!sideT && dockT.r <= sideT.l && taskStays === 'task' && closedT === 'closed' && !!dockWide && dockWide.r > dockT.r + 300 && cols1 > cols0 && !moreWide && plainAgain === 'closed' && taskAgain === 'closed',
+    JSON.stringify({ taskStart, teammate, taskLabel, mark, late, moreT, openedT, dockT, sideT, taskStays, closedT, dockWide, moreWide, cols0, cols1, plainAgain, taskAgain }), ['app-task-ask.png', 'app-sidebar-closed.png']);
   // answered from the card: it leaves, the task chat as it is then
   await chrome.click('#ask-dock [data-act="pick"]', 'Right of the filters');
   const gone = await chrome.until(() => js(`!document.querySelector('#ask-dock .ask-dock')`), 10_000);

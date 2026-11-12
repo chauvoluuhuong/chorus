@@ -17,8 +17,9 @@ An agent asks through the chorus `request_approval` tool ([integrations/approval
   sidebar: the panel colour with the accent on its border and on "<agent> asks you". The question; the details clamped to 3
   lines with **Show more** only when they overflow (re-checked when the column changes width); the options, **Other…**, a note;
   **Fold** shrinks it to one line, remembered per request (`localStorage chorus.askFold`). The same ask is in Approvals.
-- The card names the agent ("Claude Code asks you"); in a task chat the mockup names the teammate, which the page can't do
-  until the optional module tells the host which teammate a chat belongs to.
+- Who asks: in a task chat the teammate running its work session, after its agent's letter mark ("claude-worker-1 asks you",
+  from the module's `choruspro.chatTeammate`, chorus-core 72cc8f3); in a plain chat, or with an older module or before its data
+  loads, the agent ("Claude Code asks you"). The card is redrawn when the module's data arrives (`src/desktop/ask-label.js`).
 - A CLI's own permission prompt stays the thin red **Approve / Deny** banner, inside the chat column.
 
 ## The right sidebar
