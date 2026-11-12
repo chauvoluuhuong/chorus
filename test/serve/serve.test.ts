@@ -9,6 +9,7 @@ import WebSocket from 'ws';
 import { Controller } from '../../src/app/controller.ts';
 import { VirtualScreen } from '../../src/app/screen.ts';
 import { buildHandoff } from '../../src/core/handoff.ts';
+import { buildInteractive } from '../../src/core/launch.ts';
 import { Store } from '../../src/core/store.ts';
 import type { AgentId } from '../../src/core/types.ts';
 import type { AgentCheck, FastReport } from '@chauvoluuhuong/chorus-core/doctor';
@@ -33,6 +34,8 @@ async function rig(seed?: (store: Store, project: string) => void, notifications
   const store = new Store(project);
   seed?.(store, project);
   const launches: { agent: AgentId; prompt?: string; resumeId?: string; skipPermissions?: boolean }[] = [];
+  // the model and folder each chat was launched with
+  const launchedWith: { agent: AgentId; model?: string; cwd: string }[] = [];
   let srvRef: ChorusServer | undefined;
   const c = new Controller({
     project,
@@ -44,6 +47,7 @@ async function rig(seed?: (store: Store, project: string) => void, notifications
     opener: async () => ({ ok: true }),
     launcher: (agent, o) => {
       launches.push({ agent, prompt: o.prompt, resumeId: o.resumeId, skipPermissions: o.skipPermissions });
+      launchedWith.push({ agent, model: o.model, cwd: o.cwd });
       return { bin: process.execPath, args: [FAKE, agent], cwd: o.cwd };
     },
   });
@@ -70,7 +74,7 @@ async function rig(seed?: (store: Store, project: string) => void, notifications
     await sleep(300); // the agents' exits arrive before the store closes
     store.close();
   };
-  return { srv, c, store, project, url, api, launches, notificationLinks, done };
+  return { srv, c, store, project, url, api, launches, launchedWith, notificationLinks, done };
 }
 
 /** A desktop window: a socket and the terminal it would draw (replayed screen + live bytes). */
@@ -483,6 +487,28 @@ test('serve: Report issue works before any test run, with the issue types to pic
   } finally {
     if (before === undefined) delete process.env.CHORUS_DOCTOR_HOME;
     else process.env.CHORUS_DOCTOR_HOME = before;
+    await r.done();
+  }
+});
+
+test('New chat in the desktop offers fable for Claude Code (latestModels, after default); the CLI app\'s list is unchanged; a chat with it runs claude --model fable', async () => {
+  const r = await rig();
+  try {
+    const claude = (await r.api('GET', '/api/newchat')).json.agents.find((a: any) => a.id === 'claude');
+    assert.deepEqual(claude.models, ['default', 'fable', 'sonnet', 'opus', 'haiku']);
+    assert.deepEqual(claude.efforts.fable, claude.efforts.sonnet, 'its efforts are offered too');
+    assert.deepEqual(r.c.modelList('claude'), ['default', 'sonnet', 'opus', 'haiku'], 'the CLI app keeps its list');
+    const codex = (await r.api('GET', '/api/newchat')).json.agents.find((a: any) => a.id === 'codex');
+    assert.deepEqual(codex.models, r.c.modelList('codex'), 'no newer models for Codex');
+    const made = await r.api('POST', '/api/chats', { agent: 'claude', folder: r.project, model: 'fable' });
+    assert.equal(made.status, 200);
+    const l = r.launchedWith.find(x => x.agent === 'claude' && x.model === 'fable');
+    assert.ok(l, JSON.stringify(r.launchedWith));
+    const cmd = buildInteractive('claude', { cwd: l!.cwd, model: l!.model, project: r.project, threadId: made.json.id } as any);
+    const at = cmd.args.indexOf('--model');
+    assert.equal(cmd.args[at + 1], 'fable', cmd.args.join(' '));
+    assert.equal(r.store.getThread(made.json.id)!.model, 'fable');
+  } finally {
     await r.done();
   }
 });

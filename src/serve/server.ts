@@ -18,6 +18,7 @@ import { App, projectName, type AppIO, type Entry } from '../app/app.ts';
 import { AGENTS, type Controller } from '../app/controller.ts';
 import type { ItemState, RichLine } from '../app/compositor.ts';
 import { effortsFor } from '../app/models.ts';
+import { latestModels } from '@chauvoluuhuong/chorus-core';
 import { computerDir } from '../app/screens.ts';
 import type { ThreadHost } from '../app/thread-host.ts';
 import { transcriptPath } from '../core/capture.ts';
@@ -948,7 +949,8 @@ export class ChorusServer {
       recent: c.recentFolders(folder),
       from: src ? { id: src.id, title: src.title, agent: src.agent, skip: !!src.skip_permissions } : null,
       agents: AGENTS.map(a => {
-        const models = c.modelList(a);
+        // the desktop offers the newest models right after "default" (fable for Claude Code); the CLI app keeps modelList as it is
+        const list = c.modelList(a), models = list.length ? [list[0], ...latestModels(a).filter(m => !list.includes(m)), ...list.slice(1)] : list;
         return { id: a, quota: quota[a] ?? null, skipFlag: SKIP_FLAG[a], models, efforts: Object.fromEntries(models.map(m => [m, effortsFor(a, m)])) };
       }),
     };
