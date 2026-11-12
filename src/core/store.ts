@@ -379,9 +379,13 @@ export class Store {
     return this.db.prepare('SELECT * FROM approvals_log ORDER BY id DESC LIMIT ?').all(limit) as unknown as ApprovalLogRow[];
   }
 
-  /** An agent asks the user something (the chorus request_approval tool); the app that hosts the chat shows it. */
+  /**
+   * An agent asks the user something (the chorus request_approval tool); the app that hosts the chat shows it. One open ask per
+   * chat: the chat's older pending asks are cancelled (not answered, so nothing goes to the approvals log).
+   */
   createRequest(r: { threadId: string; question: string; details?: string; options?: string[] }): RequestRow {
     const id = `r_${randomBytes(4).toString('hex')}`;
+    this.db.prepare("UPDATE requests SET status = 'cancelled', answered = ? WHERE thread_id = ? AND status = 'pending'").run(now(), r.threadId);
     this.db.prepare("INSERT INTO requests (id,thread_id,question,details,options,status,created) VALUES (?,?,?,?,?,'pending',?)").run(id, r.threadId, r.question, r.details ?? null, JSON.stringify(r.options?.length ? r.options : ['Approve', 'Decline']), now());
     return this.getRequest(id)!;
   }

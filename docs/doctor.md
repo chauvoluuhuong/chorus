@@ -37,7 +37,7 @@ method, a different login or plan.
 | Entry | What happens |
 |---|---|
 | `site/install.sh` (curl), `packages/installer` (`npx`), the Homebrew cask | No doctor in the terminal: the installer only opens the app (macOS) or says `chorus desktop` (Linux), and the app runs the check on first launch (`@workspace/mockups/desktop-first-run.html`) |
-| **Desktop app**, first launch, and after an update of Chorus, chorus-core or an installed CLI | The doctor popup opens with the fast check (§6) |
+| **Desktop app**, first launch, and after an update of Chorus, chorus-core or an installed CLI | The fast check runs; the doctor popup opens only when it did not pass (§6.1) |
 | `npm install -g @chauvoluuhuong/chorus` | No postinstall prompt (npm hides output, no TTY). The first `chorus` run with no `~/.chorus/doctor/last.json` runs the fast check |
 | By hand | the desktop's Doctor page, or `chorus doctor` any time; flags in §8 |
 
@@ -288,13 +288,18 @@ reason), `doctor.log`, and `<cli>/<case>/` with the evidence of §4.1 rule 8. Th
 - Something changed since the last run: the Chorus version, the chorus-core version, or the version of an installed CLI (read with
   `--version` at start, as the app does now). A CLI newly installed or removed counts.
 - Never otherwise: no popup on a normal start. The Doctor page in the sidebar foot runs it any time.
+- And in both cases only when the fast check **did not pass** (owner, 2026-11-12): the page waits for its result and opens
+  nothing before it, not even "Checking…". Passed = at least one agent is Ready and no installed agent needs the user (not logged
+  in, a version new to Chorus, a failed check); an agent that is not installed does not count. When it passed nothing opens: the
+  Doctor dot and the Doctor page show the result, and the detailed test is there (`shortCheckPassed` in
+  `src/desktop/doctor-popup.js`, `doctorIfNeeded()` in `app.js`; `test/serve/doctor-popup.test.ts`, `npm run proof:first-run`).
 
 On a first launch the Welcome's choice (Community or Pro) comes first: the popup waits while the Welcome or "Finish in your
 browser" is in front, and opens once the user keeps Community, says Not now, or comes back signed in (owner, 2026-11-09;
 `doctorWhenReady()` in `src/desktop/app.js`, `npm run proof:first-run`). If the plan can't be read, it opens as before.
 
-Otherwise it opens over the window as soon as the page loads, with the fast check (§2), which is done in a few seconds. When every CLI is
-Ready the popup says so and closes itself after 2 s (or on **Continue**). For an untested version it asks before the deeper test
+Otherwise it opens over the window once the fast check (§2) has answered, which takes a few seconds, and only when it did not
+pass (above). For an untested version it asks before the deeper test
 (the turns are on the user's plan); **Continue** is always there, the test keeps running behind, and its result goes to the
 Doctor page and to a dot on the sidebar's Doctor button (amber while running, red with the count of failures, none when all pass).
 

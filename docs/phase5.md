@@ -85,14 +85,14 @@ system), with the screens of the CLI app (`@workspace/mockups/chorus-cli.html` (
 |---|---|---|
 | Sidebar | New chat, Approvals (count), Memory, Skills; projects that fold, their chats with a state dot and agent letter, continued chats under their source (↳); agents ✓/✗ and Doctor at the bottom | `state` (pushed) |
 | New chat | agent cards (version, login, plan %), model, effort, project folder (Browse…, recent, this computer), first message (optional), skip permissions with its flag and warning | `GET newchat`, `POST chats`, `GET/POST folders` |
-| Chat | header (agent, state, model · effort, `skip`, plan meter, folder), Hand off, Artifacts / Activity / Record drawers, Delete; an "asks" banner with Approve / Deny when this chat waits; "not loaded" banner with Ask again on a handoff chat; the agent's own screen | `WS /ws`, `GET chats/:id`, `…/artifacts`, `…/activity`, `POST …/approve|deny|retry|open|preview`, `DELETE chats/:id` |
+| Chat | header (agent, state, model · effort, `skip`, plan meter, folder), Hand off, Task (task chats) · Artifacts · Activity · Record in one right sidebar, Delete; an "asks" banner with Approve / Deny when this chat waits; "not loaded" banner with Ask again on a handoff chat; the agent's own screen | `WS /ws`, `GET chats/:id`, `…/artifacts`, `…/activity`, `POST …/approve|deny|retry|open|preview`, `DELETE chats/:id` |
 | Hand off | the New chat form for the chat that continues another one | `GET newchat?from=`, `POST chats/:id/handoff` |
 | Approvals | every waiting request with its risk tag, Approve / Deny / Open chat, All projects / This project, Decided today; a toast with the same buttons when a background chat asks | `GET approvals` |
 | Memory | every chat of every project, search, what it asked, last answer, files, tools, recent calls; Open, Continue with another agent, What an agent reads, Delete | `GET memory?q=` |
 | Skills | the library with on/off switches, New skill, Edit (opens SKILL.md), found in the agents' folders with Import | `GET/POST skills…` |
 | Doctor | the doctor lines of the CLI app | `GET doctor` |
 | Dialogs | the Controller's questions (delete?, limit reached, how to open a file) | `state.dialogs`, `POST dialogs/:id` |
-| Approval cards | a question an agent asks through the chorus `request_approval` tool: the question, its summary, the agent's options and a note field, in the inbox, as a banner over the chat and as a toast; the answer is typed into the agent ([integrations/approvals.md §D](integrations/approvals.md)) | `state.approvals` (`kind: 'ask'`), `POST chats/:id/answer` |
+| Approval cards | a question an agent asks through the chorus `request_approval` tool: the question, its summary, the agent's options and a note field, in the inbox, as a card docked over the chat column (one per chat, [features/chat-and-update.md](features/chat-and-update.md)) and as a toast; the answer is typed into the agent ([integrations/approvals.md §D](integrations/approvals.md)) | `state.approvals` (`kind: 'ask'`), `POST chats/:id/answer` |
 
 Keys: ⌘N new chat, ⌘I approvals, ⌘B sidebar, ⌘1–9 chats, Esc closes a dialog. Everything else goes to the agent in front.
 The address keeps the screen (`#/chat/<id>`), so a reload or a restarted server comes back to it.

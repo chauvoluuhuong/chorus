@@ -71,8 +71,11 @@ const pro = await js<string[]>('[...document.querySelectorAll(".plan-card.pro li
 console.log(`  Pro lists: ${pro.join(' · ') || '(plain lines)'}`);
 await shot('welcome', 'First launch: the Welcome, Community or Pro. The Doctor waits.');
 
+// the popup opens only when the short check did not pass (owner, 2026-11-12): on this Mac some installed agent needs you
+const needs = await js<string[]>('chorus.S.state.doctor.agents.filter(a => a.state !== "missing" && a.state !== "ready").map(a => a.agent + ": " + a.state)');
+console.log(`  installed agents that need you: ${needs.join(', ') || 'none'}`);
 await click('.plan-card button', /Keep Community/);
-check('Keep Community opens the Doctor', await until(doctorOpen, 5000));
+check('the short check did not pass: Keep Community opens the Doctor', needs.length > 0 && (await until(doctorOpen, 5000)));
 await until(() => js<boolean>('!/Checking/.test(document.querySelector("#fr-title")?.textContent ?? "")'), 15_000);
 await shot('doctor', 'Then the Doctor: the short check of the agents.');
 await click('#fr-foot button', /start using Chorus|Continue/);
@@ -95,6 +98,35 @@ console.log('First launch again, clicking fast: the Doctor opens once');
   check('a closed Doctor stays closed', !(await doctorOpen()));
   serve!.kill('SIGTERM');
   await sleep(800);
+  Object.assign(env, { CHORUS_HOME: path.join(home, 'chorus'), CHORUS_DOCTOR_HOME: home });
+}
+
+console.log('First launch where the short check passes: no Doctor popup');
+{
+  // Antigravity treated as not installed (it is the one new to Chorus on this Mac), which does not count; Claude Code and Codex Ready
+  serve!.kill('SIGTERM');
+  await sleep(800);
+  const fresh = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-first-'));
+  Object.assign(env, { CHORUS_HOME: path.join(fresh, 'chorus'), CHORUS_DOCTOR_HOME: fresh, CHORUS_DOCTOR_HIDE: 'agy' });
+  await cdp('Page.navigate', { url: await startServe() });
+  await until(async () => (await view()) === 'welcome', 15_000, 100);
+  await until(() => js<boolean>('!!chorus.S.state?.doctor?.agents && !chorus.S.state.doctor.checking'), 20_000);
+  const states = await js<string[]>('chorus.S.state.doctor.agents.map(a => a.agent + ": " + a.state)');
+  console.log(`  agents: ${states.join(', ')}`);
+  await click('.plan-card button', /Keep Community/);
+  await sleep(4000);
+  const passed = states.some(x => / ready$/.test(x)) && states.every(x => / (ready|missing)$/.test(x));
+  check('the short check passed: no Doctor popup, no "Checking…" first; the Doctor dot and page still show the result', passed && !(await doctorOpen()) && (await view()) === 'new');
+  await shot('passed-no-doctor', 'First launch, the short check passed: no Doctor popup; the Doctor dot shows the result.');
+  await js(`chorus.go({ name: 'doctor' })`);
+  await sleep(800);
+  await click('#view button, #view [role="button"]', /Show details/);
+  await sleep(400);
+  const page = await js<{ text: string; deep: number }>('({ text: document.querySelector("#view").textContent, deep: document.querySelectorAll("#view [data-act=\\"doc-run\\"][data-arg$=\\":deep\\"]").length })');
+  check('the Doctor page has the result and the detailed test', /Ready/.test(page.text) && page.deep > 0) || console.log(`  page: ${page.deep} detailed-test buttons · ${page.text.replace(/\s+/g, ' ').slice(0, 400)}`);
+  serve!.kill('SIGTERM');
+  await sleep(800);
+  delete env.CHORUS_DOCTOR_HIDE;
   Object.assign(env, { CHORUS_HOME: path.join(home, 'chorus'), CHORUS_DOCTOR_HOME: home });
 }
 
