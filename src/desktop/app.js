@@ -1,6 +1,7 @@
 // Chorus desktop (Phase 5): a window over `chorus serve`. Everything it shows comes from the server; every button is one API
 // call. The agents run in the server's PTYs; their own screens are drawn here with xterm.js.
 /* global Terminal, FitAddon */
+import { shortCheckPassed } from './doctor-popup.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -209,7 +210,7 @@ function onState(st) {
   // first load: the doctor's popup when this is a first launch or something was updated (docs/doctor.md §6.1)
   if (first) void firstDoctor();
   renderChrome();
-  if (doctorChanged) drawDoctor();
+  if (doctorChanged) (drawDoctor(), doctorIfNeeded());
   else renderDoctorDot();
   if (S.view.name === 'chat') renderChatParts();
   else if (['approvals', 'home'].includes(S.view.name) && !$('#view').contains(document.activeElement?.closest('.note-input, .other-input'))) renderView();
@@ -1103,15 +1104,25 @@ const drAgent = agent => drAgents()?.find(a => a.agent === agent);
 async function firstDoctor() {
   try {
     const { first } = await api('GET', '/api/doctor/first');
-    if (first) (S.doctorWaits = true), doctorWhenReady();
     const d = await loadDoctor();
-    // once per launch: a popup the user already closed stays closed when the details arrive late
-    if ((first || d.due) && !S.doctorOpened) (S.doctorWaits = true), doctorWhenReady();
+    // it opens by itself only when the short check did not pass: its result decides (doctorIfNeeded), nothing opens before it
+    if ((first || d.due) && !S.doctorOpened) (S.doctorDue = true), doctorIfNeeded();
     else if ($('#doctor-pop')) drawDoctor();
     else renderDoctorDot();
   } catch {
     /* the app works without the doctor */
   }
+}
+/** The short check answered: when it passed nothing opens (the Doctor dot and page show the result, the detailed test is there);
+ *  otherwise the popup opens, after the Welcome on a first launch. Once per launch. */
+function doctorIfNeeded() {
+  if (!S.doctorDue) return;
+  const passed = shortCheckPassed(S.state?.doctor);
+  if (passed === null) return;
+  S.doctorDue = false;
+  if (passed) return renderDoctorDot();
+  S.doctorWaits = true;
+  doctorWhenReady();
 }
 
 /** First launch: the Welcome's choice (Community or Pro) comes first, then the Doctor (owner, 2026-11-09). While the plan is not
