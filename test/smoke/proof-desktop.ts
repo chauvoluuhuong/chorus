@@ -226,20 +226,20 @@ await click('.chat-row', /Create calc\.js/);
 await until(async () => (await view()).id === claudeId, 5000);
 await until(async () => (await state()).chats.find((c: any) => c.id === claudeId)?.state === 'idle', 120000);
 check('the Claude chat settles as "waiting for you" and the store has its turns, the node call and usage', await until(async () => (await has('.chat-head', /waiting for you/)), 10000) && (() => { const s = store(); return s.getTurns(claudeId).length >= 2 && s.getToolCalls(claudeId).some(c => /node -e/.test(c.target) && c.status === 'ok') && (s.getUsage(claudeId)?.outputTokens ?? 0) > 0; })());
-await js(`localStorage.removeItem('chorus.drawer')`);
-await click('[data-act="drawer"][data-arg="artifacts"]');
+await js(`localStorage.removeItem('chorus.side')`);
+await click('[data-act="side"][data-arg="artifacts"]');
 check('Artifacts lists notes.md with its version and the files the tools wrote', await until(() => has('.drawer .art', /notes\.md/), 8000) && (await has('.drawer', /calc\.js/)));
 await shot('artifacts', 'The Artifacts drawer next to the agent\'s screen: notes.md (v1) with Open, Show in folder, Copy path, and the files Claude\'s tools wrote');
 const preview = await js<{ url: string }>(`fetch('/api/chats/${claudeId}/preview', { method: 'POST', headers: { 'x-chorus': '1', 'content-type': 'application/json' }, body: JSON.stringify({ path: 'notes.md' }) }).then(r => r.json())`);
 const page = await (await fetch(preview.url)).text().catch(() => '');
 check('Open serves the artifact on a local page that reloads while the agent edits it', /calc/i.test(page) && /EventSource/.test(page), page.slice(0, 200));
-await click('[data-act="drawer"][data-arg="activity"]');
+await click('[data-act="side"][data-arg="activity"]');
 check('Activity shows the tool calls with status and duration', await until(() => has('.drawer .act-row', /node -e/), 8000));
 await shot('activity', 'The Activity drawer: the chat\'s timeline of tool calls, approvals and files, with filters by kind');
-await click('[data-act="drawer"][data-arg="record"]');
+await click('[data-act="side"][data-arg="record"]');
 check('Record shows what get_handoff_context returns for this chat', await until(() => has('.drawer pre.record', /calc\.js/), 8000));
 await shot('record', 'The Record drawer: exactly what the next agent reads through get_handoff_context');
-await click('[data-act="drawer"][data-arg="record"]');
+await click('[data-act="side"][data-arg="record"]');
 
 /* ---------- 5b. dropped files, an approval card with an answer of your own ---------- */
 
@@ -288,14 +288,14 @@ const rpc = [
 ].map(m => JSON.stringify(m)).join('\n') + '\n';
 const asked2 = spawnSync(process.execPath, [CLI, 'mcp', '--thread', codexId], { cwd: project, env, input: rpc, encoding: 'utf8', timeout: 20000 });
 const reqId = asked2.stdout.match(/approval card (r_[0-9a-f]+)/)?.[1] ?? '';
-check('the card shows on the Codex chat with the agent\'s options and Other…', !!reqId && (await until(() => has('.banner.card', /Ship the cake order page today/), 15000)) && (await has('.banner.card [data-act="other"]', /Other/)), asked2.stdout.slice(-300));
-await click('.banner.card [data-act="other"]');
-await click('.banner.card .other-input');
+check('the card shows on the Codex chat with the agent\'s options and Other…', !!reqId && (await until(() => has('.ask-dock', /Ship the cake order page today/), 15000)) && (await has('.ask-dock [data-act="other"]', /Other/)), asked2.stdout.slice(-300));
+await click('.ask-dock [data-act="other"]');
+await click('.ask-dock .other-input');
 await cdp('Input.insertText', { text: 'Ship it tomorrow after the review' });
 await shot('approval-card-other', 'An approval card Codex asked for through Chorus: who asks, the question, the details, the agent\'s options, Other… for an answer of your own, and a note, each with room around it');
 await key('Enter');
 check('Other… sends your own answer: stored, and typed into Codex as "Other: …"', await until(() => store().getRequest(reqId)?.answer === 'Other: Ship it tomorrow after the review', 15000) && (await until(async () => /Other: Ship it tomorrow after the review/.test((await term()).replace(/\n\s*/g, ' ')), 15000)), JSON.stringify(store().getRequest(reqId)));
-check('the answered card leaves the chat', await until(async () => !(await js<boolean>('!!document.querySelector(".banner.card")')), 10000));
+check('the answered card leaves the chat', await until(async () => !(await js<boolean>('!!document.querySelector(".ask-dock")')), 10000));
 await click('.chat-row', /Create calc\.js/); // back to the Claude chat: it is the one handed off next
 await until(async () => (await view()).id === claudeId, 5000);
 

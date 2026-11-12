@@ -35,13 +35,18 @@ test('request_approval: the question becomes a pending card in the store and the
     assert.equal(p[0].question, 'Apply the plan?');
     assert.equal(p[0].details, '1. add hello.txt\n2. commit');
     assert.deepEqual(p[0].options, ['Approve', 'Decline']);
+    // one open ask per chat: asking again replaces the first card (plan 2026-11-12)
     await c.callTool({ name: 'request_approval', arguments: { question: 'Which database?', options: ['Postgres', 'SQLite', 'Ask me later'] } });
-    assert.deepEqual(store.pendingRequests('t1')[1].options, ['Postgres', 'SQLite', 'Ask me later']);
+    const open = store.pendingRequests('t1');
+    assert.equal(open.length, 1);
+    assert.deepEqual(open[0].options, ['Postgres', 'SQLite', 'Ask me later']);
+    assert.equal(store.getRequest(p[0].id)?.status, 'cancelled');
+    assert.equal(store.answerRequest(p[0].id, 'Approve'), false, 'a replaced card can no longer be answered');
     // answered once only (two windows, or the CLI app and the desktop)
-    assert.equal(store.answerRequest(p[0].id, 'Approve', 'go'), true);
-    assert.equal(store.answerRequest(p[0].id, 'Decline'), false);
-    assert.equal(store.getRequest(p[0].id)?.answer, 'Approve');
-    assert.equal(store.pendingRequests('t1').length, 1);
+    assert.equal(store.answerRequest(open[0].id, 'Postgres', 'go'), true);
+    assert.equal(store.answerRequest(open[0].id, 'SQLite'), false);
+    assert.equal(store.getRequest(open[0].id)?.answer, 'Postgres');
+    assert.equal(store.pendingRequests('t1').length, 0);
     assert.ok(store.mcpCalls('t1').some(m => m.tool === 'request_approval'));
   } finally {
     await c.close();
