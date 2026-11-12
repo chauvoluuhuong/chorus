@@ -17,12 +17,14 @@ An agent asks through the chorus `request_approval` tool ([integrations/approval
   sidebar: the panel colour with the accent on its border and on "<agent> asks you". The question; the details clamped to 3
   lines with **Show more** only when they overflow (re-checked when the column changes width); the options, **Other…**, a note;
   **Fold** shrinks it to one line, remembered per request (`localStorage chorus.askFold`). The same ask is in Approvals.
+- The card names the agent ("Claude Code asks you"); in a task chat the mockup names the teammate, which the page can't do
+  until the optional module tells the host which teammate a chat belongs to.
 - A CLI's own permission prompt stays the thin red **Approve / Deny** banner, inside the chat column.
 
 ## The right sidebar
 
 The chat header has **Task** (a task chat of the optional module, desktop only) · **Artifacts** · **Activity** · **Record**.
-Each opens its view in the one right sidebar, with a title row and ✕; the pressed button is lit. The lit button or ✕ closes the
+Each opens its view in the one right sidebar, with a title row and ✕; the pressed button is lit (a teal outline, as in the mockup's task chat). The lit button or ✕ closes the
 sidebar and the chat takes the full width; one view at a time. **Task** holds the module's `chat-side` slot unchanged; the
 container draws the frame (`[data-pro-slot="chat-side"]::part(panel) { border-left: 0 }`). A task chat starts on Task, a plain
 chat closed; what was open is remembered per chat (`ui.json` key `side`). A click or a key press in the agent's screen closes
@@ -31,8 +33,8 @@ opens or closes.
 
 ## Update Chorus
 
-The launch check ([notifications.md](../notifications.md), Release notices) offers a newer production version in the top bar's
-popover:
+The launch check ([notifications.md](../notifications.md), Release notices) offers a newer production version in a band under
+the top bar, which the top bar's update button opens and closes (a phone shows it as a sheet):
 
 1. **Update Chorus** → `POST /api/updates/install`. `chorus serve` fetches the official installer
    `https://chorus-cli.web.app/install.sh` (fixed address, https only, no redirects, at most 512 kB; only a test option in code

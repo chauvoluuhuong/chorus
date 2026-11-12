@@ -59,7 +59,7 @@ Rules:
 - **Scripted fake agent** `tools/fake-agent/script.ts`: steps that call given tools with given arguments, from `fake-agent.ts --script <file>` or the fake TUI (`CHORUS_FAKE_SCRIPT`, with `chorus serve --fake-agents`), so a run costs no quota. `test/flow/fake-script.test.ts`.
 - **Chat and update fixes**: `test/smoke/proof-chat-fixes.ts` is a stage of chorus-core's Pro harness (fake agents, the module's
   dev bundle; no model calls): the docked ask card (asked twice, Show more, Fold), the right sidebar (Task, Artifacts, Activity,
-  Record; open, swap, close, a click or key in the screen), the Update popover's states, each beside its scene of
+  Record; open, swap, close, a click or key in the screen), the Update band's states, each beside its scene of
   `ui-mockup-v3.html`. It needs a core built with `--dev` (`node scripts/build.mjs --dev` and `node scripts/build-pro.mjs --dev`)
   that `node_modules/@chauvoluuhuong/chorus-core` points at: `node <core>/test/pro-e2e/run.ts --public "$PWD" --stage <path of
   test/smoke/proof-chat-fixes relative to <core>/test/pro-e2e/checks>`. Pictures and pairs in `.chorus/proof/<branch>/`.

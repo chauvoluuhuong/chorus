@@ -1,5 +1,5 @@
 // Chat and setup fixes (package C, plan 2026-11-12): the docked ask card, the one right sidebar (Task · Artifacts · Activity ·
-// Record), and the Update popover, in the real page, each beside its scene of the mockup ui-mockup-v3.html. Fake agents (a script
+// Record), and the Update band, in the real page, each beside its scene of the mockup ui-mockup-v3.html. Fake agents (a script
 // makes Claude ask through request_approval), the optional module's dev bundle and its fake licence: no model calls.
 // It is a stage of chorus-core's Pro harness, which starts `chorus serve` from this checkout:
 //   node ../chorus-core/test/pro-e2e/run.ts --public "$PWD" --stage "$(node -p "require('path').relative('../chorus-core/test/pro-e2e/checks', 'test/smoke/proof-chat-fixes')")"
@@ -171,7 +171,7 @@ export default async function (c: any) {
   await chrome.shot('app-plain-chat', 'A chat (plain): closed sidebar');
   pairs.push(['app-plain-chat', 'mock-tk-chat', 'A chat (UC-14)']);
 
-  /* ---------- Update Chorus: the popover's four states (the states the server pushes, drawn by the page) ---------- */
+  /* ---------- Update Chorus: the band's four states (the states the server pushes, drawn by the page) ---------- */
   const upd = async (install: object | null, slug: string, mock: string, label: string) => {
     await js(`(() => { const u = { version: '2.2.1', currentVersion: '2.2.0', ...(${JSON.stringify(install)} ? { install: ${JSON.stringify(install)} } : {}) }; window.chorus.S.state.update = u; window.chorus.renderUpdate(u); document.getElementById('app-update').hidden = false; window.chorus.renderChrome(); })()`);
     await chrome.shot(slug, label);
@@ -186,7 +186,7 @@ export default async function (c: any) {
   await upd({ phase: 'failed', pct: 0, lines: ['curl: (28) Failed to connect to github.com port 443 after 30002 ms', 'chorus install: download failed, nothing was changed'] }, 'app-update-failed', 'mock-update_failed', 'Update: failed (UC-17)');
   const failed = await js(`[...document.querySelectorAll('#app-update button')].map(b => b.textContent)`);
   const top = await js(`document.querySelector('.update-btn')?.textContent`);
-  check('c.6', 'The Update popover: Update Chorus → Updating… (percent, then Installing…) → Restart Chorus; failed: the installer\'s last lines, Open the instructions and Try again',
+  check('c.6', 'The Update band under the top bar (the top bar\'s button opens and closes it): Update Chorus → Updating… (percent, then Installing…) → Restart Chorus; failed: the installer\'s last lines, Open the instructions and Try again',
     JSON.stringify(btns) === '["Skip this version","Update Chorus"]' && JSON.stringify(restart) === '["Restart Chorus"]' && JSON.stringify(failed) === '["Open the instructions","Try again"]', JSON.stringify({ btns, restart, failed, top }), ['app-update.png', 'app-update-run.png', 'app-update-ready.png', 'app-update-failed.png']);
   await js(`(() => { window.chorus.S.state.update = null; window.chorus.renderUpdate(null); window.chorus.renderChrome(); })()`);
 
