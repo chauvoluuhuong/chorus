@@ -303,7 +303,10 @@ export class ChorusServer {
         // the backend's answer came after the check at start and changed the tested versions: check again against the new list
         if (this.agentCheck && JSON.stringify(remoteTested()) !== tested) void this.checkAgents({ quiet: true }).catch(e => this.noteError('doctor check', e));
       });
-    if (this.o.updates) void this.o.updates.startup().then(() => this.pushState());
+    if (this.o.updates) {
+      this.o.updates.onChange(() => this.pushState());
+      void this.o.updates.startup().then(() => this.pushState());
+    }
     void this.checkAgents().catch(e => this.noteError('doctor check', e));
     return this.url;
   }
@@ -454,6 +457,8 @@ export class ChorusServer {
     if (req.method !== 'GET' && (req.headers['x-chorus'] !== '1' || !d.origins.includes(String(req.headers.origin ?? '')))) return send(res, 403, { error: 'missing X-Chorus header' });
     // which devices may come in is decided on the Mac itself, never from a device
     if (u.pathname === '/api/pro/remote' && req.method !== 'GET') return send(res, 403, { error: 'Change remote access on the Mac itself.' });
+    // so is updating Chorus: only the Mac's own window installs and restarts it
+    if (/^\/api\/updates\/(install|restart)$/.test(u.pathname)) return send(res, 403, { error: 'Update Chorus on the Mac.' });
     return this.authed(req, res, u);
   }
 
@@ -652,6 +657,13 @@ export class ChorusServer {
         if (!url) return { error: 'No update is available for this platform' };
         return this.openLink(url, this.o.onUpdateOpen);
       }
+      // Update Chorus in the app: the official installer, then Restart (requests through the private link never get here)
+      if (method === 'POST' && id === 'install' && parts.length === 2) {
+        if (!this.o.updates) return { error: 'No update is available' };
+        if (this.container) return { error: 'Update the container instead: Chorus runs in it.' };
+        return this.o.updates.install();
+      }
+      if (method === 'POST' && id === 'restart' && parts.length === 2) return this.o.updates?.restart() ?? { error: 'Nothing is installed yet' };
       return undefined;
     }
     if (a === 'signin') {
@@ -1192,7 +1204,7 @@ function readJson(req: http.IncomingMessage): Promise<Record<string, any>> {
 }
 
 /** What the page may save on the server (`POST ui`). */
-const UI_KEYS = new Set(['hidden', 'folded', 'agent', 'drawer', 'welcome', 'ended', 'banner']);
+const UI_KEYS = new Set(['hidden', 'folded', 'agent', 'drawer', 'side', 'welcome', 'ended', 'banner']);
 const asAgent = (s: unknown): AgentId | undefined => (AGENTS.includes(s as AgentId) ? (s as AgentId) : undefined);
 const expand = (p: string) => p.replace(/^~(?=\/|$)/, process.env.HOME ?? '~');
 
