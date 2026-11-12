@@ -1,6 +1,8 @@
 // Chorus desktop (Phase 5): a window over `chorus serve`. Everything it shows comes from the server; every button is one API
 // call. The agents run in the server's PTYs; their own screens are drawn here with xterm.js.
 /* global Terminal, FitAddon */
+import { shortCheckPassed } from './doctor-popup.js';
+import { askWho } from './ask-label.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -67,7 +69,14 @@ const S = {
   state: null,
   view: { name: 'new' },
   history: [],
-  drawer: localStorage.getItem('chorus.drawer') || null,
+  // the open view of the chat in front's right sidebar when it is Artifacts, Activity or Record (null otherwise: closed, or Task)
+  drawer: null,
+  // what each chat's right sidebar shows: 'task', 'artifacts', 'activity', 'record', or '' (closed). A chat not in it: a task chat
+  // opens on Task, a plain chat closed (plan 2026-11-12)
+  side: JSON.parse(localStorage.getItem('chorus.side') || '{}'),
+  // asks folded to one line (remembered per request) and asks whose details are open past 3 lines
+  askFold: new Set(JSON.parse(localStorage.getItem('chorus.askFold') || '[]')),
+  askMore: new Set(),
   info: null,
   form: null,
   browse: null,
@@ -202,7 +211,7 @@ function onState(st) {
   // first load: the doctor's popup when this is a first launch or something was updated (docs/doctor.md §6.1)
   if (first) void firstDoctor();
   renderChrome();
-  if (doctorChanged) drawDoctor();
+  if (doctorChanged) (drawDoctor(), doctorIfNeeded());
   else renderDoctorDot();
   if (S.view.name === 'chat') renderChatParts();
   else if (['approvals', 'home'].includes(S.view.name) && !$('#view').contains(document.activeElement?.closest('.note-input, .other-input'))) renderView();
@@ -529,7 +538,7 @@ function takeUi(ui) {
   else if (Object.keys(S.hidden).length) remember('hidden', S.hidden);
   if (ui.folded) S.folded = new Set(ui.folded);
   else if (S.folded.size) remember('folded', [...S.folded]);
-  if (ui.drawer !== undefined) S.drawer = ui.drawer || null;
+  if (ui.side && typeof ui.side === 'object') S.side = ui.side;
   S.agentPref = typeof ui.agent === 'string' ? ui.agent : undefined;
   S.welcome = ui.welcome;
   S.endedSeen = !!ui.ended;
@@ -630,7 +639,7 @@ function renderChrome() {
     ${S.history.length ? `<button class="btn" data-act="back" title="Back" aria-label="Back">${wide ? '‹ Back' : '‹'}</button>` : ''}
     <div class="crumbs">${crumbs}</div>
     ${waiting ? `<button class="btn waiting" data-act="approvals" aria-label="${waiting} waiting">! ${waiting}${wide ? ' waiting' : ''}</button>` : ''}
-    ${st?.update ? `<button class="btn update-btn" data-act="update-toggle" aria-expanded="${!$('#app-update').hidden}" aria-controls="app-update" title="Chorus ${esc(st.update.version)} is available">↑ <span class="update-label">Update to </span>${esc(st.update.version)}</button>` : ''}
+    ${st?.update ? `<button class="btn update-btn" data-act="update-toggle" aria-expanded="${!$('#app-update').hidden}" aria-controls="app-update" title="Chorus ${esc(st.update.version)} is available">${{ downloading: '↑ <span class="update-label">Updating to </span>', installing: '↑ <span class="update-label">Updating to </span>', ready: '↻ <span class="update-label">Restart for </span>', failed: '⚠ <span class="update-label">Update failed: </span>' }[st.update.install?.phase] ?? '↑ <span class="update-label">Update to </span>'}${esc(st.update.version)}</button>` : ''}
     <button class="btn export-btn" data-act="export" title="Save all your chats and their files to one .zip in Downloads" aria-label="Export"${S.exporting ? ' disabled' : ''}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg><span class="export-label">${S.exporting ? 'Exporting…' : 'Export'}</span></button>
     <button class="btn news-toggle" data-act="news-toggle" aria-label="Notifications${st?.notifications?.unread ? `, ${st.notifications.unread} unread` : ''}" aria-expanded="${!$('#news').hidden}" aria-controls="news"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span class="news-label">Notifications</span>${st?.notifications?.unread ? `<span class="news-count">${Math.min(st.notifications.unread, 99)}</span>` : ''}</button>`;
   }
@@ -1096,15 +1105,25 @@ const drAgent = agent => drAgents()?.find(a => a.agent === agent);
 async function firstDoctor() {
   try {
     const { first } = await api('GET', '/api/doctor/first');
-    if (first) (S.doctorWaits = true), doctorWhenReady();
     const d = await loadDoctor();
-    // once per launch: a popup the user already closed stays closed when the details arrive late
-    if ((first || d.due) && !S.doctorOpened) (S.doctorWaits = true), doctorWhenReady();
+    // it opens by itself only when the short check did not pass: its result decides (doctorIfNeeded), nothing opens before it
+    if ((first || d.due) && !S.doctorOpened) (S.doctorDue = true), doctorIfNeeded();
     else if ($('#doctor-pop')) drawDoctor();
     else renderDoctorDot();
   } catch {
     /* the app works without the doctor */
   }
+}
+/** The short check answered: when it passed nothing opens (the Doctor dot and page show the result, the detailed test is there);
+ *  otherwise the popup opens, after the Welcome on a first launch. Once per launch. */
+function doctorIfNeeded() {
+  if (!S.doctorDue) return;
+  const passed = shortCheckPassed(S.state?.doctor);
+  if (passed === null) return;
+  S.doctorDue = false;
+  if (passed) return renderDoctorDot();
+  S.doctorWaits = true;
+  doctorWhenReady();
 }
 
 /** First launch: the Welcome's choice (Community or Pro) comes first, then the Doctor (owner, 2026-11-09). While the plan is not
@@ -1530,8 +1549,10 @@ async function reportIssue() {
 
 function renderChat() {
   const id = S.view.id;
-  $('#view').innerHTML = `<div class="chat"><div class="chat-head" id="chat-head"></div>${proSlot('chat-actions', ` data-chat="${esc(id)}"`)}<div id="chat-banners"></div><div class="chat-tabs" id="chat-tabs" hidden></div>
-    <div class="chat-body tab-chat" id="chat-body"><div class="term-wrap" id="term-slot"><div class="term-over" id="term-over" hidden></div></div><div class="drawer-scrim" data-act="drawer-close"></div><aside class="drawer" id="drawer" hidden></aside>${proSlot('chat-side', ` data-chat="${esc(id)}"`)}</div></div>`;
+  // the chat column holds the banners, the agent's screen and the docked ask card; the right sidebar beside it is one container that
+  // the header's buttons open: Artifacts, Activity, Record (the drawer) or Task (the optional module's chat-side panel)
+  $('#view').innerHTML = `<div class="chat"><div class="chat-head" id="chat-head"></div>${proSlot('chat-actions', ` data-chat="${esc(id)}"`)}<div class="chat-tabs" id="chat-tabs" hidden></div>
+    <div class="chat-body tab-chat" id="chat-body"><div class="chat-col" id="chat-col"><div id="chat-banners"></div><div class="term-wrap" id="term-slot"><div class="term-over" id="term-over" hidden></div></div><div id="ask-dock"></div></div><div class="drawer-scrim" data-act="drawer-close"></div><aside class="drawer" id="drawer" hidden></aside><aside class="task-side" id="task-side" aria-label="Task"><div class="drawer-head task-head"><span class="grow title">Task</span><button class="icon-btn" data-act="side" data-arg="task" title="Close the sidebar" aria-label="Close the sidebar">✕</button></div>${proSlot('chat-side', ` data-chat="${esc(id)}"`)}</aside></div></div>`;
   $('#term-slot').prepend(termEl);
   fillSlots();
   if (!termOpened) {
@@ -1578,15 +1599,22 @@ function renderChatParts() {
   const head = $('#chat-head');
   if (!c || !head) return;
   const d = S.detail[c.id];
+  const task = !!window.choruspro?.sideTabs?.(c.id);
+  const view = sideView(c.id);
+  if (S.drawer !== (PEEK.includes(view) ? view : null)) {
+    S.drawer = PEEK.includes(view) ? view : null;
+    S.drawerData = null;
+    if (S.drawer) void loadDrawer();
+  }
+  // a header button opens its view in the right sidebar; the lit one (or ✕) closes it
+  const sideBtn = (k, label, icon, extra = '') => `<button class="btn${view === k ? ' on' : ''}" data-act="side" data-arg="${k}" aria-pressed="${view === k}" title="${label}" aria-label="${label}"><span class="ic-only">${icon}</span><span class="lbl">${label}</span>${extra}</button>`;
   // the labels go on a tablet (icons stay, with the meter) and the buttons go into the ⋯ sheet on a phone
   head.innerHTML = `<span class="badge ${esc(c.agent)}">${esc(AGENT[c.agent]?.name ?? c.agent)}</span>
     <div class="meta"><span class="dot ${esc(c.state)}"></span><span>${esc(STATE_LABEL[c.state] ?? c.state)}</span>
       ${c.model || c.effort ? `<span class="model">· ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}</span>` : ''}${c.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${meter(c.usage)}
       <span class="mono faint path" title="${esc(c.cwd)}">‎${esc(tilde(c.cwd))}‎</span>${c.toast ? `<span class="badge ok">${esc(c.toast)}</span>` : ''}</div>
     <button class="btn" data-act="handoff" data-arg="${esc(c.id)}" title="Continue this chat with another agent" aria-label="Hand off">${S.size === 'desktop' ? '⇄ Hand off' : '⇄'}</button>
-    <button class="btn${S.drawer === 'artifacts' ? ' on' : ''}" data-act="drawer" data-arg="artifacts" title="Artifacts" aria-label="Artifacts"><span class="ic-only">▤</span><span class="lbl">Artifacts</span>${c.artifacts ? ` <span class="badge plain">${c.artifacts}</span>` : ''}</button>
-    <button class="btn${S.drawer === 'activity' ? ' on' : ''}" data-act="drawer" data-arg="activity" title="Activity" aria-label="Activity"><span class="ic-only">≋</span><span class="lbl">Activity</span></button>
-    <button class="btn${S.drawer === 'record' ? ' on' : ''}" data-act="drawer" data-arg="record" title="Record" aria-label="Record"><span class="ic-only">◫</span><span class="lbl">Record</span></button>
+    ${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰') : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${c.artifacts}</span>` : '')}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}
     <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat" aria-label="Delete this chat">🗑</button>`;
   // a phone: a task chat's panel is tabs beside the chat (Chat · Steps · Plan), one shown at a time
   const tabs = S.size === 'phone' ? window.choruspro?.sideTabs?.(c.id) : null;
@@ -1594,15 +1622,13 @@ function renderChatParts() {
   const tabsEl = $('#chat-tabs');
   tabsEl.hidden = !tabs;
   tabsEl.innerHTML = tabs ? `<div class="seg" role="tablist">${[['chat', 'Chat'], ...tabs].map(([k, label]) => `<button class="${S.chatTab === k ? 'on' : ''}" data-act="chat-tab" data-arg="${esc(k)}" role="tab" aria-selected="${S.chatTab === k}">${esc(label)}</button>`).join('')}</div>` : '';
-  $('#chat-body').className = `chat-body tab-${S.chatTab}`;
+  $('#chat-body').className = `chat-body tab-${S.chatTab}${task ? ' task-chat' : ''}${view === 'task' && task ? ' side-task' : ''}`;
   const side = $('#view [data-pro-slot="chat-side"]');
   if (side) side.dataset.tab = S.size === 'phone' && S.chatTab !== 'chat' ? S.chatTab : '';
   fillSlots();
   let banners = '';
-  for (const ask of S.state.approvals.filter(a => a.id === c.id)) {
-    if (ask.kind === 'ask') banners += `<div class="banner ask card"><b>${esc(AGENT[c.agent]?.name ?? c.agent)} asks you</b><div class="ask-body">${askCard(ask)}</div></div>`;
-    else banners += `<div class="banner ask"><b>${esc(AGENT[c.agent]?.name ?? c.agent)} asks</b><span class="what" title="${esc(ask.what)}">${esc(ask.what)}</span><button class="btn good" data-act="approve" data-arg="${esc(c.id)}">✓ Approve</button><button class="btn danger" data-act="deny" data-arg="${esc(c.id)}">✕ Deny</button></div>`;
-  }
+  // a CLI's permission prompt: the thin Approve/Deny line over the chat column
+  for (const ask of S.state.approvals.filter(a => a.id === c.id && a.kind !== 'ask')) banners += `<div class="banner ask"><b>${esc(AGENT[c.agent]?.name ?? c.agent)} asks</b><span class="what" title="${esc(ask.what)}">${esc(ask.what)}</span><button class="btn good" data-act="approve" data-arg="${esc(c.id)}">✓ Approve</button><button class="btn danger" data-act="deny" data-arg="${esc(c.id)}">✕ Deny</button></div>`;
   if (d?.fromRecord) banners += `<div class="banner info"><span>${esc(d.fromRecord)} no longer had this chat's session, so Chorus continues it from its own record.</span></div>`;
   if (c.parentId && d && !d.contextLoaded && c.state === 'idle' && d.turns.some(t => t.role === 'assistant')) banners += `<div class="banner info"><span>⚠ This chat has not loaded the record of the chat it continues.</span><button class="btn" data-act="retry" data-arg="${esc(c.id)}">Ask again</button></div>`;
   const bannerEl = $('#chat-banners');
@@ -1610,11 +1636,69 @@ function renderChatParts() {
     bannerEl.innerHTML = banners;
     bannerEl.dataset.html = banners;
   }
+  drawDock(c);
   const dr = $('#drawer');
   dr.hidden = !S.drawer;
   if (S.drawer) dr.innerHTML = drawerHtml(c);
   drawTermOver();
 }
+
+/* ---------- the chat's right sidebar: one container, one view at a time, remembered per chat ---------- */
+
+const PEEK = ['artifacts', 'activity', 'record'];
+/** What this chat's sidebar shows: what you left open, else Task for a task chat and closed for a plain chat. */
+function sideView(id) {
+  const task = !!window.choruspro?.sideTabs?.(id);
+  const v = S.side[id] ?? (task ? 'task' : '');
+  return v === 'task' && !task ? '' : v;
+}
+function setSide(id, view) {
+  if (sideView(id) === view) return;
+  S.side[id] = view;
+  // only chats that still exist are kept
+  const ids = new Set(S.state?.chats.map(c => c.id) ?? []);
+  for (const k of Object.keys(S.side)) if (ids.size && !ids.has(k)) delete S.side[k];
+  remember('side', S.side);
+  renderChatParts();
+  setTimeout(refit, 30);
+}
+
+/* ---------- the "asks you" card: docked over the bottom of the chat column, the newest open ask of the chat ---------- */
+
+function drawDock(c, force = false) {
+  const el = $('#ask-dock');
+  if (!el) return;
+  const a = S.state.approvals.filter(x => x.id === c.id && x.kind === 'ask').sort((x, y) => (x.since ?? 0) - (y.since ?? 0)).at(-1);
+  // a task chat names its teammate, with its agent's mark (UC-14); a plain chat its agent (UC-06). Redrawn when the module's data
+  // arrives (its refresh redraws the chat), so a card drawn before that gets the teammate's name then
+  const w = askWho(c, window.choruspro, AGENT), who = esc(w.name);
+  const mark = w.teammate ? `<span class="badge mini ${esc(w.agent)}">${esc(AGENT[w.agent]?.letter ?? '?')}</span>` : '';
+  const fold = a && S.askFold.has(a.request);
+  const html = !a ? '' : `<div class="ask-dock${fold ? ' min' : ''}" role="region" aria-label="${who} asks you"><div class="ask-who">${mark}<b>${who} asks you</b>${fold ? `<span class="ask-line">${esc(a.question)}</span>` : '<span class="grow"></span>'}<button class="btn ask-fold" data-act="ask-fold" data-arg="${esc(a.request)}" title="${fold ? 'Open the card' : 'Fold to one line'}" aria-expanded="${!fold}">${fold ? '▴ Open' : '▾ Fold'}</button></div>${fold ? '' : `<div class="ask-body">${askCard(a, true)}</div>`}</div>`;
+  // typing a note or your own answer: the card waits (a click on Fold or Show more redraws it at once)
+  if (el.dataset.html === html || (!force && el.contains(document.activeElement) && a)) return;
+  el.innerHTML = html;
+  el.dataset.html = html;
+  fitMore(el);
+  // the chat column widens or narrows as the sidebar closes or opens: Show more follows
+  if (!el.dataset.watched) {
+    el.dataset.watched = '1';
+    new ResizeObserver(() => fitMore(el)).observe(el);
+  }
+}
+/** Show more shows only when the details are longer than the 3 lines they are clamped to. */
+function fitMore(root) {
+  for (const b of root.querySelectorAll('.ask-more')) {
+    const box = b.previousElementSibling?.firstElementChild;
+    if (!box) continue;
+    if (!box.classList.contains('clamp')) {
+      b.hidden = false;
+      continue;
+    }
+    b.hidden = box.scrollHeight <= box.clientHeight + 2;
+  }
+}
+
 
 async function loadDetail(id) {
   try {
@@ -1730,9 +1814,12 @@ function optionButtons(a, cls = 'btn') {
   return a.options.map((o, i) => `<button class="${cls}${i === 0 ? ' primary' : ''}" data-act="pick" data-arg="${esc(a.id)}" data-req="${esc(a.request)}" data-value="${esc(o)}">${esc(o)}</button>`).join('');
 }
 /** The agent's options, "Other…" for an answer of your own (sent as "Other: <your words>"), and a note for any of them. */
-function askCard(a) {
+function askCard(a, dock = false) {
   const req = `data-arg="${esc(a.id)}" data-req="${esc(a.request)}"`;
-  return `<div class="ask-q">${esc(a.question)}</div>${a.details ? `<div class="what">${esc(a.details)}</div>` : ''}
+  const more = S.askMore.has(a.request);
+  // docked: the details fold to 3 lines, with Show more when they are longer
+  const details = !a.details ? '' : dock ? `<div class="what"><div class="${more ? '' : 'clamp'}">${esc(a.details)}</div></div><button class="ask-more" data-act="ask-more" data-arg="${esc(a.request)}" hidden>${more ? 'Show less' : 'Show more'}</button>` : `<div class="what">${esc(a.details)}</div>`;
+  return `<div class="ask-q">${esc(a.question)}</div>${details}
     <div class="acts">${optionButtons(a)}<button class="btn" data-act="other">Other…</button></div>
     <div class="acts other-row" hidden><input type="text" class="other-input" placeholder="Your own answer" aria-label="Your own answer"><button class="btn primary" data-act="pick-other" ${req}>Send</button></div>
     <input type="text" class="note-input" placeholder="Add a note (optional)" aria-label="Note for the agent">`;
@@ -1834,13 +1921,27 @@ document.addEventListener('drop', async e => {
 
 
 /* ---------- app updates: state comes from the single launch check. A button in the top bar opens this popover ---------- */
+// Update Chorus (plan 2026-11-12): available → updating (downloading, installing) → ready (Restart Chorus) | failed. Only this Mac's
+// own window installs: a device on the private link is told to update on the Mac.
+const ON_MAC = NATIVE || ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
 function renderUpdate(update) {
   const box = $('#app-update');
   if (!update) box.hidden = true;
-  if (box.dataset.version === (update?.version ?? '')) return;
-  box.dataset.version = update?.version ?? '';
-  if (!update) { box.replaceChildren(); return; }
-  box.innerHTML = `<div><strong>Chorus ${esc(update.version)} is available</strong><p>You have ${esc(update.currentVersion)}. Use the official installer to update Chorus, then restart the app.</p></div><div class="app-update-actions"><button class="btn" data-act="update-skip">Skip this version</button><button class="btn primary" data-act="update-open">Update Chorus</button></div>`;
+  const v = esc(update?.version ?? ''), i = update?.install;
+  const bar = (pct, label) => `<p><span class="meter"><span class="bar"><i style="width:${pct}%"></i></span>${label}</span></p>`;
+  const card = (title, body, acts) => `<div><strong>${title}</strong>${body}</div><div class="app-update-actions">${acts}</div>`;
+  const where = /Mac/.test(navigator.platform) ? `puts Chorus ${v} in Applications` : `installs Chorus ${v}`;
+  const html = !update ? ''
+    : !ON_MAC ? card(`Chorus ${v} is available`, `<p>You have ${esc(update.currentVersion)}. Update Chorus on the Mac: its own window installs it.</p>`, '')
+    : i?.phase === 'downloading' ? card(`Updating Chorus to ${v}`, bar(i.pct, `Downloading… ${i.pct}%`), '<button class="btn primary" disabled>Updating…</button>')
+    : i?.phase === 'installing' ? card(`Updating Chorus to ${v}`, `${bar(100, 'Installing…')}<p>The official installer checks the download, then ${where}.</p>`, '<button class="btn primary" disabled>Updating…</button>')
+    : i?.phase === 'ready' ? card(`Chorus ${v} is installed`, `<p>${S.updateNote ? esc(S.updateNote) : 'Restart Chorus to use it.'}</p>`, S.updateNote ? '' : '<button class="btn primary" data-act="update-restart">Restart Chorus</button>')
+    : i?.phase === 'failed' ? card(`Chorus ${v} could not be installed`, `<p>The installer stopped. Its last lines:</p><pre class="update-err">${esc((i.lines ?? []).join('\n'))}</pre>`, '<button class="btn" data-act="update-open">Open the instructions</button><button class="btn primary" data-act="update-install">Try again</button>')
+    : card(`Chorus ${v} is available`, `<p>You have ${esc(update.currentVersion)}. Chorus installs it for you with the official installer, then asks to restart.</p>`, '<button class="btn" data-act="update-skip">Skip this version</button><button class="btn primary" data-act="update-install">Update Chorus</button>');
+  if (box.dataset.html === html) return;
+  box.dataset.html = html;
+  if (!update) return void box.replaceChildren();
+  box.innerHTML = html;
 }
 function closeUpdate() {
   $('#app-update').hidden = true; renderChrome();
@@ -2074,6 +2175,17 @@ document.addEventListener('click', async e => {
       const result = await api('POST', '/api/updates/open', {});
       return toast(result.error || 'Update instructions opened in your browser. Run the installer, then restart Chorus.');
     }
+    case 'update-install': {
+      S.updateNote = '';
+      const result = await api('POST', '/api/updates/install', {});
+      return result.error && toast(result.error);
+    }
+    case 'update-restart': {
+      const result = await api('POST', '/api/updates/restart', {});
+      // no Chorus window above the server (a browser tab): say what to do instead
+      if (result.error) S.updateNote = result.error;
+      return renderUpdate(S.state?.update);
+    }
     case 'news-toggle':
       if (!$('#news').hidden) return closeNews();
       $('#news').hidden = false; S.newsDetail = null; renderChrome();
@@ -2151,19 +2263,19 @@ document.addEventListener('click', async e => {
     case 'deny':
       return answer(arg, act === 'approve');
     case 'pick': {
-      const note = el.closest('.item, .banner, .toast')?.querySelector('.note-input')?.value ?? '';
+      const note = el.closest('.item, .banner, .toast, .ask-dock')?.querySelector('.note-input')?.value ?? '';
       await api('POST', `/api/chats/${arg}/answer`, { request: el.dataset.req, option: el.dataset.value, note });
       document.activeElement?.blur(); // the card redraws (and goes) only when nothing in it has the focus
       return loadDecided();
     }
     case 'other': {
-      const row = el.closest('.item, .banner')?.querySelector('.other-row');
+      const row = el.closest('.item, .banner, .ask-dock')?.querySelector('.other-row');
       if (!row) return;
       row.hidden = false;
       return row.querySelector('.other-input').focus();
     }
     case 'pick-other': {
-      const card = el.closest('.item, .banner');
+      const card = el.closest('.item, .banner, .ask-dock');
       const own = card?.querySelector('.other-input');
       if (!own?.value.trim()) return own?.focus();
       const note = card.querySelector('.note-input')?.value ?? '';
@@ -2175,16 +2287,27 @@ document.addEventListener('click', async e => {
       return api('POST', `/api/chats/${arg}/retry`).catch(err => toast(err.message));
     case 'delete':
       return api('DELETE', `/api/chats/${arg}`).catch(err => toast(err.message));
+    case 'side':
     case 'drawer':
     case 'drawer-to':
-    case 'drawer-close':
-      // drawer-to: always that drawer (a phone's ⋯ sheet and the drawer's own tabs); drawer-close: the dim area around it
-      S.drawer = act === 'drawer-close' ? null : act === 'drawer-to' || S.drawer !== arg ? arg : null;
-      S.drawerData = null;
-      remember('drawer', S.drawer ?? '');
-      renderChatParts();
-      setTimeout(refit, 30);
-      return loadDrawer();
+    case 'drawer-close': {
+      // side and drawer: open that view, or close the sidebar when it is the one open; drawer-to: always that view (a phone's ⋯
+      // sheet and the drawer's own tabs); drawer-close: the dim area around it
+      const id = S.view.id;
+      if (S.view.name !== 'chat' || !id) return;
+      return setSide(id, act === 'drawer-close' ? '' : act === 'drawer-to' || sideView(id) !== arg ? arg : '');
+    }
+    case 'ask-fold':
+      S.askFold.has(arg) ? S.askFold.delete(arg) : S.askFold.add(arg);
+      try {
+        localStorage.setItem('chorus.askFold', JSON.stringify([...S.askFold].slice(-50)));
+      } catch {
+        /* no storage: folded until the page reloads */
+      }
+      return S.view.name === 'chat' && drawDock(S.state.chats.find(c => c.id === S.view.id), true);
+    case 'ask-more':
+      S.askMore.has(arg) ? S.askMore.delete(arg) : S.askMore.add(arg);
+      return S.view.name === 'chat' && drawDock(S.state.chats.find(c => c.id === S.view.id), true);
     case 'act-filter':
       S.actFilter = arg;
       return renderChatParts();
@@ -2401,6 +2524,19 @@ document.addEventListener(
   true,
 );
 
+// a click or a key press in the agent's screen closes what you peek at (Artifacts, Activity, Record); Task stays open, and the docked
+// ask card is outside the screen, so a click on it does not count
+for (const type of ['pointerdown', 'keydown'])
+  document.addEventListener(
+    type,
+    e => {
+      if (S.view.name !== 'chat' || !S.drawer || !e.target.closest?.('#term-slot')) return;
+      if (S.size !== 'desktop' || e.target.closest('.term-over')) return;
+      setSide(S.view.id, '');
+    },
+    true,
+  );
+
 // the drawer keeps up with the agent while it is open
 setInterval(() => {
   if (S.view.name === 'chat' && S.drawer && !document.hidden) void loadDrawer();
@@ -2411,7 +2547,7 @@ setInterval(() => {
 window.addEventListener('unhandledrejection', e => toast(String(e.reason?.message ?? e.reason)));
 
 // for the e2e proof and for debugging from the developer tools
-window.chorus = { S, term, go };
+window.chorus = { S, term, go, renderUpdate, renderChrome, renderChatParts };
 
 // the token came in the address (chorus serve printed it); it is a cookie now, so it leaves the address bar
 if (location.search) history.replaceState(null, '', '/' + location.hash);

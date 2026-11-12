@@ -82,6 +82,8 @@ export class Controller {
   previewOpened = '';
   readonly agentInfo = new Map<AgentId, { version?: string; login?: string; ok: boolean }>();
   private sessions = new Map<string, Session>();
+  /** when each chat was last seen going idle (its turn ended): an ask made before that belongs to a turn that is over */
+  private idleSince = new Map<string, string>();
   private sawStart = new Map<string, number>();
   private detectTimer: NodeJS.Timeout | undefined;
   private closed = false;
@@ -214,7 +216,10 @@ export class Controller {
 
   private onSession(id: string, s: Session) {
     if (this.closed) return;
+    const was = this.sessions.get(id)?.status;
     this.sessions.set(id, s);
+    if (s.status === 'waiting' && was !== 'waiting') this.idleSince.set(id, new Date().toISOString());
+    else if (s.status === 'working' && was === 'waiting') this.cancelAnsweredByTyping(id);
     this.nameFromFirstMessage(id, s);
     this.refreshMeta(id, s);
     this.refreshState(id);
@@ -366,6 +371,27 @@ export class Controller {
       this.requests.delete(id);
       this.refreshState(r.thread_id);
     }
+  }
+
+  /**
+   * The chat went idle → working while its ask was still open: the user answered by typing in the chat, so the card goes. An ask
+   * made after the chat was seen idle belongs to the turn that just started and stays. Answering from the card marks the ask
+   * answered before its line is typed, so it is never pending here. A cancelled ask is not an approval: nothing is logged.
+   */
+  private cancelAnsweredByTyping(threadId: string) {
+    const idle = this.idleSince.get(threadId);
+    if (!idle) return;
+    let stale: RequestRow[];
+    try {
+      stale = this.store.pendingRequests(threadId).filter(r => r.created <= idle);
+    } catch {
+      return; // the store is closing
+    }
+    for (const r of stale) {
+      this.store.answerRequest(r.id, '', undefined, 'cancelled');
+      this.requests.delete(r.id);
+    }
+    if (stale.length) this.refreshState(threadId);
   }
 
   /** The oldest open request of a chat. */

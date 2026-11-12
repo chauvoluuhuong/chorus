@@ -302,6 +302,12 @@ test('a request through a proxy never uses the token: only the module lets a dev
   assert.equal((await via('/api/state', { cookie: 'chorus_device=ok' })).status, 200);
   assert.equal((await via('/api/approvals', { cookie: 'chorus_device=ok', 'x-chorus': '1', origin: 'https://evil.example' }, 'POST', '{}')).status, 403);
   assert.equal((await via('/api/pro/remote', { cookie: 'chorus_device=ok', 'x-chorus': '1', origin: 'https://mac.tail.ts.net', 'content-type': 'application/json' }, 'POST', '{"do":"allow"}')).status, 403, 'devices are allowed on the Mac only');
+  // Update Chorus installs and restarts on the Mac only
+  for (const p of ['/api/updates/install', '/api/updates/restart']) {
+    const u = await via(p, { cookie: 'chorus_device=ok', 'x-chorus': '1', origin: 'https://mac.tail.ts.net', 'content-type': 'application/json' }, 'POST', '{}');
+    assert.equal(u.status, 403);
+    assert.deepEqual(await u.json(), { error: 'Update Chorus on the Mac.' });
+  }
   const m = await via('/mcp', { 'content-type': 'application/json' }, 'POST', '{"jsonrpc":"2.0"}');
   assert.deepEqual(await m.json(), { got: '{"jsonrpc":"2.0"}' });
   // the window on this Mac is as before

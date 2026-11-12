@@ -174,6 +174,8 @@ a { color: var(--accent); }
 .btn.good { color: var(--ok); }
 .btn.waiting { background: var(--bad-soft); border-color: transparent; color: var(--bad); font-weight: 600; }
 .btn.on { background: var(--sel); }
+/* the chat header's sidebar buttons, lit: the teal outline of ui-mockup-v3 UC-14, everywhere (the host scenes drew them grey) */
+.chat-head [data-act="side"].on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 kbd { font: 11px var(--f-mono); color: var(--faint); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
 .btn.primary kbd { color: inherit; border-color: rgba(255, 255, 255, 0.4); }
 
@@ -226,6 +228,7 @@ textarea { resize: vertical; min-height: 84px; font-size: 15px; }
 .empty { padding: 28px; text-align: center; color: var(--muted); }
 .section-title { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; color: var(--faint); margin: 26px 0 8px; text-transform: uppercase; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.drawer-head .drawer-seg { display: none; } /* a phone's drawer tabs only (below); on wider screens the header's buttons */
 .seg button { border: 0; background: transparent; padding: 4px 12px; font-size: 12.5px; color: var(--muted); }
 .seg button.on { background: var(--sel); color: var(--ink); font-weight: 600; }
 .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
@@ -262,12 +265,28 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 .banner.ask { background: var(--bad-soft); }
 .banner.ask .what { font-family: var(--f-mono); font-size: 12.5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .banner.info { background: var(--warn-soft); color: var(--warn); }
-/* a request_approval card: who asks above the question, then details, the options (+ Other…), a note; room around each part */
-.banner.card { flex-direction: column; align-items: stretch; gap: 10px; padding: 16px 20px 18px; }
-.banner.card > b { font-size: 12px; letter-spacing: 0.02em; color: var(--muted); font-weight: 600; }
-.banner.card .ask-body, .item .ask-body { min-width: 0; display: grid; gap: 12px; }
+/* a request_approval card in Approvals: who asks above the question, then details, the options (+ Other…), a note */
+.item .ask-body { min-width: 0; display: grid; gap: 12px; }
 .ask-q { font-weight: 600; font-size: 14px; line-height: 1.4; }
-.banner.card .what { white-space: pre-wrap; overflow: auto; text-overflow: clip; max-height: 8.5em; flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; line-height: 1.5; }
+/* the chat column (plan 2026-11-12): the banners, the agent's screen and the docked ask card; the right sidebar is beside it */
+.chat-col { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.chat-col > .term-wrap { flex: 1; min-height: 0; }
+/* the "asks you" card: over the bottom of the chat column only, never over the sidebar; the newest open ask of the chat.
+   No background colour (owner, 2026-11-12): the panel, the accent on its border and label; red is for Approve/Deny only */
+.ask-dock { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 5; max-height: calc(100% - 24px); overflow: auto; display: grid; gap: 10px; padding: 12px 16px 14px; background: var(--panel); border: 1px solid var(--accent); border-radius: 12px; box-shadow: var(--shadow); }
+.ask-dock.min { padding: 6px 8px 6px 16px; }
+.ask-who { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 12px; }
+.ask-who > b { color: var(--accent); font-weight: 600; white-space: nowrap; }
+.ask-who .grow { flex: 1; }
+.ask-line { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; }
+.ask-fold { padding: 2px 9px; font-size: 12px; background: transparent; border-color: transparent; color: var(--muted); }
+.ask-fold:hover { background: var(--hover); }
+.ask-dock .ask-body { display: grid; gap: 10px; min-width: 0; }
+.ask-dock .what { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; line-height: 1.5; font-size: 13px; }
+.ask-dock .what .clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ask-dock .note-input, .ask-dock .other-input { background: var(--bg); }
+.ask-more[hidden] { display: none; }
+.ask-more { justify-self: start; border: 0; background: none; padding: 0; margin-top: -4px; color: var(--accent); font-size: 12.5px; font-weight: 600; }
 .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .acts .btn { padding: 6px 14px; }
 .other-row[hidden] { display: none; }
@@ -298,6 +317,20 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 .drawer-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--line); font-weight: 600; }
 .drawer-head .grow { flex: 1; }
 .drawer-body { flex: 1; overflow: auto; }
+/* the right sidebar on a desktop: one container, one view at a time; Task holds the optional module's panel (it draws no frame of
+   its own here). A task chat's sidebar is as wide as its panel. Tablet and phone keep their own overlays (below). */
+.task-head { display: none; }
+@media (min-width: 1025px) {
+  .chat-body.task-chat .drawer { width: 400px; }
+  .task-side { display: none; width: 400px; flex: none; border-left: 1px solid var(--line); background: var(--panel); flex-direction: column; min-height: 0; }
+  .chat-body.side-task .task-side { display: flex; }
+  .task-head { display: flex; }
+  .task-side [data-pro-slot="chat-side"].on { flex: 1; min-height: 0; width: auto; }
+  .task-side [data-pro-slot="chat-side"]::part(panel) { border-left: 0; }
+}
+@media (max-width: 1024px) {
+  .task-side { display: contents; }
+}
 .art { padding: 12px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
 .art .name { font-family: var(--f-mono); font-size: 13px; font-weight: 600; word-break: break-all; }
 .art .acts { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -429,12 +462,14 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 .news-content { display: block; width: 100%; height: min(420px, 58vh); border: 0; background: var(--panel); }
 
 /* Launch-only release notice, using the existing desktop palette. */
-/* the Update button in the top bar opens this popover (it used to be a banner across the page) */
+/* the Update button in the top bar opens and closes this band under the top bar (UC-17); a phone shows it as a sheet */
 #main{position:relative}
 .update-btn{background:var(--accent-soft);border-color:transparent;color:var(--accent);font-weight:600}
 .update-btn:hover{background:var(--accent-soft);filter:brightness(.97)}
-.app-update{position:absolute;right:16px;top:50px;z-index:40;width:min(360px,calc(100% - 32px));display:flex;flex-direction:column;gap:12px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow)}
-.app-update[hidden]{display:none}.app-update strong{font-weight:600}.app-update p{margin:5px 0 0;font-size:12.5px;color:var(--muted)}.app-update-actions{display:flex;gap:8px;justify-content:flex-end}
+.app-update{flex:none;display:flex;gap:20px;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+.app-update .meter .bar{width:180px}.app-update .update-err{margin:8px 0 0;padding:8px 12px;background:var(--bad-soft);border-radius:8px;font:12px/1.5 var(--f-mono);color:var(--ink-2);white-space:pre-wrap;overflow-wrap:anywhere}
+.app-update[hidden]{display:none}.app-update strong{font-weight:600}.app-update p{margin:5px 0 0;font-size:12px;color:var(--muted)}.app-update-actions{display:flex;gap:8px;flex-shrink:0}
+@media(max-width:900px){.app-update{align-items:flex-start;flex-direction:column;gap:12px}}
 /* a task in the sidebar: Details opens its page (a click on the row opens its last chat) */
 .chat-row .tk-det{flex:none;border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:0 6px;font-size:11px;color:var(--muted);opacity:0}
 .chat-row:hover .tk-det,.chat-row.on .tk-det,.chat-row.here .tk-det,.chat-row:focus-visible .tk-det{opacity:1}
@@ -586,7 +621,6 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
   .page { padding: 26px 22px 48px; }
   .page.nc-wrap { padding-top: 48px; }
   .news-popover { top: calc(60px + var(--safe-top)); }
-  .app-update { top: calc(50px + var(--safe-top)); }
   .dr-banner { flex-wrap: wrap; }
   .lead .mono, .kv dd, .art .name { overflow-wrap: anywhere; }
 }
@@ -671,19 +705,18 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
   .chat-head .meta { flex: 1; }
   .banner { flex-wrap: wrap; padding: 10px 14px; }
   .banner.ask .what { flex-basis: 100%; white-space: normal; }
-  .banner.card { padding: 14px 16px; }
   .other-row .other-input { min-width: 0; }
   .chat-tabs { display: block; padding: 8px 12px; border-bottom: 1px solid var(--line); }
   .chat-tabs .seg { display: flex; width: 100%; }
   .chat-tabs .seg button { flex: 1; }
-  .chat-body.tab-steps .term-wrap, .chat-body.tab-plan .term-wrap { display: none; }
+  .chat-body.tab-steps .chat-col, .chat-body.tab-plan .chat-col { display: none; }
   .chat-body.tab-chat [data-pro-slot="chat-side"] { display: none !important; }
   .chat-body:not(.tab-chat) [data-pro-slot="chat-side"].on { position: static; flex: 1; width: auto; box-shadow: none; }
   /* the drawer (Artifacts, Activity, Record): a bottom sheet, 82 % high, with a grabber */
   .drawer { position: fixed; left: 0; right: 0; top: auto; bottom: 0; width: auto; height: 82%; border-left: 0; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; z-index: 41; box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.25); padding-bottom: var(--safe-bot); }
   .grab { display: block; width: 38px; height: 5px; border-radius: 3px; background: var(--line); margin: 8px auto 0; }
   .drawer-head .grow.title { display: none; }
-  .drawer-seg { display: inline-flex; }
+  .drawer-head .drawer-seg { display: inline-flex; }
   .drawer-head .icon-btn { min-width: 40px; height: 40px; }
   .chat-body:has(.drawer:not([hidden])) .drawer-scrim { display: block; position: fixed; inset: 0; background: rgba(20, 20, 19, 0.35); z-index: 40; }
   .act-row { grid-template-columns: 56px minmax(0, 1fr) auto; }

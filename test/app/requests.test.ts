@@ -91,3 +91,89 @@ test('agy: a prompt for one of Chorus\'s own MCP tools is answered "always allow
     await r.done();
   }
 });
+
+// Stale asks (plan 2026-11-12): one open card per chat, and a card the user answered by typing leaves. The transcripts are driven
+// by hand here (the fake agent writes none): `turn` is what the tailer reports when the chat's turn starts or ends.
+const turn = (c: Controller, id: string, status: 'working' | 'waiting') => (c as any).onSession(id, { status, turns: [] });
+
+test('stale asks: a new request cancels the older pending ones of the same chat only, and nothing is logged', () => {
+  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-req-')));
+  const store = new Store(project);
+  try {
+    for (const id of ['t_a', 't_b']) store.createThread({ id, title: id, agent: 'claude', cwd: project });
+    const first = store.createRequest({ threadId: 't_a', question: 'Right of the filters?' });
+    const other = store.createRequest({ threadId: 't_b', question: 'Ship it?' });
+    const second = store.createRequest({ threadId: 't_a', question: 'Above the table, then?' });
+    assert.equal(store.getRequest(first.id)!.status, 'cancelled', 'the older ask of that chat is cancelled');
+    assert.deepEqual(store.pendingRequests('t_a').map(r => r.id), [second.id], 'only the newest one is open');
+    assert.equal(store.getRequest(other.id)!.status, 'pending', "another chat's ask stays");
+    assert.equal(store.approvalsLog().length, 0, 'a cancelled ask is not an approval');
+  } finally {
+    store.close();
+  }
+});
+
+test('stale asks: the user answers by typing in the chat (idle → working while the card is open): the card leaves, unlogged', async () => {
+  const r = await rig();
+  try {
+    const a = r.c.newThread({ agent: 'codex' });
+    await r.until(() => /READY codex/.test(r.screen(a.id)), 'codex up');
+    turn(r.c, a.id, 'working');
+    const req = r.store.createRequest({ threadId: a.id, question: 'Put the Export button right of the filters?', options: ['Right', 'Above'] });
+    await r.until(() => r.c.approvalItems().length === 1, 'the card is listed');
+    turn(r.c, a.id, 'waiting'); // the agent ended its turn after asking
+    turn(r.c, a.id, 'working'); // the user answered in the chat itself
+    assert.equal(r.store.getRequest(req.id)!.status, 'cancelled', 'answering by typing cancels it');
+    await r.until(() => r.c.approvalItems().length === 0 && r.c.app.entry(a.id)!.state !== 'approval', 'the card leaves');
+    assert.equal(r.c.app.waitingProvider(), 0, 'the top bar no longer counts it');
+    assert.equal(r.store.approvalsLog().length, 0, 'not written to the approvals log');
+    assert.doesNotMatch(r.screen(a.id), /Chorus approval/, 'nothing typed into the agent');
+  } finally {
+    await r.done();
+  }
+});
+
+test('stale asks: asked, the turn ends and the chat stays idle: the card stays until the next turn starts', async () => {
+  const r = await rig();
+  try {
+    const a = r.c.newThread({ agent: 'codex' });
+    await r.until(() => /READY codex/.test(r.screen(a.id)), 'codex up');
+    turn(r.c, a.id, 'working');
+    const req = r.store.createRequest({ threadId: a.id, question: 'Which export format?', options: ['CSV', 'XLSX'] });
+    await r.until(() => r.c.approvalItems().length === 1, 'the card is listed');
+    turn(r.c, a.id, 'waiting');
+    await sleep(600); // a few detector rounds
+    turn(r.c, a.id, 'waiting'); // the same idle chat, reported again
+    assert.equal(r.store.getRequest(req.id)!.status, 'pending', 'the card stays while the chat is idle');
+    assert.equal(r.c.approvalItems().length, 1);
+    assert.equal(r.c.app.entry(a.id)!.state, 'approval');
+    turn(r.c, a.id, 'working');
+    await r.until(() => r.c.approvalItems().length === 0, 'the next turn removes it');
+    assert.equal(r.store.getRequest(req.id)!.status, 'cancelled');
+  } finally {
+    await r.done();
+  }
+});
+
+test('stale asks: an ask made in a new turn the tailer has not seen start yet is kept; answering from the card is unchanged', async () => {
+  const r = await rig();
+  try {
+    const a = r.c.newThread({ agent: 'codex' });
+    await r.until(() => /READY codex/.test(r.screen(a.id)), 'codex up');
+    turn(r.c, a.id, 'waiting');
+    await sleep(5);
+    // the user typed and the agent asked at once; the transcript shows the turn only now
+    const req = r.store.createRequest({ threadId: a.id, question: 'Run the migration?', options: ['Run', 'Wait'] });
+    turn(r.c, a.id, 'working');
+    assert.equal(r.store.getRequest(req.id)!.status, 'pending', 'an ask of the turn that just started is not stale');
+    await r.until(() => r.c.approvalItems().length === 1, 'the card is listed');
+    turn(r.c, a.id, 'waiting');
+    assert.equal(r.c.answerRequest(req.id, 'Run'), true);
+    turn(r.c, a.id, 'working'); // the answer typed into the agent starts its turn
+    assert.equal(r.store.getRequest(req.id)!.status, 'answered');
+    await r.until(() => r.screen(a.id).includes(`got: "Chorus approval ${req.id}: Run"`), 'typed into the agent');
+    assert.equal(r.store.approvalsLog()[0].decision, 'approved');
+  } finally {
+    await r.done();
+  }
+});
