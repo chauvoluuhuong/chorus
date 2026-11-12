@@ -100,12 +100,18 @@ export class UpdateCheck {
       env.CHORUS_APP_DIR = stage;
     }
     Object.assign(env, this.o.test?.env);
-    const child = spawn('/bin/bash', [file], { cwd: os.homedir(), env, stdio: ['ignore', 'pipe', 'pipe'] });
+    // one pipe for both of its outputs, in the order it wrote them: two pipes are read in any order, so a step line ("2/2 …") could
+    // come after the error lines it came before, and curl's bar (stderr) before the step it belongs to (stdout)
+    const child = spawn('/bin/bash', ['-c', 'exec /bin/bash "$1" 2>&1', 'install', file], { cwd: os.homedir(), env, stdio: ['ignore', 'pipe', 'ignore'] });
     // the installer says "1/2  Installing …" before each part; curl draws its progress bar with \r: one download per part
     let parts = 1, downloads = 0, pct = 0;
     const lines: string[] = [];
-    const take = (chunk: Buffer) => {
-      for (const raw of chunk.toString('utf8').split(/[\r\n]+/)) {
+    // a read can end in the middle of a line ("…###  100" then ".0%"): the unfinished end waits for the next read
+    let rest = '';
+    const take = (chunk: Buffer | string, end = false) => {
+      const parts_ = (rest + chunk.toString()).split(/[\r\n]+/);
+      rest = end ? '' : parts_.pop()!;
+      for (const raw of parts_) {
         const line = raw.replace(ANSI, '').trimEnd();
         if (!line.trim()) continue;
         const step = /^\s*\d+\/(\d+)\s/.exec(line);
@@ -123,10 +129,11 @@ export class UpdateCheck {
         if (lines.length > 40) lines.shift();
       }
     };
-    child.stdout.on('data', take);
-    child.stderr.on('data', take);
+    child.stdout.setEncoding('utf8'); // a character split between two reads stays whole
+    child.stdout.on('data', (d: string) => take(d));
     child.once('error', e => lines.push(e.message));
     child.once('close', code => {
+      take('', true);
       fs.rmSync(work, { recursive: true, force: true });
       if (code === 0) {
         this.staged = platform === 'darwin' ? path.join(stage, 'Chorus.app') : undefined;

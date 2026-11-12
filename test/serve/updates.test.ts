@@ -99,6 +99,30 @@ test('Update Chorus runs the official installer: closed stdin, CHORUS_NO_OPEN, C
   assert.deepEqual(r.relaunched, [['4242', String(process.pid), '/tmp/x/Chorus.app', path.join(stage, 'Chorus.app'), '']]);
 });
 
+test('Update Chorus reads the installer as it wrote it: a progress bar split between two reads, stdout and stderr in order', async t => {
+  // the second part of the bar comes in a later read; the step line (stdout) and the error (stderr) keep their order
+  const script = `#!/bin/bash
+echo "1/2  Installing the chorus command (darwin-arm64)…"
+printf '\\r######## 100' >&2; sleep 0.3; printf '.0%%\\n' >&2
+echo "2/2  Installing Chorus.app…"
+printf '\\r######## 100.0%%\\n' >&2
+echo "first"; echo "second" >&2; echo "third"; exit 3
+`;
+  const base = await downloads(t, script);
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-updates-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const request = (async (url: any, opts: any) => (String(url) === RELEASE_MANIFEST ? Response.json(release('9.9.9')) : fetch(url, opts))) as typeof fetch;
+  const c = new UpdateCheck({ directory, version: '1.0.6', platform: 'darwin', arch: 'arm64', request, test: { installer: `${base}/install.sh` } });
+  t.after(() => c.close());
+  await c.startup();
+  const phases: string[] = [];
+  const done = new Promise<void>(r => c.onChange(() => { const st = c.snapshot()!.install!; if (phases.at(-1) !== st.phase) phases.push(st.phase); if (st.phase === 'failed') r(); }));
+  await c.install();
+  await done;
+  assert.deepEqual(phases, ['downloading', 'installing', 'failed'], 'both downloads were counted');
+  assert.deepEqual(c.snapshot()!.install!.lines!.slice(-4), ['2/2  Installing Chorus.app…', 'first', 'second', 'third']);
+});
+
 test('Update Chorus: a failed installer shows its last lines; Try again runs it again', async t => {
   const r = await installing(t, { fail: true });
   await r.c.install();
