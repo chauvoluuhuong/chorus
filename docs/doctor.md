@@ -289,8 +289,9 @@ reason), `doctor.log`, and `<cli>/<case>/` with the evidence of §4.1 rule 8. Th
   `--version` at start, as the app does now). A CLI newly installed or removed counts.
 - Never otherwise: no popup on a normal start. The Doctor page in the sidebar foot runs it any time.
 - And in both cases only when the fast check **did not pass** (owner, 2026-11-12): the page waits for its result and opens
-  nothing before it, not even "Checking…". Passed = at least one agent is Ready and no installed agent needs the user (not logged
-  in, a version new to Chorus, a failed check); an agent that is not installed does not count. When it passed nothing opens: the
+  nothing before it, not even "Checking…". Passed = at least one agent can be used and no installed agent needs the user (not
+  logged in, a failed check). A version new to Chorus can be used and its detailed test is only suggested, so it passes too
+  (owner, 2026-11-13); an agent that is not installed does not count. When it passed nothing opens: the
   Doctor dot and the Doctor page show the result, and the detailed test is there (`shortCheckPassed` in
   `src/desktop/doctor-popup.js`, `doctorIfNeeded()` in `app.js`; `test/serve/doctor-popup.test.ts`, `npm run proof:first-run`).
 
