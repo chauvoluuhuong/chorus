@@ -13,8 +13,8 @@ An agent asks through the chorus `request_approval` tool ([integrations/approval
   going idle belongs to the turn that just started and stays (the transcript can show a new turn late). Answering from the
   card marks the ask answered before its line is typed, so nothing changes there. A cancelled ask is not written to the
   approvals log. Asked, then the turn ends and the chat stays idle: the card stays.
-- **Where it shows.** Docked over the bottom of the chat column (`#ask-dock` inside `.chat-col`), never over the right
-  sidebar: the panel colour with the accent on its border and on "<agent> asks you". The question; the details clamped to 3
+- **Where it shows.** Docked at the bottom of the chat column (`#ask-dock` inside `.chat-col`), under the agent's screen since
+  2026-11-13 ([planner-loop-host.md](planner-loop-host.md)), never over the right sidebar: the panel colour with the accent on its border and on "<agent> asks you". The question; the details clamped to 3
   lines with **Show more** only when they overflow (re-checked when the column changes width); the options, **Other…**, a note;
   **Fold** shrinks it to one line, remembered per request (`localStorage chorus.askFold`). The same ask is in Approvals.
 - Who asks: in a task chat the teammate running its work session, after its agent's letter mark ("claude-worker-1 asks you",

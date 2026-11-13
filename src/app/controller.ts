@@ -51,6 +51,8 @@ export interface ControllerOpts {
   /** model per agent for new threads (tests use cheap ones) */
   models?: Partial<Record<AgentId, string>>;
   tailPollMs?: number;
+  /** how long a resumed chat's screen must stay still before a message is typed into it (default 2.5 s; tests use less) */
+  stillMs?: number;
   /** how a thread's agent is started (tests start a fake TUI instead) */
   launcher?: (agent: AgentId, o: InteractiveOpts) => Launch;
   /** how files and links are opened for the user (tests replace it) */
@@ -82,6 +84,8 @@ export class Controller {
   previewOpened = '';
   readonly agentInfo = new Map<AgentId, { version?: string; login?: string; ok: boolean }>();
   private sessions = new Map<string, Session>();
+  /** messages typed into a chat, one at a time per chat (sendToChat) */
+  private typing = new Map<string, Promise<unknown>>();
   /** when each chat was last seen going idle (its turn ended): an ask made before that belongs to a turn that is over */
   private idleSince = new Map<string, string>();
   private sawStart = new Map<string, number>();
@@ -190,6 +194,8 @@ export class Controller {
     this.pending.delete(id);
     this.pendingSince.delete(id);
     this.sawStart.delete(id);
+    // its request_approval card goes with it (the store's rows go below)
+    for (const [rid, r] of this.requests) if (r.thread_id === id) this.requests.delete(rid);
     this.app.removeEntry(id);
     this.store.deleteThread(id);
     this.app.setFlash(`deleted "${row.title}"`);
@@ -421,10 +427,44 @@ export class Controller {
     // text and Enter in one chunk read as a paste in the TUIs: Enter goes apart
     setTimeout(() => host.state === 'running' && host.write('\r'), 700);
     const no = /^(no\b|decline|deny|reject|cancel|stop|don.?t)/i.test(option);
-    this.store.logApproval(r.thread_id, `${r.question} → ${option}`, no ? 'denied' : 'approved');
+    // Skip on a question (the agent decides itself) is typed like an answer, but it is not a decision: nothing is logged
+    if (option !== SKIPPED) this.store.logApproval(r.thread_id, `${r.question} → ${option}`, no ? 'denied' : 'approved');
     this.refreshState(r.thread_id);
     this.app.setFlash(`answered: ${option} · ${r.question.slice(0, 60)}`);
     return true;
+  }
+
+  /**
+   * Types a message into a chat, one at a time per chat (the Planner loop, plan 2026-11-13): the text, then Enter 700 ms apart.
+   * A chat whose CLI is not running is continued with its CLI's resume first, and typed into once its screen has been still for
+   * 2.5 s; its transcript file stays the one it had (the resume keeps the session id). `gone`: there is no session to continue
+   * (`exists` says its file is missing, or it never had one), since agy would open an empty chat silently; `ended`: not typed now
+   * (a permission prompt is on its screen, or the resume did not come up), the caller tries again later.
+   */
+  sendToChat(id: string, text: string, exists: (row: ThreadRow) => boolean): Promise<'sent' | 'ended' | 'gone'> {
+    const run = (this.typing.get(id) ?? Promise.resolve()).then(() => this.typeInto(id, text, exists));
+    this.typing.set(id, run.catch(() => undefined));
+    return run;
+  }
+
+  private async typeInto(id: string, text: string, exists: (row: ThreadRow) => boolean): Promise<'sent' | 'ended' | 'gone'> {
+    const row = this.store.getThread(id), e = this.app.entry(id);
+    if (!row || !e) return 'gone';
+    if (this.closed || this.pending.has(id)) return 'ended';
+    let host = e.host;
+    if (!host || host.state !== 'running') {
+      if (!row.native_session_id || !exists(row)) return 'gone';
+      this.resume(e);
+      host = e.host;
+      if (!host || host.state !== 'running') return 'ended';
+      if (!(await stillFor(host, this.o.stillMs ?? 2500, 90_000))) return 'ended';
+    }
+    host.write(text);
+    // text and Enter in one chunk read as a paste in the TUIs: Enter goes apart
+    await new Promise(r => setTimeout(r, 700));
+    if (host.state !== 'running') return 'ended';
+    host.write('\r');
+    return 'sent';
   }
 
   /** An agent that ran out of quota says so on its screen: warn and point at the handoff. */
@@ -1440,3 +1480,20 @@ const helpLines = (k: string) => [
   'Sidebar dots: ● working   ◐ waiting for you   ○ idle   ! needs approval   … starting   ◌ parked (select to resume)   ■ limit reached',
   'Narrow windows: the sidebar shrinks to names, then icons, then hides (b brings it back); under 50×12 only a notice shows.',
 ];
+
+/** Typed for Skip on a question card (core's SKIPPED): the agent decides itself. */
+export const SKIPPED = 'skipped. Decide yourself and say what you chose.';
+
+/** Waits until a chat's screen has not changed for `ms` (a resumed CLI is drawn and ready); false when it ends or after `max`. */
+async function stillFor(host: { state: string; screen: { text(): string[] } }, ms: number, max: number): Promise<boolean> {
+  const t0 = Date.now();
+  let last = '', since = Date.now();
+  while (Date.now() - t0 < max) {
+    if (host.state !== 'running') return false;
+    const now = host.screen.text().join('\n');
+    if (now !== last) (last = now), (since = Date.now());
+    else if (Date.now() - since >= ms && now.trim()) return true;
+    await new Promise(r => setTimeout(r, 100));
+  }
+  return false;
+}

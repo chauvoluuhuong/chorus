@@ -99,8 +99,8 @@ test('mcp: a chat in one project can load a chat from another through the shared
   assert.match(ctx, /Add a per-key rate limit/);
   assert.match(ctx, /Limiter in place/);
   const instr = c.getInstructions() ?? '';
-  assert.ok(instr.includes(path.join(a, '.chorus', 'threads', 't_new', 'artifacts')), 'artifacts go to the chat project');
   await c.close();
+  assert.ok(instr.includes('show_artifact'), 'what it makes for the user is reported, wherever it is saved');
   sa.close();
 });
 

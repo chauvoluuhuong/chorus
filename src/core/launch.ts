@@ -3,7 +3,7 @@
 import { isSea } from 'node:sea';
 import path from 'node:path';
 import { buildHeadless as coreHeadless, buildInteractive as coreInteractive, type Launch, type McpServer } from '@chauvoluuhuong/chorus-core';
-import { APPROVAL_NOTE, TOOL_NAMES } from '../mcp/server.ts';
+import { APPROVAL_NOTE, ARTIFACT_NOTE, TOOL_NAMES } from '../mcp/server.ts';
 import type { AgentId } from './types.ts';
 
 export { homes, run, SCRUB_ENV, SKIP_FLAG, writeAgyMcpConfig, writeAgyRules, type Launch, type RunResult } from '@chauvoluuhuong/chorus-core';
@@ -47,7 +47,7 @@ export interface InteractiveOpts {
 
 /** Where a thread's artifacts go, said to the agent (architecture §9). Claude and agy also get it through the MCP server's instructions. */
 export function artifactNote(project: string, threadId: string): string {
-  return `This chat is Chorus thread ${threadId}. Files meant for the user (notes, plans, reports, mockups, anything that is not source code of the project) go in ${path.join(project, '.chorus', 'threads', threadId, 'artifacts')} (create it if missing). Chorus shows them in its Artifacts view. ${APPROVAL_NOTE}`;
+  return `This chat is Chorus thread ${threadId}. ${ARTIFACT_NOTE} ${APPROVAL_NOTE}`;
 }
 
 export function mcpCommand(project: string, threadId: string, home?: string) {

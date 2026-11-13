@@ -1,12 +1,13 @@
 // chorus serve (Phase 5): the local API and the agent-screen WebSocket, with a fake TUI as the agent.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import WebSocket from 'ws';
-import { Controller } from '../../src/app/controller.ts';
+import { Controller, SKIPPED } from '../../src/app/controller.ts';
 import { VirtualScreen } from '../../src/app/screen.ts';
 import { buildHandoff } from '../../src/core/handoff.ts';
 import { buildInteractive } from '../../src/core/launch.ts';
@@ -40,6 +41,7 @@ async function rig(seed?: (store: Store, project: string) => void, notifications
   const c = new Controller({
     project,
     store,
+    stillMs: 300,
     // only a test that says whether sessions exist checks for lost ones (decision 18)
     sessionGone: doctor.sessionExists ? row => srvRef?.sessionGone(row) : undefined,
     app: headlessApp(),
@@ -790,6 +792,186 @@ test('serve: a chat whose folder is not on this computer is shown, not started, 
     await sleep(300);
     assert.deepEqual(r.launches, [], 'nothing started');
     assert.equal((await r.api('GET', '/api/state')).status, 200, 'still serving');
+    v.ws.close();
+  } finally {
+    await r.done();
+  }
+});
+
+/* ---------- the Planner loop's host side, and Approvals (plan 2026-11-13) ---------- */
+
+test('typing into a chat (the Planner loop): sent, one message at a time; an ended chat is resumed first; gone without its session; not now while a prompt waits', async () => {
+  const r = await rig(undefined, undefined, undefined, { sessionExists: row => row.native_session_id !== 'sess-gone' });
+  const send = (id: string, text: string) => (r.srv as any).sendToChat(id, text) as Promise<string>;
+  try {
+    const v = await viewer(r.url, r.srv.token);
+    const a = (await r.api('POST', '/api/chats', { agent: 'codex', folder: r.project })).json.id as string;
+    v.send({ t: 'attach', id: a, cols: 100, rows: 30 });
+    await v.until(() => /READY codex/.test(v.text()), 'codex up');
+    assert.deepEqual(await Promise.all([send(a, 'first message'), send(a, 'second message')]), ['sent', 'sent']);
+    await v.until(() => /got: "second message"/.test(v.text()), 'both typed');
+    assert.ok(v.text().indexOf('got: "first message"') < v.text().indexOf('got: "second message"'), 'in order, each with its own Enter');
+    // a chat whose CLI ended is continued with its resume, then typed into once its screen is still
+    const b = (await r.api('POST', '/api/chats', { agent: 'claude', folder: r.project })).json.id as string;
+    await sleep(800);
+    r.store.updateThread(b, { native_session_id: 'sess-b' });
+    r.c.app.entry(b)!.host!.kill();
+    await sleep(500);
+    const before = r.launches.length;
+    assert.equal(await send(b, 'answer from the Planner'), 'sent');
+    assert.equal(r.launches.length, before + 1);
+    assert.equal(r.launches.at(-1)!.resumeId, 'sess-b', 'resumed on its own session');
+    for (let i = 0; i < 40 && !/got: "answer from the Planner"/.test(r.c.app.entry(b)!.host!.screen.text().join('\n')); i++) await sleep(50);
+    assert.match(r.c.app.entry(b)!.host!.screen.text().join('\n'), /got: "answer from the Planner"/);
+    // its CLI no longer has the session: gone, nothing started
+    const g = (await r.api('POST', '/api/chats', { agent: 'claude', folder: r.project })).json.id as string;
+    await sleep(500);
+    r.store.updateThread(g, { native_session_id: 'sess-gone' });
+    r.c.app.entry(g)!.host!.kill();
+    await sleep(400);
+    const n = r.launches.length;
+    assert.equal(await send(g, 'hello?'), 'gone');
+    assert.equal(r.launches.length, n, 'not resumed into an empty chat');
+    // a permission prompt on its screen: not typed now
+    r.c.app.entry(a)!.host!.write(`show ${PROMPT}\r`);
+    await v.until(() => v.state()?.approvals.some((x: any) => x.id === a && x.kind === 'permission'), 'a prompt');
+    assert.equal(await send(a, 'third'), 'ended');
+    v.ws.close();
+  } finally {
+    await r.done();
+  }
+});
+
+test('question cards: kind, Skip types the skip line (no decision logged), typing to the agent removes the card at once; Approvals delete; deleting a chat tells the module', async () => {
+  const r = await rig();
+  try {
+    const v = await viewer(r.url, r.srv.token);
+    const a = (await r.api('POST', '/api/chats', { agent: 'codex', folder: r.project })).json.id as string;
+    v.send({ t: 'attach', id: a, cols: 100, rows: 30 });
+    await v.until(() => /READY codex/.test(v.text()), 'codex up');
+    const q = r.store.createRequest({ threadId: a, question: 'Which table?', options: ['orders', 'carts'], kind: 'question' });
+    await v.until(() => v.state()?.approvals.some((x: any) => x.request === q.id), 'the question');
+    assert.equal(v.state().approvals.find((x: any) => x.request === q.id).askKind, 'question');
+    const logged = r.store.approvalsLog().length;
+    assert.equal((await r.api('POST', `/api/chats/${a}/answer`, { request: q.id, option: SKIPPED })).json.ok, true);
+    await v.until(() => v.text().includes(`got: "Chorus approval ${q.id}: skipped. Decide yourself and say what you chose."`), 'the skip line typed');
+    assert.equal(r.store.approvalsLog().length, logged, 'a skip is not a decision');
+    assert.ok(!v.state().approvals.some((x: any) => x.request === q.id), 'gone from Approvals');
+    // the user types to the agent instead of answering: the card and its Approvals row go at once
+    const ap = r.store.createRequest({ threadId: a, question: 'Drop the table?' });
+    await v.until(() => v.state()?.approvals.some((x: any) => x.request === ap.id && x.askKind === 'approval'), 'an approval');
+    v.send({ t: 'in', id: a, data: 'no, keep it\r' });
+    await v.until(() => r.store.getRequest(ap.id)!.status === 'cancelled' && !v.state().approvals.some((x: any) => x.request === ap.id), 'typed instead of answered', 1000);
+    // delete from Approvals: a question is cancelled; a command prompt is hidden there and keeps its line in the chat
+    const d = r.store.createRequest({ threadId: a, question: 'Ship it?', kind: 'question' });
+    await v.until(() => v.state()?.approvals.some((x: any) => x.request === d.id), 'another question');
+    assert.equal((await r.api('POST', `/api/chats/${a}/dismiss`, { request: d.id })).json.ok, true);
+    assert.equal(r.store.getRequest(d.id)!.status, 'cancelled');
+    assert.ok(!(await r.api('GET', '/api/approvals')).json.pending.some((x: any) => x.request === d.id));
+    r.c.app.entry(a)!.host!.write(`show ${PROMPT}\r`);
+    await v.until(() => v.state()?.approvals.some((x: any) => x.id === a && x.kind === 'permission'), 'a prompt');
+    await r.api('POST', `/api/chats/${a}/dismiss`, {});
+    await v.until(() => v.state().approvals.find((x: any) => x.id === a && x.kind === 'permission')?.hidden === true, 'hidden');
+    assert.equal((await r.api('GET', '/api/approvals')).json.pending.length, 0, 'not in Approvals');
+    assert.equal(r.store.approvalsLog().length, logged, 'nothing answered');
+    // a deleted chat: the optional module is told, so its waiting items go too
+    const events: any[] = [];
+    (r.srv as any).pro.chatEvent = (ev: any) => events.push(ev);
+    await r.api('DELETE', `/api/chats/${a}`);
+    await v.until(() => v.state()?.dialogs.length === 1, 'asked');
+    await r.api('POST', `/api/dialogs/${v.state().dialogs[0].id}`, { value: 'y' });
+    await v.until(() => events.some(e => e.type === 'deleted' && e.thread === a), 'told');
+    assert.equal(v.state().approvals.length, 0);
+    v.ws.close();
+  } finally {
+    await r.done();
+  }
+});
+
+test('Artifacts by report: files that exist and http(s) links, newest first, with the old folder\'s files; a click opens the file with the system\'s open command', async () => {
+  const r = await rig();
+  try {
+    const a = (await r.api('POST', '/api/chats', { agent: 'codex', folder: r.project })).json.id as string;
+    fs.writeFileSync(path.join(r.project, 'mock.html'), '<p>mock</p>');
+    const gone = path.join(r.project, 'gone.md');
+    fs.writeFileSync(gone, 'x');
+    r.store.reportArtifact(a, path.join(r.project, 'mock.html'), 'Export button mockup');
+    r.store.reportArtifact(a, gone);
+    fs.rmSync(gone);
+    r.store.reportArtifact(a, 'https://example.com/preview');
+    const list = (await r.api('GET', `/api/chats/${a}/artifacts`)).json;
+    assert.deepEqual(list.reported.map((x: any) => [x.title, x.link]), [['https://example.com/preview', true], ['Export button mockup', false]], 'a file that is no longer there is not listed');
+    const opened: string[] = [];
+    (r.srv as any).o.openFile = async (t: string) => (opened.push(t), { ok: true });
+    assert.equal((await r.api('POST', `/api/chats/${a}/open-report`, { id: list.reported[1].id })).json.ok, true);
+    assert.equal((await r.api('POST', `/api/chats/${a}/open-report`, { id: list.reported[0].id })).json.ok, true);
+    assert.deepEqual(opened, [path.join(r.project, 'mock.html'), 'https://example.com/preview']);
+    assert.match((await r.api('POST', `/api/chats/${a}/open-report`, { id: 999 })).json.error, /no longer there/);
+  } finally {
+    await r.done();
+  }
+});
+
+test('New chat: a first message\'s /skill-name loads that skill (any CLI); a /word that is no skill stays; @ lists a folder\'s files (git or not), only for folders Chorus offers', async () => {
+  const r = await rig((_s, project) => {
+    for (const [name, on] of [['brand-style', true], ['old-thing', false]] as const) {
+      fs.mkdirSync(path.join(project, '.chorus', 'skills', name), { recursive: true });
+      fs.writeFileSync(path.join(project, '.chorus', 'skills', name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name}\n---\nbody\n`);
+      void on;
+    }
+  });
+  try {
+    await r.api('POST', '/api/skills/old-thing/toggle');
+    const made = await r.api('POST', '/api/chats', { agent: 'agy', folder: r.project, prompt: 'Add a gift card page. Use /brand-style and /old-thing, see src/a/b and /tmp' });
+    assert.equal(made.status, 200);
+    assert.equal(r.launches.at(-1)!.prompt, 'Add a gift card page. Use Use the Chorus skill "brand-style" (load it with the chorus get_skill tool). and /old-thing, see src/a/b and /tmp');
+    // hand-off: the same, after the record
+    await r.api('POST', `/api/chats/${made.json.id}/handoff`, { to: 'codex', prompt: '/brand-style please' });
+    assert.match(r.launches.at(-1)!.prompt ?? '', /get_handoff_context[\s\S]*\n\nUse the Chorus skill "brand-style" \(load it with the chorus get_skill tool\)\. please$/);
+    // @: a git folder lists tracked and untracked-not-ignored files; ignored ones are left out
+    const git = (...a: string[]) => spawnSync('git', a, { cwd: r.project });
+    fs.mkdirSync(path.join(r.project, 'src', 'pages'), { recursive: true });
+    fs.writeFileSync(path.join(r.project, 'src', 'pages', 'orders.tsx'), 'x');
+    fs.writeFileSync(path.join(r.project, 'README.md'), 'x');
+    fs.writeFileSync(path.join(r.project, '.gitignore'), 'secret.env\n');
+    fs.writeFileSync(path.join(r.project, 'secret.env'), 'x');
+    git('init', '-q');
+    git('add', 'README.md');
+    const files = async (folder: string, q = '') => (await r.api('GET', `/api/files?folder=${encodeURIComponent(folder)}&q=${encodeURIComponent(q)}`)).json;
+    const all = (await files(r.project)).files as string[];
+    assert.ok(all.includes('README.md') && all.includes('src/pages/orders.tsx') && !all.includes('secret.env'), JSON.stringify(all));
+    assert.equal((await files(r.project, 'ORD')).files[0], 'src/pages/orders.tsx', 'any part of the path, any case');
+    // not git: a walk without dot folders and node_modules
+    const plain = fs.realpathSync(fs.mkdtempSync(path.join(os.homedir(), '.chorus-test-plain-')));
+    try {
+      fs.mkdirSync(path.join(plain, 'node_modules', 'x'), { recursive: true });
+      fs.mkdirSync(path.join(plain, '.cache'));
+      fs.writeFileSync(path.join(plain, 'node_modules', 'x', 'i.js'), 'x');
+      fs.writeFileSync(path.join(plain, '.cache', 'c'), 'x');
+      fs.writeFileSync(path.join(plain, 'notes.md'), 'x');
+      assert.deepEqual((await files(plain)).files, ['notes.md']);
+    } finally {
+      fs.rmSync(plain, { recursive: true, force: true });
+    }
+    assert.deepEqual((await files('/etc')).files, [], 'not a folder Chorus offers for a chat');
+    assert.deepEqual((await files('')).files, []);
+  } finally {
+    await r.done();
+  }
+});
+
+test('request_approval with other false: the state\'s ask says so (the card has no Other…); a question keeps Skip; the default keeps Other…', async () => {
+  const r = await rig();
+  try {
+    const v = await viewer(r.url, r.srv.token);
+    const a = (await r.api('POST', '/api/chats', { agent: 'claude', folder: r.project })).json.id as string;
+    const g = r.store.createRequest({ threadId: a, question: 'Grant the Workers all permissions for this plan?', options: ['Yes, grant', 'No'], kind: 'question', other: false });
+    await v.until(() => v.state()?.approvals.some((x: any) => x.request === g.id), 'the grant card');
+    const ask = v.state().approvals.find((x: any) => x.request === g.id);
+    assert.deepEqual([ask.other, ask.askKind], [false, 'question']);
+    const d = r.store.createRequest({ threadId: a, question: 'Which table?', options: ['orders', 'carts'] });
+    await v.until(() => v.state()?.approvals.some((x: any) => x.request === d.id), 'a default card');
+    assert.equal(v.state().approvals.find((x: any) => x.request === d.id).other, true);
     v.ws.close();
   } finally {
     await r.done();
