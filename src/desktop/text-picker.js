@@ -4,6 +4,7 @@
 //
 //   attachPicker(field, [{ chars: ['/'], label: 'Skills', empty: 'No skill matches', query: /[\w.-]*/,
 //                          enabled: () => true, items: async q => [{ key, main, sub }], insert: item => `/${item.key}` }])
+//   → { close, refresh, isOpen, destroy }: a page that redraws the field attaches a new picker and calls refresh() to reopen it
 //
 // The list is ↑ ↓ to move, Enter or Tab or a click to pick, Esc to close. Its styles are in style.css, block "text picker".
 
@@ -147,6 +148,8 @@ export function attachPicker(field, triggers, { onChange } = {}) {
   document.addEventListener('mousedown', onDown, true);
   return {
     close,
+    /** Looks at the field again: the list opens (or follows) the word the caret is in, as after typing. */
+    refresh: () => void update(),
     isOpen: () => !!tok && !box.hidden,
     destroy() {
       close();
