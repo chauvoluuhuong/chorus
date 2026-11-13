@@ -31,10 +31,13 @@ in one chunk read as a paste in the TUIs). It answers:
 
 ## Delete from Approvals
 
-Every row has 🗑. A warning comes first ("Handle it in its chat, or the chat may stay waiting"), with **Don't ask again** (saved UI
+Every place that shows a waiting item has 🗑 (2026-11-13, waiting items): a row in Approvals and on Home, the card docked in a
+chat (beside Fold, also folded) and the Approve / Deny line of a command prompt (at its end). A warning comes first ("Handle it in its chat, or the chat may stay waiting"), with **Don't ask again** (saved UI
 key `noDelAsk`); the module's rows use the same dialog (`host.confirmDelete`). Delete takes the item off the list only, the agent
-is not answered: an agent's question is cancelled; a command prompt is hidden from Approvals and its counts until it changes, and
-its Approve/Deny line stays in the chat (`POST chats/:id/dismiss`, the module's `dismissApproval`). Deleting a chat drops its card
+is not answered: an agent's question is cancelled; a command prompt is hidden from Approvals, its counts and its chat until the prompt
+on the agent's screen changes (`POST chats/:id/dismiss`, the module's `dismissApproval`). The counts follow the lists: the header's "N waiting", the sidebar's Approvals and Home count the
+host's rows plus the module's open needs (the module leaves out a need it hid); a project's "!N" and the Needs you filter count
+chats with an item in those lists. Deleting a chat drops its card
 and tells the module (`onChatEvent({ type: 'deleted' })`), which closes its plan approvals and gates and withdraws what it asked.
 
 ## Artifacts by report

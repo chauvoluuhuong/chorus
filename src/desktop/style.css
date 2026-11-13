@@ -285,6 +285,9 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 .ask-line { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; }
 .ask-fold { padding: 2px 9px; font-size: 12px; background: transparent; border-color: transparent; color: var(--muted); }
 .ask-fold:hover { background: var(--hover); }
+.icon-btn.del { font-size: 13px; opacity: 0.75; }
+.icon-btn.del:hover { opacity: 1; }
+.banner.ask .icon-btn.del, .ask-who .icon-btn.del { flex: none; }
 .ask-dock .ask-body { display: grid; gap: 10px; min-width: 0; }
 .ask-dock .what { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; line-height: 1.5; font-size: 13px; }
 .ask-dock .what .clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
