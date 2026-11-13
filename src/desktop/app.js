@@ -574,7 +574,7 @@ function treeHtml(keep) {
     const chats = keep ? all.filter(keep) : all;
     if (keep && !chats.length) continue;
     const folded = S.folded.has(cwd) && !keep;
-    const bang = all.filter(c => c.state === 'approval').length;
+    const bang = all.filter(waitsOnYou).length;
     // the project in front: the chat you look at is in it, or the New chat form starts there. Its ＋ always shows; others on hover.
     const here = (v.name === 'chat' && chats.some(c => c.id === v.id)) || (v.name === 'new' && !v.from && (S.form?.folder ?? v.folder) === cwd);
     tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-rm" data-act="rm-project" data-arg="${esc(cwd)}" title="Remove from the sidebar (the folder and its chats are kept)" aria-label="Remove ${esc(base(cwd))} from the sidebar">×</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button></div>`;
@@ -594,6 +594,9 @@ function treeHtml(keep) {
 /** What Approvals lists: a command prompt deleted from it stays hidden there (its Approve/Deny line stays in the chat). */
 const listed = () => (S.state?.approvals ?? []).filter(a => !a.hidden);
 const waitingCount = () => listed().length + (window.choruspro?.needsCount?.() ?? 0);
+/** A chat with an item in Approvals: what a project's "!N" and the Needs you filter count, so they agree with the lists (a prompt
+ *  deleted from Approvals still keeps its chat waiting on the agent's screen, but it is no longer counted). */
+const waitsOnYou = c => listed().some(a => a.id === c.id);
 
 function renderChrome() {
   const st = S.state;
@@ -781,7 +784,7 @@ function homeHtml() {
   const active = chats.filter(c => c.state in ORDER).sort((a, b) => ORDER[a.state] - ORDER[b.state]).slice(0, 6);
   const row = c => `<button class="hm-row" data-act="chat" data-arg="${esc(c.id)}"><span class="dot ${esc(c.state)}"></span><span class="tx"><b>${esc(c.title)}</b><span>${chatSub(c)}</span></span><span class="badge mini ${esc(c.agent)}">${esc(AGENT[c.agent]?.letter ?? '?')}</span><span class="chev">›</span></button>`;
   const projects = [...chatsByProject()].map(([cwd, cs]) => {
-    const bang = cs.filter(c => c.state === 'approval').length;
+    const bang = cs.filter(waitsOnYou).length;
     return `<button class="card hm-proj" data-act="proj-open" data-arg="${esc(cwd)}"><b><span>${esc(base(cwd))}</span>${bang ? `<i>!${bang}</i>` : ''}</b><span class="sub">${cs.length} chat${cs.length === 1 ? '' : 's'}</span><span class="dots">${cs.slice(0, 8).map(c => `<span class="dot ${esc(c.state)}"></span>`).join('')}</span></button>`;
   }).join('');
   return `<div class="hm">
@@ -799,7 +802,7 @@ function homeHtml() {
 
 const CHAT_FILTERS = [
   ['all', 'All', () => true],
-  ['needs', 'Needs you', c => c.state === 'approval'],
+  ['needs', 'Needs you', c => waitsOnYou(c)],
   ['working', 'Working', c => c.state === 'busy' || c.state === 'starting'],
   ['turn', 'Your turn', c => c.state === 'idle'],
   ['resting', 'Resting', c => c.state === 'parked' || c.state === 'ended'],
@@ -1006,7 +1009,7 @@ async function loadDecided() {
 const waitFor = since => { const s = Date.now() / 1000 - since; return s < 60 ? `${Math.max(0, Math.round(s))}s` : `${Math.round(s / 60)}m`; };
 const riskBadge = r => (r ? `<span class="badge ${r.level === 'err' ? 'bad' : r.level === 'warn' ? 'warn' : 'plain'}">${esc(r.label)}</span>` : '');
 /** One request from a chat, with its answers: Approvals, and a phone's Home. */
-const approvalItem = a => `<div class="item"><div class="head"><span class="dot approval"></span><span class="t">${esc(a.title)}</span><span class="badge ${esc(a.agent)}">${esc(AGENT[a.agent]?.name ?? a.agent)}</span><span class="faint">${esc(base(a.cwd))} · waiting ${waitFor(a.since)}</span><span style="flex:1"></span>${riskBadge(a.risk)}<button class="icon-btn" data-act="appr-del" data-arg="${esc(a.id)}" data-req="${esc(a.request ?? '')}" title="Delete from Approvals" aria-label="Delete from Approvals">🗑</button></div>
+const approvalItem = a => `<div class="item"><div class="head"><span class="dot approval"></span><span class="t">${esc(a.title)}</span><span class="badge ${esc(a.agent)}">${esc(AGENT[a.agent]?.name ?? a.agent)}</span><span class="faint">${esc(base(a.cwd))} · waiting ${waitFor(a.since)}</span><span style="flex:1"></span>${riskBadge(a.risk)}${delBtn(a.id, a.request)}</div>
           ${
             a.kind === 'ask'
               ? `${askCard(a)}<div class="acts"><span style="flex:1"></span><button class="btn" data-act="chat" data-arg="${esc(a.id)}">Open chat ›</button></div>`
@@ -1652,7 +1655,8 @@ function renderChatParts() {
   fillSlots();
   let banners = '';
   // a CLI's permission prompt: the thin Approve/Deny line over the chat column
-  for (const ask of S.state.approvals.filter(a => a.id === c.id && a.kind !== 'ask')) banners += `<div class="banner ask"><b>${esc(AGENT[c.agent]?.name ?? c.agent)} asks</b><span class="what" title="${esc(ask.what)}">${esc(ask.what)}</span><button class="btn good" data-act="approve" data-arg="${esc(c.id)}">✓ Approve</button><button class="btn danger" data-act="deny" data-arg="${esc(c.id)}">✕ Deny</button></div>`;
+  // deleted (🗑, here or in Approvals): hidden in the chat too until the prompt on the agent's screen changes
+  for (const ask of S.state.approvals.filter(a => a.id === c.id && a.kind !== 'ask' && !a.hidden)) banners += `<div class="banner ask"><b>${esc(AGENT[c.agent]?.name ?? c.agent)} asks</b><span class="what" title="${esc(ask.what)}">${esc(ask.what)}</span><button class="btn good" data-act="approve" data-arg="${esc(c.id)}">✓ Approve</button><button class="btn danger" data-act="deny" data-arg="${esc(c.id)}">✕ Deny</button>${delBtn(c.id, '')}</div>`;
   if (d?.fromRecord) banners += `<div class="banner info"><span>${esc(d.fromRecord)} no longer had this chat's session, so Chorus continues it from its own record.</span></div>`;
   if (c.parentId && d && !d.contextLoaded && c.state === 'idle' && d.turns.some(t => t.role === 'assistant')) banners += `<div class="banner info"><span>⚠ This chat has not loaded the record of the chat it continues.</span><button class="btn" data-act="retry" data-arg="${esc(c.id)}">Ask again</button></div>`;
   const bannerEl = $('#chat-banners');
@@ -1797,6 +1801,8 @@ async function withSkills(text) {
   const names = new Set((await skillsOn()).map(k => k.name));
   return String(text ?? '').replace(/(^|\s)\/([\w-]+(?:\.[\w-]+)*)(?=\s|$|[,.;:!?)])/g, (all, pre, name) => (names.has(name) ? `${pre}Use the Chorus skill "${name}" (load it with the chorus get_skill tool).` : all));
 }
+/** 🗑 on a waiting item, wherever it shows (Approvals, Home, the card in a chat, the Approve / Deny line): one warning, one result. */
+const delBtn = (id, request) => `<button class="icon-btn del" data-act="appr-del" data-arg="${esc(id)}" data-req="${esc(request ?? '')}" title="Delete from Approvals" aria-label="Delete from Approvals">🗑</button>`;
 /** Typed for Skip on a question card: the agent decides itself. */
 const SKIPPED = 'skipped. Decide yourself and say what you chose.';
 
@@ -1811,7 +1817,7 @@ function drawDock(c, force = false) {
   const w = askWho(c, window.choruspro, AGENT), who = esc(w.name);
   const mark = w.teammate ? `<span class="badge mini ${esc(w.agent)}">${esc(AGENT[w.agent]?.letter ?? '?')}</span>` : '';
   const fold = a && S.askFold.has(a.request);
-  const html = !a ? '' : `<div class="ask-dock${fold ? ' min' : ''}" role="region" aria-label="${who} asks you"><div class="ask-who">${mark}<b>${who} asks you</b>${fold ? `<span class="ask-line">${esc(a.question)}</span>` : '<span class="grow"></span>'}<button class="btn ask-fold" data-act="ask-fold" data-arg="${esc(a.request)}" title="${fold ? 'Open the card' : 'Fold to one line'}" aria-expanded="${!fold}">${fold ? '▴ Open' : '▾ Fold'}</button></div>${fold ? '' : `<div class="ask-body">${askCard(a, true)}</div>`}</div>`;
+  const html = !a ? '' : `<div class="ask-dock${fold ? ' min' : ''}" role="region" aria-label="${who} asks you"><div class="ask-who">${mark}<b>${who} asks you</b>${fold ? `<span class="ask-line">${esc(a.question)}</span>` : '<span class="grow"></span>'}<button class="btn ask-fold" data-act="ask-fold" data-arg="${esc(a.request)}" title="${fold ? 'Open the card' : 'Fold to one line'}" aria-expanded="${!fold}">${fold ? '▴ Open' : '▾ Fold'}</button>${delBtn(c.id, a.request)}</div>${fold ? '' : `<div class="ask-body">${askCard(a, true)}</div>`}</div>`;
   // typing a note or your own answer: the card waits (a click on Fold or Show more redraws it at once)
   if (el.dataset.html === html || (!force && el.contains(document.activeElement) && a)) return;
   el.innerHTML = html;
