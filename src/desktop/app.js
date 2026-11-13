@@ -725,6 +725,10 @@ function renderView() {
   const slot = el.querySelector('[data-pro-slot="view"]');
   if (v.name === 'pro' && slot?.dataset.id === v.id) return;
   const scroll = el.scrollTop;
+  // a redraw while you type (a pushed state, the module's refresh as chats run) must not move you: the focused field gets its
+  // focus, caret and scroll back, and an open "/" or "@" list opens again at the caret
+  const typing = document.activeElement?.id && el.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName) ? document.activeElement : null;
+  const keep = typing && { id: typing.id, start: typing.selectionStart, end: typing.selectionEnd, dir: typing.selectionDirection, top: typing.scrollTop, list: typing.id === 'nc-prompt' && !!ncPicker?.isOpen() };
   el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml, unlock: unlockHtml, welcome: welcomeHtml, trying: tryingHtml, paying: payingHtml, 'pro-paid': paidHtml, 'pro-started': startedHtml, 'pro-ended': endedHtml, home: homeHtml, chats: chatsHtml, more: moreHtml, pro: () => `<div data-pro-slot="view" data-id="${esc(v.id ?? '')}" style="height:100%"></div>` }[v.name]?.() ?? '';
   // a state push redraws a phone's Home and Chats: where you were stays (another screen starts at its top)
   if (['home', 'chats', 'more', 'approvals'].includes(v.name) && el.dataset.v === v.name) el.scrollTop = scroll;
@@ -734,7 +738,17 @@ function renderView() {
   if (v.name === 'new') {
     const ta = $('#nc-prompt');
     if (ta) attachNcPicker(ta);
-    if (ta && !v.from && !MQ_TOUCH.matches) ta.focus();
+    if (ta && !keep && !v.from && !MQ_TOUCH.matches) {
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+  }
+  const back = keep && document.getElementById(keep.id);
+  if (back && el.contains(back)) {
+    back.focus({ preventScroll: true });
+    if (keep.start != null) back.setSelectionRange(keep.start, keep.end, keep.dir ?? 'none');
+    back.scrollTop = keep.top;
+    if (keep.list) ncPicker?.refresh();
   }
   if (v.name === 'chats' && S.cl.focus) {
     const q = $('#cl-q');
