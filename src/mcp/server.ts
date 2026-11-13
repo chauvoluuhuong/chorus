@@ -103,12 +103,14 @@ export function createServer(project: string, threadId?: string, home?: string):
         question: z.string().min(1).describe('What you ask, in one sentence (e.g. "Apply the migration plan to the production database?")'),
         details: z.string().optional().describe('A short summary the user needs to decide: the plan, the command, what changes (a few lines; the full plan can be an artifact)'),
         options: z.array(z.string().min(1)).min(2).max(5).optional().describe('The answers to offer, the one you suggest first. Default: ["Approve", "Decline"]'),
+        kind: z.enum(['question', 'approval']).optional().describe('"approval" (the default): the user approves or declines an action you want to take. "question": you need a choice or a fact from the user; they may also skip it, and then you decide yourself.'),
       },
     },
-    async ({ question, details, options }) => {
+    async ({ question, details, options, kind }) => {
       if (!threadId) return reply('request_approval', 'This chat is not a Chorus thread: ask the user in your reply.', true);
-      const r = store.createRequest({ threadId, question, details, options });
-      return reply('request_approval', `Shown to the user as approval card ${r.id} with the options: ${r.options.join(' / ')}. End your turn now without asking again in your reply. Their answer arrives as their next message: "Chorus approval ${r.id}: <option>", or "Other: <their own words>" when none fit.`);
+      const r = store.createRequest({ threadId, question, details, options, kind });
+      const skip = r.kind === 'question' ? ' If they skip it, the message is "Chorus approval <id>: skipped. Decide yourself and say what you chose.": then decide yourself, say what you chose, and go on.' : '';
+      return reply('request_approval', `Shown to the user as approval card ${r.id} with the options: ${r.options.join(' / ')}. End your turn now without asking again in your reply. Their answer arrives as their next message: "Chorus approval ${r.id}: <option>", or "Other: <their own words>" when none fit.${skip}`);
     },
   );
 

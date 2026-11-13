@@ -47,10 +47,22 @@ export interface RequestRow {
   details: string | null;
   options: string[];
   status: 'pending' | 'answered' | 'cancelled';
+  /** a question (open: it can be skipped, the agent decides itself) or an approval (Approve / Decline of an action) */
+  kind: 'question' | 'approval';
   answer: string | null;
   note: string | null;
   created: string;
   answered: string | null;
+}
+
+/** A file or link an agent reported with the chorus `show_artifact` tool (plan 2026-11-13): wherever it is saved. */
+export interface ReportedArtifact {
+  id: number;
+  thread_id: string;
+  /** an absolute path, or an http(s) link */
+  target: string;
+  title: string | null;
+  ts: string;
 }
 
 export interface ArtifactRow {
@@ -96,7 +108,10 @@ CREATE TABLE IF NOT EXISTS attachments (
 );
 CREATE TABLE IF NOT EXISTS requests (
   id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, question TEXT NOT NULL, details TEXT, options TEXT NOT NULL,
-  status TEXT NOT NULL, answer TEXT, note TEXT, created TEXT NOT NULL, answered TEXT
+  status TEXT NOT NULL, answer TEXT, note TEXT, created TEXT NOT NULL, answered TEXT, kind TEXT NOT NULL DEFAULT 'approval'
+);
+CREATE TABLE IF NOT EXISTS reported (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, thread_id TEXT NOT NULL, target TEXT NOT NULL, title TEXT, ts TEXT NOT NULL
 );
 `;
 
@@ -141,6 +156,8 @@ export class Store {
     if (!tcols.includes('detail')) this.db.exec('ALTER TABLE tool_calls ADD COLUMN detail TEXT');
     if (!cols.includes('effort')) this.db.exec('ALTER TABLE threads ADD COLUMN effort TEXT');
     if (!cols.includes('turn_base')) this.db.exec('ALTER TABLE threads ADD COLUMN turn_base INTEGER NOT NULL DEFAULT 0');
+    const rcols = (this.db.prepare('PRAGMA table_info(requests)').all() as { name: string }[]).map(c => c.name);
+    if (!rcols.includes('kind')) this.db.exec("ALTER TABLE requests ADD COLUMN kind TEXT NOT NULL DEFAULT 'approval'");
   }
 
   /**
@@ -250,7 +267,7 @@ export class Store {
     db.exec('BEGIN');
     try {
       db.prepare('UPDATE threads SET parent_thread_id = NULL WHERE parent_thread_id = ?').run(id);
-      for (const table of ['turns', 'tool_calls', 'usage', 'artifacts', 'approvals_log', 'mcp_calls', 'requests', 'attachments']) db.prepare(`DELETE FROM ${table} WHERE thread_id = ?`).run(id);
+      for (const table of ['turns', 'tool_calls', 'usage', 'artifacts', 'approvals_log', 'mcp_calls', 'requests', 'attachments', 'reported']) db.prepare(`DELETE FROM ${table} WHERE thread_id = ?`).run(id);
       db.prepare('DELETE FROM threads WHERE id = ?').run(id);
       db.exec('COMMIT');
     } catch (e) {
@@ -383,10 +400,10 @@ export class Store {
    * An agent asks the user something (the chorus request_approval tool); the app that hosts the chat shows it. One open ask per
    * chat: the chat's older pending asks are cancelled (not answered, so nothing goes to the approvals log).
    */
-  createRequest(r: { threadId: string; question: string; details?: string; options?: string[] }): RequestRow {
+  createRequest(r: { threadId: string; question: string; details?: string; options?: string[]; kind?: 'question' | 'approval' }): RequestRow {
     const id = `r_${randomBytes(4).toString('hex')}`;
     this.db.prepare("UPDATE requests SET status = 'cancelled', answered = ? WHERE thread_id = ? AND status = 'pending'").run(now(), r.threadId);
-    this.db.prepare("INSERT INTO requests (id,thread_id,question,details,options,status,created) VALUES (?,?,?,?,?,'pending',?)").run(id, r.threadId, r.question, r.details ?? null, JSON.stringify(r.options?.length ? r.options : ['Approve', 'Decline']), now());
+    this.db.prepare("INSERT INTO requests (id,thread_id,question,details,options,status,created,kind) VALUES (?,?,?,?,?,'pending',?,?)").run(id, r.threadId, r.question, r.details ?? null, JSON.stringify(r.options?.length ? r.options : ['Approve', 'Decline']), now(), r.kind === 'question' ? 'question' : 'approval');
     return this.getRequest(id)!;
   }
 
@@ -403,6 +420,18 @@ export class Store {
   /** Answers a pending request once; false when it was already answered or cancelled (by another window or app). */
   answerRequest(id: string, answer: string, note?: string, status: 'answered' | 'cancelled' = 'answered'): boolean {
     return Number(this.db.prepare("UPDATE requests SET status = ?, answer = ?, note = ?, answered = ? WHERE id = ? AND status = 'pending'").run(status, answer, note ?? null, now(), id).changes) > 0;
+  }
+
+  /** show_artifact: the agent reports a file (absolute path) or a link it made for the user. The same target again moves it up. */
+  reportArtifact(threadId: string, target: string, title?: string): ReportedArtifact {
+    this.db.prepare('DELETE FROM reported WHERE thread_id = ? AND target = ?').run(threadId, target);
+    const r = this.db.prepare('INSERT INTO reported (thread_id,target,title,ts) VALUES (?,?,?,?)').run(threadId, target, title?.trim() || null, now());
+    return this.db.prepare('SELECT * FROM reported WHERE id = ?').get(Number(r.lastInsertRowid)) as unknown as ReportedArtifact;
+  }
+
+  /** What a chat reported, newest first. */
+  reportedArtifacts(threadId: string): ReportedArtifact[] {
+    return this.db.prepare('SELECT * FROM reported WHERE thread_id = ? ORDER BY id DESC').all(threadId) as unknown as ReportedArtifact[];
   }
 
   mcpCalls(threadId: string): { tool: string; ts: string }[] {

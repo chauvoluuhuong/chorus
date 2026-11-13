@@ -200,7 +200,7 @@ export class ChorusServer {
     this.container = o.container ?? (process.env.CHORUS_BOX === '1' || inContainer());
     // a sign-in that finished: check again, so the Doctor shows the agent ready
     this.signIns = o.signIns ?? new SignIns({ onChange: s => { if (s.state === 'done') void this.checkAgents({ quiet: true }).catch(e => this.noteError('doctor check', e)); } });
-    this.pro = new ProHost({ homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.c.approvalItems('all').map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))] }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
+    this.pro = new ProHost({ homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), dismissApproval: (thread, request) => this.dismissApproval(thread, request), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.approvalsNow().filter(a => !a.hidden).map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))] }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     if (o.chatLaunch) o.chatLaunch.host = this.pro;
     this.bridge();
   }
@@ -215,12 +215,53 @@ export class ChorusServer {
     }
   }
 
+  /** The optional module types into a chat (the Planner loop): an ended chat is continued first; `gone` when its session is gone. */
   private sendToChat(id: string, text: string) {
-    const host = this.app.entry(id)?.host;
-    if (!host) return;
-    host.write(text);
-    // text and Enter in one chunk read as a paste in the TUIs: Enter goes apart
-    setTimeout(() => host.state === 'running' && host.write('\r'), 700);
+    return this.c.sendToChat(id, text, row => (this.o.sessionExists ?? sessionOnDisk)(row));
+  }
+
+  /** Command prompts deleted from Approvals: hidden there until the prompt changes; their Approve/Deny line stays in the chat. */
+  private hiddenPrompts = new Map<string, string>();
+
+  /**
+   * Approvals' delete (plan 2026-11-13, item 4): the item only, the agent is not answered. An agent's question is cancelled; a
+   * command prompt is hidden from Approvals until it changes.
+   */
+  dismissApproval(thread: string, request?: string) {
+    const c = this.c;
+    if (request) {
+      const r = c.store.getRequest(request);
+      if (r && r.thread_id === thread) c.store.answerRequest(r.id, '', undefined, 'cancelled');
+    } else {
+      const p = c.approvalItems('all').find(a => a.id === thread && a.kind === 'permission');
+      if (p) this.hiddenPrompts.set(thread, p.what);
+    }
+    this.pushState();
+  }
+
+  /**
+   * What waits on the user now: the controller's prompts and cards, with each card's kind (question or approval). A card the store
+   * no longer has pending (answered by typing, skipped, deleted) is left out at once; a command prompt deleted from Approvals is
+   * marked hidden until it changes.
+   */
+  private approvalsNow(): (ReturnType<Controller['approvalItems']>[number] & { hidden: boolean; askKind?: 'question' | 'approval' })[] {
+    const c = this.c;
+    const items = c.approvalItems('all').flatMap((a): (ReturnType<Controller['approvalItems']>[number] & { hidden: boolean; askKind?: 'question' | 'approval' })[] => {
+      if (a.kind !== 'ask') return [{ ...a, hidden: this.hiddenPrompts.get(a.id) === a.what }];
+      const r = c.store.getRequest(a.request);
+      return r && r.status === 'pending' ? [{ ...a, askKind: r.kind ?? 'approval', hidden: false }] : [];
+    });
+    for (const [id, what] of this.hiddenPrompts) if (!items.some(a => a.kind === 'permission' && a.id === id && a.what === what)) this.hiddenPrompts.delete(id);
+    return items;
+  }
+
+  /** Typing to the agent while its question card is open answers it by typing: the card leaves the chat and Approvals at once. */
+  private typedTo(id: string, data: string) {
+    if (!/[\r\n]/.test(data)) return;
+    const open = this.c.store.pendingRequests(id);
+    if (!open.length) return;
+    for (const r of open) this.c.store.answerRequest(r.id, '', undefined, 'cancelled');
+    this.pushState();
   }
 
   /** The Controller's questions, flashes and bell reach the desktop instead of a terminal. */
@@ -728,7 +769,11 @@ export class ChorusServer {
         return thread && this.chatDetail(id);
       case 'DELETE chats/:id':
         if (!thread) return undefined;
-        void c.deleteThread(id).then(() => this.pushState());
+        // once it is gone, the optional module closes its waiting items (plan approvals, gates) and withdraws what it asked
+        void c.deleteThread(id).then(() => {
+          if (!c.store.getThread(id)) this.pro.chatEvent({ type: 'deleted', thread: id } as { type: string });
+          this.pushState();
+        });
         return { asked: true };
       case 'POST chats/:id/select':
         return this.select(id) ? { ok: true } : undefined;
@@ -754,6 +799,11 @@ export class ChorusServer {
         this.pushState();
         return { ok };
       }
+      case 'POST chats/:id/dismiss':
+        // Approvals' delete (the page warned first): the item only, the agent is not answered
+        if (!thread) return undefined;
+        this.dismissApproval(id, typeof b.request === 'string' && b.request ? b.request : undefined);
+        return { ok: true };
       case 'POST chats/:id/retry':
         this.select(id);
         c.retryContext();
@@ -771,7 +821,7 @@ export class ChorusServer {
       case 'GET memory':
         return { where: c.store.shared ? c.store.root.replace(process.env.HOME ?? '\0', '~') + '/chorus.db' : '.chorus/chorus.db', items: c.memoryItems(q.get('q') ?? '') };
       case 'GET approvals':
-        return { pending: c.approvalItems('all'), decided: c.decidedItems() };
+        return { pending: this.approvalsNow().filter(a => !a.hidden), decided: c.decidedItems() };
       case 'GET skills':
         return this.skills();
       case 'POST skills': {
@@ -914,7 +964,7 @@ export class ChorusServer {
       chats,
       // when each request appeared (whole seconds), not "seconds waiting": the state must not change every push, or the
       // window would redraw the inbox under the mouse
-      approvals: c.approvalItems('all').map(({ waiting, ...x }) => ({ ...x, since: Math.round(Date.now() / 1000 - waiting) })),
+      approvals: this.approvalsNow().map(({ waiting, ...x }) => ({ ...x, since: Math.round(Date.now() / 1000 - waiting) })),
       ui: this.ui(),
       notice: this.app.notice,
       dialogs: [...this.dialogs.values()].map(x => x.d),
@@ -1057,6 +1107,7 @@ export class ChorusServer {
       } else if (m.t === 'in' && typeof m.data === 'string') {
         if (process.env.CHORUS_DEBUG_INPUT) fs.appendFileSync(process.env.CHORUS_DEBUG_INPUT, JSON.stringify(m.data) + '\n');
         host?.write(m.data);
+        if (host && typeof m.id === 'string') this.typedTo(m.id, m.data);
       }
       else if (m.t === 'resize' && m.cols > 0 && m.rows > 0 && this.setsSize(cl)) {
         this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
