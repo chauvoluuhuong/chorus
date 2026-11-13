@@ -382,6 +382,10 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 .tpick > button:hover, .tpick > button.on { background: var(--hover); }
 .tpick > button .mono { color: var(--accent); font-weight: 600; font-family: var(--f-mono); }
 .tpick > button.file .mono { color: var(--ink); }
+.tpick > button { min-width: 0; }
+/* as in the mockup: the name and a file's folder on one line, a description on two at most; longer ones end with an ellipsis */
+.tpick > button .mono, .tpick > button.file small { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tpick > button:not(.file) small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .tpick > button small { color: var(--muted); font-size: 12px; line-height: 1.35; }
 .tpick > button.file small { font-family: var(--f-mono); color: var(--faint); font-size: 11.5px; }
 .tpick-empty { padding: 8px 10px; color: var(--muted); font-size: 13px; }
