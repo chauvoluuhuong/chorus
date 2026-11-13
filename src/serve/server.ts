@@ -984,7 +984,7 @@ export class ChorusServer {
         effort: e.meta?.effort ?? t?.effort ?? null,
         skip: !!t?.skip_permissions,
         usage: e.meta?.usage ?? null,
-        artifacts: e.meta?.artifacts ?? 0,
+        artifacts: (e.meta?.artifacts ?? 0) + c.store.reportedArtifacts(e.id).length,
         toast: e.meta?.toast ?? null,
         updated: t?.updated ?? null,
       };
@@ -1336,7 +1336,7 @@ function readJson(req: http.IncomingMessage): Promise<Record<string, any>> {
 }
 
 /** What the page may save on the server (`POST ui`). */
-const UI_KEYS = new Set(['hidden', 'folded', 'agent', 'drawer', 'side', 'welcome', 'ended', 'banner']);
+const UI_KEYS = new Set(['hidden', 'folded', 'agent', 'drawer', 'side', 'sideW', 'noDelAsk', 'welcome', 'ended', 'banner']);
 const asAgent = (s: unknown): AgentId | undefined => (AGENTS.includes(s as AgentId) ? (s as AgentId) : undefined);
 const expand = (p: string) => p.replace(/^~(?=\/|$)/, process.env.HOME ?? '~');
 
