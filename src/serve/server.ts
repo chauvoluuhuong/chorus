@@ -27,7 +27,8 @@ import { buildHandoff, handoffPrompt } from '../core/handoff.ts';
 import { exportAll } from '../core/export.ts';
 import { SKIP_FLAG } from '../core/launch.ts';
 import { defaultOpener } from '../core/opener.ts';
-import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, sourceDir, syncSkills } from '../core/skills.ts';
+import { disabledSkills, expandSkillMentions, findNativeSkills, importSkill, listSkills, setSkillEnabled, sourceDir, syncSkills } from '../core/skills.ts';
+import { matchFiles, projectFiles } from '../core/files.ts';
 import type { AgentId } from '../core/types.ts';
 import { CLIS, type AgentCheck, type DeepReport, type FastReport } from '@chauvoluuhuong/chorus-core/doctor';
 import { check, composeIssue, firstLaunch, ghReady, host, isDue, isIssueKind, ISSUE_KINDS, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, remoteTested, reportDetails, runCommand, runDeep, sendIssue, versions, DOCTOR_DIR } from '../core/doctor.ts';
@@ -780,7 +781,8 @@ export class ChorusServer {
         const dir = path.resolve(expand(String(b.folder ?? c.project)));
         if (dir === computerDir()) fs.mkdirSync(dir, { recursive: true }); // "This computer": a chat that belongs to no project
         if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return { error: `${b.folder} is not a folder` };
-        const e = c.newThread({ agent, model: b.model, effort: b.effort, cwd: dir, skipPermissions: !!b.skip, prompt: b.prompt?.trim() || undefined });
+        const prompt = typeof b.prompt === 'string' ? expandSkillMentions(b.prompt.trim(), this.skillNames()) : undefined;
+        const e = c.newThread({ agent, model: b.model, effort: b.effort, cwd: dir, skipPermissions: !!b.skip, prompt: prompt || undefined });
         this.pushState();
         return { id: e.id };
       }
@@ -800,7 +802,8 @@ export class ChorusServer {
         const to = asAgent(b.to);
         if (!thread || !to) return undefined;
         const opts = { model: b.model, effort: b.effort, skipPermissions: !!b.skip };
-        const note = typeof b.note === 'string' ? b.note.trim() : '';
+        const typed = typeof b.note === 'string' ? b.note : typeof b.prompt === 'string' ? b.prompt : '';
+        const note = expandSkillMentions(typed.trim(), this.skillNames());
         // a note (the paid Hand off's "Anything to add?") goes after the record, in the same first message
         const e = note ? c.newThread({ agent: to, title: `${thread.title} → ${to}`, prompt: `${handoffPrompt(thread)}\n\n${note}`, parent: thread, cwd: thread.cwd, ...opts }) : await c.handoff(id, to, opts);
         this.pushState();
@@ -850,6 +853,12 @@ export class ChorusServer {
         return { pending: this.approvalsNow().filter(a => !a.hidden), decided: c.decidedItems() };
       case 'GET skills':
         return this.skills();
+      case 'GET files': {
+        // the New chat form's "@" list: the files of a folder Chorus offers for a chat
+        const folder = path.resolve(expand(String(q.get('folder') ?? '')));
+        if (!q.get('folder') || !this.offeredFolder(folder)) return { error: 'not a folder Chorus offers for a chat', files: [] };
+        return { files: matchFiles(projectFiles(folder), String(q.get('q') ?? '')) };
+      }
       case 'POST skills': {
         const slug = String(b.name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
         if (!slug) return { error: 'name it with lowercase words and dashes' };
@@ -1111,6 +1120,25 @@ export class ChorusServer {
       const inside = !link && !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
       return [{ id: r.id, title: r.title ?? (link ? r.target : path.basename(r.target)), target: r.target, link, inside, ts: r.ts, ago: c.ago(r.ts) }];
     });
+  }
+
+  /** The skills that are on in this project: what "/" lists and what a first message's `/name` loads. */
+  skillNames() {
+    const off = disabledSkills(this.c.project);
+    return listSkills(this.c.project).filter(s => !off.includes(path.basename(s.dir))).map(s => s.name);
+  }
+
+  /** A folder the New chat form offers for a chat: the project, a chat's or a recent folder, This computer, or one in the home folder (Browse…). */
+  private offeredFolder(dir: string) {
+    const c = this.c;
+    try {
+      if (!fs.statSync(dir).isDirectory()) return false;
+    } catch {
+      return false;
+    }
+    const known = new Set([c.project, computerDir(), ...c.store.listThreads().map(t => t.cwd), ...c.recentFolders(c.project)].map(d => path.resolve(d)));
+    const home = os.homedir();
+    return known.has(dir) || (dir !== home && dir.startsWith(home + path.sep));
   }
 
   skills() {

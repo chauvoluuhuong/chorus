@@ -227,3 +227,13 @@ export function importSkill(project: string, found: Pick<Skill, 'dir'>): string 
   fs.cpSync(found.dir, to, { recursive: true, dereference: true });
   return to;
 }
+
+/**
+ * A first message's `/skill-name` words (the New chat and hand-off forms' "/" list, plan 2026-11-13, item 8): each that names one
+ * of the given skills becomes a line the agent acts on with the chorus get_skill tool, the same on all three CLIs (none of their
+ * own slash commands is relied on). A `/word` that is no skill, or a path, stays as typed.
+ */
+export function expandSkillMentions(text: string, skills: string[]): string {
+  const known = new Set(skills);
+  return text.replace(/(^|\s)\/([\w-]+(?:\.[\w-]+)*)(?=\s|$|[,.;:!?)])/g, (all, pre: string, name: string) => (known.has(name) ? `${pre}Use the Chorus skill "${name}" (load it with the chorus get_skill tool).` : all));
+}

@@ -1,5 +1,6 @@
 // chorus serve (Phase 5): the local API and the agent-screen WebSocket, with a fake TUI as the agent.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -906,6 +907,54 @@ test('Artifacts by report: files that exist and http(s) links, newest first, wit
     assert.equal((await r.api('POST', `/api/chats/${a}/open-report`, { id: list.reported[0].id })).json.ok, true);
     assert.deepEqual(opened, [path.join(r.project, 'mock.html'), 'https://example.com/preview']);
     assert.match((await r.api('POST', `/api/chats/${a}/open-report`, { id: 999 })).json.error, /no longer there/);
+  } finally {
+    await r.done();
+  }
+});
+
+test('New chat: a first message\'s /skill-name loads that skill (any CLI); a /word that is no skill stays; @ lists a folder\'s files (git or not), only for folders Chorus offers', async () => {
+  const r = await rig((_s, project) => {
+    for (const [name, on] of [['brand-style', true], ['old-thing', false]] as const) {
+      fs.mkdirSync(path.join(project, '.chorus', 'skills', name), { recursive: true });
+      fs.writeFileSync(path.join(project, '.chorus', 'skills', name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${name}\n---\nbody\n`);
+      void on;
+    }
+  });
+  try {
+    await r.api('POST', '/api/skills/old-thing/toggle');
+    const made = await r.api('POST', '/api/chats', { agent: 'agy', folder: r.project, prompt: 'Add a gift card page. Use /brand-style and /old-thing, see src/a/b and /tmp' });
+    assert.equal(made.status, 200);
+    assert.equal(r.launches.at(-1)!.prompt, 'Add a gift card page. Use Use the Chorus skill "brand-style" (load it with the chorus get_skill tool). and /old-thing, see src/a/b and /tmp');
+    // hand-off: the same, after the record
+    await r.api('POST', `/api/chats/${made.json.id}/handoff`, { to: 'codex', prompt: '/brand-style please' });
+    assert.match(r.launches.at(-1)!.prompt ?? '', /get_handoff_context[\s\S]*\n\nUse the Chorus skill "brand-style" \(load it with the chorus get_skill tool\)\. please$/);
+    // @: a git folder lists tracked and untracked-not-ignored files; ignored ones are left out
+    const git = (...a: string[]) => spawnSync('git', a, { cwd: r.project });
+    fs.mkdirSync(path.join(r.project, 'src', 'pages'), { recursive: true });
+    fs.writeFileSync(path.join(r.project, 'src', 'pages', 'orders.tsx'), 'x');
+    fs.writeFileSync(path.join(r.project, 'README.md'), 'x');
+    fs.writeFileSync(path.join(r.project, '.gitignore'), 'secret.env\n');
+    fs.writeFileSync(path.join(r.project, 'secret.env'), 'x');
+    git('init', '-q');
+    git('add', 'README.md');
+    const files = async (folder: string, q = '') => (await r.api('GET', `/api/files?folder=${encodeURIComponent(folder)}&q=${encodeURIComponent(q)}`)).json;
+    const all = (await files(r.project)).files as string[];
+    assert.ok(all.includes('README.md') && all.includes('src/pages/orders.tsx') && !all.includes('secret.env'), JSON.stringify(all));
+    assert.equal((await files(r.project, 'ORD')).files[0], 'src/pages/orders.tsx', 'any part of the path, any case');
+    // not git: a walk without dot folders and node_modules
+    const plain = fs.realpathSync(fs.mkdtempSync(path.join(os.homedir(), '.chorus-test-plain-')));
+    try {
+      fs.mkdirSync(path.join(plain, 'node_modules', 'x'), { recursive: true });
+      fs.mkdirSync(path.join(plain, '.cache'));
+      fs.writeFileSync(path.join(plain, 'node_modules', 'x', 'i.js'), 'x');
+      fs.writeFileSync(path.join(plain, '.cache', 'c'), 'x');
+      fs.writeFileSync(path.join(plain, 'notes.md'), 'x');
+      assert.deepEqual((await files(plain)).files, ['notes.md']);
+    } finally {
+      fs.rmSync(plain, { recursive: true, force: true });
+    }
+    assert.deepEqual((await files('/etc')).files, [], 'not a folder Chorus offers for a chat');
+    assert.deepEqual((await files('')).files, []);
   } finally {
     await r.done();
   }
