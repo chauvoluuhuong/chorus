@@ -273,7 +273,11 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 .chat-col > .term-wrap { flex: 1; min-height: 0; }
 /* the "asks you" card: over the bottom of the chat column only, never over the sidebar; the newest open ask of the chat.
    No background colour (owner, 2026-11-12): the panel, the accent on its border and label; red is for Approve/Deny only */
-.ask-dock { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 5; max-height: calc(100% - 24px); overflow: auto; display: grid; gap: 10px; padding: 12px 16px 14px; background: var(--panel); border: 1px solid var(--accent); border-radius: 12px; box-shadow: var(--shadow); }
+/* below the agent's screen, which ends above it, so the CLI's own input line stays in view (plan 2026-11-13, item 7); folded, the
+   screen gets the space back */
+#ask-dock { flex: none; max-height: 62%; display: flex; flex-direction: column; min-height: 0; }
+#ask-dock:empty { display: none; }
+.ask-dock { position: relative; flex: 0 1 auto; margin: 8px 12px 12px; z-index: 5; min-height: 0; overflow: auto; display: grid; gap: 10px; padding: 12px 16px 14px; background: var(--panel); border: 1px solid var(--accent); border-radius: 12px; box-shadow: var(--shadow); }
 .ask-dock.min { padding: 6px 8px 6px 16px; }
 .ask-who { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 12px; }
 .ask-who > b { color: var(--accent); font-weight: 600; white-space: nowrap; }
@@ -332,6 +336,27 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
   .task-side { display: contents; }
 }
 .art { padding: 12px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+/* Artifacts: what the agent reported, a row each; a click opens it (plan 2026-11-13, item 5) */
+.art-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 11px 16px; font: inherit; color: inherit; text-decoration: none; cursor: pointer; }
+.art-row:hover { background: var(--hover); }
+.art-row.off { color: var(--muted); cursor: default; }
+.art-row.off:hover { background: none; }
+.art-t { flex: 1; min-width: 0; display: grid; gap: 2px; font-size: 13px; }
+.art-t .mono { font-size: 12px; word-break: break-all; }
+.art-t > .faint:last-child { font-size: 12px; }
+.art-go { color: var(--accent); font-size: 12.5px; font-weight: 600; flex: none; }
+/* the right sidebar's left edge: drag to resize, double-click to put it back (desktop only) */
+.side-resize { display: none; }
+@media (min-width: 1025px) {
+  .drawer, .task-side { position: relative; }
+  .side-resize { display: block; position: absolute; left: -4px; top: 0; bottom: 0; width: 8px; cursor: col-resize; z-index: 6; }
+  .side-resize::after { content: ''; position: absolute; left: 3px; top: 0; bottom: 0; width: 2px; background: transparent; transition: background 0.12s; }
+  .side-resize:hover::after, .side-resize.drag::after { background: var(--accent); }
+  .side-resize-tip { position: absolute; top: 50%; right: 10px; transform: translateY(-50%); white-space: nowrap; background: var(--ink); color: var(--bg); font-size: 11.5px; padding: 3px 8px; border-radius: 6px; opacity: 0; pointer-events: none; transition: opacity 0.12s; }
+  .side-resize:hover .side-resize-tip, .side-resize.drag .side-resize-tip { opacity: 1; }
+  body.resizing { cursor: col-resize; user-select: none; }
+  body.resizing .xterm { pointer-events: none; }
+}
 .art .name { font-family: var(--f-mono); font-size: 13px; font-weight: 600; word-break: break-all; }
 .art .acts { display: flex; gap: 6px; flex-wrap: wrap; }
 .act-row { display: grid; grid-template-columns: 62px 52px 1fr auto; gap: 8px; padding: 5px 16px; font: 12px/1.5 var(--f-mono); border-bottom: 1px solid var(--line); align-items: baseline; }
@@ -349,6 +374,17 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 .dialog .opts { display: flex; flex-direction: column; gap: 6px; padding: 6px 20px 18px; }
 .dialog .opts .btn { justify-content: flex-start; padding: 8px 12px; }
 .dialog .foot { display: flex; gap: 8px; justify-content: flex-end; padding: 10px 20px 18px; }
+.dialog .tick { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; color: var(--ink); }
+/* ---------- text picker (src/desktop/text-picker.js): "/" skills, "@" files ---------- */
+.tpick { position: absolute; z-index: 20; width: 340px; max-height: 300px; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.tpick[hidden] { display: none; }
+.tpick > button { text-align: left; border: 0; background: transparent; border-radius: 8px; padding: 7px 10px; display: flex; flex-direction: column; gap: 1px; color: var(--ink); }
+.tpick > button:hover, .tpick > button.on { background: var(--hover); }
+.tpick > button .mono { color: var(--accent); font-weight: 600; font-family: var(--f-mono); }
+.tpick > button.file .mono { color: var(--ink); }
+.tpick > button small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.tpick > button.file small { font-family: var(--f-mono); color: var(--faint); font-size: 11.5px; }
+.tpick-empty { padding: 8px 10px; color: var(--muted); font-size: 13px; }
 .folders { border: 1px solid var(--line); border-radius: 9px; max-height: 300px; overflow: auto; margin-top: 8px; }
 .folders button { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 6px 12px; font-family: var(--f-mono); font-size: 12.5px; }
 .folders button:hover { background: var(--hover); }

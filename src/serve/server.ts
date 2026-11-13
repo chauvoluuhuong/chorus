@@ -27,7 +27,8 @@ import { buildHandoff, handoffPrompt } from '../core/handoff.ts';
 import { exportAll } from '../core/export.ts';
 import { SKIP_FLAG } from '../core/launch.ts';
 import { defaultOpener } from '../core/opener.ts';
-import { disabledSkills, findNativeSkills, importSkill, listSkills, setSkillEnabled, sourceDir, syncSkills } from '../core/skills.ts';
+import { disabledSkills, expandSkillMentions, findNativeSkills, importSkill, listSkills, setSkillEnabled, sourceDir, syncSkills } from '../core/skills.ts';
+import { matchFiles, projectFiles } from '../core/files.ts';
 import type { AgentId } from '../core/types.ts';
 import { CLIS, type AgentCheck, type DeepReport, type FastReport } from '@chauvoluuhuong/chorus-core/doctor';
 import { check, composeIssue, firstLaunch, ghReady, host, isDue, isIssueKind, ISSUE_KINDS, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, remoteTested, reportDetails, runCommand, runDeep, sendIssue, versions, DOCTOR_DIR } from '../core/doctor.ts';
@@ -50,6 +51,10 @@ const VENDOR: Record<string, string> = {
 };
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const DEFAULT_SIZE = { cols: 120, rows: 36 };
+/** a reported artifact served to a device: what a browser can show by itself */
+const FILE_TYPES: Record<string, string> = { '.md': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.json': 'application/json', '.csv': 'text/plain; charset=utf-8', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.pdf': 'application/pdf' };
+/** The system's open command for a file or a link (macOS open, Linux xdg-open): an argument, never a shell string. */
+const openOnThisComputer = (target: string): Promise<{ ok: boolean; error?: string }> => (process.env.CHORUS_NO_OPEN === '1' ? Promise.resolve({ ok: true }) : defaultOpener({ mode: 'default' }, /^https?:/i.test(target) ? { url: target, path: target } : { path: target }));
 /**
  * How to sign in an AI CLI inside the Chorus box, from the computer's own terminal: Claude Code prints a link and waits for the code
  * pasted back; Codex needs --device-auth (its usual sign-in waits for the browser on the box's localhost:1455); agy asks on its first
@@ -124,6 +129,8 @@ export interface ServeOpts {
   chatLaunch?: ChatLaunch;
   /** opens the sign-up page in the user's browser (tests); the system's opener otherwise */
   openLink?: (url: string) => void;
+  /** opens a reported artifact on this computer (tests); the system's open command otherwise (macOS open, Linux xdg-open) */
+  openFile?: (target: string) => Promise<{ ok: boolean; error?: string }>;
   /** the system's folder picker (tests); the real one otherwise */
   pickFolder?: typeof pickFolder;
   /** runs the CLIs' sign-ins in a container (tests: a fake PTY); the real one otherwise */
@@ -200,7 +207,7 @@ export class ChorusServer {
     this.container = o.container ?? (process.env.CHORUS_BOX === '1' || inContainer());
     // a sign-in that finished: check again, so the Doctor shows the agent ready
     this.signIns = o.signIns ?? new SignIns({ onChange: s => { if (s.state === 'done') void this.checkAgents({ quiet: true }).catch(e => this.noteError('doctor check', e)); } });
-    this.pro = new ProHost({ homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.c.approvalItems('all').map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))] }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
+    this.pro = new ProHost({ homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), dismissApproval: (thread, request) => this.dismissApproval(thread, request), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.approvalsNow().filter(a => !a.hidden).map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))] }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     if (o.chatLaunch) o.chatLaunch.host = this.pro;
     this.bridge();
   }
@@ -215,12 +222,53 @@ export class ChorusServer {
     }
   }
 
+  /** The optional module types into a chat (the Planner loop): an ended chat is continued first; `gone` when its session is gone. */
   private sendToChat(id: string, text: string) {
-    const host = this.app.entry(id)?.host;
-    if (!host) return;
-    host.write(text);
-    // text and Enter in one chunk read as a paste in the TUIs: Enter goes apart
-    setTimeout(() => host.state === 'running' && host.write('\r'), 700);
+    return this.c.sendToChat(id, text, row => (this.o.sessionExists ?? sessionOnDisk)(row));
+  }
+
+  /** Command prompts deleted from Approvals: hidden there until the prompt changes; their Approve/Deny line stays in the chat. */
+  private hiddenPrompts = new Map<string, string>();
+
+  /**
+   * Approvals' delete (plan 2026-11-13, item 4): the item only, the agent is not answered. An agent's question is cancelled; a
+   * command prompt is hidden from Approvals until it changes.
+   */
+  dismissApproval(thread: string, request?: string) {
+    const c = this.c;
+    if (request) {
+      const r = c.store.getRequest(request);
+      if (r && r.thread_id === thread) c.store.answerRequest(r.id, '', undefined, 'cancelled');
+    } else {
+      const p = c.approvalItems('all').find(a => a.id === thread && a.kind === 'permission');
+      if (p) this.hiddenPrompts.set(thread, p.what);
+    }
+    this.pushState();
+  }
+
+  /**
+   * What waits on the user now: the controller's prompts and cards, with each card's kind (question or approval). A card the store
+   * no longer has pending (answered by typing, skipped, deleted) is left out at once; a command prompt deleted from Approvals is
+   * marked hidden until it changes.
+   */
+  private approvalsNow(): (ReturnType<Controller['approvalItems']>[number] & { hidden: boolean; askKind?: 'question' | 'approval'; other?: boolean })[] {
+    const c = this.c;
+    const items = c.approvalItems('all').flatMap((a): (ReturnType<Controller['approvalItems']>[number] & { hidden: boolean; askKind?: 'question' | 'approval'; other?: boolean })[] => {
+      if (a.kind !== 'ask') return [{ ...a, hidden: this.hiddenPrompts.get(a.id) === a.what }];
+      const r = c.store.getRequest(a.request);
+      return r && r.status === 'pending' ? [{ ...a, askKind: r.kind ?? 'approval', other: r.other !== 0, hidden: false }] : [];
+    });
+    for (const [id, what] of this.hiddenPrompts) if (!items.some(a => a.kind === 'permission' && a.id === id && a.what === what)) this.hiddenPrompts.delete(id);
+    return items;
+  }
+
+  /** Typing to the agent while its question card is open answers it by typing: the card leaves the chat and Approvals at once. */
+  private typedTo(id: string, data: string) {
+    if (!/[\r\n]/.test(data)) return;
+    const open = this.c.store.pendingRequests(id);
+    if (!open.length) return;
+    for (const r of open) this.c.store.answerRequest(r.id, '', undefined, 'cancelled');
+    this.pushState();
   }
 
   /** The Controller's questions, flashes and bell reach the desktop instead of a terminal. */
@@ -476,6 +524,19 @@ export class ChorusServer {
       const r = this.c.dropFiles(upload[1], [{ name: u.searchParams.get('name') ?? 'file', bytes }]);
       return send(res, 'error' in r ? 409 : 200, r);
     }
+    // reported artifacts (plan 2026-11-13, item 5): a device on the private link opens only files inside the chat's project, served
+    // to it here; it never opens anything on the Mac. Links and files elsewhere say "Open on the Mac"
+    const rep = u.pathname.match(/^\/api\/chats\/([\w-]+)\/(?:reported\/(\d+)|open-report|open)$/);
+    if (rep) {
+      const remote = this.isRemote(req);
+      if (req.method === 'POST' && remote) return send(res, 403, { error: 'Open it on the Mac.' });
+      if (req.method === 'GET' && rep[2]) {
+        const a = this.reported(rep[1]).find(x => x.id === Number(rep[2]));
+        if (!a || a.link || (remote && !a.inside)) return send(res, a ? 403 : 404, { error: a ? 'Open it on the Mac.' : 'not found' });
+        res.writeHead(200, { 'content-type': TYPES[path.extname(a.target).toLowerCase()] ?? FILE_TYPES[path.extname(a.target).toLowerCase()] ?? 'application/octet-stream', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "sandbox; default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'" });
+        return void fs.createReadStream(a.target).pipe(res);
+      }
+    }
     const body = req.method === 'GET' ? {} : await readJson(req);
     const out = await this.route(req.method ?? 'GET', u.pathname.slice(5).split('/').map(decodeURIComponent), u.searchParams, body);
     if (out === undefined) return send(res, 404, { error: 'not found' });
@@ -720,7 +781,8 @@ export class ChorusServer {
         const dir = path.resolve(expand(String(b.folder ?? c.project)));
         if (dir === computerDir()) fs.mkdirSync(dir, { recursive: true }); // "This computer": a chat that belongs to no project
         if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return { error: `${b.folder} is not a folder` };
-        const e = c.newThread({ agent, model: b.model, effort: b.effort, cwd: dir, skipPermissions: !!b.skip, prompt: b.prompt?.trim() || undefined });
+        const prompt = typeof b.prompt === 'string' ? expandSkillMentions(b.prompt.trim(), this.skillNames()) : undefined;
+        const e = c.newThread({ agent, model: b.model, effort: b.effort, cwd: dir, skipPermissions: !!b.skip, prompt: prompt || undefined });
         this.pushState();
         return { id: e.id };
       }
@@ -728,7 +790,11 @@ export class ChorusServer {
         return thread && this.chatDetail(id);
       case 'DELETE chats/:id':
         if (!thread) return undefined;
-        void c.deleteThread(id).then(() => this.pushState());
+        // once it is gone, the optional module closes its waiting items (plan approvals, gates) and withdraws what it asked
+        void c.deleteThread(id).then(() => {
+          if (!c.store.getThread(id)) this.pro.chatEvent({ type: 'deleted', thread: id } as { type: string });
+          this.pushState();
+        });
         return { asked: true };
       case 'POST chats/:id/select':
         return this.select(id) ? { ok: true } : undefined;
@@ -736,7 +802,8 @@ export class ChorusServer {
         const to = asAgent(b.to);
         if (!thread || !to) return undefined;
         const opts = { model: b.model, effort: b.effort, skipPermissions: !!b.skip };
-        const note = typeof b.note === 'string' ? b.note.trim() : '';
+        const typed = typeof b.note === 'string' ? b.note : typeof b.prompt === 'string' ? b.prompt : '';
+        const note = expandSkillMentions(typed.trim(), this.skillNames());
         // a note (the paid Hand off's "Anything to add?") goes after the record, in the same first message
         const e = note ? c.newThread({ agent: to, title: `${thread.title} → ${to}`, prompt: `${handoffPrompt(thread)}\n\n${note}`, parent: thread, cwd: thread.cwd, ...opts }) : await c.handoff(id, to, opts);
         this.pushState();
@@ -754,6 +821,11 @@ export class ChorusServer {
         this.pushState();
         return { ok };
       }
+      case 'POST chats/:id/dismiss':
+        // Approvals' delete (the page warned first): the item only, the agent is not answered
+        if (!thread) return undefined;
+        this.dismissApproval(id, typeof b.request === 'string' && b.request ? b.request : undefined);
+        return { ok: true };
       case 'POST chats/:id/retry':
         this.select(id);
         c.retryContext();
@@ -762,6 +834,13 @@ export class ChorusServer {
         return thread && c.activityRows(id);
       case 'GET chats/:id/artifacts':
         return thread && this.artifacts(id);
+      case 'POST chats/:id/open-report': {
+        // a reported file or link, opened on this computer with the system's open command, never through a shell
+        const a = thread && this.reported(id).find(x => x.id === Number(b.id));
+        if (!a) return { error: 'That artifact is no longer there.' };
+        const r = await (this.o.openFile ?? openOnThisComputer)(a.target);
+        return r.ok ? { ok: true } : { error: r.error ?? 'Could not open it.' };
+      }
       case 'POST chats/:id/open':
         if (!thread) return undefined;
         await c.openArtifact(id, String(b.path), b.via);
@@ -771,9 +850,15 @@ export class ChorusServer {
       case 'GET memory':
         return { where: c.store.shared ? c.store.root.replace(process.env.HOME ?? '\0', '~') + '/chorus.db' : '.chorus/chorus.db', items: c.memoryItems(q.get('q') ?? '') };
       case 'GET approvals':
-        return { pending: c.approvalItems('all'), decided: c.decidedItems() };
+        return { pending: this.approvalsNow().filter(a => !a.hidden), decided: c.decidedItems() };
       case 'GET skills':
         return this.skills();
+      case 'GET files': {
+        // the New chat form's "@" list: the files of a folder Chorus offers for a chat
+        const folder = path.resolve(expand(String(q.get('folder') ?? '')));
+        if (!q.get('folder') || !this.offeredFolder(folder)) return { error: 'not a folder Chorus offers for a chat', files: [] };
+        return { files: matchFiles(projectFiles(folder), String(q.get('q') ?? '')) };
+      }
       case 'POST skills': {
         const slug = String(b.name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
         if (!slug) return { error: 'name it with lowercase words and dashes' };
@@ -899,7 +984,7 @@ export class ChorusServer {
         effort: e.meta?.effort ?? t?.effort ?? null,
         skip: !!t?.skip_permissions,
         usage: e.meta?.usage ?? null,
-        artifacts: e.meta?.artifacts ?? 0,
+        artifacts: (e.meta?.artifacts ?? 0) + c.store.reportedArtifacts(e.id).length,
         toast: e.meta?.toast ?? null,
         updated: t?.updated ?? null,
       };
@@ -914,7 +999,7 @@ export class ChorusServer {
       chats,
       // when each request appeared (whole seconds), not "seconds waiting": the state must not change every push, or the
       // window would redraw the inbox under the mouse
-      approvals: c.approvalItems('all').map(({ waiting, ...x }) => ({ ...x, since: Math.round(Date.now() / 1000 - waiting) })),
+      approvals: this.approvalsNow().map(({ waiting, ...x }) => ({ ...x, since: Math.round(Date.now() / 1000 - waiting) })),
       ui: this.ui(),
       notice: this.app.notice,
       dialogs: [...this.dialogs.values()].map(x => x.d),
@@ -1006,10 +1091,54 @@ export class ChorusServer {
     const touched = new Set<string>();
     for (const call of c.store.getToolCalls(id)) if (/^(Write|Edit|write_to_file|replace_file_content|apply_patch|file_change)$/.test(call.tool) && call.target) touched.add(call.target);
     return {
+      reported: this.reported(id),
       folder: c.store.artifactsDir(id),
       items: c.store.listArtifacts(id).map(a => ({ path: a.path, abs: a.abs, ts: a.ts, ago: c.ago(a.ts), versions: versionsOf(a.path) })),
       files: [...touched].slice(0, 50),
     };
+  }
+
+  /**
+   * What the chat reported with show_artifact, newest first, that is there now: a file that exists, or an http(s) link (nothing is
+   * fetched). `inside`: the file is in the chat's project, so a device on the private link may open it.
+   */
+  reported(id: string) {
+    const c = this.c, t = c.store.getThread(id);
+    if (!t) return [];
+    const real = (p: string) => { try { return fs.realpathSync(p); } catch { return p; } };
+    const project = real(t.project ?? t.cwd);
+    return c.store.reportedArtifacts(id).flatMap(r => {
+      const link = /^https?:\/\//i.test(r.target);
+      if (!link) {
+        try {
+          if (!fs.statSync(r.target).isFile()) return [];
+        } catch {
+          return [];
+        }
+      }
+      const rel = link ? '' : path.relative(project, real(r.target));
+      const inside = !link && !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+      return [{ id: r.id, title: r.title ?? (link ? r.target : path.basename(r.target)), target: r.target, link, inside, ts: r.ts, ago: c.ago(r.ts) }];
+    });
+  }
+
+  /** The skills that are on in this project: what "/" lists and what a first message's `/name` loads. */
+  skillNames() {
+    const off = disabledSkills(this.c.project);
+    return listSkills(this.c.project).filter(s => !off.includes(path.basename(s.dir))).map(s => s.name);
+  }
+
+  /** A folder the New chat form offers for a chat: the project, a chat's or a recent folder, This computer, or one in the home folder (Browse…). */
+  private offeredFolder(dir: string) {
+    const c = this.c;
+    try {
+      if (!fs.statSync(dir).isDirectory()) return false;
+    } catch {
+      return false;
+    }
+    const known = new Set([c.project, computerDir(), ...c.store.listThreads().map(t => t.cwd), ...c.recentFolders(c.project)].map(d => path.resolve(d)));
+    const home = os.homedir();
+    return known.has(dir) || (dir !== home && dir.startsWith(home + path.sep));
   }
 
   skills() {
@@ -1057,6 +1186,7 @@ export class ChorusServer {
       } else if (m.t === 'in' && typeof m.data === 'string') {
         if (process.env.CHORUS_DEBUG_INPUT) fs.appendFileSync(process.env.CHORUS_DEBUG_INPUT, JSON.stringify(m.data) + '\n');
         host?.write(m.data);
+        if (host && typeof m.id === 'string') this.typedTo(m.id, m.data);
       }
       else if (m.t === 'resize' && m.cols > 0 && m.rows > 0 && this.setsSize(cl)) {
         this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
@@ -1206,7 +1336,7 @@ function readJson(req: http.IncomingMessage): Promise<Record<string, any>> {
 }
 
 /** What the page may save on the server (`POST ui`). */
-const UI_KEYS = new Set(['hidden', 'folded', 'agent', 'drawer', 'side', 'welcome', 'ended', 'banner']);
+const UI_KEYS = new Set(['hidden', 'folded', 'agent', 'drawer', 'side', 'sideW', 'noDelAsk', 'welcome', 'ended', 'banner']);
 const asAgent = (s: unknown): AgentId | undefined => (AGENTS.includes(s as AgentId) ? (s as AgentId) : undefined);
 const expand = (p: string) => p.replace(/^~(?=\/|$)/, process.env.HOME ?? '~');
 
