@@ -71,6 +71,9 @@ Rules:
   Planner plans, asks for the grant, "start" starts step 1 with the skip flag, the Worker asks the Planner and gets the answer; the
   chats' screens are saved as text in `.chorus/proof/<branch>/real-planner-loop/`. A page can draw a device's view on the Mac with
   `sessionStorage chorus-view=device` (only what is drawn changes).
+- **Waiting items**: `test/smoke/proof-waiting-items.ts` (the same Pro-harness setup): 🗑 on the card in a chat, on the Approve /
+  Deny line, in Approvals and on Home (desktop and phone), Cancel, Delete, Don't ask again, a delete in one place clearing the
+  others, and the counts agreeing with the lists after a plan approval is deleted.
 - **First launch**: `npm run proof:first-run` (`test/smoke/proof-first-run.ts`, no model calls, ~30 s) drives the page in Chrome over a fresh Chorus home: the Welcome (Community or Pro) first while the Doctor waits, Keep Community opens the Doctor, a second launch shows neither, and the trial-ended text. `--plans <file>` shows given Welcome words (a backend change not deployed yet). PNGs in `.chorus/proof/first-run/`.
 - **Sizes**: `npm run proof:desktop -- --sizes` (`test/smoke/proof-sizes.ts`) opens every screen at a phone, a tablet and a desktop size, light and dark, with fake agents, and checks sideways scroll, cut-off controls and touch sizes; desktop screens are compared with the newest release. Details: [`features/responsive.md`](features/responsive.md).
 - **Chrome driver** `test/smoke/chrome.ts`: headless Chrome over the DevTools protocol with real clicks and key presses, used by `proof:desktop` and other e2e runs.
