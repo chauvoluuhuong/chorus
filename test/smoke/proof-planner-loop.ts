@@ -40,7 +40,7 @@ export default async function (c: any) {
   const pairs: [string, string, string][] = [];
 
   /* ---------- New chat: "/" lists the skills that are on, "@" the folder's files; no folder, no list and no request ---------- */
-  for (const [name, d] of [['brand-style', 'Our colours, type and spacing for every page'], ['gift-cards', 'How gift cards work in this shop'], ['csv-export', 'Exports follow the table: same columns, filtered rows']]) await r.api('POST', '/api/skills', { name, description: d });
+  for (const [name, d] of [['brand-style', 'Our colours, type, spacing and voice for every page and email: the palette with its contrast pairs, the two type scales, the 4 px grid, button and form styles, and the words we use and avoid. Read it before you change anything people see.'], ['gift-cards', 'How gift cards work in this shop'], ['csv-export', 'Exports follow the table: same columns, filtered rows']]) await r.api('POST', '/api/skills', { name, description: d });
   fs.mkdirSync(path.join(project, 'src', 'pages'), { recursive: true });
   fs.writeFileSync(path.join(project, 'src', 'pages', 'orders.tsx'), 'export {}');
   await js(`window.chorus.go({ name: 'new' })`);

@@ -1,7 +1,7 @@
 // Regression (fix/new-chat-picker): on New chat and the hand-off form, the "/" list stays open and filters, and the caret stays where
 // it was, when the page redraws the form while you type (the optional module's board event → host.refresh → renderView, as when
-// chats are running), and Escape closes the list and leaves the caret in place. Also: a skill's long description is one line in the
-// list. A stage of chorus-core's Pro harness (fake agents, the module's dev bundle), like proof-planner-loop.ts:
+// chats are running), and Escape closes the list and leaves the caret in place. Also: a skill's long description is two lines at most in
+// the list. A stage of chorus-core's Pro harness (fake agents, the module's dev bundle), like proof-planner-loop.ts:
 //   node <core>/test/pro-e2e/run.ts --public "$PWD" --stage <path of test/smoke/proof-new-chat-picker relative to <core>/test/pro-e2e/checks>
 import path from 'node:path';
 
@@ -53,15 +53,15 @@ export default async function (c: any) {
   await sleep(1200);
   await skip();
   const n = await run('New chat');
-  // the long description is one line in the list
+  // the long description is two lines at most in the list (the mockup's rows wrap to two)
   await js(`(() => { const t = document.querySelector('#nc-prompt'); t.value = ''; t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   await chrome.typeLine('/hyd', false);
   await sleep(700);
-  const clamp = await js(`(() => { const s = document.querySelector('.tpick [data-i] small'); if (!s) return null; const lh = parseFloat(getComputedStyle(s).lineHeight) || 16; return { h: s.getBoundingClientRect().height, lh, ellipsis: getComputedStyle(s).textOverflow }; })()`);
-  await chrome.shot('picker-long-description', 'New chat: / with a long description, one line');
+  const clamp = await js(`(() => { const s = document.querySelector('.tpick [data-i] small'); if (!s) return null; const lh = parseFloat(getComputedStyle(s).lineHeight) || 16; return { h: s.getBoundingClientRect().height, lh, clamp: getComputedStyle(s).webkitLineClamp, more: s.scrollHeight > s.clientHeight + 2 }; })()`);
+  await chrome.shot('picker-long-description', 'New chat: / with a long description, two lines at most');
   await chrome.key('Escape');
-  check('p.1', 'New chat: with the / list open, the page redraws (the module\'s board event) and you type on: the list stays open and filters, the caret stays; Escape closes it and leaves the caret; a long description is one line',
-    n.ok && !!clamp && clamp.h <= clamp.lh * 1.5, JSON.stringify({ ...n, clamp }), ['picker-long-description.png']);
+  check('p.1', 'New chat: with the / list open, the page redraws (the module\'s board event) and you type on: the list stays open and filters, the caret stays; Escape closes it and leaves the caret; a long description is two lines at most, cut with an ellipsis',
+    n.ok && !!clamp && clamp.h <= clamp.lh * 2.5 && clamp.h > clamp.lh * 1.5, JSON.stringify({ ...n, clamp }), ['picker-long-description.png']);
 
   // the hand-off form: the same field, for a chat that continues another
   const chat = (await r.api('POST', '/api/chats', { agent: 'codex', folder: project })).json.id as string;
