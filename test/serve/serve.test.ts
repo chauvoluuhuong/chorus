@@ -959,3 +959,21 @@ test('New chat: a first message\'s /skill-name loads that skill (any CLI); a /wo
     await r.done();
   }
 });
+
+test('request_approval with other false: the state\'s ask says so (the card has no Other…); a question keeps Skip; the default keeps Other…', async () => {
+  const r = await rig();
+  try {
+    const v = await viewer(r.url, r.srv.token);
+    const a = (await r.api('POST', '/api/chats', { agent: 'claude', folder: r.project })).json.id as string;
+    const g = r.store.createRequest({ threadId: a, question: 'Grant the Workers all permissions for this plan?', options: ['Yes, grant', 'No'], kind: 'question', other: false });
+    await v.until(() => v.state()?.approvals.some((x: any) => x.request === g.id), 'the grant card');
+    const ask = v.state().approvals.find((x: any) => x.request === g.id);
+    assert.deepEqual([ask.other, ask.askKind], [false, 'question']);
+    const d = r.store.createRequest({ threadId: a, question: 'Which table?', options: ['orders', 'carts'] });
+    await v.until(() => v.state()?.approvals.some((x: any) => x.request === d.id), 'a default card');
+    assert.equal(v.state().approvals.find((x: any) => x.request === d.id).other, true);
+    v.ws.close();
+  } finally {
+    await r.done();
+  }
+});

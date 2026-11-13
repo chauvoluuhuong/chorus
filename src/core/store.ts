@@ -49,6 +49,8 @@ export interface RequestRow {
   status: 'pending' | 'answered' | 'cancelled';
   /** a question (open: it can be skipped, the agent decides itself) or an approval (Approve / Decline of an action) */
   kind: 'question' | 'approval';
+  /** 0: only the listed options make sense, the card has no "Other…" */
+  other: number;
   answer: string | null;
   note: string | null;
   created: string;
@@ -108,7 +110,7 @@ CREATE TABLE IF NOT EXISTS attachments (
 );
 CREATE TABLE IF NOT EXISTS requests (
   id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, question TEXT NOT NULL, details TEXT, options TEXT NOT NULL,
-  status TEXT NOT NULL, answer TEXT, note TEXT, created TEXT NOT NULL, answered TEXT, kind TEXT NOT NULL DEFAULT 'approval'
+  status TEXT NOT NULL, answer TEXT, note TEXT, created TEXT NOT NULL, answered TEXT, kind TEXT NOT NULL DEFAULT 'approval', other INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS reported (
   id INTEGER PRIMARY KEY AUTOINCREMENT, thread_id TEXT NOT NULL, target TEXT NOT NULL, title TEXT, ts TEXT NOT NULL
@@ -158,6 +160,7 @@ export class Store {
     if (!cols.includes('turn_base')) this.db.exec('ALTER TABLE threads ADD COLUMN turn_base INTEGER NOT NULL DEFAULT 0');
     const rcols = (this.db.prepare('PRAGMA table_info(requests)').all() as { name: string }[]).map(c => c.name);
     if (!rcols.includes('kind')) this.db.exec("ALTER TABLE requests ADD COLUMN kind TEXT NOT NULL DEFAULT 'approval'");
+    if (!rcols.includes('other')) this.db.exec('ALTER TABLE requests ADD COLUMN other INTEGER NOT NULL DEFAULT 1');
   }
 
   /**
@@ -400,10 +403,10 @@ export class Store {
    * An agent asks the user something (the chorus request_approval tool); the app that hosts the chat shows it. One open ask per
    * chat: the chat's older pending asks are cancelled (not answered, so nothing goes to the approvals log).
    */
-  createRequest(r: { threadId: string; question: string; details?: string; options?: string[]; kind?: 'question' | 'approval' }): RequestRow {
+  createRequest(r: { threadId: string; question: string; details?: string; options?: string[]; kind?: 'question' | 'approval'; other?: boolean }): RequestRow {
     const id = `r_${randomBytes(4).toString('hex')}`;
     this.db.prepare("UPDATE requests SET status = 'cancelled', answered = ? WHERE thread_id = ? AND status = 'pending'").run(now(), r.threadId);
-    this.db.prepare("INSERT INTO requests (id,thread_id,question,details,options,status,created,kind) VALUES (?,?,?,?,?,'pending',?,?)").run(id, r.threadId, r.question, r.details ?? null, JSON.stringify(r.options?.length ? r.options : ['Approve', 'Decline']), now(), r.kind === 'question' ? 'question' : 'approval');
+    this.db.prepare("INSERT INTO requests (id,thread_id,question,details,options,status,created,kind,other) VALUES (?,?,?,?,?,'pending',?,?,?)").run(id, r.threadId, r.question, r.details ?? null, JSON.stringify(r.options?.length ? r.options : ['Approve', 'Decline']), now(), r.kind === 'question' ? 'question' : 'approval', r.other === false ? 0 : 1);
     return this.getRequest(id)!;
   }
 

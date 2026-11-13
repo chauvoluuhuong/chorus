@@ -221,6 +221,18 @@ export default async function (c: any) {
   pairs.push(['app-task-ask', 'mock-tk-ask', 'Chat with an ask (UC-14)']);
   check('d.6', 'A task chat\'s question card has Skip and sits under the terminal, beside the task', !!(await box('#task-side')) && !!(await js(`!!document.querySelector('#ask-dock [data-act="skip"]')`)), '', ['app-task-ask.png']);
 
+  /* ---------- the Planner's grant question: only Yes, grant / No, and Skip (other: false; UC-14 Planner: grant, then start) ---------- */
+  // the fake agents read the script when a chat starts: this Claude chat asks the grant question
+  fs.writeFileSync(script, JSON.stringify({ claude: [{ say: 'Plan approved. One more question before the Workers start.' }, { call: 'request_approval', args: { question: 'Grant the Workers all permissions for this plan?', details: 'With the grant, every step\'s Worker chat of #1 starts with skip-permissions: no prompts while it edits files or runs commands. Your Workers\' own settings don\'t change, and the grant ends with the task.', options: ['Yes, grant', 'No'], kind: 'question', other: false } }, { say: 'Shown to you as a card: waiting for your answer' }], '*': [] }));
+  const granter = (await r.api('POST', '/api/pro/run', { action: 'createPlan', teammate: 'planner', project, message: 'Plan the CSV export' })).json.thread as string;
+  await open(granter);
+  await chrome.until(() => js(`/Grant the Workers/.test(document.querySelector('#ask-dock .ask-q')?.textContent ?? '')`), 25_000);
+  await sleep(900);
+  const grantBtns = await js(`[...document.querySelectorAll('#ask-dock .acts button')].filter(b => b.offsetParent).map(b => b.textContent)`);
+  await chrome.shot('app-grant', 'Planner: grant, then start');
+  pairs.push(['app-grant', 'mock-tk-grant', 'Planner: grant, then start (UC-14)']);
+  check('d.8', 'The grant question (other: false): Yes, grant / No / Skip, no Other…', JSON.stringify(grantBtns) === '["Yes, grant","No","Skip"]', JSON.stringify(grantBtns), ['app-grant.png']);
+
   /* ---------- the mockup's scenes, the same size ---------- */
   const mock = path.join(publicDir, 'workspace/mockups/ui-mockup-v3.html');
   const scene = async (find: string, slug: string, then = '') => {
@@ -237,6 +249,7 @@ export default async function (c: any) {
   await scene(`x.dataset.scn === 'resize'`, 'mock-resize', `(() => { const h = document.querySelector('[data-resize]'); const b = h.getBoundingClientRect(); h.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, clientX: b.left + 4, clientY: b.top + 300 })); })()`);
   for (const id of ['nc_slash', 'nc_at']) await scene(`x.dataset.scn === '${id}'`, `mock-${id}`);
   await scene(tk('Chat with an ask'), 'mock-tk-ask');
+  await scene(tk('Planner: grant, then start'), 'mock-tk-grant');
 
   /* ---------- each screen beside its scene, one picture per pair, in .chorus/proof/<branch>/ ---------- */
   const branch = spawnSync('git', ['branch', '--show-current'], { cwd: publicDir, encoding: 'utf8' }).stdout.trim();

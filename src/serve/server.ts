@@ -251,12 +251,12 @@ export class ChorusServer {
    * no longer has pending (answered by typing, skipped, deleted) is left out at once; a command prompt deleted from Approvals is
    * marked hidden until it changes.
    */
-  private approvalsNow(): (ReturnType<Controller['approvalItems']>[number] & { hidden: boolean; askKind?: 'question' | 'approval' })[] {
+  private approvalsNow(): (ReturnType<Controller['approvalItems']>[number] & { hidden: boolean; askKind?: 'question' | 'approval'; other?: boolean })[] {
     const c = this.c;
-    const items = c.approvalItems('all').flatMap((a): (ReturnType<Controller['approvalItems']>[number] & { hidden: boolean; askKind?: 'question' | 'approval' })[] => {
+    const items = c.approvalItems('all').flatMap((a): (ReturnType<Controller['approvalItems']>[number] & { hidden: boolean; askKind?: 'question' | 'approval'; other?: boolean })[] => {
       if (a.kind !== 'ask') return [{ ...a, hidden: this.hiddenPrompts.get(a.id) === a.what }];
       const r = c.store.getRequest(a.request);
-      return r && r.status === 'pending' ? [{ ...a, askKind: r.kind ?? 'approval', hidden: false }] : [];
+      return r && r.status === 'pending' ? [{ ...a, askKind: r.kind ?? 'approval', other: r.other !== 0, hidden: false }] : [];
     });
     for (const [id, what] of this.hiddenPrompts) if (!items.some(a => a.kind === 'permission' && a.id === id && a.what === what)) this.hiddenPrompts.delete(id);
     return items;

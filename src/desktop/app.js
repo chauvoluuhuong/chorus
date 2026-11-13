@@ -1948,8 +1948,8 @@ function askCard(a, dock = false) {
   // docked: the details fold to 3 lines, with Show more when they are longer
   const details = !a.details ? '' : dock ? `<div class="what"><div class="${more ? '' : 'clamp'}">${esc(a.details)}</div></div><button class="ask-more" data-act="ask-more" data-arg="${esc(a.request)}" hidden>${more ? 'Show less' : 'Show more'}</button>` : `<div class="what">${esc(a.details)}</div>`;
   return `<div class="ask-q">${esc(a.question)}</div>${details}
-    <div class="acts">${optionButtons(a)}<button class="btn" data-act="other">Other…</button>${a.askKind === 'question' ? `<button class="btn" data-act="skip" ${req} title="The agent decides itself">Skip</button>` : ''}</div>
-    <div class="acts other-row" hidden><input type="text" class="other-input" placeholder="Your own answer" aria-label="Your own answer"><button class="btn primary" data-act="pick-other" ${req}>Send</button></div>
+    <div class="acts">${optionButtons(a)}${a.other === false ? '' : '<button class="btn" data-act="other">Other…</button>'}${a.askKind === 'question' ? `<button class="btn" data-act="skip" ${req} title="The agent decides itself">Skip</button>` : ''}</div>
+    ${a.other === false ? '' : `<div class="acts other-row" hidden><input type="text" class="other-input" placeholder="Your own answer" aria-label="Your own answer"><button class="btn primary" data-act="pick-other" ${req}>Send</button></div>`}
     <input type="text" class="note-input" placeholder="Add a note (optional)" aria-label="Note for the agent">`;
 }
 
