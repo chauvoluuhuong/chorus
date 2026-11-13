@@ -886,3 +886,27 @@ test('question cards: kind, Skip types the skip line (no decision logged), typin
     await r.done();
   }
 });
+
+test('Artifacts by report: files that exist and http(s) links, newest first, with the old folder\'s files; a click opens the file with the system\'s open command', async () => {
+  const r = await rig();
+  try {
+    const a = (await r.api('POST', '/api/chats', { agent: 'codex', folder: r.project })).json.id as string;
+    fs.writeFileSync(path.join(r.project, 'mock.html'), '<p>mock</p>');
+    const gone = path.join(r.project, 'gone.md');
+    fs.writeFileSync(gone, 'x');
+    r.store.reportArtifact(a, path.join(r.project, 'mock.html'), 'Export button mockup');
+    r.store.reportArtifact(a, gone);
+    fs.rmSync(gone);
+    r.store.reportArtifact(a, 'https://example.com/preview');
+    const list = (await r.api('GET', `/api/chats/${a}/artifacts`)).json;
+    assert.deepEqual(list.reported.map((x: any) => [x.title, x.link]), [['https://example.com/preview', true], ['Export button mockup', false]], 'a file that is no longer there is not listed');
+    const opened: string[] = [];
+    (r.srv as any).o.openFile = async (t: string) => (opened.push(t), { ok: true });
+    assert.equal((await r.api('POST', `/api/chats/${a}/open-report`, { id: list.reported[1].id })).json.ok, true);
+    assert.equal((await r.api('POST', `/api/chats/${a}/open-report`, { id: list.reported[0].id })).json.ok, true);
+    assert.deepEqual(opened, [path.join(r.project, 'mock.html'), 'https://example.com/preview']);
+    assert.match((await r.api('POST', `/api/chats/${a}/open-report`, { id: 999 })).json.error, /no longer there/);
+  } finally {
+    await r.done();
+  }
+});

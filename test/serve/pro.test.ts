@@ -48,7 +48,7 @@ async function rig(first: LoadResult = LOCKED) {
     await client.connect(b);
     return client;
   };
-  return { srv, api, tools, home, project, change: (r: LoadResult) => changed(r), close: () => (srv.close(), c.stop(), store.close()) };
+  return { srv, api, tools, home, project, store, change: (r: LoadResult) => changed(r), close: () => (srv.close(), c.stop(), store.close()) };
 }
 
 test('the loader is told the app\'s version, so a preview gets the preview paid build', async () => {
@@ -315,6 +315,30 @@ test('a request through a proxy never uses the token: only the module lets a dev
   // an AI app with no chat gets the app's tools
   const tools = await (await fetch(`${url}/api/pro/mcp/tools?app=1`, { headers: { authorization: `Bearer ${JSON.parse(fs.readFileSync(path.join(r.home, 'serve.json'), 'utf8')).mcpToken}` } })).json();
   assert.deepEqual(tools.tools.map((x: any) => x.name), ['chorus_projects']);
+  r.close();
+});
+
+test('reported artifacts through the private link: a file inside the chat\'s project is served to the device; files elsewhere and links say open on the Mac; nothing opens on the Mac from a device', async () => {
+  const r = await rig(remoteStand);
+  await new Promise(x => setTimeout(x, 20));
+  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-rep-')));
+  r.store.createThread({ id: 't_rep', title: 'report', agent: 'claude', cwd: project, project });
+  fs.writeFileSync(path.join(project, 'plan.md'), '# The plan');
+  const outside = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-out-')), 'notes.md');
+  fs.writeFileSync(outside, 'secret notes');
+  const inA = r.store.reportArtifact('t_rep', path.join(project, 'plan.md'), 'Plan');
+  const outA = r.store.reportArtifact('t_rep', outside);
+  const link = r.store.reportArtifact('t_rep', 'https://example.com/x');
+  const dev = { cookie: 'chorus_device=ok', 'x-forwarded-for': '100.64.0.2', host: 'mac.tail.ts.net' };
+  const list = await (await fetch(`${r.srv.url}/api/chats/t_rep/artifacts`, { headers: dev })).json();
+  assert.deepEqual(list.reported.map((x: any) => [x.title, x.inside, x.link]), [['https://example.com/x', false, true], ['notes.md', false, false], ['Plan', true, false]]);
+  const got = await fetch(`${r.srv.url}/api/chats/t_rep/reported/${inA.id}`, { headers: dev });
+  assert.equal(got.status, 200);
+  assert.equal(await got.text(), '# The plan');
+  assert.equal((await fetch(`${r.srv.url}/api/chats/t_rep/reported/${outA.id}`, { headers: dev })).status, 403, 'outside the project');
+  assert.equal((await fetch(`${r.srv.url}/api/chats/t_rep/reported/${link.id}`, { headers: dev })).status, 403, 'a link is not fetched');
+  const post = await fetch(`${r.srv.url}/api/chats/t_rep/open-report`, { method: 'POST', headers: { ...dev, 'x-chorus': '1', origin: 'https://mac.tail.ts.net', 'content-type': 'application/json' }, body: JSON.stringify({ id: inA.id }) });
+  assert.equal(post.status, 403, 'a device never opens anything on the Mac');
   r.close();
 });
 

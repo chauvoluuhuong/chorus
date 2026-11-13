@@ -1,6 +1,9 @@
 // `chorus mcp --thread <id> [--project <dir>]`: stdio MCP server each AI CLI starts for its session.
 // Stateless: every call reads the shared store (docs/architecture.md §6). All tools are read-only except request_approval,
 // which only records a question for the app that hosts the chat.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -9,7 +12,14 @@ import { listSkills, readSkill } from '../core/skills.ts';
 import { Store } from '../core/store.ts';
 import { addProTools } from './pro.ts';
 
-export const TOOL_NAMES = ['get_handoff_context', 'get_thread_turns', 'list_threads', 'list_artifacts', 'list_skills', 'get_skill', 'request_approval'] as const;
+export const TOOL_NAMES = ['get_handoff_context', 'get_thread_turns', 'list_threads', 'list_artifacts', 'list_skills', 'get_skill', 'request_approval', 'show_artifact'] as const;
+
+/**
+ * Said to every agent at start (plan 2026-11-13, item 5): there is no fixed folder for what it makes for the user; it reports each
+ * file or link with show_artifact, and Chorus lists it in the chat's Artifacts view.
+ */
+export const ARTIFACT_NOTE =
+  'Whenever you create a file meant for the user (a note, plan, report, mockup, export: anything that is not source code of the project) or find a link they should open, call the chorus MCP tool show_artifact with its path or the link and a short title, right after making it. Save the file wherever it fits the work. Chorus lists it in its Artifacts view, where the user opens it.';
 
 /**
  * Said to every agent at start (MCP server instructions for Claude and agy, developer instructions for Codex): an approval the
@@ -21,11 +31,8 @@ export const APPROVAL_NOTE =
 
 export function createServer(project: string, threadId?: string, home?: string): McpServer & { addProTools(): Promise<void> } {
   const store = new Store(project, { home });
-  // Every agent starts this server for its thread, so this text reaches all three: it says where the thread's artifacts go.
-  const dir = threadId ? store.artifactsDir(threadId) : undefined;
-  const instructions = dir
-    ? `This chat is Chorus thread ${threadId}. Files meant for the user (notes, plans, reports, mockups, anything that is not source code of the project) go in ${dir} (create it if missing). Chorus shows them in its Artifacts view. ${APPROVAL_NOTE}`
-    : undefined;
+  // Every agent starts this server for its thread, so this text reaches all three: how it shows the user what it made, and asks
+  const instructions = threadId ? `This chat is Chorus thread ${threadId}. ${ARTIFACT_NOTE} ${APPROVAL_NOTE}` : undefined;
   const server = new McpServer({ name: 'chorus', version: '1.0.0' }, instructions ? { instructions } : undefined) as McpServer & { addProTools(): Promise<void> };
 
   const reply = (tool: string, text: string, isError = false) => {
@@ -111,6 +118,38 @@ export function createServer(project: string, threadId?: string, home?: string):
       const r = store.createRequest({ threadId, question, details, options, kind });
       const skip = r.kind === 'question' ? ' If they skip it, the message is "Chorus approval <id>: skipped. Decide yourself and say what you chose.": then decide yourself, say what you chose, and go on.' : '';
       return reply('request_approval', `Shown to the user as approval card ${r.id} with the options: ${r.options.join(' / ')}. End your turn now without asking again in your reply. Their answer arrives as their next message: "Chorus approval ${r.id}: <option>", or "Other: <their own words>" when none fit.${skip}`);
+    },
+  );
+
+  server.registerTool(
+    'show_artifact',
+    {
+      description:
+        'Show the user a file you made for them (or a link): it is listed in the chat\'s Artifacts view in Chorus, where they open it. Call it right after you create the file, wherever you saved it. A path can be absolute or relative to your working folder; the file must exist. A link must be http or https.',
+      inputSchema: {
+        target: z.string().min(1).describe('The file\'s path, or an http(s) link'),
+        title: z.string().optional().describe('A short title for the list (e.g. "Export button mockup"); default: the file name'),
+      },
+    },
+    async ({ target, title }) => {
+      if (!threadId) return reply('show_artifact', 'This chat is not a Chorus thread: give the user the path in your reply.', true);
+      const t = target.trim();
+      if (/^https?:\/\//i.test(t)) {
+        store.reportArtifact(threadId, t, title);
+        return reply('show_artifact', `Listed in Artifacts: ${title?.trim() || t}`);
+      }
+      if (/^[a-z][a-z0-9+.-]*:/i.test(t)) return reply('show_artifact', 'Only a file path or an http(s) link can be shown.', true);
+      const cwd = store.getThread(threadId)?.cwd ?? project;
+      const abs = path.resolve(cwd, t.replace(/^~(?=\/)/, os.homedir()));
+      let file = false;
+      try {
+        file = fs.statSync(abs).isFile();
+      } catch {
+        /* missing */
+      }
+      if (!file) return reply('show_artifact', `There is no file at ${abs}. Save it first, then call show_artifact again.`, true);
+      store.reportArtifact(threadId, abs, title);
+      return reply('show_artifact', `Listed in Artifacts: ${title?.trim() || path.basename(abs)} (${abs})`);
     },
   );
 

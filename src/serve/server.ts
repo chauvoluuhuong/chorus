@@ -50,6 +50,10 @@ const VENDOR: Record<string, string> = {
 };
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const DEFAULT_SIZE = { cols: 120, rows: 36 };
+/** a reported artifact served to a device: what a browser can show by itself */
+const FILE_TYPES: Record<string, string> = { '.md': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.json': 'application/json', '.csv': 'text/plain; charset=utf-8', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.pdf': 'application/pdf' };
+/** The system's open command for a file or a link (macOS open, Linux xdg-open): an argument, never a shell string. */
+const openOnThisComputer = (target: string): Promise<{ ok: boolean; error?: string }> => (process.env.CHORUS_NO_OPEN === '1' ? Promise.resolve({ ok: true }) : defaultOpener({ mode: 'default' }, /^https?:/i.test(target) ? { url: target, path: target } : { path: target }));
 /**
  * How to sign in an AI CLI inside the Chorus box, from the computer's own terminal: Claude Code prints a link and waits for the code
  * pasted back; Codex needs --device-auth (its usual sign-in waits for the browser on the box's localhost:1455); agy asks on its first
@@ -124,6 +128,8 @@ export interface ServeOpts {
   chatLaunch?: ChatLaunch;
   /** opens the sign-up page in the user's browser (tests); the system's opener otherwise */
   openLink?: (url: string) => void;
+  /** opens a reported artifact on this computer (tests); the system's open command otherwise (macOS open, Linux xdg-open) */
+  openFile?: (target: string) => Promise<{ ok: boolean; error?: string }>;
   /** the system's folder picker (tests); the real one otherwise */
   pickFolder?: typeof pickFolder;
   /** runs the CLIs' sign-ins in a container (tests: a fake PTY); the real one otherwise */
@@ -517,6 +523,19 @@ export class ChorusServer {
       const r = this.c.dropFiles(upload[1], [{ name: u.searchParams.get('name') ?? 'file', bytes }]);
       return send(res, 'error' in r ? 409 : 200, r);
     }
+    // reported artifacts (plan 2026-11-13, item 5): a device on the private link opens only files inside the chat's project, served
+    // to it here; it never opens anything on the Mac. Links and files elsewhere say "Open on the Mac"
+    const rep = u.pathname.match(/^\/api\/chats\/([\w-]+)\/(?:reported\/(\d+)|open-report|open)$/);
+    if (rep) {
+      const remote = this.isRemote(req);
+      if (req.method === 'POST' && remote) return send(res, 403, { error: 'Open it on the Mac.' });
+      if (req.method === 'GET' && rep[2]) {
+        const a = this.reported(rep[1]).find(x => x.id === Number(rep[2]));
+        if (!a || a.link || (remote && !a.inside)) return send(res, a ? 403 : 404, { error: a ? 'Open it on the Mac.' : 'not found' });
+        res.writeHead(200, { 'content-type': TYPES[path.extname(a.target).toLowerCase()] ?? FILE_TYPES[path.extname(a.target).toLowerCase()] ?? 'application/octet-stream', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "sandbox; default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'" });
+        return void fs.createReadStream(a.target).pipe(res);
+      }
+    }
     const body = req.method === 'GET' ? {} : await readJson(req);
     const out = await this.route(req.method ?? 'GET', u.pathname.slice(5).split('/').map(decodeURIComponent), u.searchParams, body);
     if (out === undefined) return send(res, 404, { error: 'not found' });
@@ -812,6 +831,13 @@ export class ChorusServer {
         return thread && c.activityRows(id);
       case 'GET chats/:id/artifacts':
         return thread && this.artifacts(id);
+      case 'POST chats/:id/open-report': {
+        // a reported file or link, opened on this computer with the system's open command, never through a shell
+        const a = thread && this.reported(id).find(x => x.id === Number(b.id));
+        if (!a) return { error: 'That artifact is no longer there.' };
+        const r = await (this.o.openFile ?? openOnThisComputer)(a.target);
+        return r.ok ? { ok: true } : { error: r.error ?? 'Could not open it.' };
+      }
       case 'POST chats/:id/open':
         if (!thread) return undefined;
         await c.openArtifact(id, String(b.path), b.via);
@@ -1056,10 +1082,35 @@ export class ChorusServer {
     const touched = new Set<string>();
     for (const call of c.store.getToolCalls(id)) if (/^(Write|Edit|write_to_file|replace_file_content|apply_patch|file_change)$/.test(call.tool) && call.target) touched.add(call.target);
     return {
+      reported: this.reported(id),
       folder: c.store.artifactsDir(id),
       items: c.store.listArtifacts(id).map(a => ({ path: a.path, abs: a.abs, ts: a.ts, ago: c.ago(a.ts), versions: versionsOf(a.path) })),
       files: [...touched].slice(0, 50),
     };
+  }
+
+  /**
+   * What the chat reported with show_artifact, newest first, that is there now: a file that exists, or an http(s) link (nothing is
+   * fetched). `inside`: the file is in the chat's project, so a device on the private link may open it.
+   */
+  reported(id: string) {
+    const c = this.c, t = c.store.getThread(id);
+    if (!t) return [];
+    const real = (p: string) => { try { return fs.realpathSync(p); } catch { return p; } };
+    const project = real(t.project ?? t.cwd);
+    return c.store.reportedArtifacts(id).flatMap(r => {
+      const link = /^https?:\/\//i.test(r.target);
+      if (!link) {
+        try {
+          if (!fs.statSync(r.target).isFile()) return [];
+        } catch {
+          return [];
+        }
+      }
+      const rel = link ? '' : path.relative(project, real(r.target));
+      const inside = !link && !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+      return [{ id: r.id, title: r.title ?? (link ? r.target : path.basename(r.target)), target: r.target, link, inside, ts: r.ts, ago: c.ago(r.ts) }];
+    });
   }
 
   skills() {

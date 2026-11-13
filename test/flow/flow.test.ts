@@ -9,6 +9,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { captureStream } from '../../src/core/capture.ts';
 import { buildHandoff, handoffPrompt } from '../../src/core/handoff.ts';
 import { mcpCommand, run } from '../../src/core/launch.ts';
+import { ARTIFACT_NOTE } from '../../src/mcp/server.ts';
 import { Store } from '../../src/core/store.ts';
 import { syncSkills } from '../../src/core/skills.ts';
 
@@ -57,7 +58,7 @@ test('mcp: get_handoff_context returns the parent thread and the call is logged'
   const t = setTimeout(() => void c.close(), 20000);
   t.unref();
   const tools = (await c.listTools()).tools.map(t => t.name).sort();
-  assert.deepEqual(tools, ['get_handoff_context', 'get_skill', 'get_thread_turns', 'list_artifacts', 'list_skills', 'list_threads', 'request_approval']);
+  assert.deepEqual(tools, ['get_handoff_context', 'get_skill', 'get_thread_turns', 'list_artifacts', 'list_skills', 'list_threads', 'request_approval', 'show_artifact']);
   const out = text(await c.callTool({ name: 'get_handoff_context', arguments: {} }));
   assert.match(out, /parent work/);
   assert.match(out, /echo the probe string/);
@@ -111,25 +112,52 @@ test('fake agent can simulate a plan-limit stop', async () => {
   assert.match(r.stdout, /usage limit reached/);
 });
 
-test('artifact folder: the MCP server tells the agent where the thread keeps files for the user', async () => {
+test('artifacts by report: the MCP server tells the agent to report what it makes with show_artifact, and names no folder', async () => {
   const proj = project();
   const c = await client(proj, 't_artifacts');
   const text = c.getInstructions() ?? '';
-  assert.match(text, /Chorus thread t_artifacts/);
-  assert.ok(text.includes(path.join(proj, '.chorus', 'threads', 't_artifacts', 'artifacts')));
   await c.close();
+  assert.match(text, /Chorus thread t_artifacts/);
+  assert.ok(text.includes(ARTIFACT_NOTE));
+  assert.ok(!text.includes(path.join('.chorus', 'threads')), 'no fixed folder');
   const none = await client(proj, '');
   void none; // a server without a thread id has no folder to name: nothing to assert, it must simply start
   await none.close();
 });
 
-test('artifact folder: Codex gets it as developer instructions (it does not show MCP server instructions to the model)', async () => {
+test('artifacts by report: Codex gets the note as developer instructions (it does not show MCP server instructions to the model)', async () => {
   const { buildHeadless, buildInteractive, artifactNote } = await import('../../src/core/launch.ts');
   const proj = project();
   for (const l of [buildHeadless('codex', { prompt: 'hi', cwd: proj, project: proj, threadId: 't_9' }), buildInteractive('codex', { cwd: proj, project: proj, threadId: 't_9' })]) {
     const i = l.args.findIndex(a => a.startsWith('developer_instructions='));
     assert.ok(i > 0 && l.args[i - 1] === '-c', l.args.join(' ').slice(0, 200));
-    assert.ok(l.args[i].includes(path.join(proj, '.chorus', 'threads', 't_9', 'artifacts')));
+    assert.ok(l.args[i].includes('show_artifact'));
   }
   assert.match(artifactNote(proj, 't_9'), /Chorus thread t_9/);
+});
+
+test('show_artifact: a file (any folder, a relative path from the chat folder) or an http(s) link is listed; a missing file or another scheme is not', async () => {
+  const proj = project();
+  const store = new Store(proj);
+  store.createThread({ id: 't_rep', title: 'report', agent: 'claude', cwd: proj });
+  fs.mkdirSync(path.join(proj, 'docs'), { recursive: true });
+  fs.writeFileSync(path.join(proj, 'docs', 'plan.md'), '# plan');
+  const elsewhere = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-elsewhere-')), 'mock.html');
+  fs.writeFileSync(elsewhere, '<p>mock</p>');
+  const c = await client(proj, 't_rep');
+  try {
+    const say = async (target: string, title?: string) => { const r: any = await c.callTool({ name: 'show_artifact', arguments: { target, ...(title ? { title } : {}) } }); return { text: r.content[0].text as string, error: !!r.isError }; };
+    assert.deepEqual(await say('docs/plan.md', 'The plan'), { text: `Listed in Artifacts: The plan (${path.join(proj, 'docs', 'plan.md')})`, error: false });
+    assert.equal((await say(elsewhere)).error, false, 'wherever it is saved');
+    assert.equal((await say('https://example.com/preview', 'Preview')).error, false);
+    const missing = await say('docs/nope.md');
+    assert.equal(missing.error, true);
+    assert.match(missing.text, /no file at .*nope\.md\. Save it first/);
+    assert.equal((await say('file:///etc/passwd')).error, true, 'only a path or an http(s) link');
+    assert.equal((await say('javascript:alert(1)')).error, true);
+    assert.deepEqual(store.reportedArtifacts('t_rep').map(r => [r.target, r.title]), [['https://example.com/preview', 'Preview'], [elsewhere, null], [path.join(proj, 'docs', 'plan.md'), 'The plan']]);
+  } finally {
+    await c.close();
+    store.close();
+  }
 });
