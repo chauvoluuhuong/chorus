@@ -4,6 +4,7 @@
 import { shortCheckPassed } from './doctor-popup.js';
 import { askWho } from './ask-label.js';
 import { attachPicker } from './text-picker.js';
+import { cliFitNote, newChatHint } from './cli-fit.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -509,6 +510,7 @@ function welcomeHtml() {
     <ul>${list(c, pro).join('')}</ul>
     <button class="btn${pro ? ' primary' : ''} wide" data-act="${pro ? 'plan-try' : 'plan-community'}">${esc(c?.button ?? (pro ? 'Try Pro free' : 'Keep Community'))}</button><div class="fine">${esc(c?.fine ?? '')}</div></div>`;
   return `<div class="page welcome"><h1>${esc(w?.title ?? 'Welcome to Chorus')}</h1><p class="lead">${esc(w?.lede ?? 'Start free, or try Pro. You can change your mind any time.')}</p>
+    ${cliFitNote()}
     ${planWords === null ? '<p class="muted" role="status" style="text-align:center">Loading…</p>' : `<div class="plan-cards">${card(w?.community, false)}${card(w?.pro, true)}</div>`}</div>`;
 }
 const tryingHtml = () => `<div class="page welcome center"><div class="big">↗</div><h1>Finish in your browser</h1><p class="lead">Sign in with Google or your email on the page that opened. Chorus picks it up here when you're done.</p>
@@ -924,7 +926,7 @@ function newChatHtml() {
       ${f.skip && !T?.info ? `<div class="nc-warn">⚠ Starts ${esc(AGENT[f.agent].name)} with <code>${esc(a.skipFlag)}</code>: it won't stop to ask before editing files or running commands, and nothing from this chat reaches Approvals.</div>` : ''}
       ${f.error ? `<div class="nc-warn">${esc(f.error)}</div>` : ''}
     </div>
-    <p class="nc-hint">${src ? 'The old chat stays as it is; the new one shows under it with ↳.' : T?.hint || `${MQ_TOUCH.matches ? '' : `${MOD}↵ sends · `}you talk to the agent in its own screen`}</p>
+    <p class="nc-hint">${!src && T?.hint ? T.hint : esc(newChatHint({ agent: f.agent, handoff: !!src, teammate: !!T?.info, touch: MQ_TOUCH.matches, mod: MOD }))}</p>
   </div>`;
 }
 
@@ -1539,19 +1541,94 @@ async function pollDoctorJob(agent, id) {
 }
 
 /** Report issue (the Doctor page, the failed-test banner, the first-launch screen): works without a test run. The server adds a
- *  fresh short check, the detailed tests on file and what the app can tell; the user picks the kind, says what happened, and
- *  reads and edits everything before it is sent. Every report is filed as a user report with the lowest priority. */
+ *  fresh short check, the detailed tests on file and what the app can tell; the user says what happened, adds screenshots if they
+ *  like, and reads and edits everything before it is sent. It goes to the Chorus team's admin page through chorus serve, never to
+ *  GitHub from here (plan 2026-11-13); a reference comes back. */
+const SHOT_MAX = 4;
+const SHOT_TARGET = 1_000_000;
+const SHOT_SIDE = 2000;
+const SHOT_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+const fmtBytes = n => (n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1e3))} KB`);
+const blobType = b => new Promise(resolve => { const r = new FileReader(); r.onload = () => { const u = new Uint8Array(r.result); resolve(u[0] === 0x89 && u[1] === 0x50 ? 'image/png' : u[0] === 0xff && u[1] === 0xd8 ? 'image/jpeg' : String.fromCharCode(...u.subarray(8, 12)) === 'WEBP' ? 'image/webp' : ''); }; r.onerror = () => resolve(''); r.readAsArrayBuffer(b.slice(0, 12)); });
+
+/** A screenshot made small enough to send: kept as it is when it is already under ~1 MB and 2000 px; otherwise drawn on a canvas
+ *  with its longest side at most 2000 px and saved as JPEG (WebP when it may be transparent), the quality stepped down, then the
+ *  size, until it is about 1 MB. */
+async function scaleShot(blob) {
+  const type = SHOT_TYPES.includes(blob.type) ? blob.type : await blobType(blob);
+  if (!SHOT_TYPES.includes(type)) throw new Error('only PNG, JPEG or WebP images');
+  const bmp = await createImageBitmap(blob).catch(() => { throw new Error('this image could not be read'); });
+  const w = bmp.width, h = bmp.height;
+  if (blob.size <= SHOT_TARGET && Math.max(w, h) <= SHOT_SIDE) return bmp.close?.(), { blob, type, scaled: false };
+  let want = type === 'image/jpeg' ? 'image/jpeg' : 'image/webp';
+  let k = Math.min(1, SHOT_SIDE / Math.max(w, h));
+  try {
+    for (let round = 0; round < 8; round++, k *= 0.8) {
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(w * k));
+      c.height = Math.max(1, Math.round(h * k));
+      const g = c.getContext('2d');
+      for (const q of [0.92, 0.85, 0.75, 0.65, 0.55]) {
+        g.clearRect(0, 0, c.width, c.height);
+        if (want === 'image/jpeg') (g.fillStyle = '#fff'), g.fillRect(0, 0, c.width, c.height);
+        g.drawImage(bmp, 0, 0, c.width, c.height);
+        const out = await new Promise(r => c.toBlob(r, want, q));
+        // a browser that can't write WebP gives a PNG instead: JPEG then
+        if (out && out.type !== want) { want = 'image/jpeg'; continue; }
+        if (out && out.size <= SHOT_TARGET) return { blob: out, type: want, scaled: true };
+      }
+    }
+  } finally {
+    bmp.close?.();
+  }
+  throw new Error('it could not be made small enough');
+}
+
+const toBase64 = blob => new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).replace(/^data:[^,]*,/, '')); r.onerror = () => reject(r.error); r.readAsDataURL(blob); });
+
+/** Adds screenshots to the open report (file picker, drop, paste, or paths from the native window's drop). */
+async function addShots(files) {
+  const R = S.report;
+  if (!R || R.sent) return;
+  for (const f of files) {
+    if (R.shots.length >= SHOT_MAX) { toast(`At most ${SHOT_MAX} screenshots`); break; }
+    try {
+      const r = await scaleShot(f);
+      R.shots.push({ name: f.name || `Pasted image ${R.shots.length + 1}.${r.type.split('/')[1].replace('jpeg', 'jpg')}`, blob: r.blob, type: r.type, scaled: r.scaled, url: URL.createObjectURL(r.blob) });
+    } catch (err) {
+      toast(`${f.name || 'The image'} was not added: ${err.message}`);
+    }
+  }
+  drawShots();
+}
+function drawShots() {
+  const R = S.report, box = $('#rp-shots');
+  if (!R || !box) return;
+  box.innerHTML = R.shots.map((x, i) => `<div class="rp-shot"><div class="rp-thumb" style="background-image:url('${esc(x.url)}')"></div><button type="button" class="rp-rm" data-act="rp-rm" data-arg="${i}" aria-label="Remove ${esc(x.name)}" title="Remove">×</button><div class="rp-name" title="${esc(x.name)}">${esc(x.name)}</div><div class="rp-size">${fmtBytes(x.blob.size)}${x.scaled ? ' · made smaller' : ''}</div></div>`).join('')
+    + (R.shots.length < SHOT_MAX ? '<button type="button" class="rp-add" data-act="rp-add">＋ Add image</button>' : '');
+  $('#rp-count').textContent = `${R.shots.length} of ${SHOT_MAX}`;
+}
+
+async function addShotPaths(paths) {
+  const files = [];
+  for (const p of paths.slice(0, SHOT_MAX)) {
+    const r = await api('POST', '/api/doctor/issue/image', { path: p }).catch(err => ({ error: err.message }));
+    if (r.error) toast(`${base(p)} was not added: ${r.error}`);
+    else files.push(new File([Uint8Array.from(atob(r.data), c => c.charCodeAt(0))], base(p), { type: r.type }));
+  }
+  return addShots(files);
+}
+
 async function reportIssue() {
   if ($('#doc-report-pop')) return;
   const el = document.createElement('div');
   el.className = 'scrim';
   el.id = 'doc-report-pop';
-  el.innerHTML = `<div class="dialog dr-dialog" role="dialog"><h2>Report an issue</h2><div class="body"><p class="muted"><span class="spin"></span> Collecting what Chorus knows about this machine…</p></div></div>`;
+  el.innerHTML = `<div class="dialog dr-dialog rp-dialog" role="dialog" aria-label="Report an issue"><h2>Report an issue</h2><div class="body"><p class="muted"><span class="spin"></span> Collecting what Chorus knows about this machine…</p></div></div>`;
   $('#dialogs').append(el);
   const client = {
     window: NATIVE ? 'native' : 'browser',
-    agent: navigator.userAgent,
-    screen: `${screen.width}×${screen.height}@${devicePixelRatio}`,
+    screen: `${screen.width}×${screen.height} @${devicePixelRatio}`,
     size: `${innerWidth}×${innerHeight}`,
     language: navigator.language,
     view: S.view.name,
@@ -1561,15 +1638,78 @@ async function reportIssue() {
     el.remove();
     return toast(`Could not build the report: ${r.error}`);
   }
-  const kinds = r.kinds.map(k => `<option value="${esc(k.id)}"${k.id === r.kind ? ' selected' : ''}>${esc(k.name)}</option>`).join('');
+  S.report = { shots: [], setup: r.setup, sending: false, error: null, sent: null };
   el.querySelector('.dialog').innerHTML = `<h2>Report an issue</h2><div class="body">
-      <p class="muted">This goes to github.com/chauvoluuhuong/chorus/issues. Emails, account ids, keys and your home path are taken out; read it and edit what you like before sending.</p>
-      <label class="dr-label">Type<select class="dlg-input" id="doc-issue-kind">${kinds}</select></label>
-      <label class="dr-label">Title<input type="text" class="dlg-input" id="doc-issue-title" value="${esc(r.title)}" placeholder="In a few words: what went wrong or what you need"></label>
-      <label class="dr-label">What happened<textarea class="dr-issue short" id="doc-issue-what" placeholder="What you did, what you expected, what you saw instead"></textarea></label>
-      <details class="dr-attach"><summary>Attached: the doctor's report and this machine (${r.details.split('\n').length} lines)</summary><textarea class="dr-issue" id="doc-issue-body" spellcheck="false">${esc(r.details)}</textarea></details>
-    </div><div class="foot"><span class="grow faint">Filed as a user report</span><button class="btn" data-act="doc-issue-cancel">Cancel</button><button class="btn primary" data-act="doc-send">${S.doctor?.gh ? 'Create issue' : 'Open on GitHub'}</button></div>`;
+      <p class="muted rp-lead">This goes to the Chorus team, not to a public page. Emails, account ids, keys and your home path are taken out; read it and edit what you like before sending.</p>
+      <label class="dr-label">Title<input type="text" class="dlg-input" id="doc-issue-title" value="${esc(r.title)}" maxlength="200" placeholder="In a few words: what went wrong or what you need"></label>
+      <label class="dr-label">What happened<textarea class="dr-issue short" id="doc-issue-what" maxlength="5000" placeholder="What you did, what you expected, what you saw instead"></textarea></label>
+      <div class="dr-label" id="rp-drop">Screenshots (optional)
+        <div class="rp-shots" id="rp-shots"></div>
+        <span class="rp-note"><span id="rp-count">0 of ${SHOT_MAX}</span> · PNG, JPEG or WebP · choose, drop or paste · large images are made smaller (about 1 MB each). Check that a screenshot shows nothing private.</span>
+        <input type="file" id="rp-file" accept="image/png,image/jpeg,image/webp" multiple hidden></div>
+      <label class="dr-label">Email, if you want a reply (optional)<input type="email" class="dlg-input" id="doc-issue-email" maxlength="200" placeholder="you@example.com" autocomplete="email"></label>
+      <div class="dr-label">Sent with your report (collected by Chorus)<div class="rp-chips">${(r.chips ?? []).map(t => `<span class="rp-chip">${esc(t)}</span>`).join('')}</div></div>
+      <details class="dr-attach"><summary>All details: read and edit before sending (${r.details.split('\n').length} lines)</summary><textarea class="dr-issue" id="doc-issue-body" spellcheck="false" maxlength="60000">${esc(r.details)}</textarea></details>
+      <div class="rp-error" id="rp-error" role="alert" hidden></div>
+    </div><div class="foot"><span class="grow faint">Sent only when you press Send</span><button class="btn" data-act="doc-issue-cancel">Cancel</button><button class="btn dark" id="rp-send" data-act="doc-send">Send report</button></div>`;
+  drawShots();
+  $('#rp-file').addEventListener('change', e => { void addShots([...e.target.files]); e.target.value = ''; });
+  // a drop on the dialog (a browser gives the bytes) and a paste anywhere while it is open
+  for (const ev of ['dragenter', 'dragover']) el.addEventListener(ev, e => { if (hasFiles(e)) e.preventDefault(), e.stopPropagation(), $('#rp-drop')?.classList.add('over'); });
+  el.addEventListener('dragleave', e => { if (!e.relatedTarget || !el.contains(e.relatedTarget)) $('#rp-drop')?.classList.remove('over'); });
+  el.addEventListener('drop', e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    $('#rp-drop')?.classList.remove('over');
+    void addShots([...e.dataTransfer.files]);
+  });
+  el.addEventListener('paste', e => {
+    const files = [...(e.clipboardData?.files ?? [])].filter(f => f.type.startsWith('image/'));
+    if (!files.length) return;
+    e.preventDefault();
+    void addShots(files);
+  });
   $('#doc-issue-title').focus();
+}
+
+/** Sends the open report; on "not reached" the dialog stays with everything in it and the button says Try again. */
+async function sendReport() {
+  const R = S.report;
+  if (!R || R.sending) return;
+  R.sending = true;
+  const btn = $('#rp-send'), err = $('#rp-error');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Sending…';
+  err.hidden = true;
+  let r;
+  try {
+    const images = await Promise.all(R.shots.map(async x => ({ type: x.type, data: await toBase64(x.blob) })));
+    r = await api('POST', '/api/doctor/issue/send', { title: $('#doc-issue-title').value, what: $('#doc-issue-what').value, details: $('#doc-issue-body').value, email: $('#doc-issue-email').value, setup: R.setup, images });
+  } catch (e) {
+    r = { error: 'the Chorus service could not be reached', offline: true, local: e.message };
+  }
+  R.sending = false;
+  if (!$('#doc-report-pop')) return;
+  if (r.error) {
+    btn.disabled = false;
+    btn.textContent = 'Try again';
+    err.textContent = r.offline ? 'Not sent: the Chorus service could not be reached. Nothing is lost; check your connection and try again.' : `Not sent: ${r.error}`;
+    err.hidden = false;
+    return err.scrollIntoView({ block: 'nearest' });
+  }
+  R.sent = r;
+  const n = r.images ?? 0;
+  $('#doc-report-pop .dialog').innerHTML = `<h2>✔ Report sent</h2><div class="body"><p class="muted">Thank you. It went to the Chorus team${n ? `, with ${n} screenshot${n > 1 ? 's' : ''}` : ''}.${r.failed ? ` ${r.failed} screenshot${r.failed > 1 ? 's' : ''} did not arrive.` : ''}</p>
+      <div class="rp-ref"><span class="muted">Reference</span><b id="rp-ref">${esc(r.ref)}</b><button class="btn" data-act="rp-copy">Copy</button></div>
+      <p class="faint rp-quote">Quote this reference if you write to us about it.</p></div>
+    <div class="foot"><button class="btn primary" data-act="doc-issue-cancel">Done</button></div>`;
+  $('#doc-report-pop').setAttribute('aria-label', 'Report sent');
+}
+function closeReport() {
+  for (const x of S.report?.shots ?? []) URL.revokeObjectURL(x.url);
+  S.report = null;
+  $('#doc-report-pop')?.remove();
 }
 
 /* ---------- a chat ---------- */
@@ -2032,6 +2172,12 @@ function deliverPaths(paths, copy) {
 
 // the native window (Tauri): enter / over / drop / leave with full paths and the pointer in CSS pixels
 window.chorusDrop = ({ kind, paths, x, y }) => {
+  // the report dialog takes a dropped image as a screenshot: the window gives its path, the server reads the image
+  if ($('#doc-report-pop')) {
+    hideDrop();
+    if (kind === 'drop' && paths?.length) void addShotPaths(paths);
+    return;
+  }
   if (kind === 'leave') return hideDrop();
   const zone = showDrop(x, y, true);
   if (kind !== 'drop') return;
@@ -2312,12 +2458,19 @@ document.addEventListener('click', async e => {
     case 'doc-report':
       return void reportIssue();
     case 'doc-issue-cancel':
-      return el.closest('.scrim')?.remove();
-    case 'doc-send': {
-      const r = await api('POST', '/api/doctor/issue/send', { kind: $('#doc-issue-kind').value, summary: $('#doc-issue-title').value, what: $('#doc-issue-what').value, details: $('#doc-issue-body').value }).catch(err => ({ error: err.message }));
-      el.closest('.scrim')?.remove();
-      return toast(r.error ? `Not sent: ${r.error}` : r.via === 'gh' ? `Issue created: ${r.url}` : 'Opened GitHub; the report is on your clipboard: paste it as the description');
+      return closeReport();
+    case 'doc-send':
+      return void sendReport();
+    case 'rp-add':
+      return $('#rp-file')?.click();
+    case 'rp-rm': {
+      const [x] = S.report?.shots.splice(Number(arg), 1) ?? [];
+      if (x) URL.revokeObjectURL(x.url);
+      return drawShots();
     }
+    case 'rp-copy':
+      await navigator.clipboard?.writeText(S.report?.sent?.ref ?? '').catch(() => {});
+      return toast('Reference copied');
     case 'update-toggle': $('#app-update').hidden = !$('#app-update').hidden; return renderChrome();
     case 'update-skip': closeUpdate(); return api('POST', '/api/updates/skip', {});
     case 'update-open': {

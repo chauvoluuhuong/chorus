@@ -564,6 +564,9 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 .page.welcome .lead { text-align: center; color: var(--muted); margin: 8px auto 0; max-width: 560px; }
 .page.welcome.center { text-align: center; padding-top: 48px; }
 .page.welcome .big { font-size: 34px; margin-bottom: 8px; }
+.wl-strip { display: flex; gap: 10px; align-items: flex-start; max-width: 640px; margin: 16px auto 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.wl-strip .badge.mini { vertical-align: -1px; }
+.wl-thanks { flex: none; font-size: 16px; line-height: 1.3; }
 .plan-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
 .plan-card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; display: flex; flex-direction: column; }
 .plan-card.pro { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -814,3 +817,37 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
   .skill .grow { flex-basis: calc(100% - 60px); }
   .handoff-src { overflow-wrap: anywhere; }
 }
+
+/* Report issue (plan 2026-11-13): screenshots, email, the setup chips; sent with a reference, or "not reached" with Try again */
+.btn.dark { background: var(--ink); border-color: var(--ink); color: var(--bg); font-weight: 600; }
+.btn.dark:hover:not(:disabled) { background: var(--ink-2); }
+.dialog.rp-dialog { width: min(660px, calc(100vw - 32px)); }
+.rp-dialog h2 { font-size: 23px; padding: 22px 22px 4px; }
+.rp-dialog .body { padding: 0 22px 8px; }
+.rp-dialog .foot { padding: 12px 22px 20px; }
+.rp-dialog .rp-lead { margin: 0 0 4px; font-size: 13px; }
+.rp-dialog .dr-label { display: grid; gap: 6px; margin-top: 14px; font-size: 12.5px; color: var(--muted); }
+.rp-dialog .dr-label .dlg-input, .rp-dialog .dr-label .dr-issue { margin-top: 0; }
+.rp-dialog .dlg-input { width: 100%; height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; font-size: 13.5px; outline: none; }
+.rp-dialog .dlg-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.rp-dialog .dr-issue { border-radius: 8px; }
+.rp-dialog .dr-issue.short { min-height: 64px; }
+.rp-dialog .dr-label.over { outline: 2px dashed var(--accent); outline-offset: 4px; border-radius: 8px; }
+.rp-shots { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
+.rp-shot { position: relative; width: 104px; }
+.rp-thumb { height: 66px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg) center / cover no-repeat; }
+.rp-rm { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; border: 0; padding: 0; background: rgba(0, 0, 0, 0.6); color: #fff; cursor: pointer; line-height: 1; font-size: 14px; }
+.rp-name { font-size: 11px; color: var(--muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp-size { font-size: 11px; color: var(--faint); }
+.rp-add { width: 104px; height: 66px; border-radius: 8px; border: 1px dashed var(--line); background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 12.5px; }
+.rp-add:hover { border-color: var(--faint); color: var(--ink); }
+.rp-note { color: var(--faint); font-size: 12px; }
+.rp-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.rp-chip { font-size: 12px; padding: 3px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--ink); }
+.rp-dialog .dr-attach { margin-top: 14px; font-size: 12.5px; }
+.rp-dialog .dr-attach .dr-issue { min-height: 230px; }
+.rp-error { margin-top: 12px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); color: var(--bad); font-size: 12.5px; }
+.rp-ref { display: flex; gap: 10px; align-items: center; margin-top: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.rp-ref .muted { font-size: 12.5px; }
+.rp-ref b { font-family: var(--f-mono); font-size: 15px; flex: 1; }
+.rp-quote { font-size: 12.5px; margin: 10px 0 0; }
