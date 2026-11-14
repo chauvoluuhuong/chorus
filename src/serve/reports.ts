@@ -100,7 +100,9 @@ export class ReportSender {
     const j = (await res.json().catch(() => ({}))) as { id?: unknown; ref?: unknown; error?: unknown };
     if (res.status >= 500) return { error: 'the Chorus service could not be reached', offline: true };
     if (!res.ok || typeof j.id !== 'string' || typeof j.ref !== 'string') {
-      if (res.status === 429) return { error: typeof j.error === 'string' ? j.error : 'Too many reports from this computer today. Try again tomorrow.' };
+      // the limits in plain words (chorus-admin docs/client-contract.md: 5 reports a day; sizes)
+      if (res.status === 429) return { error: 'This computer has sent 5 reports today, the most for one day. Nothing is lost: try again tomorrow, or keep the text and send it then.' };
+      if (res.status === 413) return { error: 'The report is too large to send. Shorten the details or remove a screenshot, then try again.' };
       return { error: typeof j.error === 'string' ? j.error : `the Chorus service answered ${res.status}` };
     }
     const id = j.id;

@@ -84,7 +84,7 @@ test('ReportSender: not reached, rate limit, a backend error, and a screenshot t
   be.set('error');
   assert.equal((await s.send(one) as { offline?: boolean }).offline, true, 'a 5xx reads as not reached: Try again');
   be.set('limit');
-  assert.deepEqual(await s.send(one), { error: 'Five reports a day from one installation.' });
+  assert.match((await s.send(one) as { error: string }).error, /sent 5 reports today/);
   be.set('image-fails');
   be.seen.length = 0;
   assert.deepEqual(await s.send(one), { ok: true, id: 'abc', ref: 'R-7K2F9', images: 1, failed: 1 });
