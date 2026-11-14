@@ -17,6 +17,7 @@ import type { AgentCheck, FastReport } from '@chauvoluuhuong/chorus-core/doctor'
 import { SignIns } from '../../src/serve/signin.ts';
 import { boxLoginCommand, ChorusServer, headlessApp, hostNames, type ServeOpts } from '../../src/serve/server.ts';
 import { NotificationInbox } from '../../src/serve/notifications.ts';
+import { ReportSender } from '../../src/serve/reports.ts';
 import { UpdateCheck } from '../../src/serve/updates.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
@@ -28,7 +29,7 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const agentCheck = (agent: AgentId, state: AgentCheck['state'], login: AgentCheck['login'] = state === 'needs-login' ? 'no' : 'yes'): AgentCheck => ({ agent, name: agent, state, login, version: '1.0.0', page: '', loginCommand: [agent, 'login'], ms: 1 });
 const fastReport = (agents: AgentCheck[] = (['claude', 'codex', 'agy'] as AgentId[]).map(a => agentCheck(a, 'ready'))): FastReport => ({ node: { version: '22', ok: true }, platform: 'test', agents, ms: 1 });
 
-async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand' | 'pickFolder' | 'sessionExists' | 'host' | 'container' | 'signIns'> = {}) {
+async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand' | 'pickFolder' | 'sessionExists' | 'host' | 'container' | 'signIns' | 'reports'> = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-home-'));
   process.env.CODEX_HOME = home;
   const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-serve-')));
@@ -476,16 +477,43 @@ test('serve: the window coming back checks again quietly, at most once every 10 
   }
 });
 
-test('serve: Report issue works before any test run, with the issue types to pick from', async () => {
-  const r = await rig();
+test('serve: Report issue works before any test run, and is sent to the admin backend with its screenshots', async () => {
+  const got: { url: string; body: any; type?: string }[] = [];
+  const reports = new ReportSender({
+    version: '9.9.9',
+    credentials: () => ({ installationId: 'inst', installationKey: 'key' }),
+    endpoint: 'http://backend.test',
+    request: (async (url: string, init: RequestInit) => {
+      got.push({ url, body: typeof init.body === 'string' ? JSON.parse(init.body) : init.body, type: (init.headers as Record<string, string>)['content-type'] });
+      return new Response(JSON.stringify(url.endsWith('/v1/reports') ? { id: 'r1', ref: 'R-ABCDE' } : { ok: true }), { status: url.endsWith('/v1/reports') ? 201 : 200 });
+    }) as typeof fetch,
+  });
+  const r = await rig(undefined, undefined, undefined, { reports });
   const before = process.env.CHORUS_DOCTOR_HOME;
   process.env.CHORUS_DOCTOR_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-doctor-'));
   try {
     const rep = (await r.api('POST', '/api/doctor/issue', { client: { window: 'browser' }, errors: ['boom'] })).json;
-    assert.deepEqual(rep.kinds.map((k: { id: string }) => k.id), ['bug', 'cli', 'feature', 'question', 'other']);
-    assert.ok(rep.details.includes('window browser') && rep.details.includes('page: boom'));
-    // an unknown type is refused before anything is sent
-    assert.equal((await r.api('POST', '/api/doctor/issue/send', { kind: 'urgent', details: '' })).json.error, 'kind and details');
+    assert.equal(rep.kinds, undefined, 'no Type to pick');
+    assert.ok(rep.details.includes('- Window: browser') && rep.details.includes('page: boom'));
+    assert.ok(rep.setup.clis && rep.chips.length >= 4);
+    // a PNG of about 1 MB, as base64: past the usual 1 MB body limit, inside the report's
+    const png = Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(1_000_000, 1)]).toString('base64');
+    const sent = (await r.api('POST', '/api/doctor/issue/send', { title: 'Hang', what: 'it hung', details: rep.details, email: 'me@example.com', setup: rep.setup, images: [{ type: 'image/png', data: png }] })).json;
+    assert.deepEqual(sent, { ok: true, id: 'r1', ref: 'R-ABCDE', images: 1, failed: 0 });
+    assert.deepEqual(got.map(g => g.url), ['http://backend.test/v1/reports', 'http://backend.test/v1/reports/r1/images/1']);
+    assert.equal(got[0].body.email, 'me@example.com');
+    assert.equal(got[0].body.imageCount, 1);
+    assert.equal(got[1].type, 'image/png');
+    // refused before anything is sent: not an image
+    assert.match((await r.api('POST', '/api/doctor/issue/send', { details: 'x', images: [{ data: Buffer.from('hello').toString('base64') }] })).json.error, /not a PNG/);
+    assert.equal(got.length, 2);
+    // the native window's drop: an image by its path, read only when it is one
+    const f = path.join(r.project, 'shot.png');
+    fs.writeFileSync(f, Buffer.from(png, 'base64'));
+    assert.equal((await r.api('POST', '/api/doctor/issue/image', { path: f })).json.type, 'image/png');
+    fs.writeFileSync(path.join(r.project, 'notes.txt'), 'secret');
+    assert.match((await r.api('POST', '/api/doctor/issue/image', { path: path.join(r.project, 'notes.txt') })).json.error, /only PNG/);
+    assert.equal((await r.api('POST', '/api/doctor/issue/image', { path: 'relative.png' })).json.error, 'not a file');
   } finally {
     if (before === undefined) delete process.env.CHORUS_DOCTOR_HOME;
     else process.env.CHORUS_DOCTOR_HOME = before;
