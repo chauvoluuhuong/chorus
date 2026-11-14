@@ -83,7 +83,8 @@ export class NotificationInbox {
     for await (const chunk of response.body) { bytes += chunk.length; if (bytes > 12_000_000) { throw new Error('Notification response too large'); } chunks.push(chunk); }
     return JSON.parse(Buffer.concat(chunks).toString('utf8'));
   }
-  private credentials() { return { installationId: this.saved.installationId, installationKey: this.saved.installationKey }; }
+  /** Also the installation ID and key a user-started report carries (src/serve/reports.ts). */
+  credentials() { return { installationId: this.saved.installationId, installationKey: this.saved.installationKey }; }
   private acknowledge(sent: Event[], s: Saved) { s.received.push(...sent.map(e => e.id)); s.pending = s.pending.filter(e => !sent.some(old => old.id === e.id && old.type === e.type)); }
   startup(): Promise<void> {
     // A rejected launch request is also final for this process. No retry on UI requests, reconnect, or focus.
