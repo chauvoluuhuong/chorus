@@ -31,9 +31,10 @@ import { disabledSkills, expandSkillMentions, findNativeSkills, importSkill, lis
 import { matchFiles, projectFiles } from '../core/files.ts';
 import type { AgentId } from '../core/types.ts';
 import { CLIS, type AgentCheck, type DeepReport, type FastReport } from '@chauvoluuhuong/chorus-core/doctor';
-import { check, composeIssue, firstLaunch, ghReady, host, isDue, isIssueKind, ISSUE_KINDS, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, remoteTested, reportDetails, runCommand, runDeep, sendIssue, versions, DOCTOR_DIR } from '../core/doctor.ts';
+import { check, firstLaunch, ghReady, host, isDue, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, remoteTested, reportDetails, runCommand, runDeep, versions } from '../core/doctor.ts';
 
-import type { NotificationInbox } from './notifications.ts';
+import { NotificationInbox } from './notifications.ts';
+import { imageType, parseReport, ReportSender } from './reports.ts';
 import { ChatLaunch, ProHost, type ProLoader } from './pro.ts';
 import { SignIns } from './signin.ts';
 import { inContainer } from '../cli/screen.ts';
@@ -79,7 +80,7 @@ export function hostNames(host?: string, interfaces: ReturnType<typeof os.networ
   else if (host) add(host);
   return [...names];
 }
-const LITERAL = new Set(['POST ui', 'POST folders/pick', 'POST skills/import', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/send']);
+const LITERAL = new Set(['POST ui', 'POST folders/pick', 'POST skills/import', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/image', 'POST doctor/issue/send']);
 
 /** The App without a terminal: input and output go nowhere, the Controller drives it as usual. */
 export function headlessIO(): AppIO {
@@ -105,6 +106,8 @@ export interface Dialog {
 export interface ServeOpts {
   controller: Controller;
   notifications?: NotificationInbox;
+  /** where a report from the Doctor's dialog goes (tests); the backend otherwise, with the notifications' installation ID */
+  reports?: ReportSender;
   updates?: UpdateCheck;
   onUpdateOpen?: (url: string) => void;
   onNotificationLink?: (url: string) => void;
@@ -166,6 +169,8 @@ export class ChorusServer {
   /** what `chorus mcp` holds: it opens /api/pro/mcp/ and nothing else */
   readonly mcpToken = crypto.randomBytes(24).toString('hex');
   readonly pro: ProHost;
+  readonly reports: ReportSender;
+  private ownInbox: NotificationInbox | undefined;
   url = '';
   /** in a container (the Chorus box): the CLIs sign in from the page (signin.ts), not in a terminal */
   readonly container: boolean;
@@ -207,6 +212,8 @@ export class ChorusServer {
     this.container = o.container ?? (process.env.CHORUS_BOX === '1' || inContainer());
     // a sign-in that finished: check again, so the Doctor shows the agent ready
     this.signIns = o.signIns ?? new SignIns({ onChange: s => { if (s.state === 'done') void this.checkAgents({ quiet: true }).catch(e => this.noteError('doctor check', e)); } });
+    // the notifications' installation ID; with notifications off (CHORUS_NOTIFICATIONS=0) the same file, made on first use
+    this.reports = o.reports ?? new ReportSender({ version: versions().chorus, credentials: () => (this.o.notifications ?? (this.ownInbox ??= new NotificationInbox({ directory: path.join(process.env.CHORUS_HOME ?? path.join(os.homedir(), '.chorus'), 'notifications'), version: versions().chorus }))).credentials() });
     this.pro = new ProHost({ homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), dismissApproval: (thread, request) => this.dismissApproval(thread, request), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.approvalsNow().filter(a => !a.hidden).map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))] }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     if (o.chatLaunch) o.chatLaunch.host = this.pro;
     this.bridge();
@@ -537,7 +544,15 @@ export class ChorusServer {
         return void fs.createReadStream(a.target).pipe(res);
       }
     }
-    const body = req.method === 'GET' ? {} : await readJson(req);
+    // a report carries up to 4 screenshots of about 1 MB each, as base64
+    // reading a dropped image by its path is for this Mac's own window, never a device on the private link
+    if (u.pathname === '/api/doctor/issue/image' && this.isRemote(req)) return send(res, 403, { error: 'Add it on the Mac.' });
+    let body: Record<string, any>;
+    try {
+      body = req.method === 'GET' ? {} : await readJson(req, u.pathname === '/api/doctor/issue/send' ? 8_000_000 : 1_000_000);
+    } catch (e) {
+      return send(res, (e as Error).message === 'too large' ? 413 : 400, { error: (e as Error).message });
+    }
     const out = await this.route(req.method ?? 'GET', u.pathname.slice(5).split('/').map(decodeURIComponent), u.searchParams, body);
     if (out === undefined) return send(res, 404, { error: 'not found' });
     send(res, 200, out);
@@ -925,13 +940,25 @@ export class ChorusServer {
         const client = b.client && typeof b.client === 'object' ? b.client : undefined;
         // a new check for the report, quiet, and the same one every screen gets
         const { report: fast } = await this.checkAgents({ quiet: true });
-        const r = await reportDetails({ fast, deep: this.deepReports, chats, projects: new Set(threads.map(t => t.project ?? t.cwd)).size, client, errors, update: this.o.updates?.snapshot() ?? null });
-        return { ...r, kinds: Object.entries(ISSUE_KINDS).map(([id, k]) => ({ id, name: k.name })) };
+        const ps = this.pro.status();
+        const pro = ps.unlocked ? { version: ps.version, state: ps.plan ?? 'active' } : ps.reason ? { state: `not active: ${ps.reason}` } : null;
+        return reportDetails({ fast, deep: this.deepReports, chats, projects: new Set(threads.map(t => t.project ?? t.cwd)).size, client, errors, update: this.o.updates?.snapshot() ?? null, pro });
+      }
+      case 'POST doctor/issue/image': {
+        // an image dropped on the report dialog in the native window, which gives its path: only a PNG, JPEG or WebP is read
+        const f = typeof b.path === 'string' && path.isAbsolute(b.path) ? b.path : '';
+        const st = f ? fs.statSync(f, { throwIfNoEntry: false }) : undefined;
+        if (!st?.isFile()) return { error: 'not a file' };
+        if (st.size > 30_000_000) return { error: 'larger than 30 MB' };
+        const bytes = fs.readFileSync(f);
+        const type = imageType(bytes);
+        return type ? { type, data: bytes.toString('base64') } : { error: 'only PNG, JPEG or WebP images' };
       }
       case 'POST doctor/issue/send': {
-        if (!isIssueKind(b.kind) || typeof b.details !== 'string') return { error: 'kind and details' };
-        const it = composeIssue({ kind: b.kind, summary: String(b.summary ?? ''), what: String(b.what ?? ''), details: b.details });
-        return { ...sendIssue(it.title, it.body, path.join(DOCTOR_DIR(), 'issue.md')), title: it.title, labels: it.labels };
+        // to the Chorus team's admin page (plan 2026-11-13); `chorus doctor --report` in a terminal still files a GitHub issue
+        const r = parseReport(b);
+        if ('error' in r) return r;
+        return this.reports.send(r);
       }
       case 'POST dialogs/:id':
         return { ok: this.answer(id, b.value) };
@@ -1317,12 +1344,15 @@ function readRaw(req: http.IncomingMessage, limit: number): Promise<Buffer> {
   });
 }
 
-function readJson(req: http.IncomingMessage): Promise<Record<string, any>> {
+function readJson(req: http.IncomingMessage, limit = 1_000_000): Promise<Record<string, any>> {
   return new Promise((resolve, reject) => {
     let s = '';
     req.on('data', d => {
       s += d;
-      if (s.length > 1_000_000) req.destroy();
+      if (s.length > limit) {
+        req.destroy();
+        reject(new Error('too large'));
+      }
     });
     req.on('end', () => {
       try {
