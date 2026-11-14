@@ -340,9 +340,8 @@ details.
 
 ### 6.4 Report issue in the desktop
 
-A dialog with the redacted `issue.md` (§7) in an editable text box, the list of evidence files in the zip, and:
-**Create issue with GitHub CLI** (only when `gh` is logged in), else **Open on GitHub** (title in the URL; body copied to the
-clipboard; zip shown in Finder), and **Cancel**. Nothing is sent before one of the first two is clicked.
+Sent to the Chorus team's admin page, not to GitHub (2026-11-14): see §7.1 and
+[`features/report-issue.md`](features/report-issue.md). The terminal's `chorus doctor --report` still files a GitHub issue (§7).
 
 ### 6.5 What `chorus serve` adds
 
@@ -352,7 +351,7 @@ clipboard; zip shown in Finder), and **Cancel**. Nothing is sent before one of t
 | `POST /api/doctor/run` `{ level, agents }` | starts a run; progress as `doctor` messages on the WebSocket (the runner's events, `docs/chorus-core.md` §4) |
 | `POST /api/doctor/stop` | stops it; finished cases keep their result |
 | `POST /api/doctor/terminal` `{ agent, action: 'install' \| 'login' }` | a PTY with the command from the install table; nothing else can be run through it |
-| `GET /api/doctor/issue` · `POST /api/doctor/issue` `{ body, via: 'gh' \| 'browser' }` | the redacted body; sends it the chosen way |
+| `POST /api/doctor/issue` · `POST /api/doctor/issue/send` · `POST /api/doctor/issue/image` | the report's details; sends it to the admin backend (§7.1) |
 
 These sit behind the local API's existing token (`docs/phase5.md` §2).
 
@@ -412,24 +411,38 @@ On yes:
 The Doctor page shows which Chorus runs under its title (version, core version, how it was installed, and a newer release when the
 launch check found one); the doctor popup shows the version in its corner (2026-10-26).
 
-### 7.1 Report issue in the desktop, any time (2026-10-26)
+### 7.1 Report issue in the desktop, any time (2026-10-26; to the admin page with screenshots 2026-11-14)
 
 The Doctor page has a **Report issue** button next to Run test (also on the failed-test banner and the first-launch screen's last
-step); it needs no test run. The dialog asks for:
+step); it needs no test run. The dialog (mockup `ui-mockup-v3.html`, UC-13 "Report issue…") has, with **no Type field**:
 
-- **Type**: Bug, An agent does not work with Chorus (picked by default when a detailed test failed), Feature request, Question,
-  Other.
 - **Title** and **What happened**, in the user's words.
-- **Attached** (collapsed, editable): a fresh short check (no model calls), each agent's newest detailed test on file with the
-  evidence of failed cases, and what the app can tell without prompts, code or file names: OS, CPU, memory, locale and time zone,
-  Chorus and core versions and install method, native window or browser with its size, CLI binaries and whether they update
-  themselves, newest releases, versions that passed here, the backend's tested list, chat counts per agent, state and CLI version,
-  the number of projects, and the newest errors of the server and the page. All of it goes through `redact()`.
+- **Screenshots (optional)**: up to 4, PNG, JPEG or WebP, by file picker, drop (a browser gives the bytes; the native window gives
+  a path, which `POST /api/doctor/issue/image` reads only when it is such an image, and never for a device on the private link) or
+  paste; each removable. The page makes each one about 1 MB: kept as it is when already under 1 MB and 2000 px, else drawn on a
+  canvas with its longest side ≤ 2000 px and saved as JPEG (WebP when it may be transparent; JPEG where the browser can't write
+  WebP), quality stepped down, then size. "Check that a screenshot shows nothing private."
+- **Email, if you want a reply (optional)**.
+- **Sent with your report (collected by Chorus)**: chips (app version and channel, core, install method, OS and arch, each CLI
+  with its version and Doctor state) and **All details** (collapsed, editable), sections: Chorus (app, channel, install method,
+  core, the paid module's version and state, window, server uptime, waiting update), This machine (OS name and version, kernel,
+  arch, CPU × count, RAM, Node, shell, terminal, locale, time zone), AI CLIs (a fresh short check: installed, state, newest
+  tested, newest release, install, login; binaries; self-updating), Detailed tests on file (date, pass/fail, the failed case and
+  its reason, the last 40 lines of its evidence; versions that passed here; the backend's tested list), Use (chats by agent, state
+  and CLI version; projects), Recent errors (last 30 lines). All of it goes through `redact()`. Never: host name, user name,
+  serial or hardware id, prompts, chat content, code, project names.
 
-The issue is titled `[<type>] <title>` and its body starts with `<!-- chorus-report kind=<type> -->`. A user without access to the
-repo can't set labels, so `.github/workflows/issue-labels.yml` puts them on when the issue opens: the type's labels (`bug`,
-`bug` + `cli-compat`, `enhancement`, `question`) plus **`user report`** and **`priority: low`**: a report from the app has the lowest
-priority. Sending is as above (`gh issue create`, else the new-issue page with the body on the clipboard).
+**Send report** → `POST /api/doctor/issue/send` (title, what, details, email, the short `setup`, images as base64; this route
+reads up to 8 MB) → `chorus serve` → the backend: `POST /v1/reports` with the installation ID and key, then
+`PUT /v1/reports/<id>/images/<n>` per image (`src/serve/reports.ts`). The page then shows **✔ Report sent** with the reference
+(`R-7K2F9`) and **Copy**. When the backend is not reached (no connection, a 5xx) the dialog stays with "Not sent: the Chorus
+service could not be reached. Nothing is lost…" and **Try again**; another refusal (5 reports a day) is shown in its own words.
+A report is sent even when notifications are off (`CHORUS_NOTIFICATIONS=0`), with the same installation ID file
+(`~/.chorus/notifications/inbox.json`, made on first use). `CHORUS_REPORTS_API` points it at another backend (tests).
+
+The terminal's `chorus doctor --report` keeps the GitHub route of §7: `composeIssue` (title `[<type>] <title>`, body starting
+`<!-- chorus-report kind=<type> -->`, labels put on by `.github/workflows/issue-labels.yml` with **`user report`** and
+**`priority: low`**) and `sendIssue` (`gh issue create`, else the new-issue page with the body on the clipboard).
 
 ## 8. Flags
 
