@@ -168,48 +168,134 @@ export interface ReportContext {
   deep?: DeepReport[];
   chats?: { agent: string; state: string; cli_version: string | null }[];
   projects?: number;
-  /** the page: native window or browser, user agent, screen and window size, language */
+  /** the page: native window or browser, screen and window size, language, the page it was on */
   client?: Record<string, unknown>;
   /** the short check to report: the desktop passes the server's (one check for every screen); a new one otherwise */
   fast?: FastReport;
   /** the newest errors the server and the page saw */
   errors?: string[];
   update?: { currentVersion: string; version: string } | null;
+  /** the paid module, when it is there: its version and state (never the account) */
+  pro?: { version?: string; state: string } | null;
+}
+
+/** The small structured part of a report, for the admin list: nothing the details text does not say too. */
+export interface ReportSetup {
+  appVersion: string;
+  channel: 'preview' | 'production' | 'dev';
+  os: string;
+  arch: string;
+  clis: Partial<Record<AgentId, { version: string | null; state: string }>>;
 }
 
 const gb = (n: number) => `${(n / 2 ** 30).toFixed(1)} GB`;
 const count = (xs: string[]) => Object.entries(xs.reduce<Record<string, number>>((m, x) => ((m[x] = (m[x] ?? 0) + 1), m), {})).map(([k, n]) => `${k} ${n}`).join(', ') || 'none';
+const CLI_NAMES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', agy: 'Antigravity' };
+/** The Doctor's word for a CLI's state: the same as the desktop's (agentStatus in src/desktop/app.js). */
+export const STATE_LABEL: Record<string, string> = { ready: 'Ready', 'needs-login': 'Not logged in', untested: 'New version', missing: 'Not installed' };
+
+/** How this copy of Chorus was installed: the installer keeps versions/<v>/app (src/serve/updates.ts), npm a global module. */
+export function installMethod(file = import.meta.filename): string {
+  const real = (() => {
+    try {
+      return fs.realpathSync(file);
+    } catch {
+      return file;
+    }
+  })();
+  if (/\/versions\/[^/]+\/app\//.test(real)) return 'curl installer';
+  if (real.includes('/lib/node_modules/')) return 'npm global';
+  return 'from a checkout';
+}
+export const channelOf = (version: string, install = installMethod()): ReportSetup['channel'] => (/-preview\.\d+$/.test(version) ? 'preview' : install === 'from a checkout' ? 'dev' : 'production');
+
+/** The OS by its product name and version (macOS 15.2, Ubuntu 24.04.1 LTS), not the kernel's; nothing that names the machine. */
+export function osName(): string {
+  if (process.platform === 'darwin') {
+    const v = spawnSync('sw_vers', ['-productVersion'], { encoding: 'utf8', timeout: 2000 }).stdout?.trim();
+    return `macOS ${v || '?'}`;
+  }
+  if (process.platform === 'linux') {
+    const pretty = /^PRETTY_NAME="?([^"\n]*)"?$/m.exec((() => { try { return fs.readFileSync('/etc/os-release', 'utf8'); } catch { return ''; } })())?.[1];
+    return pretty || 'Linux';
+  }
+  return `${os.type()} ${os.release()}`;
+}
+
+const day = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : `${d.getDate()} ${d.toLocaleString('en', { month: 'short' })} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
 
 /** The report the dialog shows: the doctor's (a fresh short check, the detailed tests on file) and everything else the app can
- *  tell without the user's prompts, code or file names. The user reads and edits it before it is sent. */
-export async function reportDetails(ctx: ReportContext = {}): Promise<{ title: string; details: string; kind: IssueKind }> {
+ *  tell without the user's prompts, code or file names, and without what names the machine or the person (no host name, user
+ *  name, serial or hardware id). The user reads and edits it before it is sent. `setup` and `chips` are the same facts, short. */
+export async function reportDetails(ctx: ReportContext = {}): Promise<{ title: string; details: string; kind: IssueKind; setup: ReportSetup; chips: string[] }> {
   const fast = ctx.fast ?? (await check());
   const onDisk = lastDeep();
   const deep = [...(ctx.deep ?? [])];
   for (const a of AGENTS) if (!deep.some(d => d.agent === a) && onDisk[a]) deep.push(onDisk[a]!);
   const base = issue(fast, deep);
+  const v = versions();
+  const install = installMethod();
+  const channel = channelOf(v.chorus, install);
   const cpus = os.cpus();
   const c = ctx.client ?? {};
   const latest = await latestReleases().catch(() => ({}) as Partial<Record<AgentId, string>>);
+  const osn = osName();
+  const label = (a: FastReport['agents'][number]) => STATE_LABEL[a.state] ?? a.state;
+  const str = (k: string) => (typeof c[k] === 'string' || typeof c[k] === 'number' ? String(c[k]) : '');
+  const window = [str('window') === 'native' ? 'native app' : str('window') ? `${str('window')}` : '', str('screen') || str('size'), str('language') && `language ${str('language')}`, str('view') && `on the ${str('view')} page`].filter(Boolean).join(', ');
+  const deepLines = deep.flatMap(d => {
+    const when = 'at' in d ? ` ${day(String((d as { at: string }).at))}` : '';
+    const rs = d.results ?? [];
+    const passed = rs.filter(r => r.status === 'pass' || r.status === 'skip').length;
+    if (d.ok) return [`- ${d.agent} ${d.version ?? '?'}: passed${when} (${passed} of ${rs.length})`];
+    const bad = rs.filter(r => r.status === 'fail' || r.status === 'blocked');
+    return [
+      `- ${d.agent} ${d.version ?? '?'}: failed${when} (${passed} of ${rs.length})${bad.map(r => ` · ✖ ${r.id} ${r.title}${r.reason ? ` (${r.reason})` : ''}`).join('')}`,
+      ...bad.flatMap(r => (r.evidence ? [`  evidence of ${r.id} (last 40 lines):`, ...r.evidence.split('\n').slice(-40).map(l => `    ${l.slice(0, 300)}`)] : [])),
+    ];
+  });
   const lines = [
-    base.body,
-    '### This machine and app',
+    '### Chorus',
+    `- App: Chorus ${v.chorus} (${channel} channel), installed ${install === 'from a checkout' ? 'from a checkout' : `with the ${install}`}`,
+    `- chorus-core ${v.core}${ctx.pro ? ` · paid module ${ctx.pro.version ?? '?'} (${ctx.pro.state})` : ' · paid module: not loaded'}`,
+    ...(window ? [`- Window: ${window}`] : []),
+    `- Server up ${Math.round(process.uptime() / 60)} min · update: ${ctx.update ? `${ctx.update.version} waiting` : 'none waiting'}`,
     '',
-    `- OS: ${os.type()} ${os.release()} (${os.platform()} ${os.arch()}), ${cpus[0]?.model ?? '?'} × ${cpus.length}, ${gb(os.totalmem())} RAM (${gb(os.freemem())} free)`,
-    `- Locale: ${Intl.DateTimeFormat().resolvedOptions().locale}, time zone ${Intl.DateTimeFormat().resolvedOptions().timeZone}, LANG ${process.env.LANG ?? '?'}`,
-    `- Chorus: ${host().app}, core ${host().core}, ${host().install}; server up ${Math.round(process.uptime() / 60)} min${ctx.update ? `; update ${ctx.update.version} is available` : ''}`,
-    ...(Object.keys(c).length ? [`- Desktop: ${Object.entries(c).map(([k, v]) => `${k} ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ')}`] : []),
-    `- CLI binaries: ${fast.agents.map(a => `${a.agent} ${a.bin ?? '–'}${a.updatesItself ? ` (updates itself: ${a.updatesItself})` : ''}`).join('; ')}`,
-    `- Newest releases: ${Object.entries(latest).map(([a, v]) => `${a} ${v ?? '?'}`).join(', ') || '?'}`,
-    `- Detailed tests on file: ${deep.map(d => `${d.agent} ${d.version ?? '?'} ${d.ok ? 'passed' : 'failed'}${'at' in d ? ` (${String((d as { at: string }).at).slice(0, 16)})` : ''}`).join(', ') || 'none'}`,
-    `- Passed here before: ${known().join(', ') || 'none'}; tested after this build: ${JSON.stringify(remoteTested())}`,
-    ...(ctx.chats ? [`- Chats: ${ctx.chats.length} (${count(ctx.chats.map(t => t.agent))}; ${count(ctx.chats.map(t => t.state))}); CLI versions used: ${count(ctx.chats.map(t => `${t.agent} ${t.cli_version ?? '?'}`))}`] : []),
+    '### This machine',
+    `- ${osn} (${os.type()} ${os.release()}), ${os.arch()}, ${cpus[0]?.model?.trim() ?? '?'} × ${cpus.length}, ${gb(os.totalmem())} RAM (${gb(os.freemem())} free)`,
+    `- Node ${process.versions.node} · shell ${process.env.SHELL ?? '?'} · terminal: ${process.env.TERM_PROGRAM ?? (str('window') === 'native' ? 'Chorus' : '?')}`,
+    `- Locale ${Intl.DateTimeFormat().resolvedOptions().locale}, time zone ${Intl.DateTimeFormat().resolvedOptions().timeZone}`,
+    '',
+    '### AI CLIs (short check, just now)',
+    '| CLI | Installed | State | Newest tested | Newest release | Install | Login |',
+    '|---|---|---|---|---|---|---|',
+    ...fast.agents.map(a => `| ${CLI_NAMES[a.agent] ?? a.name} | ${a.version ?? '–'} | ${label(a)} | ${a.newestTested ?? '–'} | ${latest[a.agent] ?? '–'} | ${a.version ? (a.method ?? '?') : '–'} | ${a.state === 'missing' ? '–' : a.login === 'yes' ? 'ok' : a.login === 'no' ? 'no' : '?'} |`),
+    `- Binaries: ${fast.agents.map(a => `${a.agent} ${a.bin ?? '–'}`).join(' · ')}`,
+    ...fast.agents.filter(a => a.updatesItself).map(a => `- ${a.agent} updates itself: ${a.updatesItself}`),
+    '',
+    '### Detailed tests on file',
+    ...(deepLines.length ? deepLines : ['- none']),
+    `- Passed here before: ${known().join(', ') || 'none'}; tested after this build: ${Object.entries(remoteTested()).filter(([, vs]) => vs?.length).map(([a, vs]) => `${a} ${vs!.join(', ')}`).join('; ') || 'none'}`,
+    '',
+    '### Use',
+    ...(ctx.chats ? [`- Chats: ${ctx.chats.length} (${count(ctx.chats.map(t => t.agent))}; ${count(ctx.chats.map(t => t.state))}) · CLI versions used: ${count(ctx.chats.map(t => `${t.agent} ${t.cli_version ?? '?'}`))}`] : []),
     ...(ctx.projects !== undefined ? [`- Projects: ${ctx.projects}`] : []),
-    '',
+    ...(!ctx.chats && ctx.projects === undefined ? ['- not known here'] : []),
   ];
-  if (ctx.errors?.length) lines.push('<details><summary>Recent errors</summary>', '', '```', ...ctx.errors.slice(-30).map(e => e.slice(0, 500)), '```', '</details>', '');
+  if (ctx.errors?.length) lines.push('', '### Recent errors (last 30 lines)', ...ctx.errors.slice(-30).map(e => e.replace(/\s+/g, ' ').slice(0, 500)));
   const failed = deep.some(d => !d.ok);
-  return { title: base.title === 'doctor: report' ? '' : base.title, details: redact(lines.join('\n')).slice(0, 60_000), kind: failed ? 'cli' : 'bug' };
+  const setup: ReportSetup = {
+    appVersion: v.chorus,
+    channel,
+    os: osn,
+    arch: os.arch(),
+    clis: Object.fromEntries(fast.agents.map(a => [a.agent, { version: a.version ?? null, state: label(a) }])),
+  };
+  const chips = [`Chorus ${v.chorus} · ${channel}`, `core ${v.core}`, install, `${osn} · ${os.arch()}`, ...fast.agents.map(a => `${CLI_NAMES[a.agent] ?? a.name}${a.version ? ` ${a.version}` : ''} · ${label(a)}`)];
+  return { title: base.title === 'doctor: report' ? '' : base.title, details: redact(lines.join('\n')).slice(0, 60_000), kind: failed ? 'cli' : 'bug', setup, chips };
 }
 
 /** The issue as it is sent: the kind and what the user wrote first, then the details they read. */
