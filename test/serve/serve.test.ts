@@ -495,7 +495,7 @@ test('serve: Report issue works before any test run, and is sent to the admin ba
     const rep = (await r.api('POST', '/api/doctor/issue', { client: { window: 'browser' }, errors: ['boom'] })).json;
     assert.equal(rep.kinds, undefined, 'no Type to pick');
     assert.ok(rep.details.includes('- Window: browser') && rep.details.includes('page: boom'));
-    assert.ok(rep.setup.clis && rep.chips.length >= 4);
+    assert.ok(Array.isArray(rep.setup.clis) && rep.chips.length >= 4);
     // a PNG of about 1 MB, as base64: past the usual 1 MB body limit, inside the report's
     const png = Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(1_000_000, 1)]).toString('base64');
     const sent = (await r.api('POST', '/api/doctor/issue/send', { title: 'Hang', what: 'it hung', details: rep.details, email: 'me@example.com', setup: rep.setup, images: [{ type: 'image/png', data: png }] })).json;

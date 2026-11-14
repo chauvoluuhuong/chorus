@@ -17,9 +17,10 @@ What the user sees and what is sent: [`../doctor.md`](../doctor.md) §7.1.
 
 What the app sends to the backend:
 
-- `POST /v1/reports` (JSON): `installationId`, `installationKey`, `title`, `what`, `details`, `setup`
-  (`appVersion`, `channel` preview / production / dev, `os`, `arch`, `clis.<cli>.version` and `.state`), `email` (only when given),
-  `platform`, `appVersion`, `imageCount` → `{ id, ref }`.
+- `POST /v1/reports` (JSON): `installationId`, `installationKey`, `title` (the first words of what happened when the user gave
+  none; the backend needs one), `what`, `details`, `setup` (`channel` preview / production / dev, `install`, `core`, `paid`, `os`,
+  `kernel`, `arch`, `cpu`, `ram`, `node`, `shell`, and `clis`: a list of `{ id, name, version, state, tested, test }` with state
+  `ready`, `login`, `update` or `missing`), `email` (only when given), `platform`, `appVersion`, `imageCount` → `{ id, ref }`.
 - Then per image n = 1…imageCount: `PUT /v1/reports/<id>/images/<n>`, the raw bytes, `content-type` from the image's first bytes,
   headers `x-installation-id`, `x-installation-key`. A screenshot that fails is tried once more; the report is kept and the sent
   screen says how many did not arrive.
@@ -43,5 +44,5 @@ What the app sends to the backend:
   `test/serve/serve.test.ts` (the routes, an image past the 1 MB body limit, a dropped path), `test/serve/doctor-report.test.ts`
   (sections, nothing naming the machine, `setup`, chips, install method and channel), `test/serve/cli-fit.test.ts`.
 - E2E: `node test/smoke/proof-report-images.ts` (headless Chrome, a fresh Chorus home, notifications off, a fake backend; with
-  `--admin <chorus-admin checkout>` a local chorus-admin server instead, read back through its admin route). Each screen beside its
+  `--admin <chorus-admin checkout>` chorus-admin's local run (`test/local-admin.mjs`: in-memory store and bucket) instead, read back through its admin route). Each screen beside its
   mockup scene in `.chorus/proof/<branch>/`.

@@ -179,14 +179,23 @@ export interface ReportContext {
   pro?: { version?: string; state: string } | null;
 }
 
-/** The small structured part of a report, for the admin list: nothing the details text does not say too. */
+/** The small structured part of a report, for the admin list (chorus-admin docs/client-contract.md, "User-started report"): short
+ *  strings, nothing the details text does not say too. A CLI's state is ready, login, update or missing. */
 export interface ReportSetup {
-  appVersion: string;
   channel: 'preview' | 'production' | 'dev';
+  install: string;
+  core: string;
+  paid?: string;
   os: string;
+  kernel: string;
   arch: string;
-  clis: Partial<Record<AgentId, { version: string | null; state: string }>>;
+  cpu: string;
+  ram: string;
+  node: string;
+  shell: string;
+  clis: { id: AgentId; name: string; version?: string; state: string; tested?: string; test?: string }[];
 }
+const SETUP_STATE: Record<string, string> = { ready: 'ready', 'needs-login': 'login', untested: 'update', missing: 'missing' };
 
 const gb = (n: number) => `${(n / 2 ** 30).toFixed(1)} GB`;
 const count = (xs: string[]) => Object.entries(xs.reduce<Record<string, number>>((m, x) => ((m[x] = (m[x] ?? 0) + 1), m), {})).map(([k, n]) => `${k} ${n}`).join(', ') || 'none';
@@ -287,12 +296,23 @@ export async function reportDetails(ctx: ReportContext = {}): Promise<{ title: s
   ];
   if (ctx.errors?.length) lines.push('', '### Recent errors (last 30 lines)', ...ctx.errors.slice(-30).map(e => e.replace(/\s+/g, ' ').slice(0, 500)));
   const failed = deep.some(d => !d.ok);
+  const testOf = (agent: string) => {
+    const d = deep.find(x => x.agent === agent);
+    return d ? `${d.ok ? 'passed' : 'failed'}${'at' in d ? ` ${day(String((d as { at: string }).at)).replace(/ \d\d:\d\d$/, '')}` : ''}` : undefined;
+  };
   const setup: ReportSetup = {
-    appVersion: v.chorus,
     channel,
+    install,
+    core: v.core,
+    ...(ctx.pro?.version ? { paid: `${ctx.pro.version} (${ctx.pro.state})` } : {}),
     os: osn,
+    kernel: `${os.type()} ${os.release()}`,
     arch: os.arch(),
-    clis: Object.fromEntries(fast.agents.map(a => [a.agent, { version: a.version ?? null, state: label(a) }])),
+    cpu: `${cpus[0]?.model?.trim() ?? '?'} × ${cpus.length}`,
+    ram: gb(os.totalmem()),
+    node: process.versions.node,
+    shell: path.basename(process.env.SHELL ?? '?'),
+    clis: fast.agents.map(a => ({ id: a.agent, name: CLI_NAMES[a.agent] ?? a.name, ...(a.version ? { version: a.version } : {}), state: SETUP_STATE[a.state] ?? a.state, ...(a.newestTested ? { tested: a.newestTested } : {}), ...(testOf(a.agent) ? { test: testOf(a.agent) } : {}) })),
   };
   const chips = [`Chorus ${v.chorus} · ${channel}`, `core ${v.core}`, install, `${osn} · ${os.arch()}`, ...fast.agents.map(a => `${CLI_NAMES[a.agent] ?? a.name}${a.version ? ` ${a.version}` : ''} · ${label(a)}`)];
   return { title: base.title === 'doctor: report' ? '' : base.title, details: redact(lines.join('\n')).slice(0, 60_000), kind: failed ? 'cli' : 'bug', setup, chips };

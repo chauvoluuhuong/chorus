@@ -22,10 +22,13 @@ test('a report can be built without a test run; the terminal\'s GitHub issue kee
   assert.ok(!r.details.includes(os.hostname()), 'no host name');
   assert.ok(!new RegExp(`\\b${os.userInfo().username}\\b`).test(r.details), 'no user name');
   // the short setup for the admin list and the chips: the same facts
-  assert.deepEqual(Object.keys(r.setup).sort(), ['appVersion', 'arch', 'channel', 'clis', 'os']);
+  // (chorus-admin docs/client-contract.md: these keys, short strings, clis a list with ready / login / update / missing)
+  for (const k of Object.keys(r.setup)) assert.ok(['channel', 'install', 'core', 'paid', 'os', 'kernel', 'arch', 'cpu', 'ram', 'node', 'shell', 'clis'].includes(k), k);
   assert.ok(['preview', 'production', 'dev'].includes(r.setup.channel));
-  assert.deepEqual(Object.keys(r.setup.clis).sort(), ['agy', 'claude', 'codex']);
-  assert.ok(r.chips[0].startsWith(`Chorus ${r.setup.appVersion} · `) && r.chips.length === 7, r.chips.join(' | '));
+  assert.deepEqual(r.setup.clis.map(c => c.id).sort(), ['agy', 'claude', 'codex']);
+  assert.ok(r.setup.clis.every(c => ['ready', 'login', 'update', 'missing'].includes(c.state)));
+  assert.ok(Object.values(r.setup).every(x => typeof x !== 'string' || x.length <= 200));
+  assert.ok(r.chips[0].startsWith('Chorus ') && r.chips[1] === `core ${r.setup.core}` && r.chips.length === 7, r.chips.join(' | '));
 
   const it = composeIssue({ kind: 'feature', summary: '  dark   mode ', what: 'Please add it', details: r.details });
   assert.equal(it.title, '[Feature request] dark mode');

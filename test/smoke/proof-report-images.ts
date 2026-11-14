@@ -70,25 +70,23 @@ if (ADMIN) {
   backend = `http://127.0.0.1:${(fake.address() as net.AddressInfo).port}`;
 }
 
-/** chorus-admin's server from a checkout, on a free port, with its in-memory store (its tests' setup); never the live backend. */
+/** chorus-admin's local run from a checkout (test/local-admin.mjs: its API with the in-memory store and bucket, a stand-in admin
+ *  sign-in, four sample reports); never the live backend. */
 async function startAdmin(dir: string) {
-  const token = 'proof-admin-token';
-  const env = { ...process.env, PORT: '0', ADMIN_TOKEN: token, CHORUS_ADMIN_TOKEN: token, STORE: 'memory', NODE_ENV: 'test' } as Record<string, string>;
+  const free = () => new Promise<number>(r => { const s = http.createServer().listen(0, '127.0.0.1', () => { const p = (s.address() as net.AddressInfo).port; s.close(() => r(p)); }); });
+  const [api, web] = [await free(), await free()];
+  const env = { ...process.env, API_PORT: String(api), WEB_PORT: String(web) } as Record<string, string>;
   for (const k of ['GOOGLE_APPLICATION_CREDENTIALS', 'FIRESTORE_EMULATOR_HOST']) delete env[k];
-  const p = spawn(process.execPath, [path.join(dir, 'server/index.mjs')], { cwd: dir, env, stdio: ['ignore', 'pipe', 'pipe'] });
-  p.stderr!.on('data', d => fs.appendFileSync(path.join(OUT, 'admin.log'), d));
-  const base = await new Promise<string>((resolve, reject) => {
+  const p = spawn(process.execPath, [path.join(dir, 'test/local-admin.mjs')], { cwd: dir, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  for (const s of [p.stdout!, p.stderr!]) s.on('data', d => fs.appendFileSync(path.join(OUT, 'admin.log'), d));
+  await new Promise<void>((resolve, reject) => {
     let buf = '';
-    p.stdout!.on('data', d => {
-      buf += d;
-      fs.appendFileSync(path.join(OUT, 'admin.log'), d);
-      const m = buf.match(/(http:\/\/[\w.:[\]-]+:\d+)/) ?? buf.match(/listening on (?:port )?(\d+)/i);
-      if (m) resolve(m[1].startsWith('http') ? m[1] : `http://127.0.0.1:${m[1]}`);
-    });
-    p.on('exit', c => reject(new Error(`chorus-admin exited ${c}: ${buf}`)));
-    setTimeout(() => reject(new Error(`chorus-admin did not say where it listens: ${buf}`)), 15_000);
+    p.stdout!.on('data', d => ((buf += d), /API: http/.test(buf) && resolve()));
+    p.on('exit', c => reject(new Error(`chorus-admin's local run exited ${c}: ${buf}`)));
+    setTimeout(() => reject(new Error(`chorus-admin's local run did not start: ${buf}`)), 30_000);
   });
-  return { base, token, proc: p };
+  console.log(`chorus-admin local run: API http://127.0.0.1:${api} · admin http://127.0.0.1:${web}/admin/`);
+  return { base: `http://127.0.0.1:${api}`, token: 'local-admin', proc: p };
 }
 
 /* ---------- chorus serve over a fresh home, notifications off ---------- */
@@ -221,7 +219,7 @@ if (!admin) {
   const r = got.at(-1);
   const b = r?.body ?? {};
   check('the backend got one report: installation ID and key, title, what, details, email, setup, platform, app version, 2 images',
-    got.length === 1 && typeof b.installationId === 'string' && b.installationKey?.length > 20 && b.title === 'Codex approval prompt not seen' && /npm test/.test(b.what) && b.details.includes('### Chorus') && b.email === 'me@example.com' && b.setup?.appVersion && b.setup?.clis?.claude && b.platform === process.platform && b.appVersion && b.imageCount === 2, JSON.stringify({ n: got.length, b: { ...b, details: `${String(b.details).length} chars`, installationKey: '…' } }));
+    got.length === 1 && typeof b.installationId === 'string' && b.installationKey?.length > 20 && b.title === 'Codex approval prompt not seen' && /npm test/.test(b.what) && b.details.includes('### Chorus') && b.email === 'me@example.com' && b.setup?.channel && b.setup?.clis?.some((c: any) => c.id === 'claude') && b.platform === process.platform && b.appVersion && b.imageCount === 2, JSON.stringify({ n: got.length, b: { ...b, details: `${String(b.details).length} chars`, installationKey: '…' } }));
   check('then each image by PUT /v1/reports/<id>/images/<n>: its type, ≤ 1.5 MB, the installation ID and key in headers',
     r?.images.length === 2 && r.images.every((x, i) => x.n === String(i + 1) && /^image\/(png|jpeg|webp)$/.test(x.type) && x.bytes <= 1_500_000 && x.id === b.installationId && x.key.length === 4), JSON.stringify(r?.images));
   check('the installation ID is the notifications\' file, made though notifications are off', fs.existsSync(path.join(home, 'chorus/notifications/inbox.json')) && JSON.parse(fs.readFileSync(path.join(home, 'chorus/notifications/inbox.json'), 'utf8')).installationId === b.installationId);
@@ -229,14 +227,12 @@ if (!admin) {
   // read it back through the admin route
   const h = { authorization: `Bearer ${admin.token}` };
   const list = (await (await fetch(`${admin.base}/admin/reports`, { headers: h })).json()) as any;
-  const items = list.reports ?? list.items ?? list;
-  const item = Array.isArray(items) ? items.find((x: any) => x.ref === ref) : undefined;
-  const one = item ? ((await (await fetch(`${admin.base}/admin/reports/${encodeURIComponent(item.id)}`, { headers: h })).json()) as any) : undefined;
-  const rep = one?.report ?? one;
+  const item = (list.reports ?? []).find((x: any) => x.ref === ref);
+  const rep = item ? ((await (await fetch(`${admin.base}/admin/reports/${encodeURIComponent(item.id)}`, { headers: h })).json()) as any) : undefined;
   const img = item ? await fetch(`${admin.base}/admin/reports/${encodeURIComponent(item.id)}/images/1`, { headers: h }) : undefined;
   const bytes = img?.ok ? Buffer.from(await img.arrayBuffer()) : Buffer.alloc(0);
   fs.writeFileSync(path.join(OUT, 'admin-report.json'), JSON.stringify({ list: { ...list, reports: undefined }, item, report: { ...rep, details: `${String(rep?.details ?? '').length} chars` } }, null, 2));
-  check('chorus-admin (local run) stored the report: listed by its reference, with its text, email and setup', !!item && rep?.title === 'Codex approval prompt not seen' && /npm test/.test(rep?.what ?? '') && rep?.email === 'me@example.com' && !!rep?.setup, JSON.stringify({ item, keys: Object.keys(rep ?? {}) }));
+  check('chorus-admin (local run) stored the report: listed by its reference, with its text, email and setup', !!item && rep?.title === 'Codex approval prompt not seen' && /npm test/.test(rep?.what ?? '') && rep?.email === 'me@example.com' && rep?.setup?.clis?.length === 3 && rep?.images?.length === 2, JSON.stringify({ item, keys: Object.keys(rep ?? {}) }));
   check('and its image, read through the admin route', !!img?.ok && bytes.length > 1000 && /^image\//.test(img.headers.get('content-type') ?? ''), `${img?.status} ${img?.headers.get('content-type')} ${bytes.length}`);
   if (bytes.length) fs.writeFileSync(path.join(OUT, 'admin-image-1'), bytes);
 }

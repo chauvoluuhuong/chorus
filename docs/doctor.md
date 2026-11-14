@@ -432,7 +432,7 @@ step); it needs no test run. The dialog (mockup `ui-mockup-v3.html`, UC-13 "Repo
   and CLI version; projects), Recent errors (last 30 lines). All of it goes through `redact()`. Never: host name, user name,
   serial or hardware id, prompts, chat content, code, project names.
 
-**Send report** → `POST /api/doctor/issue/send` (title, what, details, email, the short `setup`, images as base64; this route
+**Send report** → `POST /api/doctor/issue/send` (title, what, details, email, the short `setup` of [`features/report-issue.md`](features/report-issue.md), images as base64; this route
 reads up to 8 MB) → `chorus serve` → the backend: `POST /v1/reports` with the installation ID and key, then
 `PUT /v1/reports/<id>/images/<n>` per image (`src/serve/reports.ts`). The page then shows **✔ Report sent** with the reference
 (`R-7K2F9`) and **Copy**. When the backend is not reached (no connection, a 5xx) the dialog stays with "Not sent: the Chorus

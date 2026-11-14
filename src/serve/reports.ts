@@ -47,7 +47,9 @@ export function parseReport(b: Record<string, any>): Report | { error: string } 
     images.push({ type, bytes });
   }
   const setup = b.setup && typeof b.setup === 'object' && !Array.isArray(b.setup) && JSON.stringify(b.setup).length <= 4000 ? b.setup : {};
-  return { title: text('title').trim().replace(/\s+/g, ' '), what: text('what').trim(), details: text('details'), setup, ...(email ? { email } : {}), images };
+  // the backend needs a title: the first words of what happened when the user gave none
+  const title = text('title').trim().replace(/\s+/g, ' ') || text('what').trim().replace(/\s+/g, ' ').slice(0, 80) || 'Report from the app';
+  return { title, what: text('what').trim(), details: text('details'), setup, ...(email ? { email } : {}), images };
 }
 
 export interface Credentials {

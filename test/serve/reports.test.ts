@@ -46,6 +46,9 @@ test('parseReport: text, email, setup and up to 4 images; refuses what the backe
   assert.deepEqual(ok.images.map(i => i.type), ['image/png', 'image/jpeg']);
   assert.deepEqual(ok.setup, { appVersion: '2.4.0' });
   assert.equal('email' in (parseReport({ details: 'x', email: '' }) as Report), false);
+  // the backend needs a title: the first words of what happened, else a plain one
+  assert.equal((parseReport({ what: 'The  chat\nhung', details: 'x' }) as Report).title, 'The chat hung');
+  assert.equal((parseReport({ details: 'x' }) as Report).title, 'Report from the app');
   assert.match((parseReport({ details: 'x', email: 'nope' }) as { error: string }).error, /email/);
   assert.match((parseReport({ details: 'x', images: Array(5).fill({ data: b64(PNG) }) }) as { error: string }).error, /At most 4/);
   assert.match((parseReport({ details: 'x', images: [{ data: b64(Buffer.from('GIF89a......')) }] }) as { error: string }).error, /Screenshot 1 is not a PNG/);
