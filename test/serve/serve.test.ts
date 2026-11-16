@@ -398,6 +398,14 @@ test('serve: the folder dialog lists the home folder and makes a new folder ther
     assert.match((await r.api('POST', '/api/folders', { dir: path.join(home, 'nope'), name: 'x' })).json.error, /is not a folder/);
     assert.equal(fs.existsSync(path.join(path.dirname(home), 'escape')), false);
     assert.deepEqual(fs.readdirSync(home).sort(), ['cake-shop', 'work']);
+    // each folder comes with when it was made (its birth time, or its change time where there is none), for the Created sort
+    const listed = (await r.api('GET', '/api/folders?dir=~')).json;
+    assert.deepEqual(listed.items.map((x: any) => x.name), ['cake-shop', 'work']);
+    for (const it of listed.items) {
+      const st = fs.statSync(path.join(home, it.name));
+      assert.equal(it.created, Math.round(st.birthtimeMs > 0 ? st.birthtimeMs : st.mtimeMs), it.name);
+      assert.ok(it.created > 0);
+    }
   } finally {
     process.env.HOME = realHome;
     await r.done();

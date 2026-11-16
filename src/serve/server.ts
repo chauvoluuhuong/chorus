@@ -1600,7 +1600,7 @@ function readJson(req: http.IncomingMessage, limit = 1_000_000): Promise<Record<
 }
 
 /** What the page may save on the server (`POST ui`). */
-const UI_KEYS = new Set(['hidden', 'folded', 'agent', 'drawer', 'side', 'sideW', 'noDelAsk', 'welcome', 'ended', 'banner']);
+const UI_KEYS = new Set(['browseSort', 'hidden', 'folded', 'agent', 'drawer', 'side', 'sideW', 'noDelAsk', 'welcome', 'ended', 'banner']);
 const asAgent = (s: unknown): AgentId | undefined => (AGENTS.includes(s as AgentId) ? (s as AgentId) : undefined);
 const expand = (p: string) => p.replace(/^~(?=\/|$)/, process.env.HOME ?? '~');
 
@@ -1645,7 +1645,17 @@ function listFolders(dir: string) {
   } catch {
     /* unreadable: an empty list */
   }
-  return { dir: d, parent: path.dirname(d) === d ? null : path.dirname(d), folders };
+  // when each one was made, so the dialog sorts by it without asking again: its birth time, or its change time where the file
+  // system keeps none (0 there)
+  const items = folders.map(name => {
+    try {
+      const st = fs.statSync(path.join(d, name));
+      return { name, created: Math.round(st.birthtimeMs > 0 ? st.birthtimeMs : st.mtimeMs) };
+    } catch {
+      return { name, created: 0 };
+    }
+  });
+  return { dir: d, parent: path.dirname(d) === d ? null : path.dirname(d), folders, items };
 }
 
 /** The file manager, at an export: Finder selects it; elsewhere its folder opens. */
