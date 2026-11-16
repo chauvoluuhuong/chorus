@@ -21,6 +21,10 @@ export const TOOL_NAMES = ['get_handoff_context', 'get_thread_turns', 'list_thre
 export const ARTIFACT_NOTE =
   'Whenever you create a file meant for the user (a note, plan, report, mockup, export: anything that is not source code of the project) or find a link they should open, call the chorus MCP tool show_artifact with its path or the link and a short title, right after making it. Save the file wherever it fits the work. Chorus lists it in its Artifacts view, where the user opens it.';
 
+/** Said to every chat through the MCP server's instructions (plan 2026-11-14, Stage 2): the sub thread tools exist. */
+export const SUBTHREADS_NOTE =
+  'You can hand a separate piece of work to another agent with the chorus MCP tool start_subthread (then send_to_subthread, list_subthreads, stop_subthread): Chorus types a short report into this chat each time the sub thread ends a turn.';
+
 /**
  * Said to every agent at start (MCP server instructions for Claude and agy, developer instructions for Codex): an approval the
  * agent wants from the user goes through Chorus, where it is a card the user answers from any chat, instead of a line in the
@@ -32,7 +36,7 @@ export const APPROVAL_NOTE =
 export function createServer(project: string, threadId?: string, home?: string): McpServer & { addProTools(): Promise<void> } {
   const store = new Store(project, { home });
   // Every agent starts this server for its thread, so this text reaches all three: how it shows the user what it made, and asks
-  const instructions = threadId ? `This chat is Chorus thread ${threadId}. ${ARTIFACT_NOTE} ${APPROVAL_NOTE}` : undefined;
+  const instructions = threadId ? `This chat is Chorus thread ${threadId}. ${ARTIFACT_NOTE} ${APPROVAL_NOTE} ${SUBTHREADS_NOTE}` : undefined;
   const server = new McpServer({ name: 'chorus', version: '1.0.0' }, instructions ? { instructions } : undefined) as McpServer & { addProTools(): Promise<void> };
 
   const reply = (tool: string, text: string, isError = false) => {

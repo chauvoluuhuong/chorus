@@ -7,6 +7,10 @@ import type { AgentId, Session, ToolCall, Turn, Usage } from './types.ts';
 import { maskSecrets } from './adapters/util.ts';
 
 export type ThreadState = 'working' | 'waiting' | 'ended';
+/** A sub thread: in a turn, its turn ended (`stopped`), held by an approval, no activity for a while, or its chat ended. */
+export type SubStatus = 'working' | 'stopped' | 'waiting_user' | 'quiet' | 'ended';
+/** The sub thread columns on `threads`. */
+export type SubFields = Pick<ThreadRow, 'sub_status' | 'sub_brief' | 'sub_started' | 'sub_last_activity' | 'sub_ended' | 'sub_turns' | 'sub_working_ms' | 'sub_reported'>;
 
 export interface ThreadRow {
   id: string;
@@ -27,6 +31,18 @@ export interface ThreadRow {
   effort: string | null;
   /** the last turn of earlier sessions: a new session of this chat (its CLI lost the old one) saves its turns after them */
   turn_base?: number;
+  /** set only for a sub thread (src/serve/subthreads.ts): its status; its parent is parent_thread_id */
+  sub_status?: SubStatus | null;
+  /** what the main chat asked it to do */
+  sub_brief?: string | null;
+  sub_started?: string | null;
+  sub_last_activity?: string | null;
+  sub_ended?: string | null;
+  sub_turns?: number;
+  /** time spent in turns */
+  sub_working_ms?: number;
+  /** when its latest report was typed into the main chat (null: one is due) */
+  sub_reported?: string | null;
   created: string;
   updated: string;
 }
@@ -161,6 +177,9 @@ export class Store {
     if (!tcols.includes('detail')) this.db.exec('ALTER TABLE tool_calls ADD COLUMN detail TEXT');
     if (!cols.includes('effort')) this.db.exec('ALTER TABLE threads ADD COLUMN effort TEXT');
     if (!cols.includes('turn_base')) this.db.exec('ALTER TABLE threads ADD COLUMN turn_base INTEGER NOT NULL DEFAULT 0');
+    // sub threads (plan 2026-11-14, Stage 2): free, so on Chorus's own threads table
+    for (const [col, type] of [['sub_status', 'TEXT'], ['sub_brief', 'TEXT'], ['sub_started', 'TEXT'], ['sub_last_activity', 'TEXT'], ['sub_ended', 'TEXT'], ['sub_turns', 'INTEGER NOT NULL DEFAULT 0'], ['sub_working_ms', 'INTEGER NOT NULL DEFAULT 0'], ['sub_reported', 'TEXT']])
+      if (!cols.includes(col)) this.db.exec(`ALTER TABLE threads ADD COLUMN ${col} ${type}`);
     const rcols = (this.db.prepare('PRAGMA table_info(requests)').all() as { name: string }[]).map(c => c.name);
     if (!rcols.includes('kind')) this.db.exec("ALTER TABLE requests ADD COLUMN kind TEXT NOT NULL DEFAULT 'approval'");
     if (!rcols.includes('other')) this.db.exec('ALTER TABLE requests ADD COLUMN other INTEGER NOT NULL DEFAULT 1');
@@ -297,6 +316,33 @@ export class Store {
 
   getThread(id: string): ThreadRow | undefined {
     return this.db.prepare('SELECT * FROM threads WHERE id = ?').get(id) as ThreadRow | undefined;
+  }
+
+  /** Sets a sub thread's fields (without touching `updated`, which says when the chat itself changed). */
+  setSub(id: string, patch: Partial<SubFields>) {
+    const keys = Object.keys(patch) as (keyof SubFields)[];
+    if (!keys.length) return;
+    this.db.prepare(`UPDATE threads SET ${keys.map(k => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map(k => (patch[k] ?? null) as any), id);
+  }
+
+  /** Every sub thread, or those of one main chat; oldest first. */
+  subThreads(parent?: string): ThreadRow[] {
+    return (parent
+      ? this.db.prepare('SELECT * FROM threads WHERE sub_status IS NOT NULL AND parent_thread_id = ? ORDER BY sub_started, created').all(parent)
+      : this.db.prepare('SELECT * FROM threads WHERE sub_status IS NOT NULL ORDER BY sub_started, created').all()) as unknown as ThreadRow[];
+  }
+
+  /** How much a thread has done (turns and tool calls recorded): it changes when the thread shows activity. */
+  activityMark(id: string): string {
+    const t = this.db.prepare('SELECT COUNT(*) AS n, COALESCE(MAX(seq), 0) AS m FROM turns WHERE thread_id = ?').get(id) as { n: number; m: number };
+    const c = this.db.prepare('SELECT COUNT(*) AS n FROM tool_calls WHERE thread_id = ?').get(id) as { n: number };
+    return `${t.n}/${t.m}/${c.n}`;
+  }
+
+  /** The text of a thread's last reply (its last assistant turn), or ''. */
+  lastReply(id: string): string {
+    const r = this.db.prepare("SELECT text FROM turns WHERE thread_id = ? AND role = 'assistant' ORDER BY seq DESC LIMIT 1").get(id) as { text: string } | undefined;
+    return r?.text ?? '';
   }
 
   listThreads(): ThreadRow[] {
