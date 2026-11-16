@@ -291,8 +291,22 @@ export class SubThreads {
     this.outbox = this.outbox.filter(o => o.to !== to);
   }
 
+  /**
+   * The user typed a line into an unlocked sub thread (plan 2026-11-14, Package 4A): the main chat is told, under the same rules
+   * as a report (only while it is idle, one message per chat every gapMs).
+   */
+  userTyped(id: string, text: string) {
+    const s = this.d.store.getThread(id);
+    const line = oneLine(text);
+    if (!s?.sub_status || !s.parent_thread_id || !line) return;
+    this.queue(s.parent_thread_id, `Chorus: the user typed into sub thread ${s.id} "${s.title}": "${clip(line, 400)}"`);
+    void this.deliver();
+  }
+
   /** For the window's state: a chat's place in a main thread / sub thread pair. */
-  info(t: ThreadRow | undefined) {
-    return t?.sub_status ? { parent: t.parent_thread_id, status: t.sub_status } : null;
+  info(t: ThreadRow | undefined, unlocked = false) {
+    if (!t?.sub_status) return null;
+    const main = t.parent_thread_id ? this.d.store.getThread(t.parent_thread_id) : undefined;
+    return { parent: t.parent_thread_id, status: t.sub_status, unlocked, title: main?.title ?? null };
   }
 }

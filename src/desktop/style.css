@@ -931,3 +931,20 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
 .sk-dlg { width: min(470px, calc(100vw - 32px)); }
 .sk-dlg .body p { font-size: 13.5px; }
 .sk-path { font: 12px var(--f-mono); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; color: var(--muted); overflow-wrap: anywhere; margin: 4px 0; }
+
+/* ---------- main chat and sub threads (plan 2026-11-14, Package 4A; mockup planner-owns-task.html scenes 1 to 3) ---------- */
+.chat-row.owner { font-weight: 600; color: var(--ink); }
+.chat-row .own { flex: none; font-size: 10.5px; font-weight: 600; letter-spacing: 0.03em; color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 1px 6px; }
+.chat-row .grp-badge { flex: none; min-width: 17px; height: 17px; border-radius: 9px; background: var(--bad); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; padding: 0 5px; }
+.chat-row.sub-row { padding-left: 40px; color: var(--muted); font-size: 12.5px; }
+.chat-row.sub-row.on { color: var(--ink); }
+.chat-row.sub-row .elbow { flex: none; width: 14px; color: var(--faint); font-family: var(--f-mono); font-size: 12px; margin-right: -4px; }
+.chat-row.sub-row .watch { flex: none; color: var(--faint); font-size: 11px; }
+.chat-row.sub-row.typing .watch { color: var(--warn); }
+.sub-strip { flex: none; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 16px; border-bottom: 1px solid var(--line); font-size: 12.5px; background: var(--accent-soft); color: var(--ink-2); }
+.sub-strip .msg { flex: 1; min-width: 200px; }
+.sub-strip b { color: var(--ink); }
+.sub-strip.warn { background: var(--warn-soft); }
+.sub-strip .btn.sm { padding: 4px 9px; font-size: 12px; }
+.watch-line { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; padding: 8px 14px; background: linear-gradient(transparent, rgba(0, 0, 0, 0.75) 45%); color: #d6d4cc; font-size: 12px; text-align: center; pointer-events: none; }
+.watch-line[hidden] { display: none; }

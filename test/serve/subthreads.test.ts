@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import WebSocket from 'ws';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { AgentId } from '../../src/core/types.ts';
@@ -16,6 +17,7 @@ import { Store } from '../../src/core/store.ts';
 import { ChorusServer, headlessApp } from '../../src/serve/server.ts';
 import type { ProLoader } from '../../src/serve/pro.ts';
 import { SUB_NOTE } from '../../src/serve/subthreads.ts';
+import { artifactNote } from '../../src/core/launch.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const FAKE = path.join(ROOT, 'tools/fake-agent/fake-tui.mjs');
@@ -199,6 +201,49 @@ test('sub threads: the watchdog reports one with no activity to the main chat, o
     r.store.db.prepare('INSERT INTO tool_calls (thread_id,call_id,turn_seq,tool,target,status) VALUES (?,?,?,?,?,?)').run(s, 'c1', 1, 'Bash', 'npm test', 'ok');
     await r.until(() => r.store.getThread(s)!.sub_status === 'working', 'working after activity');
   } finally {
+    await r.done();
+  }
+});
+
+test('a sub thread\'s chat is watch-only: keys are dropped until Unlock; an unlocked one\'s typed lines go to the main chat as a note', async () => {
+  const r = await rig();
+  const ws = new WebSocket(r.url.replace('http', 'ws') + '/ws', { headers: { authorization: `Bearer ${r.srv.token}` } });
+  await new Promise<void>((resolve, reject) => (ws.once('open', () => resolve()), ws.once('error', reject)));
+  const type = (id: string, data: string) => ws.send(JSON.stringify({ t: 'in', id, data }));
+  const post = async (p: string, body: object) => (await fetch(r.url + p, { method: 'POST', headers: { authorization: `Bearer ${r.srv.token}`, 'x-chorus': '1', 'content-type': 'application/json' }, body: JSON.stringify(body) })).json() as Promise<any>;
+  try {
+    const main = await r.chat('claude');
+    r.store.updateThread(main, { title: 'Cake shop' });
+    const sub = subId((await r.call('start_subthread', { title: 'Price list', brief: 'Make the price list.' }, main)).text);
+    await r.until(() => /READY/.test(r.screen(sub)) && /READY/.test(r.screen(main)), 'both chats up');
+    const st = () => r.srv.state().chats.find((c: any) => c.id === sub) as any;
+    assert.deepEqual(st().sub, { parent: main, status: 'working', unlocked: false, title: 'Cake shop' });
+    // locked: nothing reaches the sub thread
+    type(sub, 'hello\r');
+    await sleep(600);
+    assert.doesNotMatch(r.screen(sub), /got: "hello"/);
+    // any other chat takes keys as always
+    type(main, 'plain\r');
+    await r.until(() => r.screen(main).includes('got: "plain"'), 'main chat takes keys');
+    // only a sub thread can be unlocked
+    assert.match((await post(`/api/chats/${main}/unlock`, { on: true })).error, /only a sub thread/);
+    assert.equal((await post(`/api/chats/${sub}/unlock`, { on: true })).unlocked, true);
+    assert.equal(st().sub.unlocked, true);
+    type(sub, 'use eurs');
+    type(sub, '\x7fos');
+    type(sub, '\r');
+    // the keys reach the sub thread as typed (the fake agent echoes Backspace raw); the note has the line as it reads
+    await r.until(() => r.screen(sub).includes('got: "use eurs'), 'typed into the unlocked sub thread');
+    await r.until(() => r.screen(main).includes(`Chorus: the user typed into sub thread ${sub} "Price list": "use euros"`), 'the main chat is told');
+    // locked again: dropped again
+    assert.equal((await post(`/api/chats/${sub}/unlock`, { on: false })).unlocked, false);
+    type(sub, 'again\r');
+    await sleep(600);
+    assert.doesNotMatch(r.screen(sub), /got: "again"/);
+    // Codex hears of the tools through its developer instructions too
+    assert.ok(artifactNote(r.project, sub).includes('start_subthread'));
+  } finally {
+    ws.close();
     await r.done();
   }
 });
