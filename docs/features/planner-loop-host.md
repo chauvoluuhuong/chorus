@@ -39,6 +39,7 @@ on the agent's screen changes (`POST chats/:id/dismiss`, the module's `dismissAp
 host's rows plus the module's open needs (the module leaves out a need it hid); a project's "!N" and the Needs you filter count
 chats with an item in those lists. Deleting a chat drops its card
 and tells the module (`onChatEvent({ type: 'deleted' })`), which closes its plan approvals and gates and withdraws what it asked.
+A chat that is the Planner of a task asks first whether its task goes too: [delete-task.md](delete-task.md).
 
 ## Artifacts by report
 
@@ -52,6 +53,13 @@ folder's files for chats from before. A click opens it on this computer with the
 `xdg-open`, as an argument, never a shell string; `POST chats/:id/open-report`). From a device on the private link a file inside
 the chat's project is served to the device (`GET chats/:id/reported/:id`, sandboxed); a file elsewhere, a link and an old folder's
 file say **Open on the Mac**, and a device never opens anything on the Mac.
+
+## The left sidebar keeps its scroll
+
+The sidebar is drawn again whole on every state push and every module refresh (`renderChrome()` in `src/desktop/app.js`), so its
+scrolling list `.tree` is a new element each time. Its `scrollTop` is read before the redraw and put back after the module's slots are
+filled: a chat that starts or stops, opening a chat and folding a task leave the list where the user scrolled it. Test:
+`test/serve/sidebar-scroll.test.ts`; what broke: [failures/2026-11-16-sidebar-lost-its-scroll.md](../failures/2026-11-16-sidebar-lost-its-scroll.md).
 
 ## The right sidebar's width
 
