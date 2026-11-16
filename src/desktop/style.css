@@ -851,3 +851,33 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
 .rp-ref .muted { font-size: 12.5px; }
 .rp-ref b { font-family: var(--f-mono); font-size: 15px; flex: 1; }
 .rp-quote { font-size: 12.5px; margin: 10px 0 0; }
+
+/* Approvals: what kind of ask it is, and where it comes from (project › chat, or project › task › step) */
+.badge.ask { background: var(--accent-soft); color: var(--accent); }
+.ask-path { display: flex; align-items: center; gap: 5px; min-width: 0; flex: 0 0 auto; max-width: 62%; font-size: 13px; }
+.ask-path a { flex: 0 1 auto; min-width: 3ch; color: var(--ink-2); border-radius: 6px; padding: 1px 5px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: none; }
+.ask-path a:hover { background: var(--hover); color: var(--accent); }
+.ask-path .ap-proj, .ask-path .ap-last { font-weight: 600; color: var(--ink); }
+.ask-path .ap-proj { flex: none; }
+.ask-path .sep { color: var(--faint); flex: none; }
+
+/* A count that just grew: its whole button grows and turns yellow for about a second; the number rolls (app.js countFlash, countNum) */
+.cnt-roll i { font-style: normal; }
+.cnt-roll i:first-child { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .flash { position: relative; z-index: 1; animation: count-flash 1.1s cubic-bezier(0.3, 0.9, 0.4, 1) both; }
+  .flash .count, .flash .badge { animation: count-flash-n 1.1s linear both; animation-delay: inherit; }
+  .cnt-roll { display: inline-block; height: 18px; line-height: 18px; overflow: hidden; vertical-align: top; }
+  .cnt-roll i, .cnt-roll i:first-child { display: block; height: 18px; animation: cnt-up 0.3s cubic-bezier(0.3, 0.7, 0.3, 1) both; animation-delay: inherit; }
+  .cnt-roll.down i { animation-name: cnt-down; }
+  .cnt-roll.down { display: inline-flex; flex-direction: column-reverse; }
+}
+@keyframes count-flash {
+  0% { transform: scale(1); }
+  14% { transform: scale(1.16); background: #f7c948; border-color: #f7c948; color: #241c00; box-shadow: 0 4px 14px rgba(247, 201, 72, 0.45); }
+  50% { transform: scale(1.08); background: #f7c948; border-color: #f7c948; color: #241c00; }
+  100% { transform: scale(1); }
+}
+@keyframes count-flash-n { 14%, 50% { background: #241c00; color: #f7c948; } }
+@keyframes cnt-up { from { transform: translateY(0); } to { transform: translateY(-100%); } }
+@keyframes cnt-down { from { transform: translateY(-100%); } to { transform: translateY(0); } }
