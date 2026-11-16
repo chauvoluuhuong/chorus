@@ -225,7 +225,7 @@ export class ChorusServer {
     this.signIns = o.signIns ?? new SignIns({ onChange: s => { if (s.state === 'done') void this.checkAgents({ quiet: true }).catch(e => this.noteError('doctor check', e)); } });
     // the notifications' installation ID; with notifications off (CHORUS_NOTIFICATIONS=0) the same file, made on first use
     this.reports = o.reports ?? new ReportSender({ version: versions().chorus, credentials: () => (this.o.notifications ?? (this.ownInbox ??= new NotificationInbox({ directory: path.join(process.env.CHORUS_HOME ?? path.join(os.homedir(), '.chorus'), 'notifications'), version: versions().chorus }))).credentials() });
-    this.pro = new ProHost({ homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), dismissApproval: (thread, request) => this.dismissApproval(thread, request), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.approvalsNow().filter(a => !a.hidden).map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))], watchOnly: (thread, mainThread) => this.subs.watchOnly(thread, mainThread) }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
+    this.pro = new ProHost({ homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), dismissApproval: (thread, request) => this.dismissApproval(thread, request), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.approvalsNow().filter(a => !a.hidden).map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))], watchOnly: (thread, mainThread) => this.subs.watchOnly(thread, mainThread), deleteChat: id => this.deleteChatQuietly(id) }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     if (o.chatLaunch) o.chatLaunch.host = this.pro;
     this.subs = new SubThreads({
       store: this.c.store,
@@ -341,8 +341,9 @@ export class ChorusServer {
   /** The Controller's questions, flashes and bell reach the desktop instead of a terminal. */
   private bridge() {
     const app = this.app;
-    // while a project is being deleted (DELETE projects, after its one warning) each chat's own "Delete this chat?" is answered here
-    app.alert = (title, lines, options) => (this.deletingProject && title === 'Delete this chat?' ? Promise.resolve('y') : (this.ask({ kind: 'alert', title, lines, options }) as Promise<string | undefined>));
+    // while a project is being deleted (DELETE projects, after its one warning), or a chat is deleted quietly (deleteChatQuietly),
+    // the chat's own "Delete this chat?" is answered here
+    app.alert = (title, lines, options) => ((this.deletingProject || this.quietDelete > 0) && title === 'Delete this chat?' ? Promise.resolve('y') : (this.ask({ kind: 'alert', title, lines, options }) as Promise<string | undefined>));
     app.prompt = (title, lines, initial = '') => this.ask({ kind: 'prompt', title, lines, initial }) as Promise<string | undefined>;
     app.choose = (title, options) => this.ask({ kind: 'choose', title, lines: [], options: options.map((label, i) => ({ key: String(i), label })) }).then(v => (v === undefined ? undefined : Number(v)));
     const flash = app.setFlash.bind(app);
@@ -369,6 +370,25 @@ export class ChorusServer {
 
   /** Set while DELETE projects removes a project's chats one by one. */
   private deletingProject = false;
+  /** How many deleteChatQuietly calls are running: their "Delete this chat?" was already asked (or needs no asking). */
+  private quietDelete = 0;
+
+  /**
+   * Deletes a chat without its own "Delete this chat?": after the Planner-chat dialog, or when the paid module deletes a deleted
+   * task's chats (ProCtx.deleteChat). The Controller stops a running chat first, as DELETE chats/:id does; the module hears it.
+   */
+  private async deleteChatQuietly(id: string) {
+    if (!this.c.store.getThread(id)) return;
+    this.quietDelete++;
+    try {
+      this.unlocked.delete(id);
+      await this.c.deleteThread(id);
+    } finally {
+      this.quietDelete--;
+    }
+    if (!this.c.store.getThread(id)) this.pro.chatEvent({ type: 'deleted', thread: id } as { type: string });
+    this.pushState();
+  }
 
   /**
    * Deletes everything Chorus keeps for one project (the × on a project, after its warning): each chat whose folder is exactly
@@ -944,11 +964,43 @@ export class ChorusServer {
         return thread && this.chatDetail(id);
       case 'DELETE chats/:id':
         if (!thread) return undefined;
-        // once it is gone, the optional module closes its waiting items (plan approvals, gates) and withdraws what it asked
-        void c.deleteThread(id).then(() => {
-          if (!c.store.getThread(id)) this.pro.chatEvent({ type: 'deleted', thread: id } as { type: string });
-          this.pushState();
-        });
+        void (async () => {
+          // the Planner chat of a task (the paid module knows): one dialog that can delete the task too
+          const r = await this.pro.call('GET', 'chat-task', { thread: id }, undefined).catch(() => undefined);
+          const own = r?.status === 200 ? (r.json as { id?: string; number?: number; title?: string; state?: string; chats?: number }) : undefined;
+          if (!own?.id) {
+            // once it is gone, the optional module closes its waiting items (plan approvals, gates) and withdraws what it asked
+            await c.deleteThread(id);
+            if (!c.store.getThread(id)) this.pro.chatEvent({ type: 'deleted', thread: id } as { type: string });
+            this.pushState();
+            return;
+          }
+          const plan = own.state === 'planning';
+          const what = plan ? `the plan "${own.title}"` : `task #${own.number} "${own.title}"`;
+          const n = own.chats ?? 0;
+          const key = await this.ask({
+            kind: 'alert',
+            title: 'Delete this chat?',
+            lines: [
+              `"${thread.title}" is the Planner of ${what}.`,
+              `Delete only the chat: the ${plan ? 'plan' : 'task'} stays, without its Planner.`,
+              `Delete the ${plan ? 'plan' : 'task'} too: its steps, comments and waiting items are removed${n ? `, and its ${n} Worker chat${n === 1 ? '' : 's'} ${n === 1 ? 'is' : 'are'} deleted` : ''}.`,
+              "Files in the project and the agent's own session log stay.",
+            ],
+            options: [
+              { key: 'y', label: 'Delete only the chat' },
+              { key: 't', label: plan ? 'Delete the chat and its plan' : `Delete the chat and task #${own.number}` },
+              { key: 'w', label: 'Keep it' },
+            ],
+          });
+          if (key === 'y') await this.deleteChatQuietly(id);
+          else if (key === 't') {
+            // the module stops the task's chats, deletes it and asks for each chat to go (ProCtx.deleteChat), the Planner's included
+            await this.pro.call('POST', 'task/remove', {}, { id: own.id, planner: true }).catch(() => undefined);
+            await this.deleteChatQuietly(id);
+            this.pushState();
+          }
+        })();
         return { asked: true };
       case 'POST chats/:id/unlock': {
         // a sub thread's chat is watch-only; Unlock lets keys through until it is locked again or the chat ends

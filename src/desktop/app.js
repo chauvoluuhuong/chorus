@@ -677,6 +677,8 @@ function renderChrome() {
   noteCount('approvals', waiting);
   const v = S.view;
   const on = n => (v.name === n ? ' on' : '');
+  // the sidebar is drawn anew below: its chat list comes back where the user scrolled it, not at the top
+  const top = $('#side .tree')?.scrollTop ?? 0;
   // a phone has no sidebar: Home, Chats and More hold its parts
   if (S.size === 'phone') {
     if ($('#side').innerHTML) $('#side').innerHTML = '';
@@ -742,6 +744,9 @@ function renderChrome() {
     n.innerHTML = `<span>${esc(notice)}</span>${btn}`;
   }
   fillSlots();
+  // after the slots: the paid module's project rows change the list's height
+  const tree = $('#side .tree');
+  if (tree && top) tree.scrollTop = top;
 }
 
 /** A phone's top bar: ‹ Back (not on the four places of the tab bar), the screen's title, at most two icons. */
