@@ -953,3 +953,16 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
 .dr-crit { font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; margin-left: 6px; vertical-align: 1px; }
 .dr-offline { font-size: 13px; background: var(--bad-soft); border-radius: 8px; padding: 8px 10px; color: var(--ink-2); margin-bottom: 4px; }
 .dr-offline b { color: var(--ink); }
+
+/* Chorus's folder dialog: what went wrong (New folder, the system dialog), said in the dialog (plan 2026-11-14, Package 10B) */
+.br-error { margin-top: 8px; font-size: 13px; color: var(--bad); background: var(--bad-soft); border-radius: 8px; padding: 6px 10px; }
+.proj-del .body .mono { overflow-wrap: anywhere; }
+
+/* Pages that are a list, a table or a board grow with a wide window (owner, 2026-11-17: "don't automatically resize when i open
+   full screen"; plan 2026-11-14, Package 10C): up to 1400 px of content, side padding kept; the opening paragraph stays readable.
+   A form or one centred card (New chat, Welcome, Unlock, dialogs) stays as narrow as before. At 1280 px and below nothing changes. */
+.mem-page { max-width: 1100px; }
+@media (min-width: 1281px) {
+  .page:not(.nc-wrap):not(.welcome):not(.hero), .page.sk-page, .page.mem-page { max-width: min(1400px, 100%); }
+  .page:not(.nc-wrap):not(.welcome):not(.hero) > .lead { max-width: 760px; }
+}
