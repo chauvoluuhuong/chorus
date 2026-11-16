@@ -374,7 +374,24 @@ test('serve: artifactsRev grows on a new version of an artifact, an edit of a re
   }
 });
 
-test('serve: the folder dialog lists the home folder and makes a new folder there and inside it; what goes wrong is said', async () => {
+test('serve: Browse asks the system\'s own folder dialog first; it answers the folder, a Cancel, or that there is none (then the page opens Chorus\'s dialog)', async () => {
+  const asked: string[] = [];
+  let answer: { dir?: string; cancelled?: boolean; none?: boolean } = { dir: '/Users/me/cake-shop' };
+  const r = await rig(undefined, undefined, undefined, { pickFolder: async start => (asked.push(start), answer) });
+  try {
+    assert.deepEqual((await r.api('POST', '/api/folders/pick', { dir: r.project })).json, { dir: '/Users/me/cake-shop' });
+    assert.deepEqual(asked, [r.project], 'the system dialog opens where the form stands');
+    answer = { cancelled: true };
+    assert.deepEqual((await r.api('POST', '/api/folders/pick', { dir: r.project })).json, { cancelled: true });
+    // no dialog of its own (Linux without zenity): the page falls back to Chorus's folder dialog (pickFolder in app.js)
+    answer = { none: true };
+    assert.deepEqual((await r.api('POST', '/api/folders/pick', { dir: r.project })).json, { none: true });
+  } finally {
+    await r.done();
+  }
+});
+
+test('serve: Chorus\'s own folder dialog (the fallback) lists the home folder and makes a new folder there and inside it; what goes wrong is said', async () => {
   const r = await rig();
   const realHome = process.env.HOME;
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-home-')));
