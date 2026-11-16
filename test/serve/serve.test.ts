@@ -32,6 +32,8 @@ const fastReport = (agents: AgentCheck[] = (['claude', 'codex', 'agy'] as AgentI
 async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand' | 'pickFolder' | 'sessionExists' | 'host' | 'container' | 'signIns' | 'reports'> = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-home-'));
   process.env.CODEX_HOME = home;
+  // the skills Chorus sees (Sync skills) come from a temp home, never the real one
+  process.env.CHORUS_SKILLS_HOME ??= home;
   const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-serve-')));
   const store = new Store(project);
   seed?.(store, project);
@@ -994,10 +996,11 @@ test('New chat: a first message\'s /skill-name loads that skill (any CLI); a /wo
     }
   });
   try {
+    // every skill Chorus sees is named (Sync skills: the library's old on/off switch no longer hides one); a /word that is no skill stays
     await r.api('POST', '/api/skills/old-thing/toggle');
-    const made = await r.api('POST', '/api/chats', { agent: 'agy', folder: r.project, prompt: 'Add a gift card page. Use /brand-style and /old-thing, see src/a/b and /tmp' });
+    const made = await r.api('POST', '/api/chats', { agent: 'agy', folder: r.project, prompt: 'Add a gift card page. Use /brand-style and /old-thing, see src/a/b and /nope' });
     assert.equal(made.status, 200);
-    assert.equal(r.launches.at(-1)!.prompt, 'Add a gift card page. Use Use the Chorus skill "brand-style" (load it with the chorus get_skill tool). and /old-thing, see src/a/b and /tmp');
+    assert.equal(r.launches.at(-1)!.prompt, 'Add a gift card page. Use Use the Chorus skill "brand-style" (load it with the chorus get_skill tool). and Use the Chorus skill "old-thing" (load it with the chorus get_skill tool)., see src/a/b and /nope');
     // hand-off: the same, after the record
     await r.api('POST', `/api/chats/${made.json.id}/handoff`, { to: 'codex', prompt: '/brand-style please' });
     assert.match(r.launches.at(-1)!.prompt ?? '', /get_handoff_context[\s\S]*\n\nUse the Chorus skill "brand-style" \(load it with the chorus get_skill tool\)\. please$/);

@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // @ts-expect-error: a page module, plain JavaScript
-import { applyPick, findToken, MAX_ITEMS, rank } from '../../src/desktop/text-picker.js';
+import { allowPick, applyPick, findToken, itemHtml, MAX_ITEMS, rank } from '../../src/desktop/text-picker.js';
 
 let folder = '';
 let asked = 0;
@@ -41,3 +41,17 @@ test('rank: any part matches, those that start with it first, at most 50; applyP
 function pick(t: any) {
   return t && { char: t.char, query: t.query, start: t.start, label: t.trigger.label };
 }
+
+test('an item may carry marks (the page\'s own HTML) and a need line (text); a trigger may ask before a pick', async () => {
+  const plain = itemHtml({ key: 'brand-style', main: '/brand-style', sub: 'Our <b>look</b>' }, 0, true);
+  assert.match(plain, /class="on" data-i="0"/);
+  assert.match(plain, /Our &lt;b&gt;look&lt;\/b&gt;/, 'a description is text');
+  assert.doesNotMatch(plain, /tp-marks|tp-need/);
+  const marked = itemHtml({ key: 'x', main: '/x', marks: '<span class="badge mini codex">X</span>', need: 'Not on <Codex> yet' }, 1, false);
+  assert.match(marked, /<span class="tp-marks"><span class="badge mini codex">X<\/span><\/span>/);
+  assert.match(marked, /<span class="tp-need">Not on &lt;Codex&gt; yet<\/span>/);
+  assert.equal(await allowPick(skills, { key: 'a' }), true, 'no beforePick: the pick goes ahead');
+  assert.equal(await allowPick({ ...skills, beforePick: async () => false }, { key: 'a' }), false, 'Cancel');
+  assert.equal(await allowPick({ ...skills, beforePick: async (x: any) => x.key === 'a' }, { key: 'a' }), true, 'Sync and use');
+  assert.equal(await allowPick({ ...skills, beforePick: async () => { throw new Error('offline'); } }, { key: 'a' }), false, 'an error is a no');
+});
