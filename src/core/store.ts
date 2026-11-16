@@ -112,6 +112,9 @@ CREATE TABLE IF NOT EXISTS requests (
   id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, question TEXT NOT NULL, details TEXT, options TEXT NOT NULL,
   status TEXT NOT NULL, answer TEXT, note TEXT, created TEXT NOT NULL, answered TEXT, kind TEXT NOT NULL DEFAULT 'approval', other INTEGER NOT NULL DEFAULT 1
 );
+CREATE TABLE IF NOT EXISTS skill_sources (path TEXT PRIMARY KEY, kind TEXT NOT NULL, added TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS skills (dir TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', source TEXT NOT NULL, seen TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS skill_links (dir TEXT NOT NULL, cli TEXT NOT NULL, path TEXT NOT NULL, made TEXT NOT NULL, PRIMARY KEY (dir, cli));
 CREATE TABLE IF NOT EXISTS reported (
   id INTEGER PRIMARY KEY AUTOINCREMENT, thread_id TEXT NOT NULL, target TEXT NOT NULL, title TEXT, ts TEXT NOT NULL
 );
@@ -435,6 +438,44 @@ export class Store {
   /** What a chat reported, newest first. */
   reportedArtifacts(threadId: string): ReportedArtifact[] {
     return this.db.prepare('SELECT * FROM reported WHERE thread_id = ? ORDER BY id DESC').all(threadId) as unknown as ReportedArtifact[];
+  }
+
+  /* ---------- Sync skills (src/core/skillsync.ts): the sources the user added, the skills last seen, the links Chorus made ---------- */
+
+  skillSources(): { path: string; kind: 'folder' | 'skill'; added: string }[] {
+    return this.db.prepare('SELECT * FROM skill_sources ORDER BY added').all() as any;
+  }
+  addSkillSource(p: string, kind: 'folder' | 'skill') {
+    this.db.prepare('INSERT OR REPLACE INTO skill_sources (path,kind,added) VALUES (?,?,COALESCE((SELECT added FROM skill_sources WHERE path = ?),?))').run(p, kind, p, now());
+  }
+  removeSkillSource(p: string) {
+    this.db.prepare('DELETE FROM skill_sources WHERE path = ?').run(p);
+  }
+  /** What the latest scan found: the table holds exactly these afterwards. */
+  replaceSkills(skills: { dir: string; name: string; description: string; source: string }[]) {
+    const ts = now();
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('DELETE FROM skills').run();
+      const ins = this.db.prepare('INSERT OR REPLACE INTO skills (dir,name,description,source,seen) VALUES (?,?,?,?,?)');
+      for (const s of skills) ins.run(s.dir, s.name, s.description, s.source, ts);
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+  }
+  storedSkills(): { dir: string; name: string; description: string; source: string; seen: string }[] {
+    return this.db.prepare('SELECT * FROM skills ORDER BY name, dir').all() as any;
+  }
+  skillLinks(): { dir: string; cli: string; path: string; made: string }[] {
+    return this.db.prepare('SELECT * FROM skill_links ORDER BY made').all() as any;
+  }
+  addSkillLink(dir: string, cli: string, p: string) {
+    this.db.prepare('INSERT OR REPLACE INTO skill_links (dir,cli,path,made) VALUES (?,?,?,?)').run(dir, cli, p, now());
+  }
+  removeSkillLink(dir: string, cli: string) {
+    this.db.prepare('DELETE FROM skill_links WHERE dir = ? AND cli = ?').run(dir, cli);
   }
 
   mcpCalls(threadId: string): { tool: string; ts: string }[] {

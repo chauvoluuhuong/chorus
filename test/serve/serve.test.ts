@@ -288,6 +288,51 @@ test('serve: a chat from an earlier run is parked and resumes when the window op
   }
 });
 
+test('serve: Sync skills lists every skill with a check per CLI; a tick links it, a second removes it; sources are added and removed', async () => {
+  const uh = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-uh-')));
+  const mk = (dir: string, name: string) => {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: About ${name}\n---\nbody\n`);
+    return dir;
+  };
+  mk(path.join(uh, '.claude/skills/video-research'), 'video-research');
+  const team = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-team-')));
+  mk(path.join(team, 'pr-review'), 'pr-review');
+  const one = mk(path.join(fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-dl-'))), 'pdf-tools'), 'pdf-tools');
+  process.env.CHORUS_SKILLS_HOME = uh;
+  const r = await rig(undefined, undefined, undefined, { pickFolder: async () => ({ dir: one }) });
+  try {
+    const all = (await r.api('GET', '/api/skills/all')).json;
+    const vr = all.skills.find((s: any) => s.name === 'video-research');
+    assert.deepEqual(vr.state, { claude: 'own', codex: '', agy: '' });
+    assert.equal(vr.where, '~/.claude/skills');
+    assert.deepEqual(all.sources.filter((s: any) => s.fixed).slice(0, 3).map((s: any) => s.show), ['~/.claude/skills', '~/.codex/skills', '~/.gemini/config/skills']);
+    const on = (await r.api('POST', '/api/skills/sync', { dir: vr.dir, cli: 'codex', on: true })).json;
+    assert.match(on.flash, /^Synced video-research to Codex · ~\/\.codex\/skills\/video-research$/);
+    assert.ok(fs.lstatSync(path.join(uh, '.codex/skills/video-research')).isSymbolicLink());
+    assert.equal((await r.api('GET', '/api/skills/all')).json.skills.find((s: any) => s.name === 'video-research').state.codex, 'sync');
+    const refused = (await r.api('POST', '/api/skills/sync', { dir: vr.dir, cli: 'claude', on: true })).json;
+    assert.match(refused.error, /already has/);
+    const off = (await r.api('POST', '/api/skills/sync', { dir: vr.dir, cli: 'codex', on: false })).json;
+    assert.equal(off.flash, 'Removed video-research from Codex');
+    assert.equal(fs.existsSync(path.join(uh, '.codex/skills/video-research')), false);
+    // a folder of skills by path, one skill through the chooser
+    const added = (await r.api('POST', '/api/skills/sources', { path: team })).json;
+    assert.ok(added.skills.some((s: any) => s.name === 'pr-review'));
+    const picked = (await r.api('POST', '/api/skills/sources/pick')).json;
+    assert.equal(picked.kind, 'skill');
+    assert.ok(picked.skills.some((s: any) => s.name === 'pdf-tools'));
+    // the names "/" lists and a first message's /name loads
+    assert.ok(r.srv.skillNames().includes('pr-review'));
+    const removed = (await r.api('POST', '/api/skills/sources/remove', { path: team })).json;
+    assert.equal(removed.skills.some((s: any) => s.name === 'pr-review'), false);
+    assert.ok(fs.existsSync(path.join(team, 'pr-review/SKILL.md')));
+  } finally {
+    delete process.env.CHORUS_SKILLS_HOME;
+    await r.done();
+  }
+});
+
 test('serve: a dropped file goes into the agent input like a terminal sends it, copied when asked, recorded with the chat', async () => {
   const r = await rig();
   try {

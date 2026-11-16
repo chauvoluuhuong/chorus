@@ -8,7 +8,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { buildHandoff, pickSourceThread } from '../core/handoff.ts';
-import { listSkills, readSkill } from '../core/skills.ts';
+import { knownSkills, readKnownSkill } from '../core/skillsync.ts';
 import { Store } from '../core/store.ts';
 import { addProTools } from './pro.ts';
 
@@ -88,16 +88,17 @@ export function createServer(project: string, threadId?: string, home?: string):
       reply('list_artifacts', store.listArtifacts(thread_id).map(a => `${a.thread_id}\t${a.abs}\t${a.version}`).join('\n') || '(none)'),
   );
 
-  server.registerTool('list_skills', { description: 'Chorus skills for this project (name and when to use).', inputSchema: {} }, async () =>
-    reply('list_skills', listSkills(project).map(s => `${s.name}: ${s.description}`).join('\n') || '(none)'),
+  // every skill Chorus has seen (Sync skills: the CLIs' folders, the user's sources, this project's library)
+  server.registerTool('list_skills', { description: 'Chorus skills (name and when to use).', inputSchema: {} }, async () =>
+    reply('list_skills', knownSkills(store, project).map(s => `${s.name}: ${s.description}`).join('\n') || '(none)'),
   );
 
   server.registerTool(
     'get_skill',
     { description: 'Full SKILL.md text of a Chorus skill; follow it as instructions.', inputSchema: { name: z.string() } },
     async ({ name }) => {
-      const r = readSkill(project, name);
-      return r ? reply('get_skill', r.body) : reply('get_skill', `Unknown skill ${name}`, true);
+      const body = readKnownSkill(store, project, name);
+      return body ? reply('get_skill', body) : reply('get_skill', `Unknown skill ${name}`, true);
     },
   );
 
