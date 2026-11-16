@@ -205,8 +205,18 @@ function onState(st) {
   }
   const previousNews = S.state?.notifications;
   const doctorChanged = JSON.stringify(S.state?.doctor) !== JSON.stringify(st.doctor);
+  const artOf = x => (S.view.name === 'chat' ? x?.chats.find(c => c.id === S.view.id)?.artifacts : undefined);
+  const artWas = artOf(S.state);
   S.state = st;
   for (const c of st.chats) noteCount(`art:${c.id}`, c.artifacts ?? 0);
+  // an unlocked sub thread that is not the chat in front locks again (also after a reload, when the page forgot it unlocked it)
+  for (const c of st.chats) {
+    if (!c.sub?.unlocked || (S.view.name === 'chat' && S.view.id === c.id) || S.locking?.has(c.id)) continue;
+    (S.locking ??= new Set()).add(c.id);
+    void api('POST', `/api/chats/${c.id}/unlock`, { on: false }).catch(() => {}).finally(() => S.locking.delete(c.id));
+  }
+  // a phone's ⋯ sheet open on this chat: its Artifacts row flashes like the chat head's button when the count grows
+  if (S.sheet === 'chat' && artOf(st) !== artWas) drawSheet();
   if (JSON.stringify(previousNews) !== JSON.stringify(st.notifications) && !$('#news').hidden && !S.newsDetail) void loadNews();
   if (!S.homeGuess) S.homeGuess = st.project.split('/').slice(0, 3).join('/');
   // a request no longer pops up at the bottom (owner, 2026-11-07): it waits in Approvals and the top bar's "waiting" button
@@ -332,6 +342,11 @@ function go(view, push = true) {
   drawSheet();
   if (push && S.view && JSON.stringify(S.view) !== JSON.stringify(view)) S.history.push(S.view);
   S.history = S.history.slice(-30);
+  // an unlocked sub thread locks again when you open another chat (or leave it)
+  if (S.unlockedChat && !(view.name === 'chat' && view.id === S.unlockedChat)) {
+    void api('POST', `/api/chats/${S.unlockedChat}/unlock`, { on: false }).catch(() => {});
+    S.unlockedChat = null;
+  }
   S.view = view;
   S.drawerData = null;
   if (view.name === 'pro-ended' && !S.endedSeen) (S.endedSeen = true), remember('ended', true);
@@ -583,11 +598,32 @@ function treeHtml(keep) {
     tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-rm" data-act="rm-project" data-arg="${esc(cwd)}" title="Remove from the sidebar (the folder and its chats are kept)" aria-label="Remove ${esc(base(cwd))} from the sidebar">×</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button></div>`;
     if (folded) continue;
     if (!keep) tree += `<div data-pro-slot="project" data-cwd="${esc(cwd)}"></div>`;
+    // a main chat and its sub threads: the main chat first, its sub threads right under it (plan 2026-11-14, Package 4A)
+    const subsOf = id => chats.filter(k => k.sub?.parent === id);
+    const ordered = [];
     for (const c of chats) {
+      if (c.sub && chats.some(p => p.id === c.sub.parent)) continue;
+      ordered.push(c, ...subsOf(c.id));
+    }
+    for (const c of ordered) {
       if (!keep && window.choruspro?.hidesChat?.(c.id)) continue; // shown under its task
-      const child = c.parentId && chats.some(p => p.id === c.parentId);
-      tree += `<button class="chat-row${child ? ' child' : ''}${v.name === 'chat' && v.id === c.id ? ' on' : ''}" data-act="chat" data-arg="${esc(c.id)}" title="${esc(c.title)} · ${esc(AGENT[c.agent]?.name ?? c.agent)} · ${esc(STATE_LABEL[c.state] ?? '')}">
-        ${child ? '<span class="arrow">↳</span>' : ''}<span class="dot ${esc(c.state)}"></span><span class="t">${esc(c.title)}</span><span class="badge mini ${esc(c.agent)}">${esc(AGENT[c.agent]?.letter ?? '?')}</span></button>`;
+      const kids = subsOf(c.id);
+      const sub = !!c.sub && chats.some(p => p.id === c.sub.parent);
+      const child = !sub && c.parentId && chats.some(p => p.id === c.parentId);
+      const on = v.name === 'chat' && v.id === c.id ? ' on' : '';
+      const mark = `<span class="badge mini ${esc(c.agent)}">${esc(AGENT[c.agent]?.letter ?? '?')}</span>`;
+      const title = `${esc(c.title)} · ${esc(AGENT[c.agent]?.name ?? c.agent)} · ${esc(STATE_LABEL[c.state] ?? '')}`;
+      if (sub) {
+        // a sub thread: dimmed, watch-only (or typing while unlocked), no badge of its own: the group's is on its main chat
+        const last = kids.length === 0 && subsOf(c.sub.parent).at(-1)?.id === c.id;
+        tree += `<button class="chat-row sub-row${on}${c.sub.unlocked ? ' typing' : ''}" data-act="chat" data-arg="${esc(c.id)}" title="${title} · a sub thread">
+        <span class="elbow">${last ? '└' : '├'}</span><span class="dot ${esc(c.state)}"></span><span class="t">${esc(c.title)}</span><span class="watch">${c.sub.unlocked ? 'typing' : 'watch'}</span>${mark}</button>`;
+        continue;
+      }
+      // the owner of sub threads: OWNER after its title, and the group's one badge (its own waiting items and its sub threads')
+      const group = kids.length ? listed().filter(a => a.id === c.id || kids.some(k => k.id === a.id)).length : 0;
+      tree += `<button class="chat-row${child ? ' child' : ''}${kids.length ? ' owner' : ''}${on}" data-act="chat" data-arg="${esc(c.id)}" title="${title}${kids.length ? ` · owner of ${kids.length} sub thread${kids.length === 1 ? '' : 's'}` : ''}">
+        ${child ? '<span class="arrow">↳</span>' : ''}<span class="dot ${esc(c.state)}"></span><span class="t">${esc(c.title)}</span>${kids.length ? '<span class="own">OWNER</span>' : ''}${group ? `<span class="grp-badge" aria-label="${group} waiting">${group}</span>` : ''}${mark}</button>`;
     }
   }
   return tree;
@@ -1794,7 +1830,7 @@ function renderChat() {
   // the chat column holds the banners, the agent's screen and the docked ask card; the right sidebar beside it is one container that
   // the header's buttons open: Artifacts, Activity, Record (the drawer) or Task (the optional module's chat-side panel)
   $('#view').innerHTML = `<div class="chat"><div class="chat-head" id="chat-head"></div>${proSlot('chat-actions', ` data-chat="${esc(id)}"`)}<div class="chat-tabs" id="chat-tabs" hidden></div>
-    <div class="chat-body tab-chat" id="chat-body"><div class="chat-col" id="chat-col"><div id="chat-banners"></div><div class="term-wrap" id="term-slot"><div class="term-over" id="term-over" hidden></div></div><div id="ask-dock"></div></div><div class="drawer-scrim" data-act="drawer-close"></div><aside class="drawer" id="drawer" hidden></aside><aside class="task-side" id="task-side" aria-label="Task">${RESIZE}<div class="drawer-head task-head"><span class="grow title">Task</span><button class="icon-btn" data-act="side" data-arg="task" title="Close the sidebar" aria-label="Close the sidebar">✕</button></div>${proSlot('chat-side', ` data-chat="${esc(id)}"`)}</aside></div></div>`;
+    <div class="chat-body tab-chat" id="chat-body"><div class="chat-col" id="chat-col"><div id="chat-banners"></div><div class="term-wrap" id="term-slot"><div class="term-over" id="term-over" hidden></div><div class="watch-line" id="watch-line" hidden>Keys are not sent to this chat · Go to main chat to change anything</div></div><div id="ask-dock"></div></div><div class="drawer-scrim" data-act="drawer-close"></div><aside class="drawer" id="drawer" hidden></aside><aside class="task-side" id="task-side" aria-label="Task">${RESIZE}<div class="drawer-head task-head"><span class="grow title">Task</span><button class="icon-btn" data-act="side" data-arg="task" title="Close the sidebar" aria-label="Close the sidebar">✕</button></div>${proSlot('chat-side', ` data-chat="${esc(id)}"`)}</aside></div></div>`;
   $('#term-slot').prepend(termEl);
   fillSlots();
   if (!termOpened) {
@@ -1829,9 +1865,9 @@ function drawSheet() {
   el.innerHTML = `<div class="sheet" role="dialog" aria-label="This chat"><div class="grab"></div>
     <div class="sh-meta"><div><span class="badge ${esc(c.agent)}">${esc(AGENT[c.agent]?.name ?? c.agent)}</span> ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}${c.skip ? ' <span class="badge warn">skip</span>' : ''}</div><div class="mono path">${esc(tilde(c.cwd))}</div>${meter(c.usage)}</div>
     <button data-act="handoff" data-arg="${esc(c.id)}"><span class="i">⇄</span>Hand off to another agent</button>
-    <button data-act="drawer-to" data-arg="artifacts"><span class="i">▤</span>Artifacts${c.artifacts ? ` <span class="badge plain">${c.artifacts}</span>` : ''}</button>
+    ${c.sub ? '' : `<button class="${countFlash(`art:${c.id}`).trim()}" data-act="drawer-to" data-arg="artifacts"><span class="i">▤</span>Artifacts${c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : ''}</button>
     <button data-act="drawer-to" data-arg="activity"><span class="i">≋</span>Activity</button>
-    <button data-act="drawer-to" data-arg="record"><span class="i">◫</span>Record</button>
+    <button data-act="drawer-to" data-arg="record"><span class="i">◫</span>Record</button>`}
     <button class="danger" data-act="delete" data-arg="${esc(c.id)}"><span class="i">🗑</span>Delete this chat</button></div>`;
   document.body.append(el);
 }
@@ -1856,7 +1892,7 @@ function renderChatParts() {
       ${c.model || c.effort ? `<span class="model">· ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}</span>` : ''}${c.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${meter(c.usage)}
       <span class="mono faint path" title="${esc(c.cwd)}">‎${esc(tilde(c.cwd))}‎</span>${c.toast ? `<span class="badge ok">${esc(c.toast)}</span>` : ''}</div>
     <button class="btn" data-act="handoff" data-arg="${esc(c.id)}" title="Continue this chat with another agent" aria-label="Hand off">${S.size === 'desktop' ? '⇄ Hand off' : '⇄'}</button>
-    ${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰') : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', countFlash(`art:${c.id}`))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}
+    ${c.sub ? '' : `${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰') : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', countFlash(`art:${c.id}`))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}`}
     <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat" aria-label="Delete this chat">🗑</button>`;
   // a phone: a task chat's panel is tabs beside the chat (Chat · Steps · Plan), one shown at a time
   const tabs = S.size === 'phone' ? window.choruspro?.sideTabs?.(c.id) : null;
@@ -1869,6 +1905,17 @@ function renderChatParts() {
   if (side) side.dataset.tab = S.size === 'phone' && S.chatTab !== 'chat' ? S.chatTab : '';
   fillSlots();
   let banners = '';
+  // a sub thread is watch-only: the strip over its screen says whose it is; Unlock lets keys through (the main chat is told)
+  if (c.sub) {
+    const main = esc(c.sub.title ?? 'its main chat');
+    banners += c.sub.unlocked
+      ? `<div class="sub-strip warn"><span class="msg">⚠ <b>Unlocked.</b> You are typing into a sub thread. The main chat is told what you typed.</span><button class="btn sm" data-act="sub-lock" data-arg="${esc(c.id)}" data-on="0">Lock again</button><button class="btn primary sm" data-act="chat" data-arg="${esc(c.sub.parent)}">Go to main chat ›</button></div>`
+      : `<div class="sub-strip"><span class="msg">👁 <b>Watch-only.</b> This is a sub thread of ${main}. Tell the main chat what you want; it decides and passes it on.</span><button class="btn primary sm" data-act="chat" data-arg="${esc(c.sub.parent)}">Go to main chat ›</button><button class="btn sm" data-act="sub-lock" data-arg="${esc(c.id)}" data-on="1">Unlock</button></div>`;
+  }
+  const watchLine = $('#watch-line');
+  if (watchLine) watchLine.hidden = !(c.sub && !c.sub.unlocked);
+  $('#term-slot')?.classList.toggle('watch', !!(c.sub && !c.sub.unlocked));
+  if (c.sub?.unlocked) S.unlockedChat = c.id;
   // a CLI's permission prompt: the thin Approve/Deny line over the chat column
   // deleted (🗑, here or in Approvals): hidden in the chat too until the prompt on the agent's screen changes
   for (const ask of S.state.approvals.filter(a => a.id === c.id && a.kind !== 'ask' && !a.hidden)) banners += `<div class="banner ask"><b>${esc(AGENT[c.agent]?.name ?? c.agent)} asks</b><span class="what" title="${esc(ask.what)}">${esc(ask.what)}</span><button class="btn good" data-act="approve" data-arg="${esc(c.id)}">✓ Approve</button><button class="btn danger" data-act="deny" data-arg="${esc(c.id)}">✕ Deny</button>${delBtn(c.id, '')}</div>`;
@@ -1892,6 +1939,8 @@ function renderChatParts() {
 const PEEK = ['artifacts', 'activity', 'record'];
 /** What this chat's sidebar shows: what you left open, else Task for a task chat and closed for a plain chat. */
 function sideView(id) {
+  // a sub thread has no right sidebar: what it does is its main chat's business
+  if (S.state?.chats.find(c => c.id === id)?.sub) return '';
   const task = !!window.choruspro?.sideTabs?.(id);
   const v = S.side[id] ?? (task ? 'task' : '');
   return v === 'task' && !task ? '' : v;
@@ -2836,6 +2885,14 @@ document.addEventListener('click', async e => {
         S.mem.record = { id: arg, text: d.record };
       }
       return renderView();
+    case 'sub-lock': {
+      const on = el.dataset.on === '1';
+      const r = await api('POST', `/api/chats/${arg}/unlock`, { on });
+      if (r.error) return toast(r.error);
+      S.unlockedChat = r.unlocked ? arg : null;
+      if (r.unlocked) term.focus();
+      return;
+    }
     case 'sk-edit':
       return api('POST', `/api/skills/${encodeURIComponent(arg)}/edit`).catch(err => toast(err.message));
     case 'sk-new': {
