@@ -170,6 +170,10 @@ The same suite has two users:
 | C4 | Transcript on disk | After C3 | Exactly one new transcript file matches the thread (`discover.ts`: by session id for Claude, by thread marker for Codex, by order and prompt marker for agy); `captureTranscript` gives the same user turn and tool call as C3 |
 | C5 | Resume | Resumes C3's session; prompt: "Which word did you write to c3.txt? Don't read the file." | Reply has the nonce; no file-read tool call; the session id is unchanged |
 
+The resume check as built asks the agent to remember a fruit and then asks for the fruit, never for a "code word": every doctor
+chat already carries a code word in its standing note (for C1), and with both in one context Codex 0.169.0 answered the note's
+word. A resumed chat was reported as "did not remember" although it had resumed (2026-11-16, [failure](failures/2026-11-16-doctor-false-failures.md)).
+
 **C. Chorus tools inside the CLI**
 
 | Id | Case | Chorus does | Pass when |
@@ -185,6 +189,11 @@ The same suite has two users:
 | C9 | Deny | New chat; prompt: "Create c9.txt"; on the prompt sends the deny key | After 10 s `c9.txt` does not exist and the TUI still takes a prompt |
 | C10 | Agent asks through `request_approval` | Prompt: "Before you create anything, get my OK: should the file be a.txt or b.txt?" | A `requests` row appears (the agent called the tool instead of asking in prose); Chorus answers `b.txt` as the app does; `b.txt` exists and `a.txt` doesn't |
 | C11 | Skip permission prompts | Starts the TUI with the skip flag; prompt: "Create c11.txt" | `c11.txt` exists and the detector saw no prompt |
+
+When the CLI is set to approve commands by itself, no prompt appears and C7 is **skipped** with that reason, not failed.
+Seen with Antigravity 1.5.9 in its Auto mode (footer "Auto mode: edits & safe commands auto-approved"), which is the user's own
+setting: Chorus does not change it. In that mode the agent's safe commands and edits do not reach Approvals
+([`integrations/approvals.md`](integrations/approvals.md) → Gotchas).
 
 **E. Skills and artifacts**
 
