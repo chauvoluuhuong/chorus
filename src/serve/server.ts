@@ -37,6 +37,7 @@ import { check, firstLaunch, ghReady, host, isDue, lastDeep, latestReleases, mar
 import { NotificationInbox } from './notifications.ts';
 import { imageType, parseReport, ReportSender } from './reports.ts';
 import { ChatLaunch, ProHost, type ProLoader } from './pro.ts';
+import { SubThreads, TOOLS as SUB_TOOLS, TOOL_NAMES as SUB_TOOL_NAMES } from './subthreads.ts';
 import { SignIns } from './signin.ts';
 import { inContainer } from '../cli/screen.ts';
 import type { UpdateCheck } from './updates.ts';
@@ -143,6 +144,9 @@ export interface ServeOpts {
   container?: boolean;
   /** whether the CLI still has a chat's session (tests); its transcript on disk otherwise */
   sessionExists?: (row: ThreadRow) => boolean;
+  /** sub threads' watchdog and gap between messages typed into one chat (tests: short ones) */
+  subQuietMs?: number;
+  subGapMs?: number;
 }
 
 const plain = (l: RichLine): string => (typeof l === 'string' ? l : l.map(s => s[0]).join(''));
@@ -170,6 +174,8 @@ export class ChorusServer {
   /** what `chorus mcp` holds: it opens /api/pro/mcp/ and nothing else */
   readonly mcpToken = crypto.randomBytes(24).toString('hex');
   readonly pro: ProHost;
+  /** main thread and sub threads: free, so the tools are served also when the paid module is locked or absent */
+  readonly subs: SubThreads;
   readonly reports: ReportSender;
   private ownInbox: NotificationInbox | undefined;
   url = '';
@@ -217,6 +223,18 @@ export class ChorusServer {
     this.reports = o.reports ?? new ReportSender({ version: versions().chorus, credentials: () => (this.o.notifications ?? (this.ownInbox ??= new NotificationInbox({ directory: path.join(process.env.CHORUS_HOME ?? path.join(os.homedir(), '.chorus'), 'notifications'), version: versions().chorus }))).credentials() });
     this.pro = new ProHost({ homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), dismissApproval: (thread, request) => this.dismissApproval(thread, request), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.approvalsNow().filter(a => !a.hidden).map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))] }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     if (o.chatLaunch) o.chatLaunch.host = this.pro;
+    this.subs = new SubThreads({
+      store: this.c.store,
+      start: x => this.c.newThread({ agent: x.agent, model: x.model, effort: x.effort, title: x.title, prompt: x.prompt, cwd: x.cwd, skipPermissions: x.skipPermissions, parent: x.parent }).id,
+      send: (id, text) => this.sendToChat(id, text),
+      stop: id => this.app.entry(id)?.host?.kill(),
+      openApproval: id => this.approvalsNow().some(a => a.id === id) || this.c.store.pendingRequests(id).length > 0,
+      usable: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent as AgentId),
+      ended: id => this.app.entry(id)?.host?.state === 'ended',
+      quietMs: o.subQuietMs,
+      gapMs: o.subGapMs,
+      changed: () => this.pushState(),
+    });
     this.bridge();
   }
 
@@ -349,7 +367,14 @@ export class ChorusServer {
     const named = this.o.host && !WILDCARD.has(this.o.host) ? this.o.host : '127.0.0.1';
     this.url = `http://${named.includes(':') ? `[${named}]` : named}:${bound}`;
     this.hostNames = hostNames(this.o.host);
-    this.ticker = setInterval(() => this.pushState(), 500);
+    this.ticker = setInterval(() => {
+      try {
+        this.subs.tick();
+      } catch (e) {
+        this.noteError('sub threads', e);
+      }
+      this.pushState();
+    }, 500);
     // openUrl: the page's address with its token, printed by `chorus` after the window opens (a browser tab on the same Chorus)
     fs.writeFileSync(this.serveFile, JSON.stringify({ url: this.url, openUrl: this.openUrl, mcpToken: this.mcpToken }), { mode: 0o600 });
     void this.pro.start();
@@ -566,10 +591,19 @@ export class ChorusServer {
   }
 
   private async proMcp(req: http.IncomingMessage, res: http.ServerResponse, route: string) {
-    if (req.method === 'GET' && route === 'tools') return send(res, 200, { tools: await this.pro.mcpTools(new URL(req.url ?? '/', 'http://x').searchParams.get('app') === '1') });
+    if (req.method === 'GET' && route === 'tools') {
+      const app = new URL(req.url ?? '/', 'http://x').searchParams.get('app') === '1';
+      // a chat gets the sub thread tools whatever the paid module's state; an AI app the user connected does not
+      const paid = await this.pro.mcpTools(app);
+      return send(res, 200, { tools: app ? paid : [...SUB_TOOLS, ...paid.filter(t => !SUB_TOOL_NAMES.includes(t.name))] });
+    }
     if (req.method === 'POST' && route === 'call') {
       const b = await readJson(req);
       if (process.env.CHORUS_PRO_LOG) console.error(`[pro] mcp ${String(b.name)} thread ${String(b.threadId)}`);
+      if (SUB_TOOL_NAMES.includes(String(b.name))) {
+        const r = await this.subs.call(String(b.name), (b.args ?? {}) as Record<string, unknown>, typeof b.threadId === 'string' ? b.threadId : undefined);
+        return 'error' in r ? send(res, 400, r) : send(res, 200, r);
+      }
       const r = await this.pro.mcpCall(String(b.name), (b.args ?? {}) as Record<string, unknown>, typeof b.threadId === 'string' ? b.threadId : undefined);
       return send(res, r.status, r.json);
     }
@@ -1046,6 +1080,8 @@ export class ChorusServer {
         artifacts: (e.meta?.artifacts ?? 0) + c.store.reportedArtifacts(e.id).length,
         toast: e.meta?.toast ?? null,
         updated: t?.updated ?? null,
+        // a sub thread: its main chat and its status (null for any other chat)
+        sub: this.subs.info(t),
       };
     });
     return {
