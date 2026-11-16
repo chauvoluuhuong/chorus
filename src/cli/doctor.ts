@@ -13,7 +13,7 @@ import type { AgentId } from '../core/types.ts';
 const tty = process.stdin.isTTY && process.stdout.isTTY;
 const color = (n: number) => (s: string) => (process.stdout.isTTY ? `\x1b[${n}m${s}\x1b[0m` : s);
 const [green, yellow, red, dim, bold] = [color(32), color(33), color(31), color(2), color(1)];
-const MARK = { ready: green('✔'), missing: yellow('⚠'), 'needs-login': yellow('⚠'), untested: yellow('◆') };
+const MARK = { ready: green('✔'), missing: yellow('⚠'), 'needs-login': yellow('⚠'), untested: yellow('◆'), off: red('✖') };
 
 export async function doctor(argv: string[]): Promise<number> {
   const yes = argv.includes('--yes');
@@ -55,6 +55,14 @@ export async function doctor(argv: string[]): Promise<number> {
       if (await ask(`  Sign in now? (runs ${a.loginCommand.join(' ')})`, true)) await runCommand(a.loginCommand.join(' '), s => process.stdout.write(s));
     }
     fast = await check();
+    // an agent off in Chorus: its detailed test failed a critical check on this version; the verified version turns it on again
+    for (const a of fast.agents.filter(a => a.state === 'off')) {
+      console.log(`\n${red('✖')} ${bold(a.name)} ${a.version} can't be used with Chorus: ${a.off?.reason ?? 'a critical check failed'}.`);
+      if (!a.testedInstall || a.version === a.newestTested) continue;
+      console.log(`  ${a.name} ${a.newestTested} is verified and works with Chorus:\n    ${a.testedInstall}`);
+      if (await ask(`  Install ${a.newestTested} now?`, true)) await runCommand(a.testedInstall, s => process.stdout.write(dim(s)));
+    }
+    if (fast.agents.some(a => a.state === 'off')) fast = await check();
     // 3. untested versions: the deeper test, asked first (it spends turns on the user's plan)
     const deep: DeepReport[] = [];
     const untested = fast.agents.filter(a => a.state === 'untested' || deepArg.includes(a.agent));

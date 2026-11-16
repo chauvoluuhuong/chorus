@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import { AGENTS, buildIssue, deepTest, fastCheck, latestRelease, redact, type DeepEvent, type DeepReport, type FastReport, type Host, type TuiHost } from '@chauvoluuhuong/chorus-core/doctor';
+import { AGENTS, buildIssue, CRITICAL, deepTest, fastCheck, latestRelease, offMark, redact, SCENARIOS, type DeepEvent, type DeepOpts, type DeepReport, type FastReport, type Host, type OffMarkIn, type TuiHost } from '@chauvoluuhuong/chorus-core/doctor';
 import { nodePtyFactory } from '../app/pty.ts';
 import { VirtualScreen } from '../app/screen.ts';
 import type { AgentId } from './types.ts';
@@ -59,10 +59,34 @@ function addKnown(entry: string) {
   writeJson(path.join(DOCTOR_DIR(), 'known.json'), [...new Set([...known(), entry])]);
 }
 
+/**
+ * Off marks (plan 2026-11-14, Stage 1): a detailed test of an agent's version that ran and failed a critical scenario (the
+ * standing note, the per-session MCP server, turn end) turns that version off in Chorus, with the scenario's one-line reason.
+ * Kept in ~/.chorus/doctor/off.json beside last.json and passed to the short check, which marks the agent `off` while that
+ * version is installed. Another installed version, or a later detailed test of that version whose critical scenarios pass,
+ * clears it. A skipped or blocked scenario never sets or clears one.
+ */
+export const offMarks = (): OffMarkIn[] => readJson(path.join(DOCTOR_DIR(), 'off.json'), []);
+function saveOffMarks(marks: OffMarkIn[]) {
+  writeJson(path.join(DOCTOR_DIR(), 'off.json'), marks);
+}
+
+/** Keeps what a detailed test says about its version: an off mark for a failed critical scenario, none once they all pass. */
+export function recordDeep(report: DeepReport, only?: string[]) {
+  if (!report.version) return;
+  const mark = offMark(report);
+  const rest = offMarks().filter(m => !(m.agent === report.agent && m.version === report.version));
+  if (mark) return saveOffMarks([...rest, mark]);
+  // cleared only by a run in which every critical scenario ran and passed
+  const ran = report.results.filter(r => CRITICAL.has(r.id));
+  const allRan = [...CRITICAL].every(id => ran.some(r => r.id === id && r.status === 'pass')) && (!only || [...CRITICAL].every(id => only.includes(id)));
+  if (allRan && rest.length !== offMarks().length) saveOffMarks(rest);
+}
+
 /** The short test. Nothing is kept on disk: in the desktop the server runs it and holds the one answer every screen reads
- *  (ChorusServer.checkAgents); `chorus doctor` runs it each time. */
+ *  (ChorusServer.checkAgents); `chorus doctor` runs it each time. The off marks go with it. */
 export async function check(agents?: AgentId[]): Promise<FastReport> {
-  return fastCheck({ agents, known: known(), tested: remoteTested() });
+  return fastCheck({ agents, known: known(), tested: remoteTested(), off: offMarks() });
 }
 
 /** Each agent's newest detailed test, from the report folders (survives a restart). */
@@ -72,7 +96,8 @@ export function lastDeep(): Partial<Record<AgentId, DeepReport & { at: string }>
   const runs = fs.existsSync(dir) ? fs.readdirSync(dir).filter(d => /^\d{4}-\d\d-\d\dT/.test(d)).sort() : [];
   for (const run of runs) {
     const r = readJson(path.join(dir, run, 'report.json'), undefined)?.report as DeepReport | undefined;
-    if (r?.agent && r.results?.length === 7) out[r.agent] = { ...r, at: fs.statSync(path.join(dir, run, 'report.json')).mtime.toISOString() };
+    // a whole run (not one scenario run alone): every scenario of its time (7 before turn-end was added, 8 now)
+    if (r?.agent && (r.results?.length ?? 0) >= Math.min(7, SCENARIOS.length)) out[r.agent] = { ...r, at: fs.statSync(path.join(dir, run, 'report.json')).mtime.toISOString() };
   }
   return out;
 }
@@ -136,13 +161,23 @@ export interface DeepRun {
 }
 
 /** The deeper test for one CLI; evidence in ~/.chorus/doctor/<time>/<agent>/. A pass makes that version Ready here. */
-export async function runDeep(agent: AgentId, onEvent?: (e: DeepEvent) => void, only?: string[]): Promise<DeepRun> {
+export async function runDeep(agent: AgentId, onEvent?: (e: DeepEvent) => void, only?: string[], checks?: DeepOpts['checks']): Promise<DeepRun> {
   // one folder per agent: the desktop tests the agents side by side, and two runs can start in the same millisecond
   const dir = path.join(DOCTOR_DIR(), `${new Date().toISOString().replace(/[:.]/g, '-')}-${agent}`);
-  const report = await deepTest(agent, { dir, tui, onEvent, only });
+  const report = await deepTest(agent, { dir, tui, onEvent, only, checks: checks ?? forcedChecks() });
   writeJson(path.join(dir, 'report.json'), { ...versions(), report });
   if (report.ok && report.version && !only) addKnown(`${agent}@${report.version}`);
+  recordDeep(report, only);
   return { dir, report };
+}
+
+/**
+ * Test-only: CHORUS_DOCTOR_FAIL=<scenario id>[,<id>…] makes those scenarios fail with a fixed reason, for proof runs of the off
+ * state without a broken CLI. Never set in a normal run.
+ */
+function forcedChecks(): DeepOpts['checks'] {
+  const ids = (process.env.CHORUS_DOCTOR_FAIL ?? '').split(',').map(x => x.trim()).filter(Boolean);
+  return ids.length ? Object.fromEntries(ids.map(id => [id, async () => `forced failure of ${id} (CHORUS_DOCTOR_FAIL)`])) : undefined;
 }
 
 export function issue(fast: FastReport, deep: DeepReport[]) {
@@ -201,7 +236,7 @@ const gb = (n: number) => `${(n / 2 ** 30).toFixed(1)} GB`;
 const count = (xs: string[]) => Object.entries(xs.reduce<Record<string, number>>((m, x) => ((m[x] = (m[x] ?? 0) + 1), m), {})).map(([k, n]) => `${k} ${n}`).join(', ') || 'none';
 const CLI_NAMES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', agy: 'Antigravity' };
 /** The Doctor's word for a CLI's state: the same as the desktop's (agentStatus in src/desktop/app.js). */
-export const STATE_LABEL: Record<string, string> = { ready: 'Ready', 'needs-login': 'Not logged in', untested: 'New version', missing: 'Not installed' };
+export const STATE_LABEL: Record<string, string> = { ready: 'Ready', 'needs-login': 'Not logged in', untested: 'New version', missing: 'Not installed', off: "Can't be used" };
 
 /** How this copy of Chorus was installed: the installer keeps versions/<v>/app (src/serve/updates.ts), npm a global module. */
 export function installMethod(file = import.meta.filename): string {

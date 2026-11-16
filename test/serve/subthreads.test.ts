@@ -247,3 +247,31 @@ test('a sub thread\'s chat is watch-only: keys are dropped until Unlock; an unlo
     await r.done();
   }
 });
+
+test('a file dropped on a locked sub thread\'s chat is refused like its keys; unlocked, it goes through', async () => {
+  const r = await rig();
+  const ws = new WebSocket(r.url.replace('http', 'ws') + '/ws', { headers: { authorization: `Bearer ${r.srv.token}` } });
+  const msgs: any[] = [];
+  ws.on('message', d => msgs.push(JSON.parse(String(d))));
+  await new Promise<void>((resolve, reject) => (ws.once('open', () => resolve()), ws.once('error', reject)));
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-drop-')), 'spec.txt');
+  fs.writeFileSync(file, 'the spec');
+  try {
+    const main = await r.chat('claude');
+    const sub = subId((await r.call('start_subthread', { title: 'Price list', brief: 'Make the price list.' }, main)).text);
+    await r.until(() => /READY/.test(r.screen(sub)), 'sub thread up');
+    ws.send(JSON.stringify({ t: 'drop', id: sub, paths: [file] }));
+    await r.until(() => msgs.some(m => m.t === 'flash' && /watch-only/.test(m.text)), 'refused with a flash');
+    assert.equal(r.store.attachments(sub).length, 0, 'nothing given to the sub thread');
+    // the page's upload route (a browser gives the bytes only) refuses it too
+    const up = await fetch(`${r.url}/api/chats/${sub}/attachments?name=spec.txt`, { method: 'POST', headers: { authorization: `Bearer ${r.srv.token}`, 'x-chorus': '1' }, body: 'the spec' });
+    assert.equal(up.status, 409);
+    await fetch(`${r.url}/api/chats/${sub}/unlock`, { method: 'POST', headers: { authorization: `Bearer ${r.srv.token}`, 'x-chorus': '1', 'content-type': 'application/json' }, body: JSON.stringify({ on: true }) });
+    ws.send(JSON.stringify({ t: 'drop', id: sub, paths: [file] }));
+    await r.until(() => msgs.some(m => m.t === 'dropped' && m.id === sub), 'unlocked: it goes through');
+    assert.equal(r.store.attachments(sub).length, 1);
+  } finally {
+    ws.close();
+    await r.done();
+  }
+});
