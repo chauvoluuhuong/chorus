@@ -214,8 +214,9 @@ export class SubThreads {
           }
           changed = true;
         } else if (approval) {
-          // a CLI permission prompt in the middle of a turn: waiting on the user, not quiet
-          if (status === 'quiet') st.setSub(s.id, { sub_status: 'working', sub_last_activity: iso(now) }), (changed = true);
+          // a CLI permission prompt (or a question card) in the middle of a turn: waiting on the user, not working or quiet
+          st.setSub(s.id, { sub_status: 'waiting_user', sub_last_activity: iso(now) });
+          changed = true;
         } else if (status === 'quiet' && moved) {
           st.setSub(s.id, { sub_status: 'working' });
           changed = true;

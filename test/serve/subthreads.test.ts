@@ -155,6 +155,14 @@ test('sub threads: nothing is reported while one waits on an approval; one level
     const main = await r.chat('claude');
     const a = subId((await r.call('start_subthread', { title: 'A', brief: 'Do A.' }, main)).text);
     assert.equal(r.store.getThread(a)!.agent, 'claude', 'the caller\'s agent by default');
+    // in the middle of a turn, an approval opens (its CLI's permission prompt, or a card): waiting_user at once; answered: working
+    await r.until(() => r.store.getThread(a)!.state === 'working', 'in a turn');
+    const mid = r.store.createRequest({ threadId: a, question: 'Run npm install?' });
+    await r.until(() => r.store.getThread(a)!.sub_status === 'waiting_user', 'waiting_user while the prompt is open');
+    await r.until(() => (r.srv.state().chats.find((c: any) => c.id === a) as any)?.sub?.status === 'waiting_user', 'in the pushed state too');
+    r.store.answerRequest(mid.id, 'Approve');
+    await r.until(() => r.store.getThread(a)!.sub_status === 'working', 'working again once answered');
+    assert.doesNotMatch(r.screen(main), /Chorus: sub thread/, 'nothing reported for it');
     // its turn ends on a question card to the user: waiting_user, no report
     r.store.createRequest({ threadId: a, question: 'May I delete old prices?' });
     r.endTurn(a, 'I asked the user.');
@@ -307,6 +315,24 @@ test('watchOnly (the paid module\'s Worker chat): a sub thread of its Planner, w
     for (const t of ['A', 'B', 'C']) assert.ok((await r.call('start_subthread', { title: t, brief: 'x' }, planner)).ok, t);
   } finally {
     ws.close();
+    await r.done();
+  }
+});
+
+test('a "context not loaded" warning about a sub thread is not passed on; about a hand-off it still is', async () => {
+  const r = await rig();
+  try {
+    const main = await r.chat('claude');
+    const sub = subId((await r.call('start_subthread', { title: 'Create hello.txt with mango', brief: 'Create hello.txt with mango.' }, main)).text);
+    void sub;
+    r.c.app.notice = '⚠ context not loaded in "Create hello.txt with mango": ^G r asks it again';
+    assert.equal(r.srv.state().notice, '');
+    r.c.app.notice = '⚠ context not loaded in "Cake shop → codex": ^G r asks it again';
+    assert.equal(r.srv.state().notice, '⚠ context not loaded in "Cake shop → codex": ^G r asks it again');
+    r.c.app.notice = '⚠ Claude Code reached its plan limit';
+    assert.equal(r.srv.state().notice, '⚠ Claude Code reached its plan limit', 'other warnings stay');
+  } finally {
+    r.c.app.notice = '';
     await r.done();
   }
 });

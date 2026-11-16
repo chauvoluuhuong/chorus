@@ -64,3 +64,19 @@ test('the MCP server\'s instructions start with the intro too', async () => {
   assert.ok(client.getInstructions()!.startsWith(CHORUS_INTRO));
   await client.close();
 });
+
+test('Chorus\'s own sub thread tools never ask: Claude Code gets them in --allowedTools; Codex approves every chorus tool; agy is answered by Chorus', () => {
+  const SUB = ['start_subthread', 'send_to_subthread', 'list_subthreads', 'stop_subthread'];
+  for (const agent of AGENTS) {
+    for (const [what, l] of [
+      ['interactive', buildInteractive(agent, { cwd: cwd(), project: '/p', threadId: 't_t', prompt: 'hi' })],
+      ['headless', buildHeadless(agent, { cwd: cwd(), project: '/p', threadId: 't_t', prompt: 'hi' })],
+    ] as const) {
+      if (agent === 'claude') {
+        const allowed = l.args[l.args.indexOf('--allowedTools') + 1].split(',');
+        for (const n of SUB) assert.ok(allowed.includes(`mcp__chorus__${n}`), `${what}: ${n}`);
+        assert.ok(allowed.includes('mcp__chorus__request_approval'), `${what}: the others stay`);
+      } else if (agent === 'codex') assert.ok(l.args.includes('mcp_servers.chorus.default_tools_approval_mode="approve"'), what);
+    }
+  }
+});
