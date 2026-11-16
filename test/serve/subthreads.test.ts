@@ -275,3 +275,38 @@ test('a file dropped on a locked sub thread\'s chat is refused like its keys; un
     await r.done();
   }
 });
+
+test('watchOnly (the paid module\'s Worker chat): a sub thread of its Planner, watch-only, never reported, counted or listed here', async () => {
+  const r = await rig();
+  const ws = new WebSocket(r.url.replace('http', 'ws') + '/ws', { headers: { authorization: `Bearer ${r.srv.token}` } });
+  await new Promise<void>((resolve, reject) => (ws.once('open', () => resolve()), ws.once('error', reject)));
+  try {
+    const planner = await r.chat('claude');
+    const workers = [await r.chat('codex'), await r.chat('codex'), await r.chat('agy')];
+    for (const w of workers) r.srv.subs.watchOnly(w, planner);
+    const w = workers[0];
+    const row = r.store.getThread(w)!;
+    assert.equal(row.parent_thread_id, planner);
+    assert.equal(row.sub_status, 'task');
+    // shown under its owner, watch-only, like a sub thread
+    await r.until(() => (r.srv.state().chats.find((c: any) => c.id === w) as any)?.sub?.status === 'task', 'state');
+    assert.equal((r.srv.state().chats.find((c: any) => c.id === w) as any).sub.parent, planner);
+    await r.until(() => /READY/.test(r.screen(w)), 'worker up');
+    ws.send(JSON.stringify({ t: 'in', id: w, data: 'hello\r' }));
+    await sleep(600);
+    assert.doesNotMatch(r.screen(w), /got: "hello"/, 'keys are not sent to it');
+    // its turn ending is not reported by Chorus (the paid module reports its Workers itself)
+    r.endTurn(w, 'Step done.');
+    await sleep(1200);
+    assert.equal(r.store.getThread(w)!.sub_status, 'task');
+    assert.doesNotMatch(r.screen(planner), /Chorus: sub thread/);
+    // not counted against the 3-sub limit, not listed, not the Planner's to send to or stop through these tools
+    assert.equal((await r.call('list_subthreads', {}, planner)).text, '(no sub threads)');
+    assert.equal((await r.call('send_to_subthread', { id: w, message: 'x' }, planner)).ok, false);
+    assert.equal((await r.call('stop_subthread', { id: w }, planner)).ok, false);
+    for (const t of ['A', 'B', 'C']) assert.ok((await r.call('start_subthread', { title: t, brief: 'x' }, planner)).ok, t);
+  } finally {
+    ws.close();
+    await r.done();
+  }
+});
