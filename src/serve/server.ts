@@ -347,6 +347,8 @@ export class ChorusServer {
     app.choose = (title, options) => this.ask({ kind: 'choose', title, lines: [], options: options.map((label, i) => ({ key: String(i), label })) }).then(v => (v === undefined ? undefined : Number(v)));
     const flash = app.setFlash.bind(app);
     app.setFlash = (msg: string) => {
+      // deleting a project: one summary on the page, not a line per chat
+      if (this.deletingProject && msg.startsWith('deleted "')) return;
       flash(msg);
       this.flashes.push({ text: msg, ts: Date.now() });
       this.flashes = this.flashes.slice(-20);
