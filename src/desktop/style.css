@@ -966,3 +966,12 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
   .page:not(.nc-wrap):not(.welcome):not(.hero), .page.sk-page, .page.mem-page { max-width: min(1400px, 100%); }
   .page:not(.nc-wrap):not(.welcome):not(.hero) > .lead { max-width: 760px; }
 }
+
+/* The folder dialog by keyboard (plan 2026-11-14, Package 10E): the selected folder, the Name / Created control, a folder's date */
+.br-dialog:focus { outline: none; }
+.br-dialog h2 { display: flex; align-items: center; gap: 10px; }
+.br-dialog h2 .br-sort { margin-left: auto; font: 400 12.5px var(--f-sans); }
+.br-dialog h2 .br-sort button { padding: 3px 10px; }
+.folders button.on, .folders button.on:hover { background: var(--accent-soft); color: var(--ink); box-shadow: inset 3px 0 0 var(--accent); }
+.folders button { display: flex; align-items: center; gap: 8px; }
+.folders .br-when { margin-left: auto; font-family: var(--f-sans); font-size: 12px; color: var(--muted); flex: none; }

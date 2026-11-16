@@ -5,6 +5,7 @@ import { shortCheckPassed } from './doctor-popup.js';
 import { askWho } from './ask-label.js';
 import { attachPicker } from './text-picker.js';
 import { cliFitNote, newChatHint } from './cli-fit.js';
+import { nextSort, sortFolders, typeJump } from './folder-nav.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -564,6 +565,7 @@ function remember(key, value) {
 function takeUi(ui) {
   if (ui.hidden) S.hidden = ui.hidden;
   else if (Object.keys(S.hidden).length) remember('hidden', S.hidden);
+  if (ui.browseSort && ['name', 'created'].includes(ui.browseSort.by)) S.browseSort = { by: ui.browseSort.by, dir: ui.browseSort.dir === 'desc' ? 'desc' : 'asc' };
   if (ui.folded) S.folded = new Set(ui.folded);
   else if (S.folded.size) remember('folded', [...S.folded]);
   if (ui.side && typeof ui.side === 'object') S.side = ui.side;
@@ -1060,9 +1062,12 @@ async function systemPick() {
   return b.then?.(r.dir);
 }
 
+/** Type to jump in the folder dialog (folder-nav.js): one per page, started again in each folder. */
+const browseJump = typeJump();
 async function openBrowse(dir, then) {
+  browseJump.reset();
   try {
-    S.browse = { ...(await api('GET', `/api/folders?dir=${encodeURIComponent(dir)}`)), then: then ?? S.browse?.then };
+    S.browse = { ...(await api('GET', `/api/folders?dir=${encodeURIComponent(dir)}`)), then: then ?? S.browse?.then, sel: null };
   } catch (e) {
     return toast(e.message);
   }
@@ -1078,11 +1083,70 @@ function drawBrowse() {
     el.className = 'scrim';
     $('#dialogs').append(el);
   }
-  el.innerHTML = `<div class="dialog" role="dialog" aria-label="Choose a project folder"><h2>Choose a project folder</h2>
-    <div class="body"><div class="mono">${esc(tilde(b.dir))}</div><div class="muted" style="font-size:12.5px">${b.folders.length} folder${b.folders.length === 1 ? '' : 's'}, sorted by name</div>
-    <div class="folders">${b.parent ? '<button data-act="br-up">‹ ..</button>' : ''}${b.folders.map(n => `<button data-act="br-open" data-arg="${esc(n)}">▸ ${esc(n)}</button>`).join('')}</div>
+  const sort = S.browseSort ?? { by: 'name', dir: 'asc' };
+  const order = browseOrder();
+  const day = ms => (ms ? new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '');
+  const sortBtn = (by, label, arrows) => `<button class="${sort.by === by ? 'on' : ''}" data-act="br-sort" data-arg="${by}" aria-pressed="${sort.by === by}" title="Sort by ${label.toLowerCase()}${sort.by === by ? ' (click to flip)' : ''}">${label}${sort.by === by ? ` ${arrows[sort.dir]}` : ''}</button>`;
+  el.innerHTML = `<div class="dialog br-dialog" role="dialog" aria-label="Choose a project folder" tabindex="-1"><h2>Choose a project folder<span class="seg br-sort">${sortBtn('name', 'Name', { asc: 'A→Z', desc: 'Z→A' })}${sortBtn('created', 'Created', { desc: 'newest', asc: 'oldest' })}</span></h2>
+    <div class="body"><div class="mono">${esc(tilde(b.dir))}</div><div class="muted" style="font-size:12.5px">${order.length} folder${order.length === 1 ? '' : 's'} · type a name to jump to it</div>
+    <div class="folders" role="listbox" aria-label="Folders">${b.parent ? '<button data-act="br-up">‹ ..</button>' : ''}${order.map(f => `<button class="${f.name === b.sel ? 'on' : ''}" role="option" aria-selected="${f.name === b.sel}" data-act="br-open" data-arg="${esc(f.name)}">▸ ${esc(f.name)}${sort.by === 'created' ? `<span class="br-when">${esc(day(f.created))}</span>` : ''}</button>`).join('')}</div>
     ${b.error ? `<div class="br-error" role="alert">${esc(b.error)}</div>` : ''}</div>
-    <div class="foot"><button class="btn" data-act="br-new">New folder…</button>${MQ_TOUCH.matches && !NATIVE ? '' : `<button class="btn" data-act="br-system">${isMac ? "Mac's folder dialog…" : 'System folder dialog…'}</button>`}<span style="flex:1"></span><button class="btn" data-act="br-cancel">Cancel</button><button class="btn primary" data-act="br-use">Use this folder</button></div></div>`;
+    <div class="foot"><button class="btn" data-act="br-new">New folder…</button>${MQ_TOUCH.matches && !NATIVE ? '' : `<button class="btn" data-act="br-system">${isMac ? "Mac's folder dialog…" : 'System folder dialog…'}</button>`}<span style="flex:1"></span><button class="btn" data-act="br-cancel">Cancel</button><button class="btn primary" data-act="br-use" title="Use this folder (${isMac ? '⌘' : 'Ctrl+'}Enter)">Use this folder</button></div></div>`;
+  // the keys work at once, without a click into the list; the selected folder stays in view
+  if (!el.contains(document.activeElement) || document.activeElement === el) el.querySelector('.br-dialog').focus({ preventScroll: true });
+  el.querySelector('.folders .on')?.scrollIntoView({ block: 'nearest' });
+}
+
+/** The folders of the dialog in the order shown (Name or Created, either way). */
+function browseOrder() {
+  const b = S.browse;
+  return b ? sortFolders(b.items ?? b.folders.map(name => ({ name, created: 0 })), S.browseSort ?? { by: 'name', dir: 'asc' }) : [];
+}
+
+/**
+ * The folder dialog's keys: letters and digits jump to a folder (folder-nav.js), ↑ ↓ move, Enter or → opens the selected
+ * folder, ← or Backspace goes up, ⌘/Ctrl+Enter uses the folder shown, Esc closes (the dialogs' own Esc). Not while typing in
+ * a text field, and Enter on a focused button (Cancel, Use this folder…) presses that button as always.
+ */
+function browseKey(e) {
+  const b = S.browse;
+  // a text field of a dialog (New folder's name) keeps its keys; the page behind the dialog (New chat's message box, which may
+  // take the focus as the form opens) does not: those keys are the dialog's, and the focus goes back to it
+  if (!b || (e.target.closest?.('input, textarea') && e.target.closest('#dialogs'))) return false;
+  if (!e.target.closest?.('#browse')) $('#browse .br-dialog')?.focus({ preventScroll: true });
+  const names = browseOrder().map(f => f.name);
+  const at = names.indexOf(b.sel);
+  const select = i => {
+    if (i < 0 || i >= names.length) return;
+    b.sel = names[i];
+    drawBrowse();
+  };
+  const onButton = e.target.closest?.('.foot button, .br-sort button');
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) return e.preventDefault(), $('#browse [data-act="br-use"]')?.click(), true;
+  if (e.metaKey || e.ctrlKey || e.altKey) return false;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    select(at < 0 ? (e.key === 'ArrowDown' ? 0 : names.length - 1) : Math.max(0, Math.min(names.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1))));
+    return true;
+  }
+  if ((e.key === 'Enter' && !onButton) || e.key === 'ArrowRight') {
+    if (at < 0) return e.key === 'ArrowRight' ? false : (e.preventDefault(), true);
+    e.preventDefault();
+    void openBrowse(`${b.dir}/${b.sel}`);
+    return true;
+  }
+  if (e.key === 'ArrowLeft' || (e.key === 'Backspace' && !onButton)) {
+    if (!b.parent) return false;
+    e.preventDefault();
+    void openBrowse(b.parent);
+    return true;
+  }
+  if (e.key.length === 1 && /[\p{L}\p{N} ._-]/u.test(e.key) && !(e.key === ' ' && onButton)) {
+    e.preventDefault();
+    select(browseJump.press(e.key, names, at));
+    return true;
+  }
+  return false;
 }
 
 /* Approvals: everything waiting on you, from every chat */
@@ -2945,6 +3009,10 @@ document.addEventListener('click', async e => {
       return openBrowse(S.browse.parent);
     case 'br-open':
       return openBrowse(`${S.browse.dir}/${arg}`);
+    case 'br-sort':
+      S.browseSort = nextSort(S.browseSort ?? { by: 'name', dir: 'asc' }, arg);
+      remember('browseSort', S.browseSort);
+      return drawBrowse();
     case 'br-cancel':
       S.browse = null;
       return drawBrowse();
@@ -3096,6 +3164,7 @@ document.addEventListener(
     const mod = isMac ? e.metaKey : e.ctrlKey;
     const dlg = [...document.querySelectorAll('#dialogs .scrim')].pop();
     if (dlg) {
+      if (dlg.id === 'browse' && e.key !== 'Escape' && browseKey(e)) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         return dismissDialog(dlg);
