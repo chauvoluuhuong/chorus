@@ -209,6 +209,11 @@ function onState(st) {
   const artWas = artOf(S.state);
   S.state = st;
   for (const c of st.chats) noteCount(`art:${c.id}`, c.artifacts ?? 0);
+  // an agent turned off shows its details on the Doctor; once it works again the Doctor says so
+  for (const a of st.doctor?.agents ?? []) {
+    if (a.state === 'off' && !S.docOff?.has(a.agent)) ((S.docOff ??= new Set()).add(a.agent), S.docOpen.add(a.agent), (S.docBackOn = null));
+    else if (a.state !== 'off' && S.docOff?.has(a.agent) && !st.doctor.checking) (S.docOff.delete(a.agent), (S.docBackOn = a.agent));
+  }
   // an unlocked sub thread that is not the chat in front locks again (also after a reload, when the page forgot it unlocked it)
   for (const c of st.chats) {
     if (!c.sub?.unlocked || (S.view.name === 'chat' && S.view.id === c.id) || S.locking?.has(c.id)) continue;
@@ -940,7 +945,7 @@ function agentRows() {
     .map(a => {
       const live = drAgent(a.id) ?? { agent: a.id };
       const st = agentStatus(live, false);
-      const sub = st.kind === 'plain' ? 'checking…' : live.state === 'missing' ? '<span class="bad">Not installed</span>' : live.state === 'needs-login' ? `<span class="bad">${esc(live.version ?? '')} · Not logged in</span>` : `${esc(live.version ?? '')} · ${esc(live.login === 'yes' ? 'Logged in' : st.label)}`;
+      const sub = st.kind === 'plain' ? 'checking…' : live.state === 'missing' ? '<span class="bad">Not installed</span>' : live.state === 'needs-login' ? `<span class="bad">${esc(live.version ?? '')} · Not logged in</span>` : live.state === 'off' ? `<span class="bad">${esc(live.version ?? '')} · Can't be used · see Doctor</span>` : `${esc(live.version ?? '')} · ${esc(live.login === 'yes' ? 'Logged in' : st.label)}`;
       const q = a.quota ? ` · <span class="${a.quota.level === 'err' ? 'bad' : a.quota.level === 'warn' ? 'warn' : ''}">plan ${esc(a.quota.text)}</span>` : '';
       return `<button class="${f.agent === a.id && !window.choruspro?.teammatePicked?.() ? 'on' : ''}" data-act="nc-agent" data-arg="${a.id}"><span class="nc-mi"><span class="badge mini ${a.id}">${AGENT[a.id].letter}</span>${AGENT[a.id].name}${from?.agent === a.id ? ' <span class="faint">(same agent)</span>' : ''}</span><span class="nc-sub">${sub}${q}</span></button>`;
     })
@@ -1217,7 +1222,7 @@ function skillSourcesHtml(k) {
 // the first-launch screen and the Doctor page draw the same rows (doctorRow). Startup, Run test, Check again, an install, a
 // login, a detailed test and the window coming back to the front all end in a new check on the server, which every window gets.
 
-const DR_STEPS = 7;
+const DR_STEPS = 8;
 const DR_METHOD = { native: 'native installer', npm: 'npm', brew: 'Homebrew', other: 'installed by hand' };
 /** What a failing detailed check means for the user (the failure banner). */
 const DR_EFFECT = {
@@ -1228,8 +1233,16 @@ const DR_EFFECT = {
   mcp: "the agent cannot reach Chorus's tools, so handoff and memory do not work",
   resume: 'a chat cannot be continued after Chorus restarts',
   approval: "Chorus cannot see the agent's permission prompts, so they do not reach Approvals",
+  'turn-end': 'Chorus cannot see when a turn ends, so a main chat or a task is not told that the work is done',
 };
-const FR_TESTS = { envelope: "Starts a chat with Chorus's note", hello: "Reads the agent's replies", shell: 'Shows commands and their output', transcript: 'Saves chat history', mcp: 'Uses Chorus tools', resume: 'Resumes a chat', approval: 'Shows approval requests' };
+/** What an off agent cannot do, per critical scenario (the Doctor's banner when a critical check failed; mockup
+ *  critical-test-provider-gate.html). Anything else: the scenario's own one-line reason. */
+const OFF_EFFECT = {
+  envelope: n => `Chorus's note did not reach ${n}, so a ${n} chat would not know where to save files for you or how to ask you for approval.`,
+  mcp: n => `Chorus could not reach ${n} through its own tools, so a ${n} chat could not share memory, hand off or ask you for approval.`,
+  'turn-end': n => `Chorus could not see when a ${n} turn ends, so it could not tell a main chat or a task that the work is done.`,
+};
+const FR_TESTS = { envelope: "Starts a chat with Chorus's note", hello: "Reads the agent's replies", shell: 'Shows commands and their output', transcript: 'Saves chat history', mcp: 'Uses Chorus tools', resume: 'Resumes a chat', approval: 'Shows approval requests', 'turn-end': 'Sees when a turn ends' };
 const FR_IDS = Object.keys(FR_TESTS);
 /** A login outside Chorus (in a terminal) shows when the window comes back to the front (recheckOnFocus); Check again stays for
  *  when it does not, or the window never lost focus. */
@@ -1340,6 +1353,8 @@ function agentStatus(a, jobs = true) {
     return s('warn', 'Not logged in', `Log in to use it here. ${LOGIN_HINT}`, [['Log in', 'doc-run', `${a.agent}:login`, true], ['Check again', 'doc-recheck', a.agent]]);
   }
   if (deep && !deep.done) return s('plain', `Detailed test · ${deep.results.length} of ${DR_STEPS}`, `Now: ${FR_TESTS[FR_IDS[deep.results.length]] ?? 'finishing'}`, [], true);
+  // a critical check of this version failed: off in Chorus until a test passes (the Doctor's banner says why and what to do)
+  if (a.state === 'off') return s('bad', jobs ? "Can't be used" : "Can't be used · see Doctor");
   if (deep?.done) {
     const rs = deep.report?.results ?? [];
     const pass = rs.filter(r => r.status === 'pass' || r.status === 'skip').length;
@@ -1411,7 +1426,7 @@ function drawSignIn(si, j) {
 
 const agentPill = st => `<span class="badge ${st.kind}">${st.busy ? '<span class="spin"></span>' : st.kind === 'ok' ? '✔ ' : st.kind === 'warn' || st.kind === 'bad' ? '⚠ ' : ''}${esc(st.label)}</span>`;
 /** The sidebar's mark: ✗ only when the agent cannot be used (not installed, not logged in, a failed test). */
-const agentMark = (a, st) => (st.kind === 'plain' ? '…' : st.kind === 'bad' || a.state === 'missing' || a.state === 'needs-login' ? '✗' : '✓');
+const agentMark = (a, st) => (st.kind === 'plain' ? '…' : st.kind === 'bad' || a.state === 'missing' || a.state === 'needs-login' || a.state === 'off' ? '✗' : '✓');
 
 function drWhen(iso) {
   const d = new Date(iso);
@@ -1431,7 +1446,7 @@ function drVersionLine(a) {
 
 function drChecks(list) {
   return list
-    .map(([m, t, time = '', why]) => `<div class="dr-check"><span class="dr-m ${m}">${m === 'ok' ? '✔' : m === 'bad' ? '✖' : m === 'warn' ? '⚠' : m === 'run' ? '<span class="spin"></span>' : '○'}</span><span${m === 'wait' ? ' class="faint"' : ''}>${esc(t)}</span><span class="dr-time">${esc(time)}</span>${why ? `<span class="dr-why">${esc(why)}</span>` : ''}</div>`)
+    .map(([m, t, time = '', why]) => `<div class="dr-check"><span class="dr-m ${m}">${m === 'ok' ? '✔' : m === 'bad' ? '✖' : m === 'warn' ? '⚠' : m === 'run' ? '<span class="spin"></span>' : '○'}</span><span${m === 'wait' ? ' class="faint"' : ''}>${esc(t)}${DR_CRITICAL.has(t) ? '<span class="dr-crit">critical</span>' : ''}</span><span class="dr-time">${esc(time)}</span>${why ? `<span class="dr-why">${esc(why)}</span>` : ''}</div>`)
     .join('');
 }
 
@@ -1454,7 +1469,9 @@ function cmpV(x, y) {
   return 0;
 }
 
-const DR_TITLES = ['The standing note reaches the model', 'A turn runs and is read: session id, reply, usage', 'A shell command and its output are read', "The CLI's own transcript is found and read", 'The per-session MCP server is reached', 'A chat resumes with its context', 'The permission prompt is recognised and approved'];
+const DR_TITLES = ['The standing note reaches the model', 'A turn runs and is read: session id, reply, usage', 'A shell command and its output are read', "The CLI's own transcript is found and read", 'The per-session MCP server is reached', 'A chat resumes with its context', 'The permission prompt is recognised and approved', 'Chorus sees when a turn ends'];
+/** The checks whose failure turns the agent off in Chorus (core SCENARIOS' critical flag): tagged "critical" on the Doctor. */
+const DR_CRITICAL = new Set([DR_TITLES[0], DR_TITLES[4], DR_TITLES[7]]);
 const drResult = r => [r.status === 'pass' ? 'ok' : r.status === 'fail' ? 'bad' : r.status === 'blocked' ? 'warn' : 'wait', r.title, `${(r.ms / 1000).toFixed(1)} s`, r.status === 'pass' ? '' : r.reason];
 
 function drDetailed(a) {
@@ -1479,6 +1496,7 @@ function drDetail(a) {
   const deep = drDetailed(a);
   return `<div class="dr-detail">
       <div class="dr-sub">${drVersionLine(a)}</div>
+      ${a.state === 'off' ? `<div class="dr-offline"><b>Off in Chorus.</b> ${esc(`${a.name} is not offered in New chat, Teammates or Hand off until its test passes. Your ${a.name} chats are kept.`)}</div>` : ''}
       <div class="dr-group"><h4>Short test <span>${esc(drChecking() ? 'running' : drWhenShort())}</span></h4>${drChecking() ? '' : drChecks(drShort(a))}</div>
       <div class="dr-group"><h4>Detailed test <span>${deep ? esc(deep[0]) : 'not run for this version'}</span>${drTestButton(a)}</h4>${deep ? drChecks(deep[1]) : '<div class="faint" style="font-size:13px">Chorus asks for it when a version is new to it.</div>'}</div>
       ${a.state !== 'missing' && a.testedInstall && a.version !== a.newestTested ? `<div class="dr-group"><h4>Suggested version</h4><div class="dr-cmd"><span>${esc(a.testedInstall)}</span><button class="btn" data-act="doc-run" data-arg="${a.agent}:tested">Install</button></div></div>` : ''}
@@ -1517,6 +1535,17 @@ function drWhenShort() {
 function drBanner() {
   const agents = drAgents();
   if (!agents || drChecking() || drDeepRunning()) return '';
+  // a critical check failed: the agent can't be used; the verified version, or a report (no Keep: it stays off until a test passes)
+  const off = agents.find(a => a.state === 'off');
+  if (off) {
+    const verified = off.testedInstall && off.version !== off.newestTested;
+    const text = `${OFF_EFFECT[off.off?.scenario]?.(off.name) ?? `${off.off?.reason ?? 'A critical check failed'}.`}${verified ? ` ${off.name} ${off.newestTested} is verified and works with Chorus.` : ''}`;
+    const acts = `${verified ? `<button class="btn primary" data-act="doc-run" data-arg="${off.agent}:tested">Install ${esc(off.name)} ${esc(off.newestTested)}</button>` : ''}<button class="btn" data-act="doc-report">Report issue</button>`;
+    return drBannerHtml('bad', `${off.name} ${off.version} can't be used with Chorus.`, text, acts);
+  }
+  // it was off and works again (the verified version installed, or a test passed)
+  const back = S.docBackOn && agents.find(a => a.agent === S.docBackOn && (a.state === 'ready' || a.state === 'untested'));
+  if (back) return drBannerHtml('ok', `${back.name} ${back.version} works with Chorus.`, 'It is on again everywhere: New chat, Teammates and Hand off.');
   const failed = agents.map(a => [a, drFailed(a)]).find(([a, j]) => j && !S.docKept.has(a.agent));
   if (failed) {
     const [a, j] = failed;
@@ -1548,7 +1577,8 @@ function drRunLine() {
   else if (d?.at) {
     const done = Object.values(S.docJobs).filter(j => j.action === 'deep' && j.done).at(-1);
     const need = d.agents.filter(a => a.state !== 'ready').length;
-    if (done && !S.docRan) when = `Detailed test of ${drName(done.agent)} finished · ${done.ok ? 'all passed' : `${done.report.results.filter(r => r.status === 'fail').length} problem`}`;
+    const crit = done?.report?.critical?.length ?? 0;
+    if (done && !S.docRan) when = `Detailed test of ${drName(done.agent)} finished · ${done.ok ? 'all passed' : crit ? `${crit} critical problem` : `${done.report.results.filter(r => r.status === 'fail').length} problem`}`;
     else if (Date.now() - new Date(d.at).getTime() < 60_000) when = `Tested just now · ${(d.ms / 1000).toFixed(1)} s`;
     else when = `Last test: ${drWhen(d.at)} · ${need ? `${need} need${need > 1 ? '' : 's'} you` : 'all ready'}`;
   }
@@ -2829,6 +2859,8 @@ document.addEventListener('click', async e => {
       return renderView();
     case 'nc-agent':
       if (!S.form) return;
+      // an agent off in Chorus (a failed critical check) can't start a chat: the Doctor says why
+      if (drAgent(arg)?.state === 'off') return toast(`${drName(arg)} can't be used with Chorus now · see Doctor`);
       S.form.agent = arg;
       S.form.model = 'default';
       S.form.effort = 'default';

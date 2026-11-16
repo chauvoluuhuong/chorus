@@ -32,7 +32,7 @@ import { matchFiles, projectFiles } from '../core/files.ts';
 import { addSource, allSkills, CLI_NAMES, removeSource, scanSkills, SYNC_CLIS, syncSkill, tilde, unsyncSkill, type Cli } from '../core/skillsync.ts';
 import type { AgentId } from '../core/types.ts';
 import { CLIS, type AgentCheck, type DeepReport, type FastReport } from '@chauvoluuhuong/chorus-core/doctor';
-import { check, firstLaunch, ghReady, host, isDue, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, remoteTested, reportDetails, runCommand, runDeep, versions } from '../core/doctor.ts';
+import { check, firstLaunch, ghReady, host, isDue, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, recordDeep, remoteTested, reportDetails, runCommand, runDeep, versions } from '../core/doctor.ts';
 
 import { NotificationInbox } from './notifications.ts';
 import { imageType, parseReport, ReportSender } from './reports.ts';
@@ -127,6 +127,8 @@ export interface ServeOpts {
   onQuit?: () => void;
   /** the doctor's short check and the install/login command runner (tests); the real ones otherwise */
   check?: () => Promise<FastReport>;
+  /** the detailed test (tests: a stub that never runs a CLI); its report's off mark is kept as runDeep keeps it */
+  deep?: typeof runDeep;
   runCommand?: typeof runCommand;
   /** the optional module's loader (tests); the real one otherwise */
   proLoader?: ProLoader;
@@ -294,6 +296,12 @@ export class ChorusServer {
    * Whether keys for this chat go through: always for a chat that is not a sub thread; for a sub thread only while unlocked, and
    * then each typed line is passed on to the main chat as a note. A sub thread whose chat ended is locked again.
    */
+  /** Why no chat can start on this agent now: a failed critical check of its installed version turned it off (the Doctor says more). */
+  private offReason(agent: AgentId): string | undefined {
+    const a = this.agentCheck?.report.agents.find(x => x.agent === agent && x.state === 'off');
+    return a ? `${a.name} ${a.version ?? ''} can't be used with Chorus: ${a.off?.reason ?? 'a critical check failed'}. See Doctor.`.replace(/ {2,}/g, ' ') : undefined;
+  }
+
   /** Unlocked, and still running: a sub thread whose chat ended is locked again. */
   private isUnlocked(id: string) {
     if (!this.unlocked.has(id)) return false;
@@ -585,6 +593,8 @@ export class ChorusServer {
     // the address; saved in the chat's attachments folder and its path put into the agent's input (docs/phase5.md §8.3)
     const upload = req.method === 'POST' && u.pathname.match(/^\/api\/chats\/([\w-]+)\/attachments$/);
     if (upload) {
+      // a locked sub thread takes no dropped files, as it takes no keys
+      if (this.c.store.getThread(upload[1])?.sub_status && !this.isUnlocked(upload[1])) return send(res, 409, { error: 'This sub thread is watch-only: give the file to its main chat, or Unlock it first' });
       const bytes = await readRaw(req, UPLOAD_LIMIT).catch(() => undefined);
       if (!bytes) return send(res, 413, { error: `a dropped file can be at most ${UPLOAD_LIMIT / 1_000_000} MB` });
       const r = this.c.dropFiles(upload[1], [{ name: u.searchParams.get('name') ?? 'file', bytes }]);
@@ -763,7 +773,8 @@ export class ChorusServer {
     this.doctorJobs.set(job.id, job);
     void (async () => {
       if (action === 'deep') {
-        const run = await runDeep(agent, e => e.type === 'scenario-end' && job.results.push(e.result));
+        const run = await (this.o.deep ?? runDeep)(agent, e => e.type === 'scenario-end' && job.results.push(e.result));
+        recordDeep(run.report); // a failed critical scenario turns this version off (the short check below reads it)
         this.deepReports = [...this.deepReports.filter(d => d.agent !== agent), run.report];
         job.ok = run.report.ok;
         job.report = run.report;
@@ -861,6 +872,7 @@ export class ChorusServer {
       case 'POST chats': {
         const agent = asAgent(b.agent);
         if (!agent) return { error: 'agent must be claude, codex or agy' };
+        if (this.offReason(agent)) return { error: this.offReason(agent) };
         const dir = path.resolve(expand(String(b.folder ?? c.project)));
         if (dir === computerDir()) fs.mkdirSync(dir, { recursive: true }); // "This computer": a chat that belongs to no project
         if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return { error: `${b.folder} is not a folder` };
@@ -892,6 +904,7 @@ export class ChorusServer {
       case 'POST chats/:id/handoff': {
         const to = asAgent(b.to);
         if (!thread || !to) return undefined;
+        if (this.offReason(to)) return { error: this.offReason(to) };
         const opts = { model: b.model, effort: b.effort, skipPermissions: !!b.skip };
         const typed = typeof b.note === 'string' ? b.note : typeof b.prompt === 'string' ? b.prompt : '';
         const note = expandSkillMentions(typed.trim(), this.skillNames());
@@ -1331,7 +1344,10 @@ export class ChorusServer {
         debug(`resize ${m.cols}x${m.rows}: agents at ${this.size.cols}x${this.size.rows}`);
       } else if (m.t === 'resize') debug(`resize ${m.cols}x${m.rows} ignored: agents stay at ${this.size.cols}x${this.size.rows}`);
       else if (m.t === 'detach') cl.detach();
-      else if (m.t === 'drop' && typeof m.id === 'string' && Array.isArray(m.paths)) {
+      else if (m.t === 'drop' && typeof m.id === 'string' && Array.isArray(m.paths) && this.c.store.getThread(m.id)?.sub_status && !this.isUnlocked(m.id)) {
+        // a locked sub thread takes no keys, and no dropped files either
+        cl.send(JSON.stringify({ t: 'flash', text: 'This sub thread is watch-only: give the file to its main chat, or Unlock it first' }));
+      } else if (m.t === 'drop' && typeof m.id === 'string' && Array.isArray(m.paths)) {
         // files dropped on the native window: Tauri gives their full paths (docs/phase5.md §8.3)
         const paths = m.paths.filter((p: unknown): p is string => typeof p === 'string' && path.isAbsolute(p));
         const r = this.c.dropFiles(m.id, paths.map((p: string) => ({ path: p })), !!m.copy);
