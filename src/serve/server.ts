@@ -341,7 +341,8 @@ export class ChorusServer {
   /** The Controller's questions, flashes and bell reach the desktop instead of a terminal. */
   private bridge() {
     const app = this.app;
-    app.alert = (title, lines, options) => this.ask({ kind: 'alert', title, lines, options }) as Promise<string | undefined>;
+    // while a project is being deleted (DELETE projects, after its one warning) each chat's own "Delete this chat?" is answered here
+    app.alert = (title, lines, options) => (this.deletingProject && title === 'Delete this chat?' ? Promise.resolve('y') : (this.ask({ kind: 'alert', title, lines, options }) as Promise<string | undefined>));
     app.prompt = (title, lines, initial = '') => this.ask({ kind: 'prompt', title, lines, initial }) as Promise<string | undefined>;
     app.choose = (title, options) => this.ask({ kind: 'choose', title, lines: [], options: options.map((label, i) => ({ key: String(i), label })) }).then(v => (v === undefined ? undefined : Number(v)));
     const flash = app.setFlash.bind(app);
@@ -362,6 +363,45 @@ export class ChorusServer {
       this.pro.chatEvent({ type: 'exit', thread: e?.id } as { type: string });
       this.pushState();
     });
+  }
+
+  /** Set while DELETE projects removes a project's chats one by one. */
+  private deletingProject = false;
+
+  /**
+   * Deletes everything Chorus keeps for one project (the × on a project, after its warning): each chat whose folder is exactly
+   * this one is stopped and deleted as DELETE chats/:id does (its rows in every table go, the paid module hears each one), the
+   * project leaves the sidebar's lists, the skill sources the user added inside it are forgotten (rows only), and the paid
+   * module is told once. Nothing on disk is deleted: not the folder, not a file in it, not its .chorus/.
+   */
+  async deleteProject(folder: string): Promise<{ removed: number } | { error: string }> {
+    const c = this.c;
+    const dir = path.resolve(expand(folder));
+    if (!folder || !path.isAbsolute(dir)) return { error: 'the project folder is needed' };
+    const chats = c.store.listThreads().filter(t => t.cwd === dir || t.project === dir);
+    let removed = 0;
+    this.deletingProject = true;
+    try {
+      for (const t of chats) {
+        this.unlocked.delete(t.id);
+        await c.deleteThread(t.id);
+        if (c.store.getThread(t.id)) continue;
+        removed++;
+        this.pro.chatEvent({ type: 'deleted', thread: t.id } as { type: string });
+      }
+    } finally {
+      this.deletingProject = false;
+    }
+    // the sidebar's own lists (ui.json): taken off, folded
+    const ui = this.ui() as { hidden?: Record<string, unknown>; folded?: unknown };
+    if (ui.hidden && dir in ui.hidden) delete ui.hidden[dir];
+    if (Array.isArray(ui.folded)) ui.folded = ui.folded.filter(f => f !== dir);
+    fs.writeFileSync(path.join(c.store.root, 'ui.json'), JSON.stringify(ui, null, 2));
+    // Chorus's own records of skill folders inside it (never a file, never a link)
+    for (const src of c.store.skillSources()) if (src.path === dir || src.path.startsWith(dir + path.sep)) c.store.removeSkillSource(src.path);
+    this.pro.chatEvent({ type: 'project-deleted', project: dir } as { type: string });
+    this.pushState();
+    return { removed };
   }
 
   private ask(d: Omit<Dialog, 'id'>): Promise<unknown> {
@@ -865,10 +905,27 @@ export class ChorusServer {
       case 'POST folders/pick':
         return (this.o.pickFolder ?? pickFolder)(path.resolve(expand(String(b.dir ?? c.project))), String(b.title ?? 'Choose a project folder'));
       case 'POST folders': {
-        const dir = path.join(expand(String(b.dir)), String(b.name ?? '').replace(/[/\\]/g, ''));
-        fs.mkdirSync(dir, { recursive: true });
+        // a new folder, only inside the folder the dialog shows; what went wrong is said in the dialog
+        const parent = path.resolve(expand(String(b.dir ?? '')));
+        const name = String(b.name ?? '').trim();
+        if (!name || /[/\\]/.test(name) || name === '.' || name === '..') return { error: 'Name the folder without slashes' };
+        try {
+          if (!fs.statSync(parent).isDirectory()) return { error: `${parent} is not a folder` };
+        } catch {
+          return { error: `${parent} is not a folder` };
+        }
+        const dir = path.join(parent, name);
+        if (fs.existsSync(dir)) return { error: `${name} already exists here` };
+        try {
+          fs.mkdirSync(dir);
+        } catch (e) {
+          const code = (e as NodeJS.ErrnoException).code;
+          return { error: code === 'EACCES' || code === 'EPERM' ? `Chorus may not make a folder in ${parent}` : (e as Error).message };
+        }
         return listFolders(dir);
       }
+      case 'DELETE projects':
+        return this.deleteProject(String(b.folder ?? q.get('folder') ?? ''));
       case 'POST chats': {
         const agent = asAgent(b.agent);
         if (!agent) return { error: 'agent must be claude, codex or agy' };

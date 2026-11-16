@@ -374,6 +374,96 @@ test('serve: artifactsRev grows on a new version of an artifact, an edit of a re
   }
 });
 
+test('serve: the folder dialog lists the home folder and makes a new folder there and inside it; what goes wrong is said', async () => {
+  const r = await rig();
+  const realHome = process.env.HOME;
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-home-')));
+  process.env.HOME = home;
+  try {
+    fs.mkdirSync(path.join(home, 'work'));
+    const at = (await r.api('GET', '/api/folders?dir=~')).json;
+    assert.equal(at.dir, home);
+    assert.deepEqual(at.folders, ['work']);
+    // New folder at the home folder: the dialog then stands in it
+    const made = (await r.api('POST', '/api/folders', { dir: home, name: 'cake-shop' })).json;
+    assert.equal(made.dir, path.join(home, 'cake-shop'));
+    assert.ok(fs.statSync(path.join(home, 'cake-shop')).isDirectory());
+    // and inside it
+    assert.equal((await r.api('POST', '/api/folders', { dir: made.dir, name: 'api' })).json.dir, path.join(home, 'cake-shop', 'api'));
+    assert.ok(fs.existsSync(path.join(home, 'cake-shop', 'api')));
+    // said in the dialog, nothing made: it exists, a slash, no name, the folder shown is not a folder
+    assert.match((await r.api('POST', '/api/folders', { dir: home, name: 'cake-shop' })).json.error, /already exists here/);
+    assert.match((await r.api('POST', '/api/folders', { dir: home, name: '../escape' })).json.error, /without slashes/);
+    assert.match((await r.api('POST', '/api/folders', { dir: home, name: '  ' })).json.error, /without slashes/);
+    assert.match((await r.api('POST', '/api/folders', { dir: path.join(home, 'nope'), name: 'x' })).json.error, /is not a folder/);
+    assert.equal(fs.existsSync(path.join(path.dirname(home), 'escape')), false);
+    assert.deepEqual(fs.readdirSync(home).sort(), ['cake-shop', 'work']);
+  } finally {
+    process.env.HOME = realHome;
+    await r.done();
+  }
+});
+
+test('serve: deleting a project removes its chats from every table and its sidebar entry, tells the module once, and keeps the folder and its files', async () => {
+  const r = await rig();
+  const other = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-other-')));
+  const events: any[] = [];
+  const chatEvent = r.srv.pro.chatEvent.bind(r.srv.pro);
+  r.srv.pro.chatEvent = (e: any) => (events.push(e), chatEvent(e));
+  try {
+    const a1 = (await r.api('POST', '/api/chats', { agent: 'claude', folder: r.project })).json.id as string;
+    const a2 = (await r.api('POST', '/api/chats', { agent: 'codex', folder: r.project })).json.id as string;
+    const b1 = (await r.api('POST', '/api/chats', { agent: 'claude', folder: other })).json.id as string;
+    for (const id of [a1, a2, b1]) {
+      r.store.createRequest({ threadId: id, question: 'ok?' });
+      r.store.reportArtifact(id, path.join(r.project, 'notes.md'), 'Notes');
+      r.store.logApproval(id, 'npm test', 'approved');
+      r.store.logMcpCall(id, 'list_threads');
+      r.store.addAttachment(id, { path: '/tmp/x', copied: false });
+    }
+    fs.writeFileSync(path.join(r.project, 'notes.md'), 'mine');
+    fs.mkdirSync(path.join(r.project, 'src'));
+    fs.writeFileSync(path.join(r.project, 'src', 'app.ts'), 'code');
+    await r.api('POST', '/api/ui', { key: 'hidden', value: { [r.project]: [a1], [other]: [] } });
+    await r.api('POST', '/api/ui', { key: 'folded', value: [r.project, other] });
+    r.store.addSkillSource(path.join(r.project, 'skills'), 'folder');
+    r.store.addSkillSource(other, 'folder');
+    const before = fs.readdirSync(r.project).sort();
+
+    const out = (await r.api('DELETE', '/api/projects', { folder: r.project })).json;
+    assert.deepEqual(out, { removed: 2 });
+    for (const id of [a1, a2]) {
+      assert.equal(r.store.getThread(id), undefined);
+      for (const table of ['turns', 'tool_calls', 'usage', 'artifacts', 'approvals_log', 'mcp_calls', 'requests', 'attachments', 'reported'])
+        assert.equal((r.store.db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE thread_id = ?`).get(id) as { n: number }).n, 0, `${table} ${id}`);
+      assert.equal(r.c.app.entry(id), undefined, 'stopped and gone from the app');
+    }
+    // the other project is untouched
+    assert.ok(r.store.getThread(b1));
+    assert.equal(r.store.pendingRequests(b1).length, 1);
+    assert.equal(r.store.reportedArtifacts(b1).length, 1);
+    // the sidebar: no chat of it, its entries gone from the lists; the other's kept
+    assert.equal(r.srv.state().chats.some((c: any) => c.cwd === r.project), false);
+    const ui = r.srv.state().ui as any;
+    assert.equal(r.project in ui.hidden, false);
+    assert.ok(other in ui.hidden);
+    assert.deepEqual(ui.folded, [other]);
+    assert.deepEqual(r.store.skillSources().map(x => x.path), [other], 'its skill source rows only');
+    // the module: each chat's deletion, then the project once
+    assert.deepEqual(events.filter(e => e.type === 'deleted').map(e => e.thread).sort(), [a1, a2].sort());
+    assert.deepEqual(events.filter(e => e.type === 'project-deleted'), [{ type: 'project-deleted', project: r.project }]);
+    // nothing on disk is touched: the folder, its files, its .chorus/
+    assert.deepEqual(fs.readdirSync(r.project).sort(), before);
+    assert.equal(fs.readFileSync(path.join(r.project, 'src', 'app.ts'), 'utf8'), 'code');
+    assert.ok(fs.existsSync(path.join(r.project, '.chorus')));
+    // an unknown folder removes nothing
+    assert.deepEqual((await r.api('DELETE', '/api/projects', { folder: path.join(other, 'nope') })).json, { removed: 0 });
+    assert.ok(r.store.getThread(b1));
+  } finally {
+    await r.done();
+  }
+});
+
 test('serve: a dropped file goes into the agent input like a terminal sends it, copied when asked, recorded with the chat', async () => {
   const r = await rig();
   try {

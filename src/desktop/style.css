@@ -953,3 +953,7 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
 .dr-crit { font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; margin-left: 6px; vertical-align: 1px; }
 .dr-offline { font-size: 13px; background: var(--bad-soft); border-radius: 8px; padding: 8px 10px; color: var(--ink-2); margin-bottom: 4px; }
 .dr-offline b { color: var(--ink); }
+
+/* Chorus's folder dialog: what went wrong (New folder, the system dialog), said in the dialog (plan 2026-11-14, Package 10B) */
+.br-error { margin-top: 8px; font-size: 13px; color: var(--bad); background: var(--bad-soft); border-radius: 8px; padding: 6px 10px; }
+.proj-del .body .mono { overflow-wrap: anywhere; }
