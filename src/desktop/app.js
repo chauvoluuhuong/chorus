@@ -1173,7 +1173,7 @@ function memoryHtml() {
       ${m.record?.id === sel.id ? `<pre class="record" style="border-top:1px solid var(--line)">${esc(m.record.text)}</pre>` : ''}</div>`
     : '';
   if (step === 'record') return `<div class="page">${detail || '<div class="card empty">This chat is no longer in Memory.</div>'}</div>`;
-  return `<div class="page" style="max-width:1100px"><h1 class="ph-hide">Memory</h1><p class="lead">Every chat Chorus recorded, in every project: what an agent gets from <span class="mono">get_handoff_context</span> when it continues one. Stored in <span class="mono">${esc(m.where)}</span>.</p>
+  return `<div class="page mem-page"><h1 class="ph-hide">Memory</h1><p class="lead">Every chat Chorus recorded, in every project: what an agent gets from <span class="mono">get_handoff_context</span> when it continues one. Stored in <span class="mono">${esc(m.where)}</span>.</p>
     <div class="toolbar"><input id="mem-q" type="search" placeholder="Search titles, questions, answers, files…" value="${esc(m.q)}" data-input="mem-q" style="max-width:420px"><span class="grow"></span><span class="muted">${m.items.length} chat${m.items.length === 1 ? '' : 's'}</span></div>
     ${m.items.length ? `<div class="mem"><div class="card list rows">${rows}</div>${step === 'list' ? '' : detail}</div>` : `<div class="card empty">${m.q ? 'Nothing matches.' : 'Nothing recorded yet.'}</div>`}</div>`;
 }
