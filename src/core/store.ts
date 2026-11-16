@@ -435,6 +435,11 @@ export class Store {
     return [...latest.values()].map(r => ({ ...r, abs: path.join(this.artifactsDir(r.thread_id), r.path) }));
   }
 
+  /** Every version of every file in the chat's artifacts folder (scanArtifacts adds a row per new content): grows on each edit. */
+  artifactVersions(threadId: string): number {
+    return (this.db.prepare('SELECT COUNT(*) AS n FROM artifacts WHERE thread_id = ?').get(threadId) as { n: number }).n;
+  }
+
   logMcpCall(threadId: string | undefined, tool: string) {
     this.db.prepare('INSERT INTO mcp_calls (thread_id,tool,ts) VALUES (?,?,?)').run(threadId ?? null, tool, now());
   }

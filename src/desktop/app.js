@@ -205,10 +205,10 @@ function onState(st) {
   }
   const previousNews = S.state?.notifications;
   const doctorChanged = JSON.stringify(S.state?.doctor) !== JSON.stringify(st.doctor);
-  const artOf = x => (S.view.name === 'chat' ? x?.chats.find(c => c.id === S.view.id)?.artifacts : undefined);
+  const artOf = x => { const c = S.view.name === 'chat' ? x?.chats.find(k => k.id === S.view.id) : undefined; return c ? `${c.artifacts}/${c.artifactsRev}` : undefined; };
   const artWas = artOf(S.state);
   S.state = st;
-  for (const c of st.chats) noteCount(`art:${c.id}`, c.artifacts ?? 0);
+  for (const c of st.chats) noteCount(`art:${c.id}`, c.artifacts ?? 0), noteCount(`artrev:${c.id}`, c.artifactsRev ?? 0);
   // an agent turned off shows its details on the Doctor; once it works again the Doctor says so
   for (const a of st.doctor?.agents ?? []) {
     if (a.state === 'off' && !S.docOff?.has(a.agent)) ((S.docOff ??= new Set()).add(a.agent), S.docOpen.add(a.agent), (S.docBackOn = null));
@@ -658,6 +658,8 @@ function countFlash(key) {
   const c = counts.get(key), age = countAge(key);
   return age >= 0 && c.n > c.from ? ` flash" style="animation-delay:-${age}ms` : '';
 }
+/** The Artifacts button flashes when the count grew or an artifact got a new version (an edit); only the count rolls. */
+const artFlash = id => countFlash(`art:${id}`) || countFlash(`artrev:${id}`);
 /** The number itself: the old one rolls out and the new one in while the change is fresh; from nothing it just appears. */
 function countNum(key, n) {
   const c = counts.get(key), age = countAge(key);
@@ -1895,7 +1897,7 @@ function drawSheet() {
   el.innerHTML = `<div class="sheet" role="dialog" aria-label="This chat"><div class="grab"></div>
     <div class="sh-meta"><div><span class="badge ${esc(c.agent)}">${esc(AGENT[c.agent]?.name ?? c.agent)}</span> ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}${c.skip ? ' <span class="badge warn">skip</span>' : ''}</div><div class="mono path">${esc(tilde(c.cwd))}</div>${meter(c.usage)}</div>
     <button data-act="handoff" data-arg="${esc(c.id)}"><span class="i">⇄</span>Hand off to another agent</button>
-    ${c.sub ? '' : `<button class="${countFlash(`art:${c.id}`).trim()}" data-act="drawer-to" data-arg="artifacts"><span class="i">▤</span>Artifacts${c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : ''}</button>
+    ${c.sub ? '' : `<button class="${artFlash(c.id).trim()}" data-act="drawer-to" data-arg="artifacts"><span class="i">▤</span>Artifacts${c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : ''}</button>
     <button data-act="drawer-to" data-arg="activity"><span class="i">≋</span>Activity</button>
     <button data-act="drawer-to" data-arg="record"><span class="i">◫</span>Record</button>`}
     <button class="danger" data-act="delete" data-arg="${esc(c.id)}"><span class="i">🗑</span>Delete this chat</button></div>`;
@@ -1922,7 +1924,7 @@ function renderChatParts() {
       ${c.model || c.effort ? `<span class="model">· ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}</span>` : ''}${c.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${meter(c.usage)}
       <span class="mono faint path" title="${esc(c.cwd)}">‎${esc(tilde(c.cwd))}‎</span>${c.toast ? `<span class="badge ok">${esc(c.toast)}</span>` : ''}</div>
     <button class="btn" data-act="handoff" data-arg="${esc(c.id)}" title="Continue this chat with another agent" aria-label="Hand off">${S.size === 'desktop' ? '⇄ Hand off' : '⇄'}</button>
-    ${c.sub ? '' : `${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰') : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', countFlash(`art:${c.id}`))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}`}
+    ${c.sub ? '' : `${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰') : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', artFlash(c.id))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}`}
     <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat" aria-label="Delete this chat">🗑</button>`;
   // a phone: a task chat's panel is tabs beside the chat (Chat · Steps · Plan), one shown at a time
   const tabs = S.size === 'phone' ? window.choruspro?.sideTabs?.(c.id) : null;

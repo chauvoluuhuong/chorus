@@ -1132,6 +1132,8 @@ export class ChorusServer {
         skip: !!t?.skip_permissions,
         usage: e.meta?.usage ?? null,
         artifacts: (e.meta?.artifacts ?? 0) + c.store.reportedArtifacts(e.id).length,
+        // grows on a new artifact and on every new version of one (plan 2026-11-14, Package 5A): the Artifacts button flashes
+        artifactsRev: this.artifactsRev(e.id),
         toast: e.meta?.toast ?? null,
         updated: t?.updated ?? null,
         // a sub thread: its main chat and its status (null for any other chat)
@@ -1155,6 +1157,42 @@ export class ChorusServer {
       // the doctor's short check, the one status of the agents (null until the first one is done)
       doctor: this.agentCheck ? { at: this.agentCheck.at, ms: this.agentCheck.report.ms, checking: this.checkShown, agents: this.agentCheck.report.agents } : this.checking ? { checking: true, agents: null } : null,
     };
+  }
+
+  /** Edits of reported artifacts seen per chat (in memory: after a restart it counts from 0, and nothing flashes on page load). */
+  private artEdits = new Map<string, number>();
+  /** Per reported target: its row id and file time when last looked at. */
+  private artSeen = new Map<string, { id: number; mtime?: number }>();
+  private artLooked = new Map<string, number>();
+
+  /**
+   * A number that grows on a new artifact and on every new version of one: the versions of the files in the chat's artifacts
+   * folder, plus the edits of its reported files (a changed file time) and the targets it reported again. The file times are
+   * read at most once every 2 s per chat, for the 50 newest reported files; the first look only remembers them.
+   */
+  artifactsRev(id: string): number {
+    const c = this.c;
+    const now = Date.now();
+    if (now - (this.artLooked.get(id) ?? 0) >= 2000) {
+      this.artLooked.set(id, now);
+      let edits = this.artEdits.get(id) ?? 0;
+      for (const r of c.store.reportedArtifacts(id).slice(0, 50)) {
+        const key = `${id}\0${r.target}`;
+        let mtime: number | undefined;
+        if (!/^https?:\/\//i.test(r.target)) {
+          try {
+            mtime = fs.statSync(r.target).mtimeMs;
+          } catch {
+            /* gone, or not a file: skipped */
+          }
+        }
+        const had = this.artSeen.get(key);
+        if (had && (had.id !== r.id || (mtime !== undefined && had.mtime !== undefined && mtime !== had.mtime))) edits++;
+        this.artSeen.set(key, { id: r.id, mtime: mtime ?? had?.mtime });
+      }
+      this.artEdits.set(id, edits);
+    }
+    return c.store.artifactVersions(id) + (this.artEdits.get(id) ?? 0);
   }
 
   /** Pushes the state to every client when it changed (called on events and twice a second). */
