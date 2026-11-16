@@ -1152,7 +1152,7 @@ export class ChorusServer {
       // window would redraw the inbox under the mouse
       approvals: this.approvalsNow().map(({ waiting, ...x }) => ({ ...x, since: Math.round(Date.now() / 1000 - waiting) })),
       ui: this.ui(),
-      notice: this.app.notice,
+      notice: this.noticeNow(),
       dialogs: [...this.dialogs.values()].map(x => x.d),
       // the doctor's short check, the one status of the agents (null until the first one is done)
       doctor: this.agentCheck ? { at: this.agentCheck.at, ms: this.agentCheck.report.ms, checking: this.checkShown, agents: this.agentCheck.report.agents } : this.checking ? { checking: true, agents: null } : null,
@@ -1193,6 +1193,17 @@ export class ChorusServer {
       this.artEdits.set(id, edits);
     }
     return c.store.artifactVersions(id) + (this.artEdits.get(id) ?? 0);
+  }
+
+  /**
+   * The controller's warning line, without a "context not loaded" about a sub thread: that warning is for a hand-off (a chat that
+   * should load its parent's record); a sub thread gets its work from its brief.
+   */
+  private noticeNow(): string {
+    const n = this.app.notice;
+    if (!/context not loaded/.test(n)) return n;
+    const subs = this.c.store.subThreads();
+    return subs.some(t => n.includes(`"${t.title}"`)) ? '' : n;
   }
 
   /** Pushes the state to every client when it changed (called on events and twice a second). */
