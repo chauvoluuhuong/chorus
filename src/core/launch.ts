@@ -3,7 +3,8 @@
 import { isSea } from 'node:sea';
 import path from 'node:path';
 import { buildHeadless as coreHeadless, buildInteractive as coreInteractive, type Launch, type McpServer } from '@chauvoluuhuong/chorus-core';
-import { APPROVAL_NOTE, ARTIFACT_NOTE, TOOL_NAMES } from '../mcp/server.ts';
+import { standingNote, TOOL_NAMES } from '../mcp/server.ts';
+import { TOOL_NAMES as SUB_TOOL_NAMES } from '../serve/subthreads.ts';
 import type { AgentId } from './types.ts';
 
 export { homes, run, SCRUB_ENV, SKIP_FLAG, writeAgyMcpConfig, writeAgyRules, type Launch, type RunResult } from '@chauvoluuhuong/chorus-core';
@@ -45,9 +46,9 @@ export interface InteractiveOpts {
   moreTools?: string[];
 }
 
-/** Where a thread's artifacts go, said to the agent (architecture §9). Claude and agy also get it through the MCP server's instructions. */
-export function artifactNote(project: string, threadId: string): string {
-  return `This chat is Chorus thread ${threadId}. ${ARTIFACT_NOTE} ${APPROVAL_NOTE}`;
+/** The standing note of a chat (src/mcp/server.ts standingNote): the intro first, then the thread id, artifacts, approvals, sub threads. */
+export function artifactNote(_project: string, threadId: string): string {
+  return standingNote(threadId);
 }
 
 export function mcpCommand(project: string, threadId: string, home?: string) {
@@ -56,7 +57,8 @@ export function mcpCommand(project: string, threadId: string, home?: string) {
   return { command: process.execPath, args: [...entry, 'mcp', '--project', project, '--thread', threadId, ...(home ? ['--home', home] : [])] };
 }
 
-const server = (o: { project: string; threadId: string; home?: string }): McpServer => ({ name: 'chorus', ...mcpCommand(o.project, o.threadId, o.home), tools: [...TOOL_NAMES] });
+// the sub thread tools are served by `chorus serve` through the bridge (src/mcp/pro.ts), and are Chorus's own: no prompt for them
+const server = (o: { project: string; threadId: string; home?: string }): McpServer => ({ name: 'chorus', ...mcpCommand(o.project, o.threadId, o.home), tools: [...TOOL_NAMES, ...SUB_TOOL_NAMES] });
 
 export function buildHeadless(agent: AgentId, o: LaunchOpts): Launch {
   return coreHeadless(agent, { prompt: o.prompt, cwd: o.cwd, resumeId: o.resumeId, model: o.model, mcp: server(o), instructions: artifactNote(o.project, o.threadId) });

@@ -205,8 +205,23 @@ function onState(st) {
   }
   const previousNews = S.state?.notifications;
   const doctorChanged = JSON.stringify(S.state?.doctor) !== JSON.stringify(st.doctor);
+  const artOf = x => { const c = S.view.name === 'chat' ? x?.chats.find(k => k.id === S.view.id) : undefined; return c ? `${c.artifacts}/${c.artifactsRev}` : undefined; };
+  const artWas = artOf(S.state);
   S.state = st;
-  for (const c of st.chats) noteCount(`art:${c.id}`, c.artifacts ?? 0);
+  for (const c of st.chats) noteCount(`art:${c.id}`, c.artifacts ?? 0), noteCount(`artrev:${c.id}`, c.artifactsRev ?? 0);
+  // an agent turned off shows its details on the Doctor; once it works again the Doctor says so
+  for (const a of st.doctor?.agents ?? []) {
+    if (a.state === 'off' && !S.docOff?.has(a.agent)) ((S.docOff ??= new Set()).add(a.agent), S.docOpen.add(a.agent), (S.docBackOn = null));
+    else if (a.state !== 'off' && S.docOff?.has(a.agent) && !st.doctor.checking) (S.docOff.delete(a.agent), (S.docBackOn = a.agent));
+  }
+  // an unlocked sub thread that is not the chat in front locks again (also after a reload, when the page forgot it unlocked it)
+  for (const c of st.chats) {
+    if (!c.sub?.unlocked || (S.view.name === 'chat' && S.view.id === c.id) || S.locking?.has(c.id)) continue;
+    (S.locking ??= new Set()).add(c.id);
+    void api('POST', `/api/chats/${c.id}/unlock`, { on: false }).catch(() => {}).finally(() => S.locking.delete(c.id));
+  }
+  // a phone's ⋯ sheet open on this chat: its Artifacts row flashes like the chat head's button when the count grows
+  if (S.sheet === 'chat' && artOf(st) !== artWas) drawSheet();
   if (JSON.stringify(previousNews) !== JSON.stringify(st.notifications) && !$('#news').hidden && !S.newsDetail) void loadNews();
   if (!S.homeGuess) S.homeGuess = st.project.split('/').slice(0, 3).join('/');
   // a request no longer pops up at the bottom (owner, 2026-11-07): it waits in Approvals and the top bar's "waiting" button
@@ -332,6 +347,11 @@ function go(view, push = true) {
   drawSheet();
   if (push && S.view && JSON.stringify(S.view) !== JSON.stringify(view)) S.history.push(S.view);
   S.history = S.history.slice(-30);
+  // an unlocked sub thread locks again when you open another chat (or leave it)
+  if (S.unlockedChat && !(view.name === 'chat' && view.id === S.unlockedChat)) {
+    void api('POST', `/api/chats/${S.unlockedChat}/unlock`, { on: false }).catch(() => {});
+    S.unlockedChat = null;
+  }
   S.view = view;
   S.drawerData = null;
   if (view.name === 'pro-ended' && !S.endedSeen) (S.endedSeen = true), remember('ended', true);
@@ -415,7 +435,7 @@ async function onProStatus(st) {
       document.head.append(Object.assign(document.createElement('link'), { id: 'pro-css', rel: 'stylesheet', href: '/api/pro/ui.css' }), js);
     });
   }
-  window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: () => { renderChrome(); fillChatSlots(); if (['new', 'approvals', 'home', 'more'].includes(S.view.name)) renderView(); else if (S.view.name === 'chat') renderChatParts(); }, doctor: () => go({ name: 'doctor' }), toast, confirmDelete, openChat: id => go({ name: 'chat', id }), upgrade, back: () => history.length && go(S.history.pop() ?? startView(), false) });
+  window.choruspro?.init?.({ go: id => go(id === 'skills' ? { name: 'skills' } : { name: 'pro', id }), skillPicker, noteCount, countFlash, countNum, newChat: folder => go({ name: 'new', folder }), refresh: () => { renderChrome(); fillChatSlots(); if (['new', 'approvals', 'home', 'more'].includes(S.view.name)) renderView(); else if (S.view.name === 'chat') renderChatParts(); }, doctor: () => go({ name: 'doctor' }), toast, confirmDelete, openChat: id => go({ name: 'chat', id }), upgrade, back: () => history.length && go(S.history.pop() ?? startView(), false) });
   if (S.view.name === 'pro' && !st.unlocked) return go(startView());
   // back from paying (the browser's link to /api/pro/paid, or Check again): the server's answer, never the browser's word
   if (S.view.name === 'paying' && st.plan === 'pro') return go({ name: 'pro-paid' });
@@ -583,11 +603,32 @@ function treeHtml(keep) {
     tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-rm" data-act="rm-project" data-arg="${esc(cwd)}" title="Remove from the sidebar (the folder and its chats are kept)" aria-label="Remove ${esc(base(cwd))} from the sidebar">×</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button></div>`;
     if (folded) continue;
     if (!keep) tree += `<div data-pro-slot="project" data-cwd="${esc(cwd)}"></div>`;
+    // a main chat and its sub threads: the main chat first, its sub threads right under it (plan 2026-11-14, Package 4A)
+    const subsOf = id => chats.filter(k => k.sub?.parent === id);
+    const ordered = [];
     for (const c of chats) {
+      if (c.sub && chats.some(p => p.id === c.sub.parent)) continue;
+      ordered.push(c, ...subsOf(c.id));
+    }
+    for (const c of ordered) {
       if (!keep && window.choruspro?.hidesChat?.(c.id)) continue; // shown under its task
-      const child = c.parentId && chats.some(p => p.id === c.parentId);
-      tree += `<button class="chat-row${child ? ' child' : ''}${v.name === 'chat' && v.id === c.id ? ' on' : ''}" data-act="chat" data-arg="${esc(c.id)}" title="${esc(c.title)} · ${esc(AGENT[c.agent]?.name ?? c.agent)} · ${esc(STATE_LABEL[c.state] ?? '')}">
-        ${child ? '<span class="arrow">↳</span>' : ''}<span class="dot ${esc(c.state)}"></span><span class="t">${esc(c.title)}</span><span class="badge mini ${esc(c.agent)}">${esc(AGENT[c.agent]?.letter ?? '?')}</span></button>`;
+      const kids = subsOf(c.id);
+      const sub = !!c.sub && chats.some(p => p.id === c.sub.parent);
+      const child = !sub && c.parentId && chats.some(p => p.id === c.parentId);
+      const on = v.name === 'chat' && v.id === c.id ? ' on' : '';
+      const mark = `<span class="badge mini ${esc(c.agent)}">${esc(AGENT[c.agent]?.letter ?? '?')}</span>`;
+      const title = `${esc(c.title)} · ${esc(AGENT[c.agent]?.name ?? c.agent)} · ${esc(STATE_LABEL[c.state] ?? '')}`;
+      if (sub) {
+        // a sub thread: dimmed, watch-only (or typing while unlocked), no badge of its own: the group's is on its main chat
+        const last = kids.length === 0 && subsOf(c.sub.parent).at(-1)?.id === c.id;
+        tree += `<button class="chat-row sub-row${on}${c.sub.unlocked ? ' typing' : ''}" data-act="chat" data-arg="${esc(c.id)}" title="${title} · a sub thread">
+        <span class="elbow">${last ? '└' : '├'}</span><span class="dot ${esc(c.state)}"></span><span class="t">${esc(c.title)}</span><span class="watch">${c.sub.unlocked ? 'typing' : 'watch'}</span>${mark}</button>`;
+        continue;
+      }
+      // the owner of sub threads: OWNER after its title, and the group's one badge (its own waiting items and its sub threads')
+      const group = kids.length ? listed().filter(a => a.id === c.id || kids.some(k => k.id === a.id)).length : 0;
+      tree += `<button class="chat-row${child ? ' child' : ''}${kids.length ? ' owner' : ''}${on}" data-act="chat" data-arg="${esc(c.id)}" title="${title}${kids.length ? ` · owner of ${kids.length} sub thread${kids.length === 1 ? '' : 's'}` : ''}">
+        ${child ? '<span class="arrow">↳</span>' : ''}<span class="dot ${esc(c.state)}"></span><span class="t">${esc(c.title)}</span>${kids.length ? '<span class="own">OWNER</span>' : ''}${group ? `<span class="grp-badge" aria-label="${group} waiting">${group}</span>` : ''}${mark}</button>`;
     }
   }
   return tree;
@@ -617,6 +658,8 @@ function countFlash(key) {
   const c = counts.get(key), age = countAge(key);
   return age >= 0 && c.n > c.from ? ` flash" style="animation-delay:-${age}ms` : '';
 }
+/** The Artifacts button flashes when the count grew or an artifact got a new version (an edit); only the count rolls. */
+const artFlash = id => countFlash(`art:${id}`) || countFlash(`artrev:${id}`);
 /** The number itself: the old one rolls out and the new one in while the change is fresh; from nothing it just appears. */
 function countNum(key, n) {
   const c = counts.get(key), age = countAge(key);
@@ -652,7 +695,7 @@ function renderChrome() {
       <button class="new${v.name === 'new' && !v.from && !v.folder ? ' on' : ''}" data-act="new"><span class="plus">${PLUS}</span>New chat<kbd style="margin-left:auto">${MOD}N</kbd></button>
       <button class="${on('approvals').trim()}${countFlash('approvals')}" data-act="approvals"><span class="ico">⚑</span>Approvals${waiting ? `<span class="count">${countNum('approvals', waiting)}</span>` : ''}</button>
       <button class="${on('memory').trim()}" data-act="memory"><span class="ico">◫</span>Memory</button>
-      <button class="${on('skills').trim()}" data-act="skills"><span class="ico">✦</span>Skills</button>
+      <button class="${on('skills').trim()}" data-act="skills"><span class="ico">⇄</span>Sync skills</button>
       ${proSlot('nav')}
     </nav>
     ${proSlot('side')}
@@ -672,7 +715,7 @@ function renderChrome() {
     if (chat) crumbs = `<a data-act="fold-open" data-arg="${esc(chat.cwd)}">${esc(base(chat.cwd))}</a><span class="sep">›</span><span class="here">${window.choruspro?.chatCrumb?.(chat.id) ?? esc(chat.title)}</span>`;
     else if (v.name === 'new') crumbs = `<span>${esc(base(S.form?.folder ?? st?.project ?? ''))}</span><span class="sep">›</span><span class="here">${v.from ? 'Hand off' : 'New chat'}</span>`;
     else if (v.name === 'pro') crumbs = window.choruspro?.crumbs?.(v.id) ?? '';
-    else crumbs = `<span class="here">${{ approvals: 'Approvals', memory: 'Memory', skills: 'Skills', doctor: 'Doctor' }[v.name] ?? ''}</span>`;
+    else crumbs = `<span class="here">${{ approvals: 'Approvals', memory: 'Memory', skills: 'Sync skills', doctor: 'Doctor' }[v.name] ?? ''}</span>`;
     $('#top').className = '';
     $('#top').innerHTML = `
     <button class="icon-btn menu-btn" data-act="menu" aria-label="Chats and projects" aria-expanded="${$('#app').classList.contains('side-open')}">☰</button>
@@ -724,7 +767,7 @@ function phoneTop(chat) {
     t.innerHTML = window.choruspro?.crumbs?.(v.id) ?? '';
     title = esc(t.content.querySelector('.here')?.textContent ?? '');
   } else {
-    title = { approvals: 'Approvals', more: 'More', new: v.from ? 'Hand off' : 'New chat', skills: 'Skills', doctor: 'Doctor', unlock: 'Unlock' }[v.name] ?? '';
+    title = { approvals: 'Approvals', more: 'More', new: v.from ? 'Hand off' : 'New chat', skills: 'Sync skills', doctor: 'Doctor', unlock: 'Unlock' }[v.name] ?? '';
   }
   return `${root ? '' : ico('back', 'Back', '‹')}<div class="ph-title">${title}</div>${icons}`;
 }
@@ -786,6 +829,12 @@ function renderView() {
     const q = $('#cl-q');
     q?.focus();
     q?.setSelectionRange(q.value.length, q.value.length);
+  }
+  if (v.name === 'skills' && S.sk?.focus) {
+    const q = $('#sk-q');
+    q?.focus();
+    q?.setSelectionRange(q.value.length, q.value.length);
+    S.sk.focus = false;
   }
   if (v.name === 'memory') {
     const q = $('#mem-q');
@@ -857,12 +906,12 @@ function moreHtml() {
   const r = (act, ic, t, val = '') => `<button class="mrow" data-act="${act}"><span class="ico">${ic}</span>${t}<span class="val">${val}</span><span class="chev">›</span></button>`;
   const marks = Object.keys(AGENT).map(a => { const i = drAgent(a) ?? { agent: a }; return `<span class="badge mini ${a}">${AGENT[a].letter}</span>${agentMark(i, agentStatus(i, false))}`; }).join(' ');
   const unread = st?.notifications?.unread ?? 0;
-  const on = S.skills?.items?.filter(s => s.on).length;
+  const on = S.skillsAll?.skills.length;
   const c = S.doctor?.chorus;
   // a paid bundle older than this page draws its sidebar items whole: they go in Team, as they come
   const parts = !window.choruspro || !!window.choruspro.sideTabs;
   return `<div class="more">
-    <div><div class="hm-h">Library</div><div class="card">${r('memory', '◫', 'Memory')}${r('skills', '✦', 'Skills', on != null ? `${on} on` : '')}</div></div>
+    <div><div class="hm-h">Library</div><div class="card">${r('memory', '◫', 'Memory')}${r('skills', '⇄', 'Sync skills', on != null ? `${on}` : '')}</div></div>
     <div><div class="hm-h">Team</div><div class="card">${parts ? proSlot('nav', ' data-part="team"') : proSlot('nav', ' class="nav old-nav"')}</div></div>
     <div><div class="hm-h">This Mac</div><div class="card">${parts ? proSlot('nav', ' data-part="mac"') : ''}${r('doctor', '✚', 'Doctor', marks)}${r('news-toggle', '♢', 'Notifications', unread ? `${unread} new` : '')}${r('export', '⤓', S.exporting ? 'Exporting…' : 'Export all chats', 'to Downloads')}${st?.update ? r('update-toggle', '↑', `Update to ${esc(st.update.version)}`) : ''}</div></div>
     ${planBox() ? `<div><div class="hm-h">Plan</div>${planBox()}</div>` : ''}
@@ -898,7 +947,7 @@ function agentRows() {
     .map(a => {
       const live = drAgent(a.id) ?? { agent: a.id };
       const st = agentStatus(live, false);
-      const sub = st.kind === 'plain' ? 'checking…' : live.state === 'missing' ? '<span class="bad">Not installed</span>' : live.state === 'needs-login' ? `<span class="bad">${esc(live.version ?? '')} · Not logged in</span>` : `${esc(live.version ?? '')} · ${esc(live.login === 'yes' ? 'Logged in' : st.label)}`;
+      const sub = st.kind === 'plain' ? 'checking…' : live.state === 'missing' ? '<span class="bad">Not installed</span>' : live.state === 'needs-login' ? `<span class="bad">${esc(live.version ?? '')} · Not logged in</span>` : live.state === 'off' ? `<span class="bad">${esc(live.version ?? '')} · Can't be used · see Doctor</span>` : `${esc(live.version ?? '')} · ${esc(live.login === 'yes' ? 'Logged in' : st.label)}`;
       const q = a.quota ? ` · <span class="${a.quota.level === 'err' ? 'bad' : a.quota.level === 'warn' ? 'warn' : ''}">plan ${esc(a.quota.text)}</span>` : '';
       return `<button class="${f.agent === a.id && !window.choruspro?.teammatePicked?.() ? 'on' : ''}" data-act="nc-agent" data-arg="${a.id}"><span class="nc-mi"><span class="badge mini ${a.id}">${AGENT[a.id].letter}</span>${AGENT[a.id].name}${from?.agent === a.id ? ' <span class="faint">(same agent)</span>' : ''}</span><span class="nc-sub">${sub}${q}</span></button>`;
     })
@@ -1117,11 +1166,15 @@ function memoryHtml() {
     ${m.items.length ? `<div class="mem"><div class="card list rows">${rows}</div>${step === 'list' ? '' : detail}</div>` : `<div class="card empty">${m.q ? 'Nothing matches.' : 'Nothing recorded yet.'}</div>`}</div>`;
 }
 
-/* Skills: one library for the three agents */
+/* Sync skills: every skill Chorus can see, a check per CLI (plan 2026-11-14, Stage 6; mockup skills-sync.html scenes 1 and 2) */
+
+const SK_CLIS = ['claude', 'codex', 'agy'];
+/** Where a sync puts its link, per CLI (src/core/skillsync.ts HOME_SKILLS). */
+const SK_HOME = { claude: '~/.claude/skills', codex: '~/.codex/skills', agy: '~/.gemini/config/skills' };
 
 async function loadSkills() {
   try {
-    S.skills = await api('GET', '/api/skills');
+    S.skillsAll = await api('GET', '/api/skills/all');
   } catch (e) {
     toast(e.message);
   }
@@ -1129,14 +1182,41 @@ async function loadSkills() {
 }
 
 function skillsHtml() {
-  const k = S.skills;
-  if (!k) return '<div class="page"><h1 class="ph-hide">Skills</h1><p class="lead">Loading…</p></div>';
-  return `<div class="page"><h1 class="ph-hide">Skills</h1><p class="lead">One library for Claude Code, Codex and Antigravity: a skill turned on here is linked into each agent's own skills folder when a chat starts. Library: <span class="mono">${esc(k.where)}</span></p>
-    <div class="toolbar"><span class="grow"></span><button class="btn" data-act="sk-new">+ New skill</button></div>
-    <div class="card list">${k.items.length ? k.items.map(s => `<div class="item skill"><input type="checkbox" class="switch" data-change="sk-toggle" data-arg="${esc(s.folder)}"${s.on ? ' checked' : ''} aria-label="${esc(s.name)} on or off"><div class="grow"><div style="font-weight:600">${esc(s.name)}</div><div class="muted" style="font-size:13px">${esc(s.description)}</div></div><button class="btn" data-act="sk-edit" data-arg="${esc(s.folder)}">Edit</button></div>`).join('') : '<div class="empty">No skills in the library yet.</div>'}</div>
-    <div class="section-title">Found in the agents' own folders</div>
-    <div class="card list">${k.found.length ? k.found.map(f => `<div class="item skill"><span class="badge mini ${esc(f.agent)}">${esc(AGENT[f.agent]?.letter ?? '·')}</span><div class="grow"><div style="font-weight:600">${esc(f.name)}</div><div class="muted mono">${esc(tilde(f.from))}</div></div><button class="btn" data-act="sk-import" data-arg="${esc(f.dir)}">Import</button></div>`).join('') : '<div class="empty">Nothing new to import.</div>'}</div></div>`;
+  const k = S.skillsAll;
+  const u = (S.sk ??= { tab: 'list', q: '', filter: 'all' });
+  if (!k) return '<div class="page"><h1 class="ph-hide">Sync skills</h1><p class="lead">Loading…</p></div>';
+  if (u.tab === 'sources') return skillSourcesHtml(k);
+  const part = s => SK_CLIS.some(c => !s.state[c]);
+  const q = u.q.trim().toLowerCase();
+  const rows = k.skills.filter(s => (u.filter === 'all' || part(s)) && (!q || `${s.name} ${s.description}`.toLowerCase().includes(q)));
+  const mark = a => `<span class="badge mini ${a}">${AGENT[a].letter}</span>`;
+  const check = (s, a) => {
+    const st = s.state[a];
+    const fixed = st === 'own' || st === 'there';
+    const title = st === 'own' ? 'It lives in this agent\'s own folder' : st === 'there' ? 'This agent has it already (not a link Chorus made)' : st === 'sync' ? 'Remove the link' : `Link it into ${SK_HOME[a]}`;
+    return `<span class="sk-cc"><button class="sk-ck ${fixed ? 'own' : st}"${fixed ? ' disabled' : ` data-act="sk-tick" data-arg="${esc(s.dir)}" data-cli="${a}" data-on="${st ? '0' : '1'}"`} title="${esc(title)}" aria-label="${esc(`${s.name} for ${AGENT[a].name}: ${fixed ? 'lives here' : st ? 'synced' : 'not there'}`)}" aria-pressed="${!!st}">✓</button><small>${fixed ? 'lives here' : st === 'sync' ? 'synced' : ''}</small></span>`;
+  };
+  return `<div class="page sk-page"><h1 class="ph-hide">Sync skills</h1><p class="lead">Every skill Chorus can see, and which of your agents has it. Tick an agent to share a skill with it: Chorus puts a link in that agent's skills folder. Nothing is copied, and the skill itself is never changed.</p>
+    <div class="toolbar sk-bar"><input id="sk-q" type="search" placeholder="Find a skill" value="${esc(u.q)}" data-input="sk-q"><div class="seg"><button class="${u.filter === 'all' ? 'on' : ''}" data-act="sk-filter" data-arg="all">All ${k.skills.length}</button><button class="${u.filter === 'part' ? 'on' : ''}" data-act="sk-filter" data-arg="part">Not on every agent</button></div><button class="btn" data-act="sk-tab" data-arg="sources">Sources · ${k.sources.length}</button><button class="btn" data-act="sk-new">+ New skill</button><button class="btn primary" data-act="sk-add">＋ Add…</button></div>
+    <div class="sk-tbl"><div class="sk-tr th"><span>Skill</span><span class="w">Where it lives</span>${SK_CLIS.map(a => `<span class="c">${mark(a)}<span>${AGENT[a].name}</span></span>`).join('')}</div>
+    ${rows.map(s => `<div class="sk-tr"><div class="sk-name"><b>${esc(s.name)}</b>${s.library ? `<button class="sk-edit" data-act="sk-edit" data-arg="${esc(s.folder)}" title="Open its SKILL.md">Edit</button>` : ''}<small>${esc(s.description)}</small></div><span class="wh" title="${esc(s.dir)}">${esc(s.where)}</span>${SK_CLIS.map(a => check(s, a)).join('')}</div>`).join('') || `<div class="empty">${q || u.filter !== 'all' ? 'No skill matches.' : 'No skills yet. Add a folder of skills, or one skill.'}</div>`}</div>
+    <div class="sk-legend"><span><span class="sk-ck own">✓</span>lives in that agent's folder</span><span><span class="sk-ck sync">✓</span>synced by Chorus (a link)</span><span><span class="sk-ck"></span>not there · click to sync</span></div></div>`;
 }
+
+function skillSourcesHtml(k) {
+  const mark = a => `<span class="badge mini ${a}">${AGENT[a].letter}</span>`;
+  const n = c => `${c} skill${c === 1 ? '' : 's'}`;
+  const row = s => {
+    const icon = s.cli && SK_CLIS.includes(s.cli) && s.label === AGENT[s.cli].name ? mark(s.cli) : `<span class="sk-src-mk">${s.fixed ? '·' : s.kind === 'skill' ? '1' : '+'}</span>`;
+    const what = s.fixed ? `${esc(s.label ?? '')} · ${n(s.count)} · always read` : !s.reachable ? `${n(0)} · not reachable now` : s.kind === 'skill' ? `one skill · ${esc(s.skill ?? '')}` : n(s.count);
+    return `<div class="sk-fr">${icon}<span class="p" title="${esc(s.path)}">${esc(s.show ?? s.path)}</span><small>${what}</small>${s.fixed ? '' : `<button class="btn sm" data-act="sk-src-rm" data-arg="${esc(s.path)}">Remove</button>`}</div>`;
+  };
+  return `<div class="page sk-page"><h1 class="ph-hide">Where skills come from</h1><p class="lead">Your agents' own folders are always read. Add anything else: a folder that holds many skills, or one single skill. Choose either with the same button; Chorus sees which it is.</p>
+    <div class="sk-fl">${k.sources.map(row).join('')}
+      <div class="sk-fr add"><button class="btn primary" data-act="sk-add">＋ Add a folder or a skill…</button><small>Opens the folder chooser. A folder with a SKILL.md in it is added as one skill; any other folder is read for the skills inside it. Removing one deletes nothing: only the links Chorus made for its skills go.</small></div>
+    </div><div style="margin-top:12px"><button class="link-btn" data-act="sk-tab" data-arg="list">‹ Back to Sync skills</button></div></div>`;
+}
+
 
 /* ---------- the doctor (docs/doctor.md §6; looks and words: docs/mockups/desktop-doctor.html) ---------- */
 // One doctor. The server's short check, pushed with the state (S.state.doctor), is the only status of the agents: the sidebar,
@@ -1144,7 +1224,7 @@ function skillsHtml() {
 // the first-launch screen and the Doctor page draw the same rows (doctorRow). Startup, Run test, Check again, an install, a
 // login, a detailed test and the window coming back to the front all end in a new check on the server, which every window gets.
 
-const DR_STEPS = 7;
+const DR_STEPS = 8;
 const DR_METHOD = { native: 'native installer', npm: 'npm', brew: 'Homebrew', other: 'installed by hand' };
 /** What a failing detailed check means for the user (the failure banner). */
 const DR_EFFECT = {
@@ -1155,8 +1235,16 @@ const DR_EFFECT = {
   mcp: "the agent cannot reach Chorus's tools, so handoff and memory do not work",
   resume: 'a chat cannot be continued after Chorus restarts',
   approval: "Chorus cannot see the agent's permission prompts, so they do not reach Approvals",
+  'turn-end': 'Chorus cannot see when a turn ends, so a main chat or a task is not told that the work is done',
 };
-const FR_TESTS = { envelope: "Starts a chat with Chorus's note", hello: "Reads the agent's replies", shell: 'Shows commands and their output', transcript: 'Saves chat history', mcp: 'Uses Chorus tools', resume: 'Resumes a chat', approval: 'Shows approval requests' };
+/** What an off agent cannot do, per critical scenario (the Doctor's banner when a critical check failed; mockup
+ *  critical-test-provider-gate.html). Anything else: the scenario's own one-line reason. */
+const OFF_EFFECT = {
+  envelope: n => `Chorus's note did not reach ${n}, so a ${n} chat would not know where to save files for you or how to ask you for approval.`,
+  mcp: n => `Chorus could not reach ${n} through its own tools, so a ${n} chat could not share memory, hand off or ask you for approval.`,
+  'turn-end': n => `Chorus could not see when a ${n} turn ends, so it could not tell a main chat or a task that the work is done.`,
+};
+const FR_TESTS = { envelope: "Starts a chat with Chorus's note", hello: "Reads the agent's replies", shell: 'Shows commands and their output', transcript: 'Saves chat history', mcp: 'Uses Chorus tools', resume: 'Resumes a chat', approval: 'Shows approval requests', 'turn-end': 'Sees when a turn ends' };
 const FR_IDS = Object.keys(FR_TESTS);
 /** A login outside Chorus (in a terminal) shows when the window comes back to the front (recheckOnFocus); Check again stays for
  *  when it does not, or the window never lost focus. */
@@ -1267,6 +1355,8 @@ function agentStatus(a, jobs = true) {
     return s('warn', 'Not logged in', `Log in to use it here. ${LOGIN_HINT}`, [['Log in', 'doc-run', `${a.agent}:login`, true], ['Check again', 'doc-recheck', a.agent]]);
   }
   if (deep && !deep.done) return s('plain', `Detailed test · ${deep.results.length} of ${DR_STEPS}`, `Now: ${FR_TESTS[FR_IDS[deep.results.length]] ?? 'finishing'}`, [], true);
+  // a critical check of this version failed: off in Chorus until a test passes (the Doctor's banner says why and what to do)
+  if (a.state === 'off') return s('bad', jobs ? "Can't be used" : "Can't be used · see Doctor");
   if (deep?.done) {
     const rs = deep.report?.results ?? [];
     const pass = rs.filter(r => r.status === 'pass' || r.status === 'skip').length;
@@ -1338,7 +1428,7 @@ function drawSignIn(si, j) {
 
 const agentPill = st => `<span class="badge ${st.kind}">${st.busy ? '<span class="spin"></span>' : st.kind === 'ok' ? '✔ ' : st.kind === 'warn' || st.kind === 'bad' ? '⚠ ' : ''}${esc(st.label)}</span>`;
 /** The sidebar's mark: ✗ only when the agent cannot be used (not installed, not logged in, a failed test). */
-const agentMark = (a, st) => (st.kind === 'plain' ? '…' : st.kind === 'bad' || a.state === 'missing' || a.state === 'needs-login' ? '✗' : '✓');
+const agentMark = (a, st) => (st.kind === 'plain' ? '…' : st.kind === 'bad' || a.state === 'missing' || a.state === 'needs-login' || a.state === 'off' ? '✗' : '✓');
 
 function drWhen(iso) {
   const d = new Date(iso);
@@ -1358,7 +1448,7 @@ function drVersionLine(a) {
 
 function drChecks(list) {
   return list
-    .map(([m, t, time = '', why]) => `<div class="dr-check"><span class="dr-m ${m}">${m === 'ok' ? '✔' : m === 'bad' ? '✖' : m === 'warn' ? '⚠' : m === 'run' ? '<span class="spin"></span>' : '○'}</span><span${m === 'wait' ? ' class="faint"' : ''}>${esc(t)}</span><span class="dr-time">${esc(time)}</span>${why ? `<span class="dr-why">${esc(why)}</span>` : ''}</div>`)
+    .map(([m, t, time = '', why]) => `<div class="dr-check"><span class="dr-m ${m}">${m === 'ok' ? '✔' : m === 'bad' ? '✖' : m === 'warn' ? '⚠' : m === 'run' ? '<span class="spin"></span>' : '○'}</span><span${m === 'wait' ? ' class="faint"' : ''}>${esc(t)}${DR_CRITICAL.has(t) ? '<span class="dr-crit">critical</span>' : ''}</span><span class="dr-time">${esc(time)}</span>${why ? `<span class="dr-why">${esc(why)}</span>` : ''}</div>`)
     .join('');
 }
 
@@ -1381,7 +1471,9 @@ function cmpV(x, y) {
   return 0;
 }
 
-const DR_TITLES = ['The standing note reaches the model', 'A turn runs and is read: session id, reply, usage', 'A shell command and its output are read', "The CLI's own transcript is found and read", 'The per-session MCP server is reached', 'A chat resumes with its context', 'The permission prompt is recognised and approved'];
+const DR_TITLES = ['The standing note reaches the model', 'A turn runs and is read: session id, reply, usage', 'A shell command and its output are read', "The CLI's own transcript is found and read", 'The per-session MCP server is reached', 'A chat resumes with its context', 'The permission prompt is recognised and approved', 'Chorus sees when a turn ends'];
+/** The checks whose failure turns the agent off in Chorus (core SCENARIOS' critical flag): tagged "critical" on the Doctor. */
+const DR_CRITICAL = new Set([DR_TITLES[0], DR_TITLES[4], DR_TITLES[7]]);
 const drResult = r => [r.status === 'pass' ? 'ok' : r.status === 'fail' ? 'bad' : r.status === 'blocked' ? 'warn' : 'wait', r.title, `${(r.ms / 1000).toFixed(1)} s`, r.status === 'pass' ? '' : r.reason];
 
 function drDetailed(a) {
@@ -1406,6 +1498,7 @@ function drDetail(a) {
   const deep = drDetailed(a);
   return `<div class="dr-detail">
       <div class="dr-sub">${drVersionLine(a)}</div>
+      ${a.state === 'off' ? `<div class="dr-offline"><b>Off in Chorus.</b> ${esc(`${a.name} is not offered in New chat, Teammates or Hand off until its test passes. Your ${a.name} chats are kept.`)}</div>` : ''}
       <div class="dr-group"><h4>Short test <span>${esc(drChecking() ? 'running' : drWhenShort())}</span></h4>${drChecking() ? '' : drChecks(drShort(a))}</div>
       <div class="dr-group"><h4>Detailed test <span>${deep ? esc(deep[0]) : 'not run for this version'}</span>${drTestButton(a)}</h4>${deep ? drChecks(deep[1]) : '<div class="faint" style="font-size:13px">Chorus asks for it when a version is new to it.</div>'}</div>
       ${a.state !== 'missing' && a.testedInstall && a.version !== a.newestTested ? `<div class="dr-group"><h4>Suggested version</h4><div class="dr-cmd"><span>${esc(a.testedInstall)}</span><button class="btn" data-act="doc-run" data-arg="${a.agent}:tested">Install</button></div></div>` : ''}
@@ -1444,6 +1537,14 @@ function drWhenShort() {
 function drBanner() {
   const agents = drAgents();
   if (!agents || drChecking() || drDeepRunning()) return '';
+  // a critical check failed: the agent can't be used; the verified version, or a report (no Keep: it stays off until a test passes)
+  const off = agents.find(a => a.state === 'off');
+  if (off) {
+    const verified = off.testedInstall && off.version !== off.newestTested;
+    const text = `${OFF_EFFECT[off.off?.scenario]?.(off.name) ?? `${off.off?.reason ?? 'A critical check failed'}.`}${verified ? ` ${off.name} ${off.newestTested} is verified and works with Chorus.` : ''}`;
+    const acts = `${verified ? `<button class="btn primary" data-act="doc-run" data-arg="${off.agent}:tested">Install ${esc(off.name)} ${esc(off.newestTested)}</button>` : ''}<button class="btn" data-act="doc-report">Report issue</button>`;
+    return drBannerHtml('bad', `${off.name} ${off.version} can't be used with Chorus.`, text, acts);
+  }
   const failed = agents.map(a => [a, drFailed(a)]).find(([a, j]) => j && !S.docKept.has(a.agent));
   if (failed) {
     const [a, j] = failed;
@@ -1453,6 +1554,9 @@ function drBanner() {
     const acts = [a.testedInstall && a.version !== a.newestTested ? `<button class="btn primary" data-act="doc-run" data-arg="${a.agent}:tested">Install ${esc(a.name)} ${esc(a.newestTested)}</button>` : '', `<button class="btn" data-act="doc-keep" data-arg="${a.agent}">Keep ${esc(a.version)}</button>`, `<button class="btn" data-act="doc-report">Report issue</button>`].join('');
     return drBannerHtml('bad', `${a.name} ${a.version}: ${fails.length} of ${j.report.results.length} checks failed.`, `Chats still start; this part does not work: ${effect}.${fix}`, acts);
   }
+  // it was off and works again (the verified version installed, or a test passed); a failed check that is not critical comes first
+  const back = S.docBackOn && agents.find(a => a.agent === S.docBackOn && (a.state === 'ready' || a.state === 'untested'));
+  if (back) return drBannerHtml('ok', `${back.name} ${back.version} works with Chorus.`, 'It is on again everywhere: New chat, Teammates and Hand off.');
   const fresh = agents.find(a => a.state === 'untested' && !S.docNotNow.has(a.agent) && !drJob(a.agent, 'deep'));
   if (fresh) {
     const text = `Chorus is tested with ${fresh.newestTested && fresh.version && cmpV(fresh.version, fresh.newestTested) < 0 ? `newer versions of ${fresh.name} (up to ${fresh.newestTested})` : `${fresh.name} up to ${fresh.newestTested ?? 'no version yet'}`}. A detailed test checks that ${fresh.version} works with Chorus: about 2 minutes and a few short model turns on your ${fresh.name} plan.`;
@@ -1475,7 +1579,8 @@ function drRunLine() {
   else if (d?.at) {
     const done = Object.values(S.docJobs).filter(j => j.action === 'deep' && j.done).at(-1);
     const need = d.agents.filter(a => a.state !== 'ready').length;
-    if (done && !S.docRan) when = `Detailed test of ${drName(done.agent)} finished · ${done.ok ? 'all passed' : `${done.report.results.filter(r => r.status === 'fail').length} problem`}`;
+    const crit = done?.report?.critical?.length ?? 0;
+    if (done && !S.docRan) when = `Detailed test of ${drName(done.agent)} finished · ${done.ok ? 'all passed' : crit ? `${crit} critical problem` : `${done.report.results.filter(r => r.status === 'fail').length} problem`}`;
     else if (Date.now() - new Date(d.at).getTime() < 60_000) when = `Tested just now · ${(d.ms / 1000).toFixed(1)} s`;
     else when = `Last test: ${drWhen(d.at)} · ${need ? `${need} need${need > 1 ? '' : 's'} you` : 'all ready'}`;
   }
@@ -1757,7 +1862,7 @@ function renderChat() {
   // the chat column holds the banners, the agent's screen and the docked ask card; the right sidebar beside it is one container that
   // the header's buttons open: Artifacts, Activity, Record (the drawer) or Task (the optional module's chat-side panel)
   $('#view').innerHTML = `<div class="chat"><div class="chat-head" id="chat-head"></div>${proSlot('chat-actions', ` data-chat="${esc(id)}"`)}<div class="chat-tabs" id="chat-tabs" hidden></div>
-    <div class="chat-body tab-chat" id="chat-body"><div class="chat-col" id="chat-col"><div id="chat-banners"></div><div class="term-wrap" id="term-slot"><div class="term-over" id="term-over" hidden></div></div><div id="ask-dock"></div></div><div class="drawer-scrim" data-act="drawer-close"></div><aside class="drawer" id="drawer" hidden></aside><aside class="task-side" id="task-side" aria-label="Task">${RESIZE}<div class="drawer-head task-head"><span class="grow title">Task</span><button class="icon-btn" data-act="side" data-arg="task" title="Close the sidebar" aria-label="Close the sidebar">✕</button></div>${proSlot('chat-side', ` data-chat="${esc(id)}"`)}</aside></div></div>`;
+    <div class="chat-body tab-chat" id="chat-body"><div class="chat-col" id="chat-col"><div id="chat-banners"></div><div class="term-wrap" id="term-slot"><div class="term-over" id="term-over" hidden></div><div class="watch-line" id="watch-line" hidden>Keys are not sent to this chat · Go to main chat to change anything</div></div><div id="ask-dock"></div></div><div class="drawer-scrim" data-act="drawer-close"></div><aside class="drawer" id="drawer" hidden></aside><aside class="task-side" id="task-side" aria-label="Task">${RESIZE}<div class="drawer-head task-head"><span class="grow title">Task</span><button class="icon-btn" data-act="side" data-arg="task" title="Close the sidebar" aria-label="Close the sidebar">✕</button></div>${proSlot('chat-side', ` data-chat="${esc(id)}"`)}</aside></div></div>`;
   $('#term-slot').prepend(termEl);
   fillSlots();
   if (!termOpened) {
@@ -1792,9 +1897,9 @@ function drawSheet() {
   el.innerHTML = `<div class="sheet" role="dialog" aria-label="This chat"><div class="grab"></div>
     <div class="sh-meta"><div><span class="badge ${esc(c.agent)}">${esc(AGENT[c.agent]?.name ?? c.agent)}</span> ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}${c.skip ? ' <span class="badge warn">skip</span>' : ''}</div><div class="mono path">${esc(tilde(c.cwd))}</div>${meter(c.usage)}</div>
     <button data-act="handoff" data-arg="${esc(c.id)}"><span class="i">⇄</span>Hand off to another agent</button>
-    <button data-act="drawer-to" data-arg="artifacts"><span class="i">▤</span>Artifacts${c.artifacts ? ` <span class="badge plain">${c.artifacts}</span>` : ''}</button>
+    ${c.sub ? '' : `<button class="${artFlash(c.id).trim()}" data-act="drawer-to" data-arg="artifacts"><span class="i">▤</span>Artifacts${c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : ''}</button>
     <button data-act="drawer-to" data-arg="activity"><span class="i">≋</span>Activity</button>
-    <button data-act="drawer-to" data-arg="record"><span class="i">◫</span>Record</button>
+    <button data-act="drawer-to" data-arg="record"><span class="i">◫</span>Record</button>`}
     <button class="danger" data-act="delete" data-arg="${esc(c.id)}"><span class="i">🗑</span>Delete this chat</button></div>`;
   document.body.append(el);
 }
@@ -1819,7 +1924,7 @@ function renderChatParts() {
       ${c.model || c.effort ? `<span class="model">· ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}</span>` : ''}${c.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${meter(c.usage)}
       <span class="mono faint path" title="${esc(c.cwd)}">‎${esc(tilde(c.cwd))}‎</span>${c.toast ? `<span class="badge ok">${esc(c.toast)}</span>` : ''}</div>
     <button class="btn" data-act="handoff" data-arg="${esc(c.id)}" title="Continue this chat with another agent" aria-label="Hand off">${S.size === 'desktop' ? '⇄ Hand off' : '⇄'}</button>
-    ${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰') : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', countFlash(`art:${c.id}`))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}
+    ${c.sub ? '' : `${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰') : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', artFlash(c.id))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}`}
     <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat" aria-label="Delete this chat">🗑</button>`;
   // a phone: a task chat's panel is tabs beside the chat (Chat · Steps · Plan), one shown at a time
   const tabs = S.size === 'phone' ? window.choruspro?.sideTabs?.(c.id) : null;
@@ -1832,6 +1937,17 @@ function renderChatParts() {
   if (side) side.dataset.tab = S.size === 'phone' && S.chatTab !== 'chat' ? S.chatTab : '';
   fillSlots();
   let banners = '';
+  // a sub thread is watch-only: the strip over its screen says whose it is; Unlock lets keys through (the main chat is told)
+  if (c.sub) {
+    const main = esc(c.sub.title ?? 'its main chat');
+    banners += c.sub.unlocked
+      ? `<div class="sub-strip warn"><span class="msg">⚠ <b>Unlocked.</b> You are typing into a sub thread. The main chat is told what you typed.</span><button class="btn sm" data-act="sub-lock" data-arg="${esc(c.id)}" data-on="0">Lock again</button><button class="btn primary sm" data-act="chat" data-arg="${esc(c.sub.parent)}">Go to main chat ›</button></div>`
+      : `<div class="sub-strip"><span class="msg">👁 <b>Watch-only.</b> This is a sub thread of ${main}. Tell the main chat what you want; it decides and passes it on.</span><button class="btn primary sm" data-act="chat" data-arg="${esc(c.sub.parent)}">Go to main chat ›</button><button class="btn sm" data-act="sub-lock" data-arg="${esc(c.id)}" data-on="1">Unlock</button></div>`;
+  }
+  const watchLine = $('#watch-line');
+  if (watchLine) watchLine.hidden = !(c.sub && !c.sub.unlocked);
+  $('#term-slot')?.classList.toggle('watch', !!(c.sub && !c.sub.unlocked));
+  if (c.sub?.unlocked) S.unlockedChat = c.id;
   // a CLI's permission prompt: the thin Approve/Deny line over the chat column
   // deleted (🗑, here or in Approvals): hidden in the chat too until the prompt on the agent's screen changes
   for (const ask of S.state.approvals.filter(a => a.id === c.id && a.kind !== 'ask' && !a.hidden)) banners += `<div class="banner ask"><b>${esc(AGENT[c.agent]?.name ?? c.agent)} asks</b><span class="what" title="${esc(ask.what)}">${esc(ask.what)}</span><button class="btn good" data-act="approve" data-arg="${esc(c.id)}">✓ Approve</button><button class="btn danger" data-act="deny" data-arg="${esc(c.id)}">✕ Deny</button>${delBtn(c.id, '')}</div>`;
@@ -1855,6 +1971,8 @@ function renderChatParts() {
 const PEEK = ['artifacts', 'activity', 'record'];
 /** What this chat's sidebar shows: what you left open, else Task for a task chat and closed for a plain chat. */
 function sideView(id) {
+  // a sub thread has no right sidebar: what it does is its main chat's business
+  if (S.state?.chats.find(c => c.id === id)?.sub) return '';
   const task = !!window.choruspro?.sideTabs?.(id);
   const v = S.side[id] ?? (task ? 'task' : '');
   return v === 'task' && !task ? '' : v;
@@ -1950,15 +2068,85 @@ function confirmDelete({ what }) {
 
 let ncPicker = null;
 let skillsList = null;
+/** Every skill Chorus sees (Sync skills), with its state per CLI: what "/" lists. */
 async function skillsOn() {
-  skillsList ??= api('GET', '/api/skills').then(r => (r.items ?? []).filter(k => k.on), () => ((skillsList = null), []));
+  skillsList ??= api('GET', '/api/skills/all').then(r => r.skills ?? [], () => ((skillsList = null), []));
   return skillsList;
+}
+/** The CLI marks of a "/" item: built only from the page's own letters and class names, never from the skill's text. */
+const skillMarks = k => SK_CLIS.map(a => `<span class="badge mini ${k.state?.[a] ? a : 'no'}" title="${AGENT[a].name}${k.state?.[a] ? '' : ': not there'}">${AGENT[a].letter}</span>`).join('');
+/** "/" picked a skill the chosen agent lacks: "Sync <name> to <CLI>?" over the form; true once the link is made. */
+function confirmSkillSync(k, agentOrAgents) {
+  const agents = [].concat(agentOrAgents);
+  return new Promise(resolve => {
+    const el = document.createElement('div');
+    el.className = 'scrim';
+    const name = agents.map(a => AGENT[a].name).join(' and ');
+    const many = agents.length > 1;
+    el.innerHTML = `<div class="dialog sk-dlg" role="dialog" aria-label="Sync ${esc(k.name)} to ${esc(name)}?"><h2>Sync ${esc(k.name)} to ${esc(name)}?</h2><div class="body"><p>This skill lives in <b>${esc(k.where)}</b>. ${esc(name)} ${many ? 'do' : 'does'} not have it yet, so ${many ? 'they' : 'it'} cannot use it.</p><p>Chorus will put a link in:</p><div class="sk-path">${agents.map(a => esc(`${SK_HOME[a]}/${k.folder}`)).join('<br>')}</div><p class="muted" style="font-size:12.5px">Nothing is copied. You can undo it in Sync skills.</p></div><div class="foot"><button class="btn" data-x="no">Cancel</button><button class="btn primary" data-x="yes">Sync and use</button></div></div>`;
+    const done = async ok => {
+      for (const agent of ok ? agents : []) {
+        const r = await api('POST', '/api/skills/sync', { dir: k.dir, cli: agent, on: true }).catch(e => ({ error: e.message }));
+        if (r.error) {
+          toast(r.error);
+          ok = false;
+          break;
+        }
+        skillsList = null;
+        if (r.skills) S.skillsAll = { skills: r.skills, sources: r.sources };
+      }
+      if (ok) toast(`Synced ${k.name} to ${name}`);
+      el.remove();
+      resolve(ok);
+    };
+    el.addEventListener('click', e => {
+      const x = e.target.closest('[data-x]')?.dataset.x;
+      if (x === 'yes' || x === 'no') void done(x === 'yes');
+      else if (e.target === el) void done(false);
+    });
+    el.addEventListener('keydown', e => e.key === 'Escape' && (e.stopPropagation(), void done(false)));
+    $('#dialogs').append(el);
+    el.querySelector('[data-x="yes"]').focus();
+  });
+}
+/** The "/" trigger for skills: the marks per CLI, and the sync dialog for the agents in `agentsNow()` that lack the picked skill. */
+function skillTrigger(agentsNow) {
+  return {
+    chars: ['/'],
+    label: 'Skills',
+    heading: 'Skills · all agents',
+    empty: 'No skill matches',
+    query: /[\w.-]*/,
+    items: async () => {
+      const agents = agentsNow().filter(a => AGENT[a]);
+      return (await skillsOn()).map(k => {
+        const lack = agents.filter(a => !k.state?.[a]);
+        return { key: k.name, main: `/${k.name}`, sub: k.description, marks: skillMarks(k), need: lack.length ? `Not on ${lack.map(a => AGENT[a].name).join(' and ')} yet · sync when you pick it` : '', skill: k };
+      });
+    },
+    // a skill one of those agents lacks: the sync dialog first; Cancel leaves the text as it is
+    beforePick: x => {
+      const lack = agentsNow().filter(a => AGENT[a] && !x.skill.state?.[a]);
+      return lack.length ? confirmSkillSync(x.skill, lack) : true;
+    },
+    insert: x => `/${x.key}`,
+  };
+}
+/** host.skillPicker (the paid module: a teammate's or an action's instructions): the same "/" picker on its own text box. */
+const modPickers = new WeakMap();
+function skillPicker(textarea, agents) {
+  if (!textarea) return;
+  modPickers.get(textarea)?.destroy();
+  skillsList = null;
+  const p = attachPicker(textarea, [skillTrigger(() => agents ?? [])]);
+  modPickers.set(textarea, p);
+  return p;
 }
 function attachNcPicker(ta) {
   ncPicker?.destroy();
   skillsList = null;
   ncPicker = attachPicker(ta, [
-    { chars: ['/'], label: 'Skills', empty: 'No skill matches', query: /[\w.-]*/, items: async () => (await skillsOn()).map(k => ({ key: k.name, main: `/${k.name}`, sub: k.description })), insert: x => `/${x.key}` },
+    skillTrigger(() => (S.form?.agent ? [S.form.agent] : [])),
     {
       chars: ['@', '＠'],
       label: 'Files',
@@ -2692,6 +2880,8 @@ document.addEventListener('click', async e => {
       return renderView();
     case 'nc-agent':
       if (!S.form) return;
+      // an agent off in Chorus (a failed critical check) can't start a chat: the Doctor says why
+      if (drAgent(arg)?.state === 'off') return toast(`${drName(arg)} can't be used with Chorus now · see Doctor`);
       S.form.agent = arg;
       S.form.model = 'default';
       S.form.effort = 'default';
@@ -2748,9 +2938,14 @@ document.addEventListener('click', async e => {
         S.mem.record = { id: arg, text: d.record };
       }
       return renderView();
-    case 'sk-import':
-      S.skills = await api('POST', '/api/skills/import', { dir: arg });
-      return renderView();
+    case 'sub-lock': {
+      const on = el.dataset.on === '1';
+      const r = await api('POST', `/api/chats/${arg}/unlock`, { on });
+      if (r.error) return toast(r.error);
+      S.unlockedChat = r.unlocked ? arg : null;
+      if (r.unlocked) term.focus();
+      return;
+    }
     case 'sk-edit':
       return api('POST', `/api/skills/${encodeURIComponent(arg)}/edit`).catch(err => toast(err.message));
     case 'sk-new': {
@@ -2758,7 +2953,36 @@ document.addEventListener('click', async e => {
       if (!name) return;
       const r = await api('POST', '/api/skills', { name });
       if (r.error) return toast(r.error);
-      S.skills = r;
+      return loadSkills();
+    }
+    case 'sk-tick': {
+      const r = await api('POST', '/api/skills/sync', { dir: arg, cli: el.dataset.cli, on: el.dataset.on === '1' });
+      if (r.skills) S.skillsAll = { skills: r.skills, sources: r.sources };
+      skillsList = null;
+      toast(r.error ?? r.flash);
+      return renderView();
+    }
+    case 'sk-filter':
+      S.sk.filter = arg;
+      return renderView();
+    case 'sk-tab':
+      S.sk.tab = arg;
+      return renderView();
+    case 'sk-add': {
+      const r = await api('POST', '/api/skills/sources/pick');
+      if (r.none) return toast('No folder chooser on this computer');
+      if (r.cancelled) return;
+      if (r.error) return toast(r.error);
+      S.skillsAll = { skills: r.skills, sources: r.sources };
+      const src = r.sources.find(x => x.path === r.added);
+      toast(r.kind === 'skill' ? `Added the skill ${src?.skill ?? ''}` : `Added ${src?.show ?? r.added}: ${src?.count ?? 0} skill${src?.count === 1 ? '' : 's'}`);
+      return renderView();
+    }
+    case 'sk-src-rm': {
+      const r = await api('POST', '/api/skills/sources/remove', { path: arg });
+      if (r.error) return toast(r.error);
+      S.skillsAll = { skills: r.skills, sources: r.sources };
+      toast(r.unsynced ? `Removed the source and ${r.unsynced} link${r.unsynced === 1 ? '' : 's'} Chorus made for it` : 'Removed the source');
       return renderView();
     }
     case 'dlg':
@@ -2786,9 +3010,6 @@ document.addEventListener('change', async e => {
     case 'nc-skip':
       f.skip = el.checked;
       return renderView();
-    case 'sk-toggle':
-      S.skills = await api('POST', `/api/skills/${encodeURIComponent(el.dataset.arg)}/toggle`);
-      return renderView();
   }
 });
 
@@ -2805,6 +3026,10 @@ document.addEventListener('input', e => {
     case 'cl-q':
       S.cl.q = el.value;
       S.cl.focus = true;
+      return renderView();
+    case 'sk-q':
+      S.sk.q = el.value;
+      S.sk.focus = true;
       return renderView();
     case 'mem-q':
       S.mem.q = el.value;

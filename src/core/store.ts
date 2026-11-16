@@ -7,6 +7,10 @@ import type { AgentId, Session, ToolCall, Turn, Usage } from './types.ts';
 import { maskSecrets } from './adapters/util.ts';
 
 export type ThreadState = 'working' | 'waiting' | 'ended';
+/** A sub thread: in a turn, its turn ended (`stopped`), held by an approval, no activity for a while, or its chat ended. */
+export type SubStatus = 'working' | 'stopped' | 'waiting_user' | 'quiet' | 'ended';
+/** The sub thread columns on `threads`. */
+export type SubFields = Pick<ThreadRow, 'sub_status' | 'sub_brief' | 'sub_started' | 'sub_last_activity' | 'sub_ended' | 'sub_turns' | 'sub_working_ms' | 'sub_reported'>;
 
 export interface ThreadRow {
   id: string;
@@ -27,6 +31,18 @@ export interface ThreadRow {
   effort: string | null;
   /** the last turn of earlier sessions: a new session of this chat (its CLI lost the old one) saves its turns after them */
   turn_base?: number;
+  /** set only for a sub thread (src/serve/subthreads.ts): its status; its parent is parent_thread_id */
+  sub_status?: SubStatus | null;
+  /** what the main chat asked it to do */
+  sub_brief?: string | null;
+  sub_started?: string | null;
+  sub_last_activity?: string | null;
+  sub_ended?: string | null;
+  sub_turns?: number;
+  /** time spent in turns */
+  sub_working_ms?: number;
+  /** when its latest report was typed into the main chat (null: one is due) */
+  sub_reported?: string | null;
   created: string;
   updated: string;
 }
@@ -112,6 +128,9 @@ CREATE TABLE IF NOT EXISTS requests (
   id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, question TEXT NOT NULL, details TEXT, options TEXT NOT NULL,
   status TEXT NOT NULL, answer TEXT, note TEXT, created TEXT NOT NULL, answered TEXT, kind TEXT NOT NULL DEFAULT 'approval', other INTEGER NOT NULL DEFAULT 1
 );
+CREATE TABLE IF NOT EXISTS skill_sources (path TEXT PRIMARY KEY, kind TEXT NOT NULL, added TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS skills (dir TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', source TEXT NOT NULL, seen TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS skill_links (dir TEXT NOT NULL, cli TEXT NOT NULL, path TEXT NOT NULL, made TEXT NOT NULL, PRIMARY KEY (dir, cli));
 CREATE TABLE IF NOT EXISTS reported (
   id INTEGER PRIMARY KEY AUTOINCREMENT, thread_id TEXT NOT NULL, target TEXT NOT NULL, title TEXT, ts TEXT NOT NULL
 );
@@ -158,6 +177,9 @@ export class Store {
     if (!tcols.includes('detail')) this.db.exec('ALTER TABLE tool_calls ADD COLUMN detail TEXT');
     if (!cols.includes('effort')) this.db.exec('ALTER TABLE threads ADD COLUMN effort TEXT');
     if (!cols.includes('turn_base')) this.db.exec('ALTER TABLE threads ADD COLUMN turn_base INTEGER NOT NULL DEFAULT 0');
+    // sub threads (plan 2026-11-14, Stage 2): free, so on Chorus's own threads table
+    for (const [col, type] of [['sub_status', 'TEXT'], ['sub_brief', 'TEXT'], ['sub_started', 'TEXT'], ['sub_last_activity', 'TEXT'], ['sub_ended', 'TEXT'], ['sub_turns', 'INTEGER NOT NULL DEFAULT 0'], ['sub_working_ms', 'INTEGER NOT NULL DEFAULT 0'], ['sub_reported', 'TEXT']])
+      if (!cols.includes(col)) this.db.exec(`ALTER TABLE threads ADD COLUMN ${col} ${type}`);
     const rcols = (this.db.prepare('PRAGMA table_info(requests)').all() as { name: string }[]).map(c => c.name);
     if (!rcols.includes('kind')) this.db.exec("ALTER TABLE requests ADD COLUMN kind TEXT NOT NULL DEFAULT 'approval'");
     if (!rcols.includes('other')) this.db.exec('ALTER TABLE requests ADD COLUMN other INTEGER NOT NULL DEFAULT 1');
@@ -296,6 +318,33 @@ export class Store {
     return this.db.prepare('SELECT * FROM threads WHERE id = ?').get(id) as ThreadRow | undefined;
   }
 
+  /** Sets a sub thread's fields (without touching `updated`, which says when the chat itself changed). */
+  setSub(id: string, patch: Partial<SubFields>) {
+    const keys = Object.keys(patch) as (keyof SubFields)[];
+    if (!keys.length) return;
+    this.db.prepare(`UPDATE threads SET ${keys.map(k => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map(k => (patch[k] ?? null) as any), id);
+  }
+
+  /** Every sub thread, or those of one main chat; oldest first. */
+  subThreads(parent?: string): ThreadRow[] {
+    return (parent
+      ? this.db.prepare('SELECT * FROM threads WHERE sub_status IS NOT NULL AND parent_thread_id = ? ORDER BY sub_started, created').all(parent)
+      : this.db.prepare('SELECT * FROM threads WHERE sub_status IS NOT NULL ORDER BY sub_started, created').all()) as unknown as ThreadRow[];
+  }
+
+  /** How much a thread has done (turns and tool calls recorded): it changes when the thread shows activity. */
+  activityMark(id: string): string {
+    const t = this.db.prepare('SELECT COUNT(*) AS n, COALESCE(MAX(seq), 0) AS m FROM turns WHERE thread_id = ?').get(id) as { n: number; m: number };
+    const c = this.db.prepare('SELECT COUNT(*) AS n FROM tool_calls WHERE thread_id = ?').get(id) as { n: number };
+    return `${t.n}/${t.m}/${c.n}`;
+  }
+
+  /** The text of a thread's last reply (its last assistant turn), or ''. */
+  lastReply(id: string): string {
+    const r = this.db.prepare("SELECT text FROM turns WHERE thread_id = ? AND role = 'assistant' ORDER BY seq DESC LIMIT 1").get(id) as { text: string } | undefined;
+    return r?.text ?? '';
+  }
+
   listThreads(): ThreadRow[] {
     return this.db.prepare('SELECT * FROM threads ORDER BY updated DESC').all() as unknown as ThreadRow[];
   }
@@ -386,6 +435,11 @@ export class Store {
     return [...latest.values()].map(r => ({ ...r, abs: path.join(this.artifactsDir(r.thread_id), r.path) }));
   }
 
+  /** Every version of every file in the chat's artifacts folder (scanArtifacts adds a row per new content): grows on each edit. */
+  artifactVersions(threadId: string): number {
+    return (this.db.prepare('SELECT COUNT(*) AS n FROM artifacts WHERE thread_id = ?').get(threadId) as { n: number }).n;
+  }
+
   logMcpCall(threadId: string | undefined, tool: string) {
     this.db.prepare('INSERT INTO mcp_calls (thread_id,tool,ts) VALUES (?,?,?)').run(threadId ?? null, tool, now());
   }
@@ -435,6 +489,44 @@ export class Store {
   /** What a chat reported, newest first. */
   reportedArtifacts(threadId: string): ReportedArtifact[] {
     return this.db.prepare('SELECT * FROM reported WHERE thread_id = ? ORDER BY id DESC').all(threadId) as unknown as ReportedArtifact[];
+  }
+
+  /* ---------- Sync skills (src/core/skillsync.ts): the sources the user added, the skills last seen, the links Chorus made ---------- */
+
+  skillSources(): { path: string; kind: 'folder' | 'skill'; added: string }[] {
+    return this.db.prepare('SELECT * FROM skill_sources ORDER BY added').all() as any;
+  }
+  addSkillSource(p: string, kind: 'folder' | 'skill') {
+    this.db.prepare('INSERT OR REPLACE INTO skill_sources (path,kind,added) VALUES (?,?,COALESCE((SELECT added FROM skill_sources WHERE path = ?),?))').run(p, kind, p, now());
+  }
+  removeSkillSource(p: string) {
+    this.db.prepare('DELETE FROM skill_sources WHERE path = ?').run(p);
+  }
+  /** What the latest scan found: the table holds exactly these afterwards. */
+  replaceSkills(skills: { dir: string; name: string; description: string; source: string }[]) {
+    const ts = now();
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('DELETE FROM skills').run();
+      const ins = this.db.prepare('INSERT OR REPLACE INTO skills (dir,name,description,source,seen) VALUES (?,?,?,?,?)');
+      for (const s of skills) ins.run(s.dir, s.name, s.description, s.source, ts);
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+  }
+  storedSkills(): { dir: string; name: string; description: string; source: string; seen: string }[] {
+    return this.db.prepare('SELECT * FROM skills ORDER BY name, dir').all() as any;
+  }
+  skillLinks(): { dir: string; cli: string; path: string; made: string }[] {
+    return this.db.prepare('SELECT * FROM skill_links ORDER BY made').all() as any;
+  }
+  addSkillLink(dir: string, cli: string, p: string) {
+    this.db.prepare('INSERT OR REPLACE INTO skill_links (dir,cli,path,made) VALUES (?,?,?,?)').run(dir, cli, p, now());
+  }
+  removeSkillLink(dir: string, cli: string) {
+    this.db.prepare('DELETE FROM skill_links WHERE dir = ? AND cli = ?').run(dir, cli);
   }
 
   mcpCalls(threadId: string): { tool: string; ts: string }[] {

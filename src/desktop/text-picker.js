@@ -7,6 +7,10 @@
 //   → { close, refresh, isOpen, destroy }: a page that redraws the field attaches a new picker and calls refresh() to reopen it
 //
 // The list is ↑ ↓ to move, Enter or Tab or a click to pick, Esc to close. Its styles are in style.css, block "text picker".
+//
+// Optional (Sync skills, plan 2026-11-14 Stage 6): a trigger's `heading` is a line over the list; an item's `marks` is HTML drawn on
+// its right (only ever built from the page's own fixed strings, never from what a skill file says) and `need` a warning line under
+// it; a trigger's `beforePick(item)` may ask first (a dialog) and resolves false to leave the field as it is.
 
 /** The longest list shown. */
 export const MAX_ITEMS = 50;
@@ -40,6 +44,21 @@ export function rank(items, query) {
 export function applyPick(text, start, caret, insert) {
   const ins = `${insert} `;
   return { text: text.slice(0, start) + ins + text.slice(caret), caret: start + ins.length };
+}
+
+/** Whether a pick goes ahead: true without `beforePick`, else what it resolves to (an error counts as no). */
+export async function allowPick(trigger, item) {
+  if (!trigger.beforePick) return true;
+  try {
+    return (await trigger.beforePick(item)) !== false;
+  } catch {
+    return false;
+  }
+}
+
+/** One item's button in the list. `main`, `sub` and `need` are text; `marks` is trusted HTML from the page's own code. */
+export function itemHtml(x, i, on) {
+  return `<button type="button" role="option" aria-selected="${on}" class="${on ? 'on' : ''}${x.file ? ' file' : ''}${x.marks ? ' marked' : ''}" data-i="${i}"><span class="mono">${esc(x.main ?? x.key)}</span>${x.marks ? `<span class="tp-marks">${x.marks}</span>` : ''}${x.sub ? `<small>${esc(x.sub)}</small>` : ''}${x.need ? `<span class="tp-need">${esc(x.need)}</span>` : ''}</button>`;
 }
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -81,9 +100,9 @@ export function attachPicker(field, triggers, { onChange } = {}) {
   const draw = () => {
     if (!tok) return close();
     box.setAttribute('aria-label', tok.trigger.label);
-    box.innerHTML = list.length
-      ? list.map((x, i) => `<button type="button" role="option" aria-selected="${i === sel}" class="${i === sel ? 'on' : ''}${x.file ? ' file' : ''}" data-i="${i}"><span class="mono">${esc(x.main ?? x.key)}</span>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}</button>`).join('')
-      : `<div class="tpick-empty">${esc(tok.trigger.empty ?? 'Nothing matches')}</div>`;
+    box.innerHTML = (tok.trigger.heading ? `<div class="tpick-h">${esc(tok.trigger.heading)}</div>` : '') + (list.length
+      ? list.map((x, i) => itemHtml(x, i, i === sel)).join('')
+      : `<div class="tpick-empty">${esc(tok.trigger.empty ?? 'Nothing matches')}</div>`);
     const c = caretAt(field);
     box.hidden = false;
     box.style.left = `${Math.max(0, Math.min(c.left, field.offsetLeft + field.clientWidth - box.offsetWidth))}px`;
@@ -108,9 +127,17 @@ export function attachPicker(field, triggers, { onChange } = {}) {
     list = rank(items, t.query);
     draw();
   };
-  const pick = i => {
+  const pick = async i => {
     if (!tok || !list[i]) return;
-    const r = applyPick(field.value, tok.start, field.selectionStart ?? field.value.length, tok.trigger.insert(list[i]));
+    const { trigger, start } = tok, item = list[i], caret = field.selectionStart ?? field.value.length, before = field.value;
+    if (trigger.beforePick) {
+      close();
+      const ok = await allowPick(trigger, item);
+      field.focus();
+      // Cancel, or the text changed meanwhile: the field stays as it is
+      if (!ok || field.value !== before) return field.setSelectionRange(caret, caret);
+    }
+    const r = applyPick(field.value, start, caret, trigger.insert(item));
     field.value = r.text;
     field.focus();
     field.setSelectionRange(r.caret, r.caret);
@@ -129,14 +156,14 @@ export function attachPicker(field, triggers, { onChange } = {}) {
     if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault();
       e.stopPropagation();
-      pick(sel);
+      void pick(sel);
     }
   };
   const onDown = e => {
     const b = e.target.closest?.('[data-i]');
     if (b && box.contains(b)) {
       e.preventDefault();
-      pick(Number(b.dataset.i));
+      void pick(Number(b.dataset.i));
     } else if (tok && e.target !== field && !box.contains(e.target)) close();
   };
   const onInput = () => void update();

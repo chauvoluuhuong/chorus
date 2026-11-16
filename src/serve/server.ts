@@ -29,13 +29,15 @@ import { SKIP_FLAG } from '../core/launch.ts';
 import { defaultOpener } from '../core/opener.ts';
 import { disabledSkills, expandSkillMentions, findNativeSkills, importSkill, listSkills, setSkillEnabled, sourceDir, syncSkills } from '../core/skills.ts';
 import { matchFiles, projectFiles } from '../core/files.ts';
+import { addSource, allSkills, CLI_NAMES, removeSource, scanSkills, SYNC_CLIS, syncSkill, tilde, unsyncSkill, type Cli } from '../core/skillsync.ts';
 import type { AgentId } from '../core/types.ts';
 import { CLIS, type AgentCheck, type DeepReport, type FastReport } from '@chauvoluuhuong/chorus-core/doctor';
-import { check, firstLaunch, ghReady, host, isDue, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, remoteTested, reportDetails, runCommand, runDeep, versions } from '../core/doctor.ts';
+import { check, firstLaunch, ghReady, host, isDue, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, recordDeep, remoteTested, reportDetails, runCommand, runDeep, versions } from '../core/doctor.ts';
 
 import { NotificationInbox } from './notifications.ts';
 import { imageType, parseReport, ReportSender } from './reports.ts';
 import { ChatLaunch, ProHost, type ProLoader } from './pro.ts';
+import { SubThreads, TOOLS as SUB_TOOLS, TOOL_NAMES as SUB_TOOL_NAMES } from './subthreads.ts';
 import { SignIns } from './signin.ts';
 import { inContainer } from '../cli/screen.ts';
 import type { UpdateCheck } from './updates.ts';
@@ -80,7 +82,7 @@ export function hostNames(host?: string, interfaces: ReturnType<typeof os.networ
   else if (host) add(host);
   return [...names];
 }
-const LITERAL = new Set(['POST ui', 'POST folders/pick', 'POST skills/import', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/image', 'POST doctor/issue/send']);
+const LITERAL = new Set(['POST ui', 'POST folders/pick', 'POST skills/import', 'GET skills/all', 'POST skills/sync', 'POST skills/sources', 'POST skills/sources/pick', 'POST skills/sources/remove', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/image', 'POST doctor/issue/send']);
 
 /** The App without a terminal: input and output go nowhere, the Controller drives it as usual. */
 export function headlessIO(): AppIO {
@@ -125,6 +127,8 @@ export interface ServeOpts {
   onQuit?: () => void;
   /** the doctor's short check and the install/login command runner (tests); the real ones otherwise */
   check?: () => Promise<FastReport>;
+  /** the detailed test (tests: a stub that never runs a CLI); its report's off mark is kept as runDeep keeps it */
+  deep?: typeof runDeep;
   runCommand?: typeof runCommand;
   /** the optional module's loader (tests); the real one otherwise */
   proLoader?: ProLoader;
@@ -142,6 +146,9 @@ export interface ServeOpts {
   container?: boolean;
   /** whether the CLI still has a chat's session (tests); its transcript on disk otherwise */
   sessionExists?: (row: ThreadRow) => boolean;
+  /** sub threads' watchdog and gap between messages typed into one chat (tests: short ones) */
+  subQuietMs?: number;
+  subGapMs?: number;
 }
 
 const plain = (l: RichLine): string => (typeof l === 'string' ? l : l.map(s => s[0]).join(''));
@@ -169,6 +176,10 @@ export class ChorusServer {
   /** what `chorus mcp` holds: it opens /api/pro/mcp/ and nothing else */
   readonly mcpToken = crypto.randomBytes(24).toString('hex');
   readonly pro: ProHost;
+  /** main thread and sub threads: free, so the tools are served also when the paid module is locked or absent */
+  readonly subs: SubThreads;
+  /** sub threads the user unlocked (watch-only otherwise: their keys are dropped), and the line each is typing */
+  private unlocked = new Map<string, string>();
   readonly reports: ReportSender;
   private ownInbox: NotificationInbox | undefined;
   url = '';
@@ -214,8 +225,20 @@ export class ChorusServer {
     this.signIns = o.signIns ?? new SignIns({ onChange: s => { if (s.state === 'done') void this.checkAgents({ quiet: true }).catch(e => this.noteError('doctor check', e)); } });
     // the notifications' installation ID; with notifications off (CHORUS_NOTIFICATIONS=0) the same file, made on first use
     this.reports = o.reports ?? new ReportSender({ version: versions().chorus, credentials: () => (this.o.notifications ?? (this.ownInbox ??= new NotificationInbox({ directory: path.join(process.env.CHORUS_HOME ?? path.join(os.homedir(), '.chorus'), 'notifications'), version: versions().chorus }))).credentials() });
-    this.pro = new ProHost({ homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), dismissApproval: (thread, request) => this.dismissApproval(thread, request), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.approvalsNow().filter(a => !a.hidden).map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))] }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
+    this.pro = new ProHost({ homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), dismissApproval: (thread, request) => this.dismissApproval(thread, request), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.approvalsNow().filter(a => !a.hidden).map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))], watchOnly: (thread, mainThread) => this.subs.watchOnly(thread, mainThread) }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     if (o.chatLaunch) o.chatLaunch.host = this.pro;
+    this.subs = new SubThreads({
+      store: this.c.store,
+      start: x => this.c.newThread({ agent: x.agent, model: x.model, effort: x.effort, title: x.title, prompt: x.prompt, cwd: x.cwd, skipPermissions: x.skipPermissions, parent: x.parent }).id,
+      send: (id, text) => this.sendToChat(id, text),
+      stop: id => this.app.entry(id)?.host?.kill(),
+      openApproval: id => this.approvalsNow().some(a => a.id === id) || this.c.store.pendingRequests(id).length > 0,
+      usable: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent as AgentId),
+      ended: id => this.app.entry(id)?.host?.state === 'ended',
+      quietMs: o.subQuietMs,
+      gapMs: o.subGapMs,
+      changed: () => this.pushState(),
+    });
     this.bridge();
   }
 
@@ -267,6 +290,43 @@ export class ChorusServer {
     });
     for (const [id, what] of this.hiddenPrompts) if (!items.some(a => a.kind === 'permission' && a.id === id && a.what === what)) this.hiddenPrompts.delete(id);
     return items;
+  }
+
+  /**
+   * Whether keys for this chat go through: always for a chat that is not a sub thread; for a sub thread only while unlocked, and
+   * then each typed line is passed on to the main chat as a note. A sub thread whose chat ended is locked again.
+   */
+  /** Why no chat can start on this agent now: a failed critical check of its installed version turned it off (the Doctor says more). */
+  private offReason(agent: AgentId): string | undefined {
+    const a = this.agentCheck?.report.agents.find(x => x.agent === agent && x.state === 'off');
+    return a ? `${a.name} ${a.version ?? ''} can't be used with Chorus: ${a.off?.reason ?? 'a critical check failed'}. See Doctor.`.replace(/ {2,}/g, ' ') : undefined;
+  }
+
+  /** Unlocked, and still running: a sub thread whose chat ended is locked again. */
+  private isUnlocked(id: string) {
+    if (!this.unlocked.has(id)) return false;
+    if (this.c.store.getThread(id)?.sub_status === 'ended' || this.app.entry(id)?.host?.state === 'ended') {
+      this.unlocked.delete(id);
+      return false;
+    }
+    return true;
+  }
+
+  private watchOnlyLets(id: string, data: string): boolean {
+    const t = this.c.store.getThread(id);
+    if (!t?.sub_status) return true;
+    if (!this.isUnlocked(id)) return false;
+    // the line being typed: printable text, Backspace takes one off, a line end sends it
+    let line = this.unlocked.get(id) ?? '';
+    for (const ch of data.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[O\]P].?|\x1b\[20[01]~/g, '')) {
+      if (ch === '\r' || ch === '\n') {
+        if (line.trim()) this.subs.userTyped(id, line);
+        line = '';
+      } else if (ch === '\x7f' || ch === '\b') line = line.slice(0, -1);
+      else if (ch >= ' ') line += ch;
+    }
+    this.unlocked.set(id, line.slice(-2000));
+    return true;
   }
 
   /** Typing to the agent while its question card is open answers it by typing: the card leaves the chat and Approvals at once. */
@@ -348,7 +408,14 @@ export class ChorusServer {
     const named = this.o.host && !WILDCARD.has(this.o.host) ? this.o.host : '127.0.0.1';
     this.url = `http://${named.includes(':') ? `[${named}]` : named}:${bound}`;
     this.hostNames = hostNames(this.o.host);
-    this.ticker = setInterval(() => this.pushState(), 500);
+    this.ticker = setInterval(() => {
+      try {
+        this.subs.tick();
+      } catch (e) {
+        this.noteError('sub threads', e);
+      }
+      this.pushState();
+    }, 500);
     // openUrl: the page's address with its token, printed by `chorus` after the window opens (a browser tab on the same Chorus)
     fs.writeFileSync(this.serveFile, JSON.stringify({ url: this.url, openUrl: this.openUrl, mcpToken: this.mcpToken }), { mode: 0o600 });
     void this.pro.start();
@@ -526,6 +593,8 @@ export class ChorusServer {
     // the address; saved in the chat's attachments folder and its path put into the agent's input (docs/phase5.md §8.3)
     const upload = req.method === 'POST' && u.pathname.match(/^\/api\/chats\/([\w-]+)\/attachments$/);
     if (upload) {
+      // a locked sub thread takes no dropped files, as it takes no keys
+      if (this.c.store.getThread(upload[1])?.sub_status && !this.isUnlocked(upload[1])) return send(res, 409, { error: 'This sub thread is watch-only: give the file to its main chat, or Unlock it first' });
       const bytes = await readRaw(req, UPLOAD_LIMIT).catch(() => undefined);
       if (!bytes) return send(res, 413, { error: `a dropped file can be at most ${UPLOAD_LIMIT / 1_000_000} MB` });
       const r = this.c.dropFiles(upload[1], [{ name: u.searchParams.get('name') ?? 'file', bytes }]);
@@ -565,10 +634,19 @@ export class ChorusServer {
   }
 
   private async proMcp(req: http.IncomingMessage, res: http.ServerResponse, route: string) {
-    if (req.method === 'GET' && route === 'tools') return send(res, 200, { tools: await this.pro.mcpTools(new URL(req.url ?? '/', 'http://x').searchParams.get('app') === '1') });
+    if (req.method === 'GET' && route === 'tools') {
+      const app = new URL(req.url ?? '/', 'http://x').searchParams.get('app') === '1';
+      // a chat gets the sub thread tools whatever the paid module's state; an AI app the user connected does not
+      const paid = await this.pro.mcpTools(app);
+      return send(res, 200, { tools: app ? paid : [...SUB_TOOLS, ...paid.filter(t => !SUB_TOOL_NAMES.includes(t.name))] });
+    }
     if (req.method === 'POST' && route === 'call') {
       const b = await readJson(req);
       if (process.env.CHORUS_PRO_LOG) console.error(`[pro] mcp ${String(b.name)} thread ${String(b.threadId)}`);
+      if (SUB_TOOL_NAMES.includes(String(b.name))) {
+        const r = await this.subs.call(String(b.name), (b.args ?? {}) as Record<string, unknown>, typeof b.threadId === 'string' ? b.threadId : undefined);
+        return 'error' in r ? send(res, 400, r) : send(res, 200, r);
+      }
       const r = await this.pro.mcpCall(String(b.name), (b.args ?? {}) as Record<string, unknown>, typeof b.threadId === 'string' ? b.threadId : undefined);
       return send(res, r.status, r.json);
     }
@@ -695,7 +773,8 @@ export class ChorusServer {
     this.doctorJobs.set(job.id, job);
     void (async () => {
       if (action === 'deep') {
-        const run = await runDeep(agent, e => e.type === 'scenario-end' && job.results.push(e.result));
+        const run = await (this.o.deep ?? runDeep)(agent, e => e.type === 'scenario-end' && job.results.push(e.result));
+        recordDeep(run.report); // a failed critical scenario turns this version off (the short check below reads it)
         this.deepReports = [...this.deepReports.filter(d => d.agent !== agent), run.report];
         job.ok = run.report.ok;
         job.report = run.report;
@@ -793,6 +872,7 @@ export class ChorusServer {
       case 'POST chats': {
         const agent = asAgent(b.agent);
         if (!agent) return { error: 'agent must be claude, codex or agy' };
+        if (this.offReason(agent)) return { error: this.offReason(agent) };
         const dir = path.resolve(expand(String(b.folder ?? c.project)));
         if (dir === computerDir()) fs.mkdirSync(dir, { recursive: true }); // "This computer": a chat that belongs to no project
         if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return { error: `${b.folder} is not a folder` };
@@ -811,11 +891,20 @@ export class ChorusServer {
           this.pushState();
         });
         return { asked: true };
+      case 'POST chats/:id/unlock': {
+        // a sub thread's chat is watch-only; Unlock lets keys through until it is locked again or the chat ends
+        if (!thread?.sub_status) return { error: 'only a sub thread is watch-only' };
+        if (b.on === false) this.unlocked.delete(id);
+        else if (!this.unlocked.has(id)) this.unlocked.set(id, '');
+        this.pushState();
+        return { ok: true, unlocked: this.unlocked.has(id) };
+      }
       case 'POST chats/:id/select':
         return this.select(id) ? { ok: true } : undefined;
       case 'POST chats/:id/handoff': {
         const to = asAgent(b.to);
         if (!thread || !to) return undefined;
+        if (this.offReason(to)) return { error: this.offReason(to) };
         const opts = { model: b.model, effort: b.effort, skipPermissions: !!b.skip };
         const typed = typeof b.note === 'string' ? b.note : typeof b.prompt === 'string' ? b.prompt : '';
         const note = expandSkillMentions(typed.trim(), this.skillNames());
@@ -868,6 +957,37 @@ export class ChorusServer {
         return { pending: this.approvalsNow().filter(a => !a.hidden), decided: c.decidedItems() };
       case 'GET skills':
         return this.skills();
+      case 'GET skills/all':
+        return allSkills(c.store, c.project);
+      case 'POST skills/sync': {
+        // a tick on Sync skills, or "Sync and use" in the "/" picker: one link in that CLI's home skills folder, or its removal
+        const cli = SYNC_CLIS.includes(b.cli) ? (b.cli as Cli) : undefined;
+        if (!cli || typeof b.dir !== 'string') return { error: 'dir and cli (claude, codex or agy) are needed' };
+        if (!c.store.storedSkills().some(s => s.dir === b.dir)) scanSkills(c.store, c.project);
+        const skill = c.store.storedSkills().find(s => s.dir === b.dir);
+        if (!skill) return { error: 'Chorus does not know this skill' };
+        const r = b.on === false ? unsyncSkill(c.store, skill.dir, cli) : syncSkill(c.store, skill.dir, cli);
+        if (!r.ok) return { error: r.error, ...allSkills(c.store, c.project) };
+        const flash = b.on === false ? `Removed ${skill.name} from ${CLI_NAMES[cli]}` : `Synced ${skill.name} to ${CLI_NAMES[cli]} · ${tilde(r.path)}`;
+        return { flash, path: r.path, ...allSkills(c.store, c.project) };
+      }
+      case 'POST skills/sources': {
+        if (typeof b.path !== 'string' || !b.path.trim()) return { error: 'path is needed' };
+        const r = addSource(c.store, expand(b.path.trim()), c.project);
+        return r.ok ? allSkills(c.store, c.project) : { error: r.error };
+      }
+      case 'POST skills/sources/pick': {
+        // the system folder chooser, as for a project folder; what was chosen is added (a skill or a folder of skills)
+        const pick = await (this.o.pickFolder ?? pickFolder)(os.homedir(), 'Choose a folder of skills, or one skill');
+        if (!pick.dir) return { ...pick };
+        const r = addSource(c.store, pick.dir, c.project);
+        return r.ok ? { added: pick.dir, kind: r.kind, ...allSkills(c.store, c.project) } : { error: r.error };
+      }
+      case 'POST skills/sources/remove': {
+        if (typeof b.path !== 'string') return { error: 'path is needed' };
+        const r = removeSource(c.store, b.path);
+        return r.ok ? { unsynced: r.unsynced, ...allSkills(c.store, c.project) } : { error: r.error };
+      }
       case 'GET files': {
         // the New chat form's "@" list: the files of a folder Chorus offers for a chat
         const folder = path.resolve(expand(String(q.get('folder') ?? '')));
@@ -1012,8 +1132,12 @@ export class ChorusServer {
         skip: !!t?.skip_permissions,
         usage: e.meta?.usage ?? null,
         artifacts: (e.meta?.artifacts ?? 0) + c.store.reportedArtifacts(e.id).length,
+        // grows on a new artifact and on every new version of one (plan 2026-11-14, Package 5A): the Artifacts button flashes
+        artifactsRev: this.artifactsRev(e.id),
         toast: e.meta?.toast ?? null,
         updated: t?.updated ?? null,
+        // a sub thread: its main chat and its status (null for any other chat)
+        sub: this.subs.info(t, this.isUnlocked(e.id)),
       };
     });
     return {
@@ -1028,11 +1152,58 @@ export class ChorusServer {
       // window would redraw the inbox under the mouse
       approvals: this.approvalsNow().map(({ waiting, ...x }) => ({ ...x, since: Math.round(Date.now() / 1000 - waiting) })),
       ui: this.ui(),
-      notice: this.app.notice,
+      notice: this.noticeNow(),
       dialogs: [...this.dialogs.values()].map(x => x.d),
       // the doctor's short check, the one status of the agents (null until the first one is done)
       doctor: this.agentCheck ? { at: this.agentCheck.at, ms: this.agentCheck.report.ms, checking: this.checkShown, agents: this.agentCheck.report.agents } : this.checking ? { checking: true, agents: null } : null,
     };
+  }
+
+  /** Edits of reported artifacts seen per chat (in memory: after a restart it counts from 0, and nothing flashes on page load). */
+  private artEdits = new Map<string, number>();
+  /** Per reported target: its row id and file time when last looked at. */
+  private artSeen = new Map<string, { id: number; mtime?: number }>();
+  private artLooked = new Map<string, number>();
+
+  /**
+   * A number that grows on a new artifact and on every new version of one: the versions of the files in the chat's artifacts
+   * folder, plus the edits of its reported files (a changed file time) and the targets it reported again. The file times are
+   * read at most once every 2 s per chat, for the 50 newest reported files; the first look only remembers them.
+   */
+  artifactsRev(id: string): number {
+    const c = this.c;
+    const now = Date.now();
+    if (now - (this.artLooked.get(id) ?? 0) >= 2000) {
+      this.artLooked.set(id, now);
+      let edits = this.artEdits.get(id) ?? 0;
+      for (const r of c.store.reportedArtifacts(id).slice(0, 50)) {
+        const key = `${id}\0${r.target}`;
+        let mtime: number | undefined;
+        if (!/^https?:\/\//i.test(r.target)) {
+          try {
+            mtime = fs.statSync(r.target).mtimeMs;
+          } catch {
+            /* gone, or not a file: skipped */
+          }
+        }
+        const had = this.artSeen.get(key);
+        if (had && (had.id !== r.id || (mtime !== undefined && had.mtime !== undefined && mtime !== had.mtime))) edits++;
+        this.artSeen.set(key, { id: r.id, mtime: mtime ?? had?.mtime });
+      }
+      this.artEdits.set(id, edits);
+    }
+    return c.store.artifactVersions(id) + (this.artEdits.get(id) ?? 0);
+  }
+
+  /**
+   * The controller's warning line, without a "context not loaded" about a sub thread: that warning is for a hand-off (a chat that
+   * should load its parent's record); a sub thread gets its work from its brief.
+   */
+  private noticeNow(): string {
+    const n = this.app.notice;
+    if (!/context not loaded/.test(n)) return n;
+    const subs = this.c.store.subThreads();
+    return subs.some(t => n.includes(`"${t.title}"`)) ? '' : n;
   }
 
   /** Pushes the state to every client when it changed (called on events and twice a second). */
@@ -1149,10 +1320,9 @@ export class ChorusServer {
     });
   }
 
-  /** The skills that are on in this project: what "/" lists and what a first message's `/name` loads. */
+  /** Every skill Chorus sees (Sync skills): what "/" lists and what a first message's `/name` loads. */
   skillNames() {
-    const off = disabledSkills(this.c.project);
-    return listSkills(this.c.project).filter(s => !off.includes(path.basename(s.dir))).map(s => s.name);
+    return [...new Set(scanSkills(this.c.store, this.c.project).skills.map(s => s.name))];
   }
 
   /** A folder the New chat form offers for a chat: the project, a chat's or a recent folder, This computer, or one in the home folder (Browse…). */
@@ -1212,6 +1382,8 @@ export class ChorusServer {
         void cl.attach(m.id);
       } else if (m.t === 'in' && typeof m.data === 'string') {
         if (process.env.CHORUS_DEBUG_INPUT) fs.appendFileSync(process.env.CHORUS_DEBUG_INPUT, JSON.stringify(m.data) + '\n');
+        // a sub thread is watch-only: its keys are dropped unless the user unlocked it (its CLI's prompts are answered by the card)
+        if (typeof m.id === 'string' && !this.watchOnlyLets(m.id, m.data)) return;
         host?.write(m.data);
         if (host && typeof m.id === 'string') this.typedTo(m.id, m.data);
       }
@@ -1221,7 +1393,10 @@ export class ChorusServer {
         debug(`resize ${m.cols}x${m.rows}: agents at ${this.size.cols}x${this.size.rows}`);
       } else if (m.t === 'resize') debug(`resize ${m.cols}x${m.rows} ignored: agents stay at ${this.size.cols}x${this.size.rows}`);
       else if (m.t === 'detach') cl.detach();
-      else if (m.t === 'drop' && typeof m.id === 'string' && Array.isArray(m.paths)) {
+      else if (m.t === 'drop' && typeof m.id === 'string' && Array.isArray(m.paths) && this.c.store.getThread(m.id)?.sub_status && !this.isUnlocked(m.id)) {
+        // a locked sub thread takes no keys, and no dropped files either
+        cl.send(JSON.stringify({ t: 'flash', text: 'This sub thread is watch-only: give the file to its main chat, or Unlock it first' }));
+      } else if (m.t === 'drop' && typeof m.id === 'string' && Array.isArray(m.paths)) {
         // files dropped on the native window: Tauri gives their full paths (docs/phase5.md §8.3)
         const paths = m.paths.filter((p: unknown): p is string => typeof p === 'string' && path.isAbsolute(p));
         const r = this.c.dropFiles(m.id, paths.map((p: string) => ({ path: p })), !!m.copy);

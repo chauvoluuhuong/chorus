@@ -68,6 +68,17 @@ chorus-core release can add versions without a Chorus release.
 | exactly a tested version | tested: Ready |
 | another patch of a tested major.minor (Claude 2.1.310 when 2.1.309 is tested), no known break between them (the list marks breaks) | tested: Ready |
 | a major.minor with no tested version (Codex 0.164.0 when 0.163.0 is the newest, or 0.158.0 between 0.155 and 0.160), or across a known break | untested: the detailed test is suggested |
+| a version whose detailed test ran on this machine and failed a critical check (§4.2) | off: "Can't be used", no chat starts on it |
+
+**Off (2026-11-16, plan 2026-11-14 Stage 1).** Three checks of the detailed test are critical: the standing note reaches the
+model (C1), the per-session MCP server is reached (C6), and Chorus sees when a turn ends. When one of them ran and failed, that
+agent's version is **off** in Chorus, with the check's one-line reason. The mark is kept in `~/.chorus/doctor/off.json` (beside
+`last.json`, keyed by agent and version) and passed to the short check, which reports the agent as `off` while that version is
+installed. Off means: not offered in New chat, Teammates or Hand off, no chat or task step starts on it (`chorus serve` refuses
+with the reason), and its chats are kept. It turns on again by itself: another installed version (the verified one the Doctor
+offers) is not marked, and a later detailed test of the same version whose critical checks pass removes the mark. A test that
+was skipped, blocked (login, quota) or not run never turns an agent off; a failed check that is not critical stays a Problem
+(§6.2), as before. `CHORUS_DOCTOR_FAIL=<id>[,<id>]` makes those checks fail with a fixed reason, for tests and proof runs only.
 
 Decided 2026-10-26: the flow is unchanged, only the comparison is by major.minor. CLIs that ship mostly patch releases (Claude Code
 2.1.x) stay Ready across them; Codex bumps the minor on each release, so most new Codex versions get the suggestion.
@@ -173,6 +184,10 @@ The same suite has two users:
 The resume check as built asks the agent to remember a fruit and then asks for the fruit, never for a "code word": every doctor
 chat already carries a code word in its standing note (for C1), and with both in one context Codex 0.169.0 answered the note's
 word. A resumed chat was reported as "did not remember" although it had resumed (2026-11-16, [failure](failures/2026-11-16-doctor-false-failures.md)).
+
+Critical cases (§2.1, Off): C1 (`envelope`), C6 (`mcp`) and turn end (`turn-end`: Chorus sees the turn end from the CLI's own
+output, the signal sub threads and tasks rest on). A critical case that fails is run once more before it counts; the Doctor tags
+these three checks "critical".
 
 **C. Chorus tools inside the CLI**
 
@@ -338,6 +353,7 @@ One row per CLI. The status is what the user needs to act on, in this order:
 | Testing | `n of 9`, the case running | — |
 | Works | ✔ `0.170.0 works on this Mac` | — |
 | Problem | ✖ and the one-line reason of the first failed case | **Install 0.163.0** (optional, §3.2) · **Keep** · **Details** (the case, its reason, the command, the stream tail or final screen) · **Report issue** |
+| Can't be used (off) | ✖ "Can't be used"; the banner "<CLI> <version> can't be used with Chorus." with what does not work, and the open row's "Off in Chorus." line | **Install <verified version>** · **Report issue**; no **Keep**: it stays off until a test passes (§2.1, Off) |
 | Out of quota | ⚠ and the reset time when the CLI says it | — |
 
 ### 6.3 The Doctor page
@@ -378,7 +394,9 @@ window is visible, the page also asks every 30 s (`{ waiting: true }`; the serve
 for at most 10 min after the window last came to the front: a login on another screen shows even when Chorus never lost focus.
 One short check costs about 0.1 s warm (1.7 s cold) and starts each CLI's version and login check, so it never loops when
 everything is Ready or the window is hidden. Each agent's "Show details" has its own **Run detailed test** / **Test again**,
-so one CLI can be tested without the others (they run side by side). Nothing of the check is kept on disk any more (`fast.json` and `lastCheck()` are gone): the
+so one CLI can be tested without the others (they run side by side). An agent that is off (§2.1) is shown on the Doctor page
+only; every other screen leaves it out the way it leaves out one that is not installed or not logged in, labelled
+"Can't be used · see Doctor". Nothing of the check is kept on disk any more (`fast.json` and `lastCheck()` are gone): the
 server's answer is the one the Report uses too, and `chorus doctor` runs its own each time.
 
 ### 6.6 Before building

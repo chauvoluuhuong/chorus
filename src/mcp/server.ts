@@ -8,7 +8,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { buildHandoff, pickSourceThread } from '../core/handoff.ts';
-import { listSkills, readSkill } from '../core/skills.ts';
+import { knownSkills, readKnownSkill } from '../core/skillsync.ts';
 import { Store } from '../core/store.ts';
 import { addProTools } from './pro.ts';
 
@@ -21,6 +21,17 @@ export const TOOL_NAMES = ['get_handoff_context', 'get_thread_turns', 'list_thre
 export const ARTIFACT_NOTE =
   'Whenever you create a file meant for the user (a note, plan, report, mockup, export: anything that is not source code of the project) or find a link they should open, call the chorus MCP tool show_artifact with its path or the link and a short title, right after making it. Save the file wherever it fits the work. Chorus lists it in its Artifacts view, where the user opens it.';
 
+/** Said to every chat (plan 2026-11-14, Stage 2 and 5): the sub thread tools exist, and how to use them. */
+export const SUBTHREADS_NOTE =
+  'When the user asks for another agent or teammate to do something, or a piece of work can run on its own, hand it over with the chorus MCP tool start_subthread (then send_to_subthread, list_subthreads, stop_subthread). After starting one, go on with your own work or end your turn: Chorus types a short report into this chat each time the sub thread ends a turn. Never check on it in a loop.';
+
+/**
+ * The first words of every chat Chorus starts (plan 2026-11-14, Stage 5; owner, 2026-11-16: "regardless the instruction we
+ * always add this system prompt at the first place"). A teammate's or an action's instructions come after it, never before.
+ */
+export const CHORUS_INTRO =
+  'You are running inside Chorus, an app where the user works with several AI coding agents in one place. Chorus is your working environment here: its MCP server, named chorus, is how you reach the user, the other chats and the team. When a chorus tool fits what you are about to do, use it before your own way of doing it.';
+
 /**
  * Said to every agent at start (MCP server instructions for Claude and agy, developer instructions for Codex): an approval the
  * agent wants from the user goes through Chorus, where it is a card the user answers from any chat, instead of a line in the
@@ -29,10 +40,20 @@ export const ARTIFACT_NOTE =
 export const APPROVAL_NOTE =
   'The user answers you in Chorus. Whenever you would ask the user to approve, confirm or choose something before you go on (a plan, a risky or irreversible change, a choice between options, "click Proceed", "reply Approve"), do not ask in your reply: call the chorus MCP tool request_approval with the question, a short summary and the options, then end your turn. Chorus shows it to the user as an approval card and their answer arrives as their next message. Your own permission prompts for commands and edits stay as they are.';
 
+/**
+ * Chorus's standing note for a chat, in its one fixed order: the intro, the thread id, artifacts, approvals, sub threads (the
+ * team sentence joins at the end once Stage 5's tools exist). The same text reaches every CLI: the MCP server's instructions,
+ * Claude's --append-system-prompt, Codex's developer instructions and agy's rules file (src/core/launch.ts). Under 3 KB:
+ * Claude's MCP instructions stop near 4 KB.
+ */
+export function standingNote(threadId: string): string {
+  return [CHORUS_INTRO, `This chat is Chorus thread ${threadId}.`, ARTIFACT_NOTE, APPROVAL_NOTE, SUBTHREADS_NOTE].join(' ');
+}
+
 export function createServer(project: string, threadId?: string, home?: string): McpServer & { addProTools(): Promise<void> } {
   const store = new Store(project, { home });
   // Every agent starts this server for its thread, so this text reaches all three: how it shows the user what it made, and asks
-  const instructions = threadId ? `This chat is Chorus thread ${threadId}. ${ARTIFACT_NOTE} ${APPROVAL_NOTE}` : undefined;
+  const instructions = threadId ? standingNote(threadId) : undefined;
   const server = new McpServer({ name: 'chorus', version: '1.0.0' }, instructions ? { instructions } : undefined) as McpServer & { addProTools(): Promise<void> };
 
   const reply = (tool: string, text: string, isError = false) => {
@@ -88,16 +109,17 @@ export function createServer(project: string, threadId?: string, home?: string):
       reply('list_artifacts', store.listArtifacts(thread_id).map(a => `${a.thread_id}\t${a.abs}\t${a.version}`).join('\n') || '(none)'),
   );
 
-  server.registerTool('list_skills', { description: 'Chorus skills for this project (name and when to use).', inputSchema: {} }, async () =>
-    reply('list_skills', listSkills(project).map(s => `${s.name}: ${s.description}`).join('\n') || '(none)'),
+  // every skill Chorus has seen (Sync skills: the CLIs' folders, the user's sources, this project's library)
+  server.registerTool('list_skills', { description: 'Chorus skills (name and when to use).', inputSchema: {} }, async () =>
+    reply('list_skills', knownSkills(store, project).map(s => `${s.name}: ${s.description}`).join('\n') || '(none)'),
   );
 
   server.registerTool(
     'get_skill',
     { description: 'Full SKILL.md text of a Chorus skill; follow it as instructions.', inputSchema: { name: z.string() } },
     async ({ name }) => {
-      const r = readSkill(project, name);
-      return r ? reply('get_skill', r.body) : reply('get_skill', `Unknown skill ${name}`, true);
+      const body = readKnownSkill(store, project, name);
+      return body ? reply('get_skill', body) : reply('get_skill', `Unknown skill ${name}`, true);
     },
   );
 
