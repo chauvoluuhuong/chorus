@@ -1543,9 +1543,6 @@ function drBanner() {
     const acts = `${verified ? `<button class="btn primary" data-act="doc-run" data-arg="${off.agent}:tested">Install ${esc(off.name)} ${esc(off.newestTested)}</button>` : ''}<button class="btn" data-act="doc-report">Report issue</button>`;
     return drBannerHtml('bad', `${off.name} ${off.version} can't be used with Chorus.`, text, acts);
   }
-  // it was off and works again (the verified version installed, or a test passed)
-  const back = S.docBackOn && agents.find(a => a.agent === S.docBackOn && (a.state === 'ready' || a.state === 'untested'));
-  if (back) return drBannerHtml('ok', `${back.name} ${back.version} works with Chorus.`, 'It is on again everywhere: New chat, Teammates and Hand off.');
   const failed = agents.map(a => [a, drFailed(a)]).find(([a, j]) => j && !S.docKept.has(a.agent));
   if (failed) {
     const [a, j] = failed;
@@ -1555,6 +1552,9 @@ function drBanner() {
     const acts = [a.testedInstall && a.version !== a.newestTested ? `<button class="btn primary" data-act="doc-run" data-arg="${a.agent}:tested">Install ${esc(a.name)} ${esc(a.newestTested)}</button>` : '', `<button class="btn" data-act="doc-keep" data-arg="${a.agent}">Keep ${esc(a.version)}</button>`, `<button class="btn" data-act="doc-report">Report issue</button>`].join('');
     return drBannerHtml('bad', `${a.name} ${a.version}: ${fails.length} of ${j.report.results.length} checks failed.`, `Chats still start; this part does not work: ${effect}.${fix}`, acts);
   }
+  // it was off and works again (the verified version installed, or a test passed); a failed check that is not critical comes first
+  const back = S.docBackOn && agents.find(a => a.agent === S.docBackOn && (a.state === 'ready' || a.state === 'untested'));
+  if (back) return drBannerHtml('ok', `${back.name} ${back.version} works with Chorus.`, 'It is on again everywhere: New chat, Teammates and Hand off.');
   const fresh = agents.find(a => a.state === 'untested' && !S.docNotNow.has(a.agent) && !drJob(a.agent, 'deep'));
   if (fresh) {
     const text = `Chorus is tested with ${fresh.newestTested && fresh.version && cmpV(fresh.version, fresh.newestTested) < 0 ? `newer versions of ${fresh.name} (up to ${fresh.newestTested})` : `${fresh.name} up to ${fresh.newestTested ?? 'no version yet'}`}. A detailed test checks that ${fresh.version} works with Chorus: about 2 minutes and a few short model turns on your ${fresh.name} plan.`;
