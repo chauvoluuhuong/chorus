@@ -206,6 +206,7 @@ function onState(st) {
   const previousNews = S.state?.notifications;
   const doctorChanged = JSON.stringify(S.state?.doctor) !== JSON.stringify(st.doctor);
   S.state = st;
+  for (const c of st.chats) noteCount(`art:${c.id}`, c.artifacts ?? 0);
   if (JSON.stringify(previousNews) !== JSON.stringify(st.notifications) && !$('#news').hidden && !S.newsDetail) void loadNews();
   if (!S.homeGuess) S.homeGuess = st.project.split('/').slice(0, 3).join('/');
   // a request no longer pops up at the bottom (owner, 2026-11-07): it waits in Approvals and the top bar's "waiting" button
@@ -596,6 +597,31 @@ function treeHtml(keep) {
 /** What Approvals lists: a command prompt deleted from it stays hidden there (its Approve/Deny line stays in the chat). */
 const listed = () => (S.state?.approvals ?? []).filter(a => !a.hidden);
 const waitingCount = () => listed().length + (window.choruspro?.needsCount?.() ?? 0);
+
+/* Counts that flash when they grow (Approvals, a chat's Artifacts): the whole button grows and turns yellow for about a
+   second, then goes back, and the number rolls to its new value. Only growth flashes (a drop rolls quietly); several at once
+   are one flash; a count that grew while the window was hidden is not replayed. The page redraws these buttons often, so a
+   redraw inside the second continues the animation from where it was (a negative animation-delay) instead of restarting it. */
+const COUNT_MS = 1100;
+const COUNT_BOOT_MS = 4000;
+const counts = new Map(); // key → { n: the number now, from: the number before, at: when it changed (0 = never shown moving) }
+function noteCount(key, n) {
+  const c = counts.get(key);
+  if (!c) return void counts.set(key, { n, from: n, at: 0 });
+  // nothing moves while the page is still loading its first numbers, or while the window is hidden
+  if (n !== c.n) counts.set(key, { n, from: c.n, at: document.hidden || performance.now() < COUNT_BOOT_MS ? 0 : Date.now() });
+}
+const countAge = key => { const c = counts.get(key); return c && c.at && Date.now() - c.at < COUNT_MS ? Date.now() - c.at : -1; };
+/** Goes inside a button's class="…": closes it with " flash" and the delay that keeps a redraw in step, when its count just grew. */
+function countFlash(key) {
+  const c = counts.get(key), age = countAge(key);
+  return age >= 0 && c.n > c.from ? ` flash" style="animation-delay:-${age}ms` : '';
+}
+/** The number itself: the old one rolls out and the new one in while the change is fresh; from nothing it just appears. */
+function countNum(key, n) {
+  const c = counts.get(key), age = countAge(key);
+  return age >= 0 && c.from > 0 && c.n === n ? `<span class="cnt-roll${c.n < c.from ? ' down' : ''}" style="animation-delay:-${age}ms"><i>${c.from}</i><i>${n}</i></span>` : String(n);
+}
 /** A chat with an item in Approvals: what a project's "!N" and the Needs you filter count, so they agree with the lists (a prompt
  *  deleted from Approvals still keeps its chat waiting on the agent's screen, but it is no longer counted). */
 const waitsOnYou = c => listed().some(a => a.id === c.id);
@@ -603,6 +629,7 @@ const waitsOnYou = c => listed().some(a => a.id === c.id);
 function renderChrome() {
   const st = S.state;
   const waiting = waitingCount();
+  noteCount('approvals', waiting);
   const v = S.view;
   const on = n => (v.name === n ? ' on' : '');
   // a phone has no sidebar: Home, Chats and More hold its parts
@@ -623,7 +650,7 @@ function renderChrome() {
     <div class="brand"><span class="logo"><i></i><i></i><i></i></span><b>Chorus</b><button class="icon-btn" data-act="sidebar" title="${S.size === 'desktop' ? `Hide the sidebar (${MOD}B)` : 'Close'}" aria-label="${S.size === 'desktop' ? 'Hide the sidebar' : 'Close the sidebar'}">⇤</button></div>
     <nav class="nav">
       <button class="new${v.name === 'new' && !v.from && !v.folder ? ' on' : ''}" data-act="new"><span class="plus">${PLUS}</span>New chat<kbd style="margin-left:auto">${MOD}N</kbd></button>
-      <button class="${on('approvals').trim()}" data-act="approvals"><span class="ico">⚑</span>Approvals${waiting ? `<span class="count">${waiting}</span>` : ''}</button>
+      <button class="${on('approvals').trim()}${countFlash('approvals')}" data-act="approvals"><span class="ico">⚑</span>Approvals${waiting ? `<span class="count">${countNum('approvals', waiting)}</span>` : ''}</button>
       <button class="${on('memory').trim()}" data-act="memory"><span class="ico">◫</span>Memory</button>
       <button class="${on('skills').trim()}" data-act="skills"><span class="ico">✦</span>Skills</button>
       ${proSlot('nav')}
@@ -652,7 +679,7 @@ function renderChrome() {
     ${$('#app').classList.contains('side-off') && S.size === 'desktop' ? `<button class="icon-btn" data-act="sidebar" title="Show the sidebar (${MOD}B)">⇥</button>` : ''}
     ${S.history.length ? `<button class="btn" data-act="back" title="Back" aria-label="Back">${wide ? '‹ Back' : '‹'}</button>` : ''}
     <div class="crumbs">${crumbs}</div>
-    ${waiting ? `<button class="btn waiting" data-act="approvals" aria-label="${waiting} waiting">! ${waiting}${wide ? ' waiting' : ''}</button>` : ''}
+    ${waiting ? `<button class="btn waiting${countFlash('approvals')}" data-act="approvals" aria-label="${waiting} waiting">! ${countNum('approvals', waiting)}${wide ? ' waiting' : ''}</button>` : ''}
     ${st?.update ? `<button class="btn update-btn" data-act="update-toggle" aria-expanded="${!$('#app-update').hidden}" aria-controls="app-update" title="Chorus ${esc(st.update.version)} is available">${{ downloading: '↑ <span class="update-label">Updating to </span>', installing: '↑ <span class="update-label">Updating to </span>', ready: '↻ <span class="update-label">Restart for </span>', failed: '⚠ <span class="update-label">Update failed: </span>' }[st.update.install?.phase] ?? '↑ <span class="update-label">Update to </span>'}${esc(st.update.version)}</button>` : ''}
     <button class="btn export-btn" data-act="export" title="Save all your chats and their files to one .zip in Downloads" aria-label="Export"${S.exporting ? ' disabled' : ''}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg><span class="export-label">${S.exporting ? 'Exporting…' : 'Export'}</span></button>
     <button class="btn news-toggle" data-act="news-toggle" aria-label="Notifications${st?.notifications?.unread ? `, ${st.notifications.unread} unread` : ''}" aria-expanded="${!$('#news').hidden}" aria-controls="news"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span class="news-label">Notifications</span>${st?.notifications?.unread ? `<span class="news-count">${Math.min(st.notifications.unread, 99)}</span>` : ''}</button>`;
@@ -1011,7 +1038,18 @@ async function loadDecided() {
 const waitFor = since => { const s = Date.now() / 1000 - since; return s < 60 ? `${Math.max(0, Math.round(s))}s` : `${Math.round(s / 60)}m`; };
 const riskBadge = r => (r ? `<span class="badge ${r.level === 'err' ? 'bad' : r.level === 'warn' ? 'warn' : 'plain'}">${esc(r.label)}</span>` : '');
 /** One request from a chat, with its answers: Approvals, and a phone's Home. */
-const approvalItem = a => `<div class="item"><div class="head"><span class="dot approval"></span><span class="t">${esc(a.title)}</span><span class="badge ${esc(a.agent)}">${esc(AGENT[a.agent]?.name ?? a.agent)}</span><span class="faint">${esc(base(a.cwd))} · waiting ${waitFor(a.since)}</span><span style="flex:1"></span>${riskBadge(a.risk)}${delBtn(a.id, a.request)}</div>
+/** What kind of ask it is: a question an agent put to you, or something that needs your approval (the CLI's own permission
+ *  prompt, or an approval the agent asked for). */
+const askKindBadge = a => (a.kind === 'ask' && a.askKind === 'question' ? '<span class="badge ask">Asks you a question</span>' : '<span class="badge bad">Needs your approval</span>');
+/** Where an ask comes from: project › chat, or project › task › its part (Planner, Step 2 · title) for a task's chat. Each part opens its place. */
+function askPath(a) {
+  const sep = '<span class="sep">›</span>';
+  const t = window.choruspro?.chatPath?.(a.id);
+  const proj = `<a class="ap-proj" data-act="fold-open" data-arg="${esc(a.cwd)}">${esc(base(a.cwd))}</a>`;
+  const rest = t ? `<a data-act="pro-view" data-arg="task~${esc(t.taskId)}">${esc(t.label)}</a>${sep}<a class="ap-last" data-act="chat" data-arg="${esc(a.id)}">${esc(t.part)}</a>` : `<a class="ap-last" data-act="chat" data-arg="${esc(a.id)}">${esc(a.title)}</a>`;
+  return `<span class="ask-path">${proj}${sep}${rest}</span>`;
+}
+const approvalItem = a => `<div class="item"><div class="head">${askKindBadge(a)}${askPath(a)}<span style="flex:1"></span><span class="badge ${esc(a.agent)}">${esc(AGENT[a.agent]?.name ?? a.agent)}</span><span class="faint">waiting ${waitFor(a.since)}</span>${a.kind === 'ask' ? '' : riskBadge(a.risk)}${delBtn(a.id, a.request)}</div>
           ${
             a.kind === 'ask'
               ? `${askCard(a)}<div class="acts"><span style="flex:1"></span><button class="btn" data-act="chat" data-arg="${esc(a.id)}">Open chat ›</button></div>`
@@ -1774,14 +1812,14 @@ function renderChatParts() {
     if (S.drawer) void loadDrawer();
   }
   // a header button opens its view in the right sidebar; the lit one (or ✕) closes it
-  const sideBtn = (k, label, icon, extra = '') => `<button class="btn${view === k ? ' on' : ''}" data-act="side" data-arg="${k}" aria-pressed="${view === k}" title="${label}" aria-label="${label}"><span class="ic-only">${icon}</span><span class="lbl">${label}</span>${extra}</button>`;
+  const sideBtn = (k, label, icon, extra = '', flash = '') => `<button class="btn${view === k ? ' on' : ''}${flash}" data-act="side" data-arg="${k}" aria-pressed="${view === k}" title="${label}" aria-label="${label}"><span class="ic-only">${icon}</span><span class="lbl">${label}</span>${extra}</button>`;
   // the labels go on a tablet (icons stay, with the meter) and the buttons go into the ⋯ sheet on a phone
   head.innerHTML = `<span class="badge ${esc(c.agent)}">${esc(AGENT[c.agent]?.name ?? c.agent)}</span>
     <div class="meta"><span class="dot ${esc(c.state)}"></span><span>${esc(STATE_LABEL[c.state] ?? c.state)}</span>
       ${c.model || c.effort ? `<span class="model">· ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}</span>` : ''}${c.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${meter(c.usage)}
       <span class="mono faint path" title="${esc(c.cwd)}">‎${esc(tilde(c.cwd))}‎</span>${c.toast ? `<span class="badge ok">${esc(c.toast)}</span>` : ''}</div>
     <button class="btn" data-act="handoff" data-arg="${esc(c.id)}" title="Continue this chat with another agent" aria-label="Hand off">${S.size === 'desktop' ? '⇄ Hand off' : '⇄'}</button>
-    ${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰') : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${c.artifacts}</span>` : '')}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}
+    ${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰') : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', countFlash(`art:${c.id}`))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}
     <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat" aria-label="Delete this chat">🗑</button>`;
   // a phone: a task chat's panel is tabs beside the chat (Chat · Steps · Plan), one shown at a time
   const tabs = S.size === 'phone' ? window.choruspro?.sideTabs?.(c.id) : null;
