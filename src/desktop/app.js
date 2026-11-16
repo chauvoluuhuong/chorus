@@ -1035,20 +1035,11 @@ async function startChat() {
 
 /* Folder browser (Browse… and "+ add") */
 
-/** The system's own picker (pick or make a folder anywhere); the dialog below only where the system has none. */
-async function pickFolder(dir, then) {
-  // a phone or a tablet (through the private link): the Mac's own picker would open on the Mac, out of reach
-  if (MQ_TOUCH.matches && !NATIVE) return openBrowse(dir, then);
-  let r;
-  try {
-    r = await api('POST', '/api/folders/pick', { dir });
-  } catch (e) {
-    return toast(e.message);
-  }
-  if (r.dir) return then(r.dir);
-  if (r.none) return openBrowse(dir, then, { noSystem: true });
+/** Picking a folder opens Chorus's own dialog at once (one read, drawn by the page); the system's dialog is a button in it. */
+function pickFolder(dir, then) {
+  return openBrowse(dir, then);
 }
-/** The system picker from inside Chorus's own dialog (only where that dialog shows and the system has one). */
+/** "Mac's folder dialog…": the system picker, for someone who wants it (it starts slowly and runs in another process). */
 async function systemPick() {
   const b = S.browse;
   if (!b) return;
@@ -1069,9 +1060,9 @@ async function systemPick() {
   return b.then?.(r.dir);
 }
 
-async function openBrowse(dir, then, o = {}) {
+async function openBrowse(dir, then) {
   try {
-    S.browse = { ...(await api('GET', `/api/folders?dir=${encodeURIComponent(dir)}`)), then: then ?? S.browse?.then, noSystem: o.noSystem ?? S.browse?.noSystem };
+    S.browse = { ...(await api('GET', `/api/folders?dir=${encodeURIComponent(dir)}`)), then: then ?? S.browse?.then };
   } catch (e) {
     return toast(e.message);
   }
@@ -1091,7 +1082,7 @@ function drawBrowse() {
     <div class="body"><div class="mono">${esc(tilde(b.dir))}</div><div class="muted" style="font-size:12.5px">${b.folders.length} folder${b.folders.length === 1 ? '' : 's'}, sorted by name</div>
     <div class="folders">${b.parent ? '<button data-act="br-up">‹ ..</button>' : ''}${b.folders.map(n => `<button data-act="br-open" data-arg="${esc(n)}">▸ ${esc(n)}</button>`).join('')}</div>
     ${b.error ? `<div class="br-error" role="alert">${esc(b.error)}</div>` : ''}</div>
-    <div class="foot"><button class="btn" data-act="br-new">New folder…</button>${(MQ_TOUCH.matches && !NATIVE) || b.noSystem ? '' : `<button class="btn" data-act="br-system">${isMac ? "Mac's folder dialog…" : 'System folder dialog…'}</button>`}<span style="flex:1"></span><button class="btn" data-act="br-cancel">Cancel</button><button class="btn primary" data-act="br-use">Use this folder</button></div></div>`;
+    <div class="foot"><button class="btn" data-act="br-new">New folder…</button>${MQ_TOUCH.matches && !NATIVE ? '' : `<button class="btn" data-act="br-system">${isMac ? "Mac's folder dialog…" : 'System folder dialog…'}</button>`}<span style="flex:1"></span><button class="btn" data-act="br-cancel">Cancel</button><button class="btn primary" data-act="br-use">Use this folder</button></div></div>`;
 }
 
 /* Approvals: everything waiting on you, from every chat */
@@ -2976,7 +2967,7 @@ document.addEventListener('click', async e => {
         r = { error: err.message };
       }
       if (S.browse !== b) return;
-      S.browse = r.error ? { ...b, error: r.error } : { ...r, then: b.then, noSystem: b.noSystem };
+      S.browse = r.error ? { ...b, error: r.error } : { ...r, then: b.then };
       return drawBrowse();
     }
     case 'br-system':
