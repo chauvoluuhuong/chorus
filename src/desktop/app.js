@@ -600,7 +600,7 @@ function treeHtml(keep) {
     const bang = all.filter(waitsOnYou).length;
     // the project in front: the chat you look at is in it, or the New chat form starts there. Its ＋ always shows; others on hover.
     const here = (v.name === 'chat' && chats.some(c => c.id === v.id)) || (v.name === 'new' && !v.from && (S.form?.folder ?? v.folder) === cwd);
-    tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-rm" data-act="rm-project" data-arg="${esc(cwd)}" title="Remove from the sidebar (the folder and its chats are kept)" aria-label="Remove ${esc(base(cwd))} from the sidebar">×</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button></div>`;
+    tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-rm" data-act="rm-project" data-arg="${esc(cwd)}" title="Delete ${esc(base(cwd))} from Chorus…" aria-label="Delete ${esc(base(cwd))} from Chorus">×</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button></div>`;
     if (folded) continue;
     if (!keep) tree += `<div data-pro-slot="project" data-cwd="${esc(cwd)}"></div>`;
     // a main chat and its sub threads: the main chat first, its sub threads right under it (plan 2026-11-14, Package 4A)
@@ -1035,18 +1035,29 @@ async function startChat() {
 
 /* Folder browser (Browse… and "+ add") */
 
-/** The system's own picker (pick or make a folder anywhere); the dialog below only where the system has none. */
-async function pickFolder(dir, then) {
-  // a phone or a tablet (through the private link): the Mac's own picker would open on the Mac, out of reach
-  if (MQ_TOUCH.matches && !NATIVE) return openBrowse(dir, then);
+/** Picking a folder opens Chorus's own dialog at once (one read, drawn by the page); the system's dialog is a button in it. */
+function pickFolder(dir, then) {
+  return openBrowse(dir, then);
+}
+/** "Mac's folder dialog…": the system picker, for someone who wants it (it starts slowly and runs in another process). */
+async function systemPick() {
+  const b = S.browse;
+  if (!b) return;
   let r;
   try {
-    r = await api('POST', '/api/folders/pick', { dir });
+    r = await api('POST', '/api/folders/pick', { dir: b.dir });
   } catch (e) {
-    return toast(e.message);
+    b.error = e.message;
+    return drawBrowse();
   }
-  if (r.dir) return then(r.dir);
-  if (r.none) return openBrowse(dir, then);
+  if (r.none) {
+    b.error = 'This computer has no folder dialog of its own: choose the folder here.';
+    return drawBrowse();
+  }
+  if (!r.dir || S.browse !== b) return;
+  S.browse = null;
+  drawBrowse();
+  return b.then?.(r.dir);
 }
 
 async function openBrowse(dir, then) {
@@ -1069,8 +1080,9 @@ function drawBrowse() {
   }
   el.innerHTML = `<div class="dialog" role="dialog" aria-label="Choose a project folder"><h2>Choose a project folder</h2>
     <div class="body"><div class="mono">${esc(tilde(b.dir))}</div><div class="muted" style="font-size:12.5px">${b.folders.length} folder${b.folders.length === 1 ? '' : 's'}, sorted by name</div>
-    <div class="folders">${b.parent ? '<button data-act="br-up">‹ ..</button>' : ''}${b.folders.map(n => `<button data-act="br-open" data-arg="${esc(n)}">▸ ${esc(n)}</button>`).join('')}</div></div>
-    <div class="foot"><button class="btn" data-act="br-new">New folder…</button><span style="flex:1"></span><button class="btn" data-act="br-cancel">Cancel</button><button class="btn primary" data-act="br-use">Use this folder</button></div></div>`;
+    <div class="folders">${b.parent ? '<button data-act="br-up">‹ ..</button>' : ''}${b.folders.map(n => `<button data-act="br-open" data-arg="${esc(n)}">▸ ${esc(n)}</button>`).join('')}</div>
+    ${b.error ? `<div class="br-error" role="alert">${esc(b.error)}</div>` : ''}</div>
+    <div class="foot"><button class="btn" data-act="br-new">New folder…</button>${MQ_TOUCH.matches && !NATIVE ? '' : `<button class="btn" data-act="br-system">${isMac ? "Mac's folder dialog…" : 'System folder dialog…'}</button>`}<span style="flex:1"></span><button class="btn" data-act="br-cancel">Cancel</button><button class="btn primary" data-act="br-use">Use this folder</button></div></div>`;
 }
 
 /* Approvals: everything waiting on you, from every chat */
@@ -2064,6 +2076,26 @@ function confirmDelete({ what }) {
   });
 }
 
+/** The × on a project: "Delete <name> from Chorus?", what goes and what stays; resolves true on "Delete everything". */
+function confirmProjectDelete(folder, n) {
+  return new Promise(resolve => {
+    const el = document.createElement('div');
+    el.className = 'scrim';
+    const name = base(folder);
+    el.innerHTML = `<div class="dialog proj-del" role="dialog" aria-label="Delete ${esc(name)} from Chorus?"><h2>Delete ${esc(name)} from Chorus?</h2><div class="body"><p>This removes everything Chorus keeps for this project: its ${n} chats with their records, artifacts lists and approvals, and its tasks, goals and failure notes. Running chats are stopped. This cannot be undone.</p><p>The folder <span class="mono">${esc(tilde(folder))}</span> and every file in it stay on your disk.</p></div><div class="foot"><button class="btn" data-x="no">Cancel</button><button class="btn danger-fill" data-x="yes">Delete everything</button></div></div>`;
+    const done = ok => (el.remove(), resolve(ok));
+    el.addEventListener('click', e => {
+      const x = e.target.closest('[data-x]')?.dataset.x;
+      if (x === 'yes' || x === 'no') done(x === 'yes');
+      else if (e.target === el) done(false);
+    });
+    el.addEventListener('keydown', e => e.key === 'Escape' && (e.stopPropagation(), done(false)));
+    $('#dialogs').append(el);
+    // Cancel has the focus: Enter does not delete
+    el.querySelector('[data-x="no"]').focus();
+  });
+}
+
 /* ---------- New chat and the hand-off form: "/" names a skill, "@" a file of the chosen folder (plan 2026-11-13, item 8) ---------- */
 
 let ncPicker = null;
@@ -2772,10 +2804,22 @@ document.addEventListener('click', async e => {
       renderChrome();
       return S.view.name === 'chats' ? renderView() : undefined;
     case 'rm-project': {
-      S.hidden[arg] = (S.state?.chats ?? []).filter(c => c.cwd === arg).map(c => c.id);
+      // the most destructive thing the app does: one warning that says what goes and what stays, then the server deletes it
+      const n = (S.state?.chats ?? []).filter(c => c.cwd === arg).length;
+      if (!(await confirmProjectDelete(arg, n))) return;
+      let r;
+      try {
+        r = await api('DELETE', '/api/projects', { folder: arg });
+      } catch (err) {
+        return toast(err.message);
+      }
+      if (r.error) return toast(r.error);
+      delete S.hidden[arg];
       remember('hidden', S.hidden);
-      const open = S.view.name === 'chat' && S.state?.chats.find(c => c.id === S.view.id)?.cwd === arg;
-      if (open) return go(startView());
+      if (S.folded.delete(arg)) remember('folded', [...S.folded]);
+      toast(`Deleted ${base(arg)} from Chorus: ${r.removed} chat${r.removed === 1 ? '' : 's'}. The folder stays on your disk.`);
+      const open = S.view.name === 'chat' && !S.state?.chats.some(c => c.id === S.view.id && c.cwd !== arg);
+      if (open || (S.view.name === 'new' && S.form?.folder === arg)) return go(startView());
       renderChrome();
       return S.view.name === 'chats' || S.view.name === 'home' ? renderView() : undefined;
     }
@@ -2911,17 +2955,23 @@ document.addEventListener('click', async e => {
       return then?.(dir);
     }
     case 'br-new': {
-      const name = await localPrompt('New folder', [`In ${tilde(S.browse.dir)}`]);
-      if (!name) return;
+      // made only inside the folder the dialog shows; an error stays in the dialog
+      const b = S.browse;
+      if (!b) return;
+      const name = await localPrompt('New folder', [`In ${tilde(b.dir)}`]);
+      if (!name?.trim() || S.browse !== b) return;
+      let r;
       try {
-        const r = await api('POST', '/api/folders', { dir: S.browse.dir, name });
-        S.browse = { ...r, then: S.browse.then };
-        drawBrowse();
+        r = await api('POST', '/api/folders', { dir: b.dir, name: name.trim() });
       } catch (err) {
-        toast(err.message);
+        r = { error: err.message };
       }
-      return;
+      if (S.browse !== b) return;
+      S.browse = r.error ? { ...b, error: r.error } : { ...r, then: b.then };
+      return drawBrowse();
     }
+    case 'br-system':
+      return systemPick();
     case 'scope':
       S.scope = arg;
       return renderView();
@@ -2968,16 +3018,16 @@ document.addEventListener('click', async e => {
     case 'sk-tab':
       S.sk.tab = arg;
       return renderView();
-    case 'sk-add': {
-      const r = await api('POST', '/api/skills/sources/pick');
-      if (r.none) return toast('No folder chooser on this computer');
-      if (r.cancelled) return;
-      if (r.error) return toast(r.error);
-      S.skillsAll = { skills: r.skills, sources: r.sources };
-      const src = r.sources.find(x => x.path === r.added);
-      toast(r.kind === 'skill' ? `Added the skill ${src?.skill ?? ''}` : `Added ${src?.show ?? r.added}: ${src?.count ?? 0} skill${src?.count === 1 ? '' : 's'}`);
-      return renderView();
-    }
+    case 'sk-add':
+      // Chorus's own folder dialog, as everywhere a folder is picked; a folder with a SKILL.md is one skill
+      return pickFolder('~', async dir => {
+        const r = await api('POST', '/api/skills/sources', { path: dir }).catch(e => ({ error: e.message }));
+        if (r.error) return toast(r.error);
+        S.skillsAll = { skills: r.skills, sources: r.sources };
+        const src = r.sources.find(x => x.path === dir);
+        toast(src?.kind === 'skill' ? `Added the skill ${src?.skill ?? ''}` : `Added ${src?.show ?? dir}: ${src?.count ?? 0} skill${src?.count === 1 ? '' : 's'}`);
+        if (S.view.name === 'skills') renderView();
+      });
     case 'sk-src-rm': {
       const r = await api('POST', '/api/skills/sources/remove', { path: arg });
       if (r.error) return toast(r.error);
