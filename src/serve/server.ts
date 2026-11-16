@@ -176,6 +176,8 @@ export class ChorusServer {
   readonly pro: ProHost;
   /** main thread and sub threads: free, so the tools are served also when the paid module is locked or absent */
   readonly subs: SubThreads;
+  /** sub threads the user unlocked (watch-only otherwise: their keys are dropped), and the line each is typing */
+  private unlocked = new Map<string, string>();
   readonly reports: ReportSender;
   private ownInbox: NotificationInbox | undefined;
   url = '';
@@ -286,6 +288,37 @@ export class ChorusServer {
     });
     for (const [id, what] of this.hiddenPrompts) if (!items.some(a => a.kind === 'permission' && a.id === id && a.what === what)) this.hiddenPrompts.delete(id);
     return items;
+  }
+
+  /**
+   * Whether keys for this chat go through: always for a chat that is not a sub thread; for a sub thread only while unlocked, and
+   * then each typed line is passed on to the main chat as a note. A sub thread whose chat ended is locked again.
+   */
+  /** Unlocked, and still running: a sub thread whose chat ended is locked again. */
+  private isUnlocked(id: string) {
+    if (!this.unlocked.has(id)) return false;
+    if (this.c.store.getThread(id)?.sub_status === 'ended' || this.app.entry(id)?.host?.state === 'ended') {
+      this.unlocked.delete(id);
+      return false;
+    }
+    return true;
+  }
+
+  private watchOnlyLets(id: string, data: string): boolean {
+    const t = this.c.store.getThread(id);
+    if (!t?.sub_status) return true;
+    if (!this.isUnlocked(id)) return false;
+    // the line being typed: printable text, Backspace takes one off, a line end sends it
+    let line = this.unlocked.get(id) ?? '';
+    for (const ch of data.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[O\]P].?|\x1b\[20[01]~/g, '')) {
+      if (ch === '\r' || ch === '\n') {
+        if (line.trim()) this.subs.userTyped(id, line);
+        line = '';
+      } else if (ch === '\x7f' || ch === '\b') line = line.slice(0, -1);
+      else if (ch >= ' ') line += ch;
+    }
+    this.unlocked.set(id, line.slice(-2000));
+    return true;
   }
 
   /** Typing to the agent while its question card is open answers it by typing: the card leaves the chat and Approvals at once. */
@@ -846,6 +879,14 @@ export class ChorusServer {
           this.pushState();
         });
         return { asked: true };
+      case 'POST chats/:id/unlock': {
+        // a sub thread's chat is watch-only; Unlock lets keys through until it is locked again or the chat ends
+        if (!thread?.sub_status) return { error: 'only a sub thread is watch-only' };
+        if (b.on === false) this.unlocked.delete(id);
+        else if (!this.unlocked.has(id)) this.unlocked.set(id, '');
+        this.pushState();
+        return { ok: true, unlocked: this.unlocked.has(id) };
+      }
       case 'POST chats/:id/select':
         return this.select(id) ? { ok: true } : undefined;
       case 'POST chats/:id/handoff': {
@@ -1081,7 +1122,7 @@ export class ChorusServer {
         toast: e.meta?.toast ?? null,
         updated: t?.updated ?? null,
         // a sub thread: its main chat and its status (null for any other chat)
-        sub: this.subs.info(t),
+        sub: this.subs.info(t, this.isUnlocked(e.id)),
       };
     });
     return {
@@ -1279,6 +1320,8 @@ export class ChorusServer {
         void cl.attach(m.id);
       } else if (m.t === 'in' && typeof m.data === 'string') {
         if (process.env.CHORUS_DEBUG_INPUT) fs.appendFileSync(process.env.CHORUS_DEBUG_INPUT, JSON.stringify(m.data) + '\n');
+        // a sub thread is watch-only: its keys are dropped unless the user unlocked it (its CLI's prompts are answered by the card)
+        if (typeof m.id === 'string' && !this.watchOnlyLets(m.id, m.data)) return;
         host?.write(m.data);
         if (host && typeof m.id === 'string') this.typedTo(m.id, m.data);
       }
