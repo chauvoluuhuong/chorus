@@ -652,7 +652,7 @@ function renderChrome() {
       <button class="new${v.name === 'new' && !v.from && !v.folder ? ' on' : ''}" data-act="new"><span class="plus">${PLUS}</span>New chat<kbd style="margin-left:auto">${MOD}N</kbd></button>
       <button class="${on('approvals').trim()}${countFlash('approvals')}" data-act="approvals"><span class="ico">⚑</span>Approvals${waiting ? `<span class="count">${countNum('approvals', waiting)}</span>` : ''}</button>
       <button class="${on('memory').trim()}" data-act="memory"><span class="ico">◫</span>Memory</button>
-      <button class="${on('skills').trim()}" data-act="skills"><span class="ico">✦</span>Skills</button>
+      <button class="${on('skills').trim()}" data-act="skills"><span class="ico">⇄</span>Sync skills</button>
       ${proSlot('nav')}
     </nav>
     ${proSlot('side')}
@@ -672,7 +672,7 @@ function renderChrome() {
     if (chat) crumbs = `<a data-act="fold-open" data-arg="${esc(chat.cwd)}">${esc(base(chat.cwd))}</a><span class="sep">›</span><span class="here">${window.choruspro?.chatCrumb?.(chat.id) ?? esc(chat.title)}</span>`;
     else if (v.name === 'new') crumbs = `<span>${esc(base(S.form?.folder ?? st?.project ?? ''))}</span><span class="sep">›</span><span class="here">${v.from ? 'Hand off' : 'New chat'}</span>`;
     else if (v.name === 'pro') crumbs = window.choruspro?.crumbs?.(v.id) ?? '';
-    else crumbs = `<span class="here">${{ approvals: 'Approvals', memory: 'Memory', skills: 'Skills', doctor: 'Doctor' }[v.name] ?? ''}</span>`;
+    else crumbs = `<span class="here">${{ approvals: 'Approvals', memory: 'Memory', skills: 'Sync skills', doctor: 'Doctor' }[v.name] ?? ''}</span>`;
     $('#top').className = '';
     $('#top').innerHTML = `
     <button class="icon-btn menu-btn" data-act="menu" aria-label="Chats and projects" aria-expanded="${$('#app').classList.contains('side-open')}">☰</button>
@@ -724,7 +724,7 @@ function phoneTop(chat) {
     t.innerHTML = window.choruspro?.crumbs?.(v.id) ?? '';
     title = esc(t.content.querySelector('.here')?.textContent ?? '');
   } else {
-    title = { approvals: 'Approvals', more: 'More', new: v.from ? 'Hand off' : 'New chat', skills: 'Skills', doctor: 'Doctor', unlock: 'Unlock' }[v.name] ?? '';
+    title = { approvals: 'Approvals', more: 'More', new: v.from ? 'Hand off' : 'New chat', skills: 'Sync skills', doctor: 'Doctor', unlock: 'Unlock' }[v.name] ?? '';
   }
   return `${root ? '' : ico('back', 'Back', '‹')}<div class="ph-title">${title}</div>${icons}`;
 }
@@ -786,6 +786,12 @@ function renderView() {
     const q = $('#cl-q');
     q?.focus();
     q?.setSelectionRange(q.value.length, q.value.length);
+  }
+  if (v.name === 'skills' && S.sk?.focus) {
+    const q = $('#sk-q');
+    q?.focus();
+    q?.setSelectionRange(q.value.length, q.value.length);
+    S.sk.focus = false;
   }
   if (v.name === 'memory') {
     const q = $('#mem-q');
@@ -857,12 +863,12 @@ function moreHtml() {
   const r = (act, ic, t, val = '') => `<button class="mrow" data-act="${act}"><span class="ico">${ic}</span>${t}<span class="val">${val}</span><span class="chev">›</span></button>`;
   const marks = Object.keys(AGENT).map(a => { const i = drAgent(a) ?? { agent: a }; return `<span class="badge mini ${a}">${AGENT[a].letter}</span>${agentMark(i, agentStatus(i, false))}`; }).join(' ');
   const unread = st?.notifications?.unread ?? 0;
-  const on = S.skills?.items?.filter(s => s.on).length;
+  const on = S.skillsAll?.skills.length;
   const c = S.doctor?.chorus;
   // a paid bundle older than this page draws its sidebar items whole: they go in Team, as they come
   const parts = !window.choruspro || !!window.choruspro.sideTabs;
   return `<div class="more">
-    <div><div class="hm-h">Library</div><div class="card">${r('memory', '◫', 'Memory')}${r('skills', '✦', 'Skills', on != null ? `${on} on` : '')}</div></div>
+    <div><div class="hm-h">Library</div><div class="card">${r('memory', '◫', 'Memory')}${r('skills', '⇄', 'Sync skills', on != null ? `${on}` : '')}</div></div>
     <div><div class="hm-h">Team</div><div class="card">${parts ? proSlot('nav', ' data-part="team"') : proSlot('nav', ' class="nav old-nav"')}</div></div>
     <div><div class="hm-h">This Mac</div><div class="card">${parts ? proSlot('nav', ' data-part="mac"') : ''}${r('doctor', '✚', 'Doctor', marks)}${r('news-toggle', '♢', 'Notifications', unread ? `${unread} new` : '')}${r('export', '⤓', S.exporting ? 'Exporting…' : 'Export all chats', 'to Downloads')}${st?.update ? r('update-toggle', '↑', `Update to ${esc(st.update.version)}`) : ''}</div></div>
     ${planBox() ? `<div><div class="hm-h">Plan</div>${planBox()}</div>` : ''}
@@ -1117,11 +1123,15 @@ function memoryHtml() {
     ${m.items.length ? `<div class="mem"><div class="card list rows">${rows}</div>${step === 'list' ? '' : detail}</div>` : `<div class="card empty">${m.q ? 'Nothing matches.' : 'Nothing recorded yet.'}</div>`}</div>`;
 }
 
-/* Skills: one library for the three agents */
+/* Sync skills: every skill Chorus can see, a check per CLI (plan 2026-11-14, Stage 6; mockup skills-sync.html scenes 1 and 2) */
+
+const SK_CLIS = ['claude', 'codex', 'agy'];
+/** Where a sync puts its link, per CLI (src/core/skillsync.ts HOME_SKILLS). */
+const SK_HOME = { claude: '~/.claude/skills', codex: '~/.codex/skills', agy: '~/.gemini/config/skills' };
 
 async function loadSkills() {
   try {
-    S.skills = await api('GET', '/api/skills');
+    S.skillsAll = await api('GET', '/api/skills/all');
   } catch (e) {
     toast(e.message);
   }
@@ -1129,14 +1139,41 @@ async function loadSkills() {
 }
 
 function skillsHtml() {
-  const k = S.skills;
-  if (!k) return '<div class="page"><h1 class="ph-hide">Skills</h1><p class="lead">Loading…</p></div>';
-  return `<div class="page"><h1 class="ph-hide">Skills</h1><p class="lead">One library for Claude Code, Codex and Antigravity: a skill turned on here is linked into each agent's own skills folder when a chat starts. Library: <span class="mono">${esc(k.where)}</span></p>
-    <div class="toolbar"><span class="grow"></span><button class="btn" data-act="sk-new">+ New skill</button></div>
-    <div class="card list">${k.items.length ? k.items.map(s => `<div class="item skill"><input type="checkbox" class="switch" data-change="sk-toggle" data-arg="${esc(s.folder)}"${s.on ? ' checked' : ''} aria-label="${esc(s.name)} on or off"><div class="grow"><div style="font-weight:600">${esc(s.name)}</div><div class="muted" style="font-size:13px">${esc(s.description)}</div></div><button class="btn" data-act="sk-edit" data-arg="${esc(s.folder)}">Edit</button></div>`).join('') : '<div class="empty">No skills in the library yet.</div>'}</div>
-    <div class="section-title">Found in the agents' own folders</div>
-    <div class="card list">${k.found.length ? k.found.map(f => `<div class="item skill"><span class="badge mini ${esc(f.agent)}">${esc(AGENT[f.agent]?.letter ?? '·')}</span><div class="grow"><div style="font-weight:600">${esc(f.name)}</div><div class="muted mono">${esc(tilde(f.from))}</div></div><button class="btn" data-act="sk-import" data-arg="${esc(f.dir)}">Import</button></div>`).join('') : '<div class="empty">Nothing new to import.</div>'}</div></div>`;
+  const k = S.skillsAll;
+  const u = (S.sk ??= { tab: 'list', q: '', filter: 'all' });
+  if (!k) return '<div class="page"><h1 class="ph-hide">Sync skills</h1><p class="lead">Loading…</p></div>';
+  if (u.tab === 'sources') return skillSourcesHtml(k);
+  const part = s => SK_CLIS.some(c => !s.state[c]);
+  const q = u.q.trim().toLowerCase();
+  const rows = k.skills.filter(s => (u.filter === 'all' || part(s)) && (!q || `${s.name} ${s.description}`.toLowerCase().includes(q)));
+  const mark = a => `<span class="badge mini ${a}">${AGENT[a].letter}</span>`;
+  const check = (s, a) => {
+    const st = s.state[a];
+    const fixed = st === 'own' || st === 'there';
+    const title = st === 'own' ? 'It lives in this agent\'s own folder' : st === 'there' ? 'This agent has it already (not a link Chorus made)' : st === 'sync' ? 'Remove the link' : `Link it into ${SK_HOME[a]}`;
+    return `<span class="sk-cc"><button class="sk-ck ${fixed ? 'own' : st}"${fixed ? ' disabled' : ` data-act="sk-tick" data-arg="${esc(s.dir)}" data-cli="${a}" data-on="${st ? '0' : '1'}"`} title="${esc(title)}" aria-label="${esc(`${s.name} for ${AGENT[a].name}: ${fixed ? 'lives here' : st ? 'synced' : 'not there'}`)}" aria-pressed="${!!st}">✓</button><small>${fixed ? 'lives here' : st === 'sync' ? 'synced' : ''}</small></span>`;
+  };
+  return `<div class="page sk-page"><h1 class="ph-hide">Sync skills</h1><p class="lead">Every skill Chorus can see, and which of your agents has it. Tick an agent to share a skill with it: Chorus puts a link in that agent's skills folder. Nothing is copied, and the skill itself is never changed.</p>
+    <div class="toolbar sk-bar"><input id="sk-q" type="search" placeholder="Find a skill" value="${esc(u.q)}" data-input="sk-q"><div class="seg"><button class="${u.filter === 'all' ? 'on' : ''}" data-act="sk-filter" data-arg="all">All ${k.skills.length}</button><button class="${u.filter === 'part' ? 'on' : ''}" data-act="sk-filter" data-arg="part">Not on every agent</button></div><button class="btn" data-act="sk-tab" data-arg="sources">Sources · ${k.sources.length}</button><button class="btn" data-act="sk-new">+ New skill</button><button class="btn primary" data-act="sk-add">＋ Add…</button></div>
+    <div class="sk-tbl"><div class="sk-tr th"><span>Skill</span><span class="w">Where it lives</span>${SK_CLIS.map(a => `<span class="c">${mark(a)}<span>${AGENT[a].name}</span></span>`).join('')}</div>
+    ${rows.map(s => `<div class="sk-tr"><div class="sk-name"><b>${esc(s.name)}</b>${s.library ? `<button class="sk-edit" data-act="sk-edit" data-arg="${esc(s.folder)}" title="Open its SKILL.md">Edit</button>` : ''}<small>${esc(s.description)}</small></div><span class="wh" title="${esc(s.dir)}">${esc(s.where)}</span>${SK_CLIS.map(a => check(s, a)).join('')}</div>`).join('') || `<div class="empty">${q || u.filter !== 'all' ? 'No skill matches.' : 'No skills yet. Add a folder of skills, or one skill.'}</div>`}</div>
+    <div class="sk-legend"><span><span class="sk-ck own">✓</span>lives in that agent's folder</span><span><span class="sk-ck sync">✓</span>synced by Chorus (a link)</span><span><span class="sk-ck"></span>not there · click to sync</span></div></div>`;
 }
+
+function skillSourcesHtml(k) {
+  const mark = a => `<span class="badge mini ${a}">${AGENT[a].letter}</span>`;
+  const n = c => `${c} skill${c === 1 ? '' : 's'}`;
+  const row = s => {
+    const icon = s.cli && SK_CLIS.includes(s.cli) && s.label === AGENT[s.cli].name ? mark(s.cli) : `<span class="sk-src-mk">${s.fixed ? '·' : s.kind === 'skill' ? '1' : '+'}</span>`;
+    const what = s.fixed ? `${esc(s.label ?? '')} · ${n(s.count)} · always read` : !s.reachable ? `${n(0)} · not reachable now` : s.kind === 'skill' ? `one skill · ${esc(s.skill ?? '')}` : n(s.count);
+    return `<div class="sk-fr">${icon}<span class="p" title="${esc(s.path)}">${esc(s.show ?? s.path)}</span><small>${what}</small>${s.fixed ? '' : `<button class="btn sm" data-act="sk-src-rm" data-arg="${esc(s.path)}">Remove</button>`}</div>`;
+  };
+  return `<div class="page sk-page"><h1 class="ph-hide">Where skills come from</h1><p class="lead">Your agents' own folders are always read. Add anything else: a folder that holds many skills, or one single skill. Choose either with the same button; Chorus sees which it is.</p>
+    <div class="sk-fl">${k.sources.map(row).join('')}
+      <div class="sk-fr add"><button class="btn primary" data-act="sk-add">＋ Add a folder or a skill…</button><small>Opens the folder chooser. A folder with a SKILL.md in it is added as one skill; any other folder is read for the skills inside it. Removing one deletes nothing: only the links Chorus made for its skills go.</small></div>
+    </div><div style="margin-top:12px"><button class="link-btn" data-act="sk-tab" data-arg="list">‹ Back to Sync skills</button></div></div>`;
+}
+
 
 /* ---------- the doctor (docs/doctor.md §6; looks and words: docs/mockups/desktop-doctor.html) ---------- */
 // One doctor. The server's short check, pushed with the state (S.state.doctor), is the only status of the agents: the sidebar,
@@ -1950,15 +1987,66 @@ function confirmDelete({ what }) {
 
 let ncPicker = null;
 let skillsList = null;
+/** Every skill Chorus sees (Sync skills), with its state per CLI: what "/" lists. */
 async function skillsOn() {
-  skillsList ??= api('GET', '/api/skills').then(r => (r.items ?? []).filter(k => k.on), () => ((skillsList = null), []));
+  skillsList ??= api('GET', '/api/skills/all').then(r => r.skills ?? [], () => ((skillsList = null), []));
   return skillsList;
+}
+/** The CLI marks of a "/" item: built only from the page's own letters and class names, never from the skill's text. */
+const skillMarks = k => SK_CLIS.map(a => `<span class="badge mini ${k.state?.[a] ? a : 'no'}" title="${AGENT[a].name}${k.state?.[a] ? '' : ': not there'}">${AGENT[a].letter}</span>`).join('');
+/** "/" picked a skill the chosen agent lacks: "Sync <name> to <CLI>?" over the form; true once the link is made. */
+function confirmSkillSync(k, agent) {
+  return new Promise(resolve => {
+    const el = document.createElement('div');
+    el.className = 'scrim';
+    const name = AGENT[agent].name;
+    el.innerHTML = `<div class="dialog sk-dlg" role="dialog" aria-label="Sync ${esc(k.name)} to ${esc(name)}?"><h2>Sync ${esc(k.name)} to ${esc(name)}?</h2><div class="body"><p>This skill lives in <b>${esc(k.where)}</b>. ${esc(name)} does not have it yet, so it cannot use it.</p><p>Chorus will put a link in:</p><div class="sk-path">${esc(`${SK_HOME[agent]}/${k.folder}`)}</div><p class="muted" style="font-size:12.5px">Nothing is copied. You can undo it in Sync skills.</p></div><div class="foot"><button class="btn" data-x="no">Cancel</button><button class="btn primary" data-x="yes">Sync and use</button></div></div>`;
+    const done = async ok => {
+      if (ok) {
+        const r = await api('POST', '/api/skills/sync', { dir: k.dir, cli: agent, on: true }).catch(e => ({ error: e.message }));
+        if (r.error) {
+          toast(r.error);
+          ok = false;
+        } else {
+          toast(`Synced ${k.name} to ${name}`);
+          skillsList = null;
+          if (r.skills) S.skillsAll = { skills: r.skills, sources: r.sources };
+        }
+      }
+      el.remove();
+      resolve(ok);
+    };
+    el.addEventListener('click', e => {
+      const x = e.target.closest('[data-x]')?.dataset.x;
+      if (x === 'yes' || x === 'no') void done(x === 'yes');
+      else if (e.target === el) void done(false);
+    });
+    el.addEventListener('keydown', e => e.key === 'Escape' && (e.stopPropagation(), void done(false)));
+    $('#dialogs').append(el);
+    el.querySelector('[data-x="yes"]').focus();
+  });
 }
 function attachNcPicker(ta) {
   ncPicker?.destroy();
   skillsList = null;
   ncPicker = attachPicker(ta, [
-    { chars: ['/'], label: 'Skills', empty: 'No skill matches', query: /[\w.-]*/, items: async () => (await skillsOn()).map(k => ({ key: k.name, main: `/${k.name}`, sub: k.description })), insert: x => `/${x.key}` },
+    {
+      chars: ['/'],
+      label: 'Skills',
+      heading: 'Skills · all agents',
+      empty: 'No skill matches',
+      query: /[\w.-]*/,
+      items: async () => {
+        const agent = S.form?.agent;
+        return (await skillsOn()).map(k => ({ key: k.name, main: `/${k.name}`, sub: k.description, marks: skillMarks(k), need: agent && AGENT[agent] && !k.state?.[agent] ? `Not on ${AGENT[agent].name} yet · sync when you pick it` : '', skill: k }));
+      },
+      // a skill the chosen agent lacks: the sync dialog first; Cancel leaves the message as it is
+      beforePick: x => {
+        const agent = S.form?.agent;
+        return !agent || !AGENT[agent] || x.skill.state?.[agent] ? true : confirmSkillSync(x.skill, agent);
+      },
+      insert: x => `/${x.key}`,
+    },
     {
       chars: ['@', '＠'],
       label: 'Files',
@@ -2748,9 +2836,6 @@ document.addEventListener('click', async e => {
         S.mem.record = { id: arg, text: d.record };
       }
       return renderView();
-    case 'sk-import':
-      S.skills = await api('POST', '/api/skills/import', { dir: arg });
-      return renderView();
     case 'sk-edit':
       return api('POST', `/api/skills/${encodeURIComponent(arg)}/edit`).catch(err => toast(err.message));
     case 'sk-new': {
@@ -2758,7 +2843,36 @@ document.addEventListener('click', async e => {
       if (!name) return;
       const r = await api('POST', '/api/skills', { name });
       if (r.error) return toast(r.error);
-      S.skills = r;
+      return loadSkills();
+    }
+    case 'sk-tick': {
+      const r = await api('POST', '/api/skills/sync', { dir: arg, cli: el.dataset.cli, on: el.dataset.on === '1' });
+      if (r.skills) S.skillsAll = { skills: r.skills, sources: r.sources };
+      skillsList = null;
+      toast(r.error ?? r.flash);
+      return renderView();
+    }
+    case 'sk-filter':
+      S.sk.filter = arg;
+      return renderView();
+    case 'sk-tab':
+      S.sk.tab = arg;
+      return renderView();
+    case 'sk-add': {
+      const r = await api('POST', '/api/skills/sources/pick');
+      if (r.none) return toast('No folder chooser on this computer');
+      if (r.cancelled) return;
+      if (r.error) return toast(r.error);
+      S.skillsAll = { skills: r.skills, sources: r.sources };
+      const src = r.sources.find(x => x.path === r.added);
+      toast(r.kind === 'skill' ? `Added the skill ${src?.skill ?? ''}` : `Added ${src?.show ?? r.added}: ${src?.count ?? 0} skill${src?.count === 1 ? '' : 's'}`);
+      return renderView();
+    }
+    case 'sk-src-rm': {
+      const r = await api('POST', '/api/skills/sources/remove', { path: arg });
+      if (r.error) return toast(r.error);
+      S.skillsAll = { skills: r.skills, sources: r.sources };
+      toast(r.unsynced ? `Removed the source and ${r.unsynced} link${r.unsynced === 1 ? '' : 's'} Chorus made for it` : 'Removed the source');
       return renderView();
     }
     case 'dlg':
@@ -2786,9 +2900,6 @@ document.addEventListener('change', async e => {
     case 'nc-skip':
       f.skip = el.checked;
       return renderView();
-    case 'sk-toggle':
-      S.skills = await api('POST', `/api/skills/${encodeURIComponent(el.dataset.arg)}/toggle`);
-      return renderView();
   }
 });
 
@@ -2805,6 +2916,10 @@ document.addEventListener('input', e => {
     case 'cl-q':
       S.cl.q = el.value;
       S.cl.focus = true;
+      return renderView();
+    case 'sk-q':
+      S.sk.q = el.value;
+      S.sk.focus = true;
       return renderView();
     case 'mem-q':
       S.mem.q = el.value;

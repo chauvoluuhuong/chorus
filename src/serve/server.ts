@@ -29,6 +29,7 @@ import { SKIP_FLAG } from '../core/launch.ts';
 import { defaultOpener } from '../core/opener.ts';
 import { disabledSkills, expandSkillMentions, findNativeSkills, importSkill, listSkills, setSkillEnabled, sourceDir, syncSkills } from '../core/skills.ts';
 import { matchFiles, projectFiles } from '../core/files.ts';
+import { addSource, allSkills, CLI_NAMES, removeSource, scanSkills, SYNC_CLIS, syncSkill, tilde, unsyncSkill, type Cli } from '../core/skillsync.ts';
 import type { AgentId } from '../core/types.ts';
 import { CLIS, type AgentCheck, type DeepReport, type FastReport } from '@chauvoluuhuong/chorus-core/doctor';
 import { check, firstLaunch, ghReady, host, isDue, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, remoteTested, reportDetails, runCommand, runDeep, versions } from '../core/doctor.ts';
@@ -80,7 +81,7 @@ export function hostNames(host?: string, interfaces: ReturnType<typeof os.networ
   else if (host) add(host);
   return [...names];
 }
-const LITERAL = new Set(['POST ui', 'POST folders/pick', 'POST skills/import', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/image', 'POST doctor/issue/send']);
+const LITERAL = new Set(['POST ui', 'POST folders/pick', 'POST skills/import', 'GET skills/all', 'POST skills/sync', 'POST skills/sources', 'POST skills/sources/pick', 'POST skills/sources/remove', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/image', 'POST doctor/issue/send']);
 
 /** The App without a terminal: input and output go nowhere, the Controller drives it as usual. */
 export function headlessIO(): AppIO {
@@ -868,6 +869,37 @@ export class ChorusServer {
         return { pending: this.approvalsNow().filter(a => !a.hidden), decided: c.decidedItems() };
       case 'GET skills':
         return this.skills();
+      case 'GET skills/all':
+        return allSkills(c.store, c.project);
+      case 'POST skills/sync': {
+        // a tick on Sync skills, or "Sync and use" in the "/" picker: one link in that CLI's home skills folder, or its removal
+        const cli = SYNC_CLIS.includes(b.cli) ? (b.cli as Cli) : undefined;
+        if (!cli || typeof b.dir !== 'string') return { error: 'dir and cli (claude, codex or agy) are needed' };
+        if (!c.store.storedSkills().some(s => s.dir === b.dir)) scanSkills(c.store, c.project);
+        const skill = c.store.storedSkills().find(s => s.dir === b.dir);
+        if (!skill) return { error: 'Chorus does not know this skill' };
+        const r = b.on === false ? unsyncSkill(c.store, skill.dir, cli) : syncSkill(c.store, skill.dir, cli);
+        if (!r.ok) return { error: r.error, ...allSkills(c.store, c.project) };
+        const flash = b.on === false ? `Removed ${skill.name} from ${CLI_NAMES[cli]}` : `Synced ${skill.name} to ${CLI_NAMES[cli]} · ${tilde(r.path)}`;
+        return { flash, path: r.path, ...allSkills(c.store, c.project) };
+      }
+      case 'POST skills/sources': {
+        if (typeof b.path !== 'string' || !b.path.trim()) return { error: 'path is needed' };
+        const r = addSource(c.store, expand(b.path.trim()), c.project);
+        return r.ok ? allSkills(c.store, c.project) : { error: r.error };
+      }
+      case 'POST skills/sources/pick': {
+        // the system folder chooser, as for a project folder; what was chosen is added (a skill or a folder of skills)
+        const pick = await (this.o.pickFolder ?? pickFolder)(os.homedir(), 'Choose a folder of skills, or one skill');
+        if (!pick.dir) return { ...pick };
+        const r = addSource(c.store, pick.dir, c.project);
+        return r.ok ? { added: pick.dir, kind: r.kind, ...allSkills(c.store, c.project) } : { error: r.error };
+      }
+      case 'POST skills/sources/remove': {
+        if (typeof b.path !== 'string') return { error: 'path is needed' };
+        const r = removeSource(c.store, b.path);
+        return r.ok ? { unsynced: r.unsynced, ...allSkills(c.store, c.project) } : { error: r.error };
+      }
       case 'GET files': {
         // the New chat form's "@" list: the files of a folder Chorus offers for a chat
         const folder = path.resolve(expand(String(q.get('folder') ?? '')));
@@ -1149,10 +1181,9 @@ export class ChorusServer {
     });
   }
 
-  /** The skills that are on in this project: what "/" lists and what a first message's `/name` loads. */
+  /** Every skill Chorus sees (Sync skills): what "/" lists and what a first message's `/name` loads. */
   skillNames() {
-    const off = disabledSkills(this.c.project);
-    return listSkills(this.c.project).filter(s => !off.includes(path.basename(s.dir))).map(s => s.name);
+    return [...new Set(scanSkills(this.c.store, this.c.project).skills.map(s => s.name))];
   }
 
   /** A folder the New chat form offers for a chat: the project, a chat's or a recent folder, This computer, or one in the home folder (Browse…). */

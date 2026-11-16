@@ -32,6 +32,8 @@ const fastReport = (agents: AgentCheck[] = (['claude', 'codex', 'agy'] as AgentI
 async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand' | 'pickFolder' | 'sessionExists' | 'host' | 'container' | 'signIns' | 'reports'> = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-home-'));
   process.env.CODEX_HOME = home;
+  // the skills Chorus sees (Sync skills) come from a temp home, never the real one
+  process.env.CHORUS_SKILLS_HOME ??= home;
   const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-serve-')));
   const store = new Store(project);
   seed?.(store, project);
@@ -284,6 +286,51 @@ test('serve: a chat from an earlier run is parked and resumes when the window op
     assert.match((await r.api('GET', '/api/doctor')).json.chorus.app, /^chorus \d+\.\d+\.\d+/);
     v.ws.close();
   } finally {
+    await r.done();
+  }
+});
+
+test('serve: Sync skills lists every skill with a check per CLI; a tick links it, a second removes it; sources are added and removed', async () => {
+  const uh = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-uh-')));
+  const mk = (dir: string, name: string) => {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: About ${name}\n---\nbody\n`);
+    return dir;
+  };
+  mk(path.join(uh, '.claude/skills/video-research'), 'video-research');
+  const team = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-team-')));
+  mk(path.join(team, 'pr-review'), 'pr-review');
+  const one = mk(path.join(fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-dl-'))), 'pdf-tools'), 'pdf-tools');
+  process.env.CHORUS_SKILLS_HOME = uh;
+  const r = await rig(undefined, undefined, undefined, { pickFolder: async () => ({ dir: one }) });
+  try {
+    const all = (await r.api('GET', '/api/skills/all')).json;
+    const vr = all.skills.find((s: any) => s.name === 'video-research');
+    assert.deepEqual(vr.state, { claude: 'own', codex: '', agy: '' });
+    assert.equal(vr.where, '~/.claude/skills');
+    assert.deepEqual(all.sources.filter((s: any) => s.fixed).slice(0, 3).map((s: any) => s.show), ['~/.claude/skills', '~/.codex/skills', '~/.gemini/config/skills']);
+    const on = (await r.api('POST', '/api/skills/sync', { dir: vr.dir, cli: 'codex', on: true })).json;
+    assert.match(on.flash, /^Synced video-research to Codex · ~\/\.codex\/skills\/video-research$/);
+    assert.ok(fs.lstatSync(path.join(uh, '.codex/skills/video-research')).isSymbolicLink());
+    assert.equal((await r.api('GET', '/api/skills/all')).json.skills.find((s: any) => s.name === 'video-research').state.codex, 'sync');
+    const refused = (await r.api('POST', '/api/skills/sync', { dir: vr.dir, cli: 'claude', on: true })).json;
+    assert.match(refused.error, /already has/);
+    const off = (await r.api('POST', '/api/skills/sync', { dir: vr.dir, cli: 'codex', on: false })).json;
+    assert.equal(off.flash, 'Removed video-research from Codex');
+    assert.equal(fs.existsSync(path.join(uh, '.codex/skills/video-research')), false);
+    // a folder of skills by path, one skill through the chooser
+    const added = (await r.api('POST', '/api/skills/sources', { path: team })).json;
+    assert.ok(added.skills.some((s: any) => s.name === 'pr-review'));
+    const picked = (await r.api('POST', '/api/skills/sources/pick')).json;
+    assert.equal(picked.kind, 'skill');
+    assert.ok(picked.skills.some((s: any) => s.name === 'pdf-tools'));
+    // the names "/" lists and a first message's /name loads
+    assert.ok(r.srv.skillNames().includes('pr-review'));
+    const removed = (await r.api('POST', '/api/skills/sources/remove', { path: team })).json;
+    assert.equal(removed.skills.some((s: any) => s.name === 'pr-review'), false);
+    assert.ok(fs.existsSync(path.join(team, 'pr-review/SKILL.md')));
+  } finally {
+    delete process.env.CHORUS_SKILLS_HOME;
     await r.done();
   }
 });
@@ -949,10 +996,11 @@ test('New chat: a first message\'s /skill-name loads that skill (any CLI); a /wo
     }
   });
   try {
+    // every skill Chorus sees is named (Sync skills: the library's old on/off switch no longer hides one); a /word that is no skill stays
     await r.api('POST', '/api/skills/old-thing/toggle');
-    const made = await r.api('POST', '/api/chats', { agent: 'agy', folder: r.project, prompt: 'Add a gift card page. Use /brand-style and /old-thing, see src/a/b and /tmp' });
+    const made = await r.api('POST', '/api/chats', { agent: 'agy', folder: r.project, prompt: 'Add a gift card page. Use /brand-style and /old-thing, see src/a/b and /nope' });
     assert.equal(made.status, 200);
-    assert.equal(r.launches.at(-1)!.prompt, 'Add a gift card page. Use Use the Chorus skill "brand-style" (load it with the chorus get_skill tool). and /old-thing, see src/a/b and /tmp');
+    assert.equal(r.launches.at(-1)!.prompt, 'Add a gift card page. Use Use the Chorus skill "brand-style" (load it with the chorus get_skill tool). and Use the Chorus skill "old-thing" (load it with the chorus get_skill tool)., see src/a/b and /nope');
     // hand-off: the same, after the record
     await r.api('POST', `/api/chats/${made.json.id}/handoff`, { to: 'codex', prompt: '/brand-style please' });
     assert.match(r.launches.at(-1)!.prompt ?? '', /get_handoff_context[\s\S]*\n\nUse the Chorus skill "brand-style" \(load it with the chorus get_skill tool\)\. please$/);
