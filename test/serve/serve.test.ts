@@ -335,6 +335,45 @@ test('serve: Sync skills lists every skill with a check per CLI; a tick links it
   }
 });
 
+test('serve: artifactsRev grows on a new version of an artifact, an edit of a reported file and a report again; not on a push with no change', async () => {
+  const r = await rig();
+  try {
+    const id = (await r.api('POST', '/api/chats', { agent: 'claude', folder: r.project })).json.id as string;
+    const rev = () => {
+      (r.srv as any).artLooked.clear(); // the file times are read at most once every 2 s: look now
+      return (r.srv.state().chats.find((c: any) => c.id === id) as any).artifactsRev as number;
+    };
+    const start = rev();
+    // a file in the chat's artifacts folder, then new content in it: a new version
+    const file = path.join(r.store.artifactsDir(id), 'plan.md');
+    fs.writeFileSync(file, 'one');
+    r.store.scanArtifacts(id);
+    const one = rev();
+    assert.equal(one, start + 1);
+    fs.writeFileSync(file, 'two');
+    r.store.scanArtifacts(id);
+    assert.equal(rev(), one + 1, 'an edit in the artifacts folder');
+    // a reported file anywhere: the first look only remembers its time
+    const outside = path.join(fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-rep-'))), 'report.md');
+    fs.writeFileSync(outside, 'v1');
+    r.store.reportArtifact(id, outside, 'Report');
+    const seen = rev();
+    assert.equal(rev(), seen, 'no change, no growth');
+    fs.utimesSync(outside, new Date(), new Date(Date.now() + 5000));
+    assert.equal(rev(), seen + 1, 'its file time changed: an edit');
+    assert.equal(rev(), seen + 1, 'once');
+    r.store.reportArtifact(id, outside, 'Report');
+    assert.equal(rev(), seen + 2, 'reported again');
+    // a link has no file time; a missing file is skipped
+    r.store.reportArtifact(id, 'https://example.com/x', 'Link');
+    fs.rmSync(outside);
+    const last = rev();
+    assert.equal(rev(), last);
+  } finally {
+    await r.done();
+  }
+});
+
 test('serve: a dropped file goes into the agent input like a terminal sends it, copied when asked, recorded with the chat', async () => {
   const r = await rig();
   try {

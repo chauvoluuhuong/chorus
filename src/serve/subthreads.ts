@@ -13,6 +13,8 @@ import type { Store, SubStatus, ThreadRow } from '../core/store.ts';
 
 export const SUB_NOTE = 'You are a sub thread of another chat in Chorus. Do only this. When you are done, or when you need something, say so in your reply and end your turn: Chorus tells the main chat.';
 export const MAX_WORKING = 3;
+/** A task step's Worker (watchOnly): the paid module's to watch and report; stored in sub_status like the others. */
+export const TASK = 'task' as SubStatus;
 const AGENTS: AgentId[] = ['claude', 'codex', 'agy'];
 
 export interface SubDeps {
@@ -120,7 +122,7 @@ export class SubThreads {
         return { text: `Chorus types it into ${sub.id} when it is idle (now, if it is).` };
       }
       case 'list_subthreads': {
-        const subs = this.d.store.subThreads(me.id);
+        const subs = this.d.store.subThreads(me.id).filter(s => s.sub_status !== TASK);
         if (!subs.length) return { text: '(no sub threads)' };
         return { text: subs.map(s => `${s.id}\t${s.title}\t${s.agent}\t${s.sub_status}\t${s.sub_turns ?? 0} turns\t${this.minutes(s)} min\t${clip(oneLine(this.d.store.lastReply(s.id)), 120)}`).join('\n') };
       }
@@ -141,7 +143,21 @@ export class SubThreads {
 
   private own(me: ThreadRow, id: unknown) {
     const sub = typeof id === 'string' ? this.d.store.getThread(id) : undefined;
-    return sub && sub.sub_status && sub.parent_thread_id === me.id ? sub : undefined;
+    return sub && sub.sub_status && sub.sub_status !== TASK && sub.parent_thread_id === me.id ? sub : undefined;
+  }
+
+  /**
+   * A task step's Worker chat (the paid module, ProCtx.watchOnly): a sub thread of the task's Planner for the window (watch-only,
+   * shown under its owner), with a status of its own. The paid module reports its Workers itself, so it is never reported,
+   * counted, listed or typed into here.
+   */
+  watchOnly(thread: string, mainThread: string) {
+    const st = this.d.store;
+    if (!st.getThread(thread) || !st.getThread(mainThread) || thread === mainThread) return;
+    if (st.getThread(thread)!.parent_thread_id !== mainThread) st.updateThread(thread, { parent_thread_id: mainThread });
+    st.setSub(thread, { sub_status: TASK, sub_started: st.getThread(thread)!.sub_started ?? iso(this.now()) });
+    this.outbox = this.outbox.filter(o => o.to !== thread && o.about !== thread);
+    this.d.changed?.();
   }
 
   private startSub(me: ThreadRow, a: Record<string, unknown>): { text: string } | { error: string } {
@@ -171,7 +187,7 @@ export class SubThreads {
     let changed = false;
     for (const s of st.subThreads()) {
       const status = s.sub_status as SubStatus;
-      if (status === 'ended') continue;
+      if (status === 'ended' || status === TASK) continue;
       const now = this.now();
       const gone = s.state === 'ended' || !!this.d.ended?.(s.id);
       if (gone) {

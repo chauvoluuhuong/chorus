@@ -205,10 +205,10 @@ function onState(st) {
   }
   const previousNews = S.state?.notifications;
   const doctorChanged = JSON.stringify(S.state?.doctor) !== JSON.stringify(st.doctor);
-  const artOf = x => (S.view.name === 'chat' ? x?.chats.find(c => c.id === S.view.id)?.artifacts : undefined);
+  const artOf = x => { const c = S.view.name === 'chat' ? x?.chats.find(k => k.id === S.view.id) : undefined; return c ? `${c.artifacts}/${c.artifactsRev}` : undefined; };
   const artWas = artOf(S.state);
   S.state = st;
-  for (const c of st.chats) noteCount(`art:${c.id}`, c.artifacts ?? 0);
+  for (const c of st.chats) noteCount(`art:${c.id}`, c.artifacts ?? 0), noteCount(`artrev:${c.id}`, c.artifactsRev ?? 0);
   // an agent turned off shows its details on the Doctor; once it works again the Doctor says so
   for (const a of st.doctor?.agents ?? []) {
     if (a.state === 'off' && !S.docOff?.has(a.agent)) ((S.docOff ??= new Set()).add(a.agent), S.docOpen.add(a.agent), (S.docBackOn = null));
@@ -435,7 +435,7 @@ async function onProStatus(st) {
       document.head.append(Object.assign(document.createElement('link'), { id: 'pro-css', rel: 'stylesheet', href: '/api/pro/ui.css' }), js);
     });
   }
-  window.choruspro?.init?.({ go: id => go({ name: 'pro', id }), newChat: folder => go({ name: 'new', folder }), refresh: () => { renderChrome(); fillChatSlots(); if (['new', 'approvals', 'home', 'more'].includes(S.view.name)) renderView(); else if (S.view.name === 'chat') renderChatParts(); }, doctor: () => go({ name: 'doctor' }), toast, confirmDelete, openChat: id => go({ name: 'chat', id }), upgrade, back: () => history.length && go(S.history.pop() ?? startView(), false) });
+  window.choruspro?.init?.({ go: id => go(id === 'skills' ? { name: 'skills' } : { name: 'pro', id }), skillPicker, noteCount, countFlash, countNum, newChat: folder => go({ name: 'new', folder }), refresh: () => { renderChrome(); fillChatSlots(); if (['new', 'approvals', 'home', 'more'].includes(S.view.name)) renderView(); else if (S.view.name === 'chat') renderChatParts(); }, doctor: () => go({ name: 'doctor' }), toast, confirmDelete, openChat: id => go({ name: 'chat', id }), upgrade, back: () => history.length && go(S.history.pop() ?? startView(), false) });
   if (S.view.name === 'pro' && !st.unlocked) return go(startView());
   // back from paying (the browser's link to /api/pro/paid, or Check again): the server's answer, never the browser's word
   if (S.view.name === 'paying' && st.plan === 'pro') return go({ name: 'pro-paid' });
@@ -658,6 +658,8 @@ function countFlash(key) {
   const c = counts.get(key), age = countAge(key);
   return age >= 0 && c.n > c.from ? ` flash" style="animation-delay:-${age}ms` : '';
 }
+/** The Artifacts button flashes when the count grew or an artifact got a new version (an edit); only the count rolls. */
+const artFlash = id => countFlash(`art:${id}`) || countFlash(`artrev:${id}`);
 /** The number itself: the old one rolls out and the new one in while the change is fresh; from nothing it just appears. */
 function countNum(key, n) {
   const c = counts.get(key), age = countAge(key);
@@ -1895,7 +1897,7 @@ function drawSheet() {
   el.innerHTML = `<div class="sheet" role="dialog" aria-label="This chat"><div class="grab"></div>
     <div class="sh-meta"><div><span class="badge ${esc(c.agent)}">${esc(AGENT[c.agent]?.name ?? c.agent)}</span> ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}${c.skip ? ' <span class="badge warn">skip</span>' : ''}</div><div class="mono path">${esc(tilde(c.cwd))}</div>${meter(c.usage)}</div>
     <button data-act="handoff" data-arg="${esc(c.id)}"><span class="i">⇄</span>Hand off to another agent</button>
-    ${c.sub ? '' : `<button class="${countFlash(`art:${c.id}`).trim()}" data-act="drawer-to" data-arg="artifacts"><span class="i">▤</span>Artifacts${c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : ''}</button>
+    ${c.sub ? '' : `<button class="${artFlash(c.id).trim()}" data-act="drawer-to" data-arg="artifacts"><span class="i">▤</span>Artifacts${c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : ''}</button>
     <button data-act="drawer-to" data-arg="activity"><span class="i">≋</span>Activity</button>
     <button data-act="drawer-to" data-arg="record"><span class="i">◫</span>Record</button>`}
     <button class="danger" data-act="delete" data-arg="${esc(c.id)}"><span class="i">🗑</span>Delete this chat</button></div>`;
@@ -1922,7 +1924,7 @@ function renderChatParts() {
       ${c.model || c.effort ? `<span class="model">· ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}</span>` : ''}${c.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${meter(c.usage)}
       <span class="mono faint path" title="${esc(c.cwd)}">‎${esc(tilde(c.cwd))}‎</span>${c.toast ? `<span class="badge ok">${esc(c.toast)}</span>` : ''}</div>
     <button class="btn" data-act="handoff" data-arg="${esc(c.id)}" title="Continue this chat with another agent" aria-label="Hand off">${S.size === 'desktop' ? '⇄ Hand off' : '⇄'}</button>
-    ${c.sub ? '' : `${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰') : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', countFlash(`art:${c.id}`))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}`}
+    ${c.sub ? '' : `${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰') : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', artFlash(c.id))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}`}
     <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat" aria-label="Delete this chat">🗑</button>`;
   // a phone: a task chat's panel is tabs beside the chat (Chat · Steps · Plan), one shown at a time
   const tabs = S.size === 'phone' ? window.choruspro?.sideTabs?.(c.id) : null;
@@ -2074,24 +2076,26 @@ async function skillsOn() {
 /** The CLI marks of a "/" item: built only from the page's own letters and class names, never from the skill's text. */
 const skillMarks = k => SK_CLIS.map(a => `<span class="badge mini ${k.state?.[a] ? a : 'no'}" title="${AGENT[a].name}${k.state?.[a] ? '' : ': not there'}">${AGENT[a].letter}</span>`).join('');
 /** "/" picked a skill the chosen agent lacks: "Sync <name> to <CLI>?" over the form; true once the link is made. */
-function confirmSkillSync(k, agent) {
+function confirmSkillSync(k, agentOrAgents) {
+  const agents = [].concat(agentOrAgents);
   return new Promise(resolve => {
     const el = document.createElement('div');
     el.className = 'scrim';
-    const name = AGENT[agent].name;
-    el.innerHTML = `<div class="dialog sk-dlg" role="dialog" aria-label="Sync ${esc(k.name)} to ${esc(name)}?"><h2>Sync ${esc(k.name)} to ${esc(name)}?</h2><div class="body"><p>This skill lives in <b>${esc(k.where)}</b>. ${esc(name)} does not have it yet, so it cannot use it.</p><p>Chorus will put a link in:</p><div class="sk-path">${esc(`${SK_HOME[agent]}/${k.folder}`)}</div><p class="muted" style="font-size:12.5px">Nothing is copied. You can undo it in Sync skills.</p></div><div class="foot"><button class="btn" data-x="no">Cancel</button><button class="btn primary" data-x="yes">Sync and use</button></div></div>`;
+    const name = agents.map(a => AGENT[a].name).join(' and ');
+    const many = agents.length > 1;
+    el.innerHTML = `<div class="dialog sk-dlg" role="dialog" aria-label="Sync ${esc(k.name)} to ${esc(name)}?"><h2>Sync ${esc(k.name)} to ${esc(name)}?</h2><div class="body"><p>This skill lives in <b>${esc(k.where)}</b>. ${esc(name)} ${many ? 'do' : 'does'} not have it yet, so ${many ? 'they' : 'it'} cannot use it.</p><p>Chorus will put a link in:</p><div class="sk-path">${agents.map(a => esc(`${SK_HOME[a]}/${k.folder}`)).join('<br>')}</div><p class="muted" style="font-size:12.5px">Nothing is copied. You can undo it in Sync skills.</p></div><div class="foot"><button class="btn" data-x="no">Cancel</button><button class="btn primary" data-x="yes">Sync and use</button></div></div>`;
     const done = async ok => {
-      if (ok) {
+      for (const agent of ok ? agents : []) {
         const r = await api('POST', '/api/skills/sync', { dir: k.dir, cli: agent, on: true }).catch(e => ({ error: e.message }));
         if (r.error) {
           toast(r.error);
           ok = false;
-        } else {
-          toast(`Synced ${k.name} to ${name}`);
-          skillsList = null;
-          if (r.skills) S.skillsAll = { skills: r.skills, sources: r.sources };
+          break;
         }
+        skillsList = null;
+        if (r.skills) S.skillsAll = { skills: r.skills, sources: r.sources };
       }
+      if (ok) toast(`Synced ${k.name} to ${name}`);
       el.remove();
       resolve(ok);
     };
@@ -2105,27 +2109,44 @@ function confirmSkillSync(k, agent) {
     el.querySelector('[data-x="yes"]').focus();
   });
 }
+/** The "/" trigger for skills: the marks per CLI, and the sync dialog for the agents in `agentsNow()` that lack the picked skill. */
+function skillTrigger(agentsNow) {
+  return {
+    chars: ['/'],
+    label: 'Skills',
+    heading: 'Skills · all agents',
+    empty: 'No skill matches',
+    query: /[\w.-]*/,
+    items: async () => {
+      const agents = agentsNow().filter(a => AGENT[a]);
+      return (await skillsOn()).map(k => {
+        const lack = agents.filter(a => !k.state?.[a]);
+        return { key: k.name, main: `/${k.name}`, sub: k.description, marks: skillMarks(k), need: lack.length ? `Not on ${lack.map(a => AGENT[a].name).join(' and ')} yet · sync when you pick it` : '', skill: k };
+      });
+    },
+    // a skill one of those agents lacks: the sync dialog first; Cancel leaves the text as it is
+    beforePick: x => {
+      const lack = agentsNow().filter(a => AGENT[a] && !x.skill.state?.[a]);
+      return lack.length ? confirmSkillSync(x.skill, lack) : true;
+    },
+    insert: x => `/${x.key}`,
+  };
+}
+/** host.skillPicker (the paid module: a teammate's or an action's instructions): the same "/" picker on its own text box. */
+const modPickers = new WeakMap();
+function skillPicker(textarea, agents) {
+  if (!textarea) return;
+  modPickers.get(textarea)?.destroy();
+  skillsList = null;
+  const p = attachPicker(textarea, [skillTrigger(() => agents ?? [])]);
+  modPickers.set(textarea, p);
+  return p;
+}
 function attachNcPicker(ta) {
   ncPicker?.destroy();
   skillsList = null;
   ncPicker = attachPicker(ta, [
-    {
-      chars: ['/'],
-      label: 'Skills',
-      heading: 'Skills · all agents',
-      empty: 'No skill matches',
-      query: /[\w.-]*/,
-      items: async () => {
-        const agent = S.form?.agent;
-        return (await skillsOn()).map(k => ({ key: k.name, main: `/${k.name}`, sub: k.description, marks: skillMarks(k), need: agent && AGENT[agent] && !k.state?.[agent] ? `Not on ${AGENT[agent].name} yet · sync when you pick it` : '', skill: k }));
-      },
-      // a skill the chosen agent lacks: the sync dialog first; Cancel leaves the message as it is
-      beforePick: x => {
-        const agent = S.form?.agent;
-        return !agent || !AGENT[agent] || x.skill.state?.[agent] ? true : confirmSkillSync(x.skill, agent);
-      },
-      insert: x => `/${x.key}`,
-    },
+    skillTrigger(() => (S.form?.agent ? [S.form.agent] : [])),
     {
       chars: ['@', '＠'],
       label: 'Files',
