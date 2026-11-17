@@ -10,10 +10,10 @@ and nothing is lost on the way.
 
 ### Try it in your browser
 
-Click through the real desktop app: plan and run a task, hand off a chat, build your team or watch a project. A few clicks
-each, and the app points at every one. No install, no AI called.
+Click through the real desktop app. Follow the highlighted button to plan and run a task; then try a handoff, your team
+or a project. A few clicks each, and the app points at every one. No install, no AI called.
 
-[![Try Chorus: click to start the guided tour](docs/media/try-chorus.png)](https://chorus-cli.web.app/tour)
+[![Try Chorus: the desktop app with its first step highlighted, Click New chat](docs/media/try-chorus.png)](https://chorus-cli.web.app/tour?try&flow=plan&demo=tk4&theme=dark)
 
 - **The real CLI, untouched.** Claude Code, Codex and Antigravity run as themselves, with every command, shortcut and feature you know. You keep working the way you already do; Chorus adds what's around it.
 - **No more ten terminal windows.** Every session sits in one sidebar.
