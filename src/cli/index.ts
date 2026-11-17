@@ -240,7 +240,7 @@ switch (cmd) {
     const fake = argv.includes('--fake-agents') || process.env.CHORUS_FAKE_AGENTS === '1'; // dev: fake TUIs instead of the real agents, for working on the desktop UI
     const fakeTui = path.resolve(import.meta.dirname, '../../tools/fake-agent/fake-tui.mjs');
     const fakeMcp = (o: { project: string; threadId: string; home?: string }) => { const m = mcpCommand(o.project, o.threadId, o.home); return [m.command, JSON.stringify(m.args)]; };
-    const chatLaunch = new ChatLaunch();
+    const chatLaunch = new ChatLaunch(store);
     let server: ChorusServer | undefined; // a chat may resume before the server is made: it resumes as always then
     const c = new Controller({ project, store, app: headlessApp(), models: models(), sessionGone: fake ? undefined : row => server?.sessionGone(row), launcher: fake ? (agent, o) => ({ bin: process.execPath, args: [fakeTui, agent, ...(process.env.CHORUS_FAKE_SCRIPT ? fakeMcp(o) : [])], cwd: o.cwd }) : (agent, o) => buildInteractive(agent, { ...o, ...chatLaunch.extras(o, agent) }) });
     c.restore();

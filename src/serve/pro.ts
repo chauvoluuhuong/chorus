@@ -3,6 +3,8 @@
 import { exclude } from '@chauvoluuhuong/chorus-core';
 import type { AgentId } from '../core/types.ts';
 import { syncSkills } from '../core/skills.ts';
+import type { Store } from '../core/store.ts';
+import { isSubThread, type ThreadRole } from '../mcp/server.ts';
 import { accountPro, activatePro, isLocked, loadPro, proDev, proLinks, recheckPro, signInPro, upgradePro, type ChatExtras, type LoadResult, type McpToolDef, type ProCtx, type ProHandler, type ProModule, type RemoteDecision, type RemoteRequest } from '@chauvoluuhuong/chorus-core/pro-loader';
 
 export interface ProLoader {
@@ -21,18 +23,33 @@ export interface ProLoader {
   dev: boolean;
 }
 
-/** What a chat gets on top of a normal launch. `chorus serve` passes this to the Controller's launcher, so the CLI app's code stays as it is. */
+/**
+ * What a chat gets on top of a normal launch, for its start text (src/mcp/server.ts startText): a teammate's role from the paid
+ * bundle, a sub thread's main thread, and for a plain chat every action it may propose. `chorus serve` passes this to the
+ * Controller's launcher, so the CLI app's code stays as it is.
+ */
 export class ChatLaunch {
   /** set just around a new chat, which starts synchronously */
   next: ChatExtras | undefined;
+  /** set just around a new sub thread: its brief (its row has none yet) */
+  nextSub: string | undefined;
   host: ProHost | undefined;
+  readonly store: Store | undefined;
 
-  extras(o: { threadId: string; project: string; cwd: string }, agent: AgentId) {
+  constructor(store?: Store) {
+    this.store = store;
+  }
+
+  extras(o: { threadId: string; project: string; cwd: string }, agent: AgentId): { role?: ThreadRole; readOnly?: boolean; moreTools?: string[]; parent?: { id: string; title: string; brief: string }; actionLabels?: string[] } {
+    const row = this.store?.getThread(o.threadId);
+    const brief = this.nextSub ?? (isSubThread(row) ? row?.sub_brief : undefined);
+    const main = brief != null && row?.parent_thread_id ? this.store?.getThread(row.parent_thread_id) : undefined;
+    const parent = main ? { id: main.id, title: main.title, brief: brief ?? '' } : undefined;
     const e = this.next ?? this.host?.chatExtras(o.threadId);
-    if (!e) return {};
+    if (!e) return { ...(parent ? { parent } : { actionLabels: this.host?.allActionLabels() }) };
     exclude(o.cwd, ['.chorus/']); // a teammate's check reads `git status`
     if (e.skills) syncSkills(o.project, { agents: [agent], into: o.cwd, only: e.skills });
-    return { note: e.note, readOnly: e.readOnly, moreTools: this.host?.toolNames() };
+    return { role: e.role, readOnly: e.readOnly, moreTools: this.host?.toolNames(), ...(parent ? { parent } : e.role ? {} : { actionLabels: this.host?.allActionLabels() }) };
   }
 }
 
@@ -186,6 +203,24 @@ export class ProHost {
 
   chatExtras(thread: string) {
     return this.module?.chatExtras?.(this.ctx, thread);
+  }
+
+  /** A chat's role, live (current_thread, the request_approval guard): none without the bundle or for a plain chat. Not gated. */
+  roleOf(thread: string): ThreadRole | undefined {
+    try {
+      return this.module?.roleOf?.(this.ctx, thread);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Every action a plain chat may propose; none without the bundle. */
+  allActionLabels(): string[] | undefined {
+    try {
+      return this.module?.allActionLabels?.(this.ctx);
+    } catch {
+      return undefined;
+    }
   }
 
   /** The module's start resumes chats while `use` is still asking for its tools: those chats ask it again here. */

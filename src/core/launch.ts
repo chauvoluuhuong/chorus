@@ -1,9 +1,9 @@
 // How to start each CLI for one Chorus thread. The CLI flags live in @chauvoluuhuong/chorus-core (docs/chorus-core.md); this
-// file adds what is Chorus's own: its MCP server (`chorus mcp` bound to the thread) and the standing note for the chat.
+// file adds what is Chorus's own: its MCP server (`chorus mcp` bound to the thread) and the chat's start text.
 import { isSea } from 'node:sea';
 import path from 'node:path';
 import { buildHeadless as coreHeadless, buildInteractive as coreInteractive, type Launch, type McpServer } from '@chauvoluuhuong/chorus-core';
-import { standingNote, TOOL_NAMES } from '../mcp/server.ts';
+import { MCP_INSTRUCTIONS, startText, TOOL_NAMES, type StartTextOpts } from '../mcp/server.ts';
 import { TOOL_NAMES as SUB_TOOL_NAMES } from '../serve/subthreads.ts';
 import type { AgentId } from './types.ts';
 
@@ -38,17 +38,25 @@ export interface InteractiveOpts {
   skipPermissions?: boolean;
   /** reasoning effort (low … max); omitted = the agent's own default (docs/integrations/effort.md) */
   effort?: string;
-  /** more standing text for the whole chat */
-  note?: string;
+  /** a teammate's chat: its role from the paid bundle (start text lines 3 to 6) */
+  role?: StartTextOpts['role'];
+  /** a sub thread: its main thread and the brief it gave (start text line 2b) */
+  parent?: StartTextOpts['parent'];
+  /** a plain chat: every action it may propose, when the bundle is there (start text line 4) */
+  actionLabels?: string[];
   /** no edits and no writing commands */
   readOnly?: boolean;
   /** more chorus tools the agent may call without a prompt */
   moreTools?: string[];
 }
 
-/** The standing note of a chat (src/mcp/server.ts standingNote): the intro first, then the thread id, artifacts, approvals, sub threads. */
-export function artifactNote(_project: string, threadId: string): string {
-  return standingNote(threadId);
+/**
+ * What a chat's system channel gets (approved 2026-11-17): the start text; Codex and agy also the chorus server's instructions after
+ * it, because they don't show MCP instructions to the model. Claude reads those as MCP instructions.
+ */
+export function systemText(agent: AgentId, o: StartTextOpts): string {
+  const text = startText(o);
+  return agent === 'claude' ? text : `${text}\n\n${MCP_INSTRUCTIONS}`;
 }
 
 export function mcpCommand(project: string, threadId: string, home?: string) {
@@ -61,7 +69,7 @@ export function mcpCommand(project: string, threadId: string, home?: string) {
 const server = (o: { project: string; threadId: string; home?: string }): McpServer => ({ name: 'chorus', ...mcpCommand(o.project, o.threadId, o.home), tools: [...TOOL_NAMES, ...SUB_TOOL_NAMES] });
 
 export function buildHeadless(agent: AgentId, o: LaunchOpts): Launch {
-  return coreHeadless(agent, { prompt: o.prompt, cwd: o.cwd, resumeId: o.resumeId, model: o.model, mcp: server(o), instructions: artifactNote(o.project, o.threadId) });
+  return coreHeadless(agent, { prompt: o.prompt, cwd: o.cwd, resumeId: o.resumeId, model: o.model, mcp: server(o), instructions: systemText(agent, { threadId: o.threadId }) });
 }
 
 /**
@@ -77,8 +85,7 @@ export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
     effort: o.effort,
     skipPermissions: o.skipPermissions,
     mcp: o.moreTools ? { ...server(o), tools: [...server(o).tools, ...o.moreTools] } : server(o),
-    instructions: artifactNote(o.project, o.threadId),
-    note: o.note,
+    instructions: systemText(agent, { threadId: o.threadId, role: o.role, parent: o.parent, actionLabels: o.actionLabels }),
     readOnly: o.readOnly,
   });
 }

@@ -9,7 +9,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { captureStream } from '../../src/core/capture.ts';
 import { buildHandoff, handoffPrompt } from '../../src/core/handoff.ts';
 import { mcpCommand, run } from '../../src/core/launch.ts';
-import { ARTIFACT_NOTE } from '../../src/mcp/server.ts';
+import { MCP_INSTRUCTIONS } from '../../src/mcp/server.ts';
 import { Store } from '../../src/core/store.ts';
 import { syncSkills } from '../../src/core/skills.ts';
 
@@ -58,7 +58,7 @@ test('mcp: get_handoff_context returns the parent thread and the call is logged'
   const t = setTimeout(() => void c.close(), 20000);
   t.unref();
   const tools = (await c.listTools()).tools.map(t => t.name).sort();
-  assert.deepEqual(tools, ['get_handoff_context', 'get_skill', 'get_thread_turns', 'list_artifacts', 'list_skills', 'list_threads', 'request_approval', 'show_artifact']);
+  assert.deepEqual(tools, ['current_thread', 'get_handoff_context', 'get_skill', 'get_thread_turns', 'list_artifacts', 'list_skills', 'list_threads', 'request_approval', 'show_artifact']);
   const out = text(await c.callTool({ name: 'get_handoff_context', arguments: {} }));
   assert.match(out, /parent work/);
   assert.match(out, /echo the probe string/);
@@ -117,8 +117,8 @@ test('artifacts by report: the MCP server tells the agent to report what it make
   const c = await client(proj, 't_artifacts');
   const text = c.getInstructions() ?? '';
   await c.close();
-  assert.match(text, /Chorus thread t_artifacts/);
-  assert.ok(text.includes(ARTIFACT_NOTE));
+  assert.equal(text, MCP_INSTRUCTIONS);
+  assert.match(text, /Show every file or link meant for the user through Chorus/);
   assert.ok(!text.includes(path.join('.chorus', 'threads')), 'no fixed folder');
   const none = await client(proj, '');
   void none; // a server without a thread id has no folder to name: nothing to assert, it must simply start
@@ -126,14 +126,14 @@ test('artifacts by report: the MCP server tells the agent to report what it make
 });
 
 test('artifacts by report: Codex gets the note as developer instructions (it does not show MCP server instructions to the model)', async () => {
-  const { buildHeadless, buildInteractive, artifactNote } = await import('../../src/core/launch.ts');
+  const { buildHeadless, buildInteractive, systemText } = await import('../../src/core/launch.ts');
   const proj = project();
   for (const l of [buildHeadless('codex', { prompt: 'hi', cwd: proj, project: proj, threadId: 't_9' }), buildInteractive('codex', { cwd: proj, project: proj, threadId: 't_9' })]) {
     const i = l.args.findIndex(a => a.startsWith('developer_instructions='));
     assert.ok(i > 0 && l.args[i - 1] === '-c', l.args.join(' ').slice(0, 200));
-    assert.ok(l.args[i].includes('show_artifact'));
+    assert.ok(l.args[i].includes('Show every file or link meant for the user through Chorus'));
   }
-  assert.match(artifactNote(proj, 't_9'), /Chorus thread t_9/);
+  assert.match(systemText('codex', { threadId: 't_9' }), /Chorus thread t_9/);
 });
 
 test('show_artifact: a file (any folder, a relative path from the chat folder) or an http(s) link is listed; a missing file or another scheme is not', async () => {

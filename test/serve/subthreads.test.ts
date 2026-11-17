@@ -12,12 +12,12 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { AgentId } from '../../src/core/types.ts';
 import { Controller } from '../../src/app/controller.ts';
-import { createServer, SUBTHREADS_NOTE } from '../../src/mcp/server.ts';
+import { createServer, MCP_INSTRUCTIONS } from '../../src/mcp/server.ts';
 import { Store } from '../../src/core/store.ts';
 import { ChorusServer, headlessApp } from '../../src/serve/server.ts';
 import type { ProLoader } from '../../src/serve/pro.ts';
 import { SUB_NOTE } from '../../src/serve/subthreads.ts';
-import { artifactNote } from '../../src/core/launch.ts';
+import { systemText } from '../../src/core/launch.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const FAKE = path.join(ROOT, 'tools/fake-agent/fake-tui.mjs');
@@ -82,7 +82,7 @@ test('sub threads: the four tools are listed for a chat with the paid module loc
     const r = await rig({ loader });
     try {
       const get = async (q: string) => (await (await fetch(`${r.url}/api/pro/mcp/tools${q}`, { headers: { authorization: `Bearer ${r.srv.mcpToken}` } })).json()) as { tools: { name: string }[] };
-      assert.deepEqual((await get('')).tools.map(t => t.name), ['start_subthread', 'send_to_subthread', 'list_subthreads', 'stop_subthread']);
+      assert.deepEqual((await get('')).tools.map(t => t.name), ['start_subthread', 'send_to_subthread', 'list_subthreads', 'stop_subthread', 'ask_main_thread']);
       assert.deepEqual((await get('?app=1')).tools, []);
       // a chat's own MCP server registers them through the bridge
       const server = createServer(r.project, 't_x', r.home);
@@ -93,7 +93,7 @@ test('sub threads: the four tools are listed for a chat with the paid module loc
       await client.connect(b);
       const names = (await client.listTools()).tools.map(t => t.name);
       for (const n of ['start_subthread', 'send_to_subthread', 'list_subthreads', 'stop_subthread', 'list_threads']) assert.ok(names.includes(n), n);
-      assert.ok(client.getInstructions()?.includes(SUBTHREADS_NOTE));
+      assert.equal(client.getInstructions(), MCP_INSTRUCTIONS);
       await client.close();
     } finally {
       await r.done();
@@ -248,8 +248,8 @@ test('a sub thread\'s chat is watch-only: keys are dropped until Unlock; an unlo
     type(sub, 'again\r');
     await sleep(600);
     assert.doesNotMatch(r.screen(sub), /got: "again"/);
-    // Codex hears of the tools through its developer instructions too
-    assert.ok(artifactNote(r.project, sub).includes('start_subthread'));
+    // Codex hears of sub threads through its developer instructions too
+    assert.ok(systemText('codex', { threadId: sub }).includes('goes to a sub thread'));
   } finally {
     ws.close();
     await r.done();
@@ -333,6 +333,64 @@ test('a "context not loaded" warning about a sub thread is not passed on; about 
     assert.equal(r.srv.state().notice, '⚠ Claude Code reached its plan limit', 'other warnings stay');
   } finally {
     r.c.app.notice = '';
+    await r.done();
+  }
+});
+
+test('ask_main_thread: typed into the idle main chat, never a request or an Approvals item; answered by send_to_subthread; no repeat in the turn report', async () => {
+  const r = await rig();
+  try {
+    const main = await r.chat('claude');
+    const sub = subId((await r.call('start_subthread', { title: 'Price list', brief: 'Make the price list.' }, main)).text);
+    // not a sub thread: refused
+    assert.match((await r.call('ask_main_thread', { kind: 'question', question: 'x?' }, main)).text, /Only a sub thread can ask its main thread/);
+    const out = await r.call('ask_main_thread', { kind: 'question', question: 'EUR or USD?', details: 'The shop is in Berlin.', options: ['EUR', 'USD'] }, sub);
+    assert.ok(out.ok, out.text);
+    const [ask] = r.store.openAsks({ thread: sub });
+    assert.equal(ask.parent_id, main);
+    assert.match(out.text, new RegExp(`Asked your main thread \\(${ask.id}\\)\\. End your turn now`));
+    await r.until(() => r.screen(main).includes(`Chorus: sub thread "Price list" (${sub}) asks [${ask.id}] (question): EUR or USD? — The shop is in Berlin. — options: EUR / USD. Answer it with send_to_subthread.`), 'typed into the main chat');
+    await r.until(() => !!r.store.getAsk(ask.id)!.typed, 'marked typed');
+    // nothing for the user: no request card, nothing in Approvals
+    assert.equal(r.store.pendingRequests().length, 0);
+    assert.deepEqual(r.srv.state().approvals, []);
+    // its turn ends on the question: no report repeats it
+    r.endTurn(sub, 'Asked my main thread: EUR or USD?');
+    await r.until(() => r.store.getThread(sub)!.sub_status === 'stopped', 'turn end seen');
+    await r.until(() => !!r.store.getThread(sub)!.sub_reported, 'marked reported');
+    await sleep(600);
+    assert.doesNotMatch(r.screen(main), /ended its turn/);
+    // the main thread answers: the ask is answered, and the answer is typed into the sub thread
+    const a = await r.call('send_to_subthread', { id: sub, message: 'EUR.' }, main);
+    assert.match(a.text, /It answers its open question\./);
+    assert.ok(r.store.getAsk(ask.id)!.answered);
+    assert.deepEqual(r.store.openAsks({ parent: main }), []);
+    await r.until(() => r.screen(sub).includes('EUR.'), 'answer typed into the sub thread');
+    // a later turn end with no open question is reported as before
+    await r.until(() => r.store.getThread(sub)!.sub_status === 'working', 'working again');
+    r.store.updateThread(sub, { state: 'working' });
+    await sleep(700);
+    r.endTurn(sub, 'Done in EUR.');
+    await r.until(() => r.screen(main).includes(`Chorus: sub thread ${sub} "Price list"`) && r.screen(main).includes('Done in EUR.'), 'reported');
+  } finally {
+    await r.done();
+  }
+});
+
+test('ask_main_thread: a task step\'s Worker is pointed to its Planner; the chat\'s CLI pid is recorded while it runs', async () => {
+  const r = await rig();
+  try {
+    const main = await r.chat('claude');
+    const step = await r.chat('codex');
+    r.srv['subs'].watchOnly(step, main);
+    assert.match((await r.call('ask_main_thread', { kind: 'question', question: 'x?' }, step)).text, /ask your Planner/);
+    assert.equal(r.store.openAsks({ parent: main }).length, 0);
+    const pid = r.c.app.entry(main)!.host!.pid;
+    assert.equal(r.store.getThread(main)!.cli_pid, pid);
+    assert.equal(r.store.threadByCliPid(pid)!.id, main);
+    r.c.app.entry(main)!.host!.kill();
+    await r.until(() => r.store.getThread(main)!.cli_pid == null, 'cleared when the CLI ends');
+  } finally {
     await r.done();
   }
 });
