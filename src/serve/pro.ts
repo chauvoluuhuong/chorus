@@ -46,7 +46,8 @@ export class ChatLaunch {
     const main = brief != null && row?.parent_thread_id ? this.store?.getThread(row.parent_thread_id) : undefined;
     const parent = main ? { id: main.id, title: main.title, brief: brief ?? '' } : undefined;
     const e = this.next ?? this.host?.chatExtras(o.threadId);
-    if (!e) return { ...(parent ? { parent } : { actionLabels: this.host?.allActionLabels() }) };
+    // a plain chat or sub thread: the bundle's tools need no prompt either (line 4 asks it to propose an action through Chorus)
+    if (!e) return { moreTools: this.host?.toolNames(), ...(parent ? { parent } : { actionLabels: this.host?.allActionLabels() }) };
     exclude(o.cwd, ['.chorus/']); // a teammate's check reads `git status`
     if (e.skills) syncSkills(o.project, { agents: [agent], into: o.cwd, only: e.skills });
     return { role: e.role, readOnly: e.readOnly, moreTools: this.host?.toolNames(), ...(parent ? { parent } : e.role ? {} : { actionLabels: this.host?.allActionLabels() }) };

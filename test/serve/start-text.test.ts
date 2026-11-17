@@ -25,7 +25,7 @@ function stand() {
   const mod: ProModule = {
     version: 'stand-in',
     routes: c => ((ctx = c), {}),
-    mcpTools: () => [],
+    mcpTools: () => [{ name: 'suggest_action' }] as any,
     ui: () => ({ js: '', css: '' }),
     onChatEvent() {},
     roleOf: (_c, t) => roles.get(t),
@@ -43,9 +43,11 @@ async function rig(first: LoadResult) {
   const store = new Store(project, { home });
   const chatLaunch = new ChatLaunch(store);
   const texts = new Map<string, string>();
+  const argv = new Map<string, string[]>();
   const launcher = (agent: 'claude' | 'codex' | 'agy', o: Parameters<typeof buildInteractive>[1]) => {
     const l = buildInteractive(agent, { ...o, ...chatLaunch.extras(o, agent) });
     texts.set(o.threadId, l.args[l.args.indexOf('--append-system-prompt') + 1]);
+    argv.set(o.threadId, l.args);
     return { bin: process.execPath, args: [FAKE, agent], cwd: o.cwd };
   };
   const c = new Controller({ project, store, app: headlessApp(), opener: async () => ({ ok: true }), launcher });
@@ -62,7 +64,7 @@ async function rig(first: LoadResult) {
     await new Promise(r => setTimeout(r, 200));
     store.close();
   };
-  return { srv, store, project, texts, api, chat, mcp, done };
+  return { srv, store, project, texts, argv, api, chat, mcp, done };
 }
 
 test('a plain chat is told every action of the bundle; without the bundle, none', async () => {
@@ -71,6 +73,8 @@ test('a plain chat is told every action of the bundle; without the bundle, none'
   try {
     const id = await r.chat();
     assert.match(r.texts.get(id)!, new RegExp(`This chat is Chorus thread ${id}\\.\\n\\nChorus actions: Create plan, Review changes\\. When one of them fits`));
+    // proposing an action through Chorus needs no permission prompt (step 4's e2e: Claude asked before suggest_action)
+    assert.match(r.argv.get(id)!.join(' '), /mcp__chorus__suggest_action/);
   } finally {
     await r.done();
   }
