@@ -48,6 +48,8 @@ export interface InteractiveOpts {
   readOnly?: boolean;
   /** more chorus tools the agent may call without a prompt */
   moreTools?: string[];
+  /** a sub thread or a step's Worker: the CLI's own question tool off where a per-session switch exists (chorus-core launch.ts) */
+  noNativeAsk?: boolean;
 }
 
 /**
@@ -87,5 +89,6 @@ export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
     mcp: o.moreTools ? { ...server(o), tools: [...server(o).tools, ...o.moreTools] } : server(o),
     instructions: systemText(agent, { threadId: o.threadId, role: o.role, parent: o.parent, actionLabels: o.actionLabels }),
     readOnly: o.readOnly,
+    noNativeAsk: o.noNativeAsk,
   });
 }

@@ -30,18 +30,18 @@ stopped.
 
 - **No task** (any other chat, a locked module, no answer): today's dialog, unchanged: "Delete this chat?" with **Delete the chat**
   and **Keep it**.
-- **The chat is the Planner of a task:** one dialog with three choices:
-  - **Delete only the chat**: the chat goes and the task stays, with no Planner.
+- **The chat is the Planner of a task:** one dialog, "Delete this chat and its task?", with two choices (owner, 2026-11-17: "Delete
+  only the chat" is gone, so a task never stays without its Planner):
   - **Delete the chat and task #N**: `POST /api/pro/task/remove { id, planner: true }`, which also deletes the Planner's chat
     through `deleteChat`. The host then deletes the chat itself if it is still there.
   - **Keep it**: nothing changes, and Esc does the same.
 
-  While the task's plan is still being made, the dialog names "the plan" and the second choice is **Delete the chat and its plan**.
+  While the task's plan is still being made, the dialog names "the plan" ("Delete this chat and its plan?") and the first choice is **Delete the chat and its plan**.
 
 Neither call is gated by the plan: a locked task can still be deleted.
 
 ## Tests
 
-`test/serve/delete-task.test.ts` (a stand-in module: today's dialog, the three choices, each answer, `deleteChat`, a locked module).
+`test/serve/delete-task.test.ts` (a stand-in module: today's dialog, the two choices, each answer, `deleteChat`, a locked module).
 The module's own tests and its e2e check are in chorus-core. The live run of this feature is in `.chorus/proof/feature/delete-task/`
 (not committed).
