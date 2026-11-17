@@ -21,6 +21,10 @@ An agent asks through the chorus `request_approval` tool ([integrations/approval
   from the module's `choruspro.chatTeammate`, chorus-core 72cc8f3); in a plain chat, or with an older module or before its data
   loads, the agent ("Claude Code asks you"). The card is redrawn when the module's data arrives (`src/desktop/ask-label.js`).
 - A CLI's own permission prompt stays the thin red **Approve / Deny** banner, inside the chat column.
+- **Shift+Enter** in a chat's agent screen inserts a new line in the CLI's input (claude, codex, agy): the page sends
+  `NEWLINE_KEYS` (`\x1b\r`, Meta+Enter, probed on each CLI; chorus-core `src/keys.ts`) instead of `\r`. Enter still sends.
+- **New chat** opens on the teammate **Planner** with **Just chat**; with no Planner teammate it stays on Just chat as before.
+  New task keeps Create plan.
 
 ## The right sidebar
 
