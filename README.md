@@ -3,7 +3,17 @@
 **We're building the best place to work with AI.**<br>
 Any AI you choose. All your work in one place. Grows with you. Always yours.
 
-**Website: [chorus-cli.web.app](https://chorus-cli.web.app/)**
+Chorus runs your AI coding agents in **one harness**, so you can orchestrate them freely: plan with one, build with another,
+and nothing is lost on the way.
+
+**Website: [chorus-cli.web.app](https://chorus-cli.web.app/)** · **Videos: [the Chorus playlist](https://www.youtube.com/playlist?list=PLNU3Anm4gzBE)** (in Vietnamese)
+
+### Try it in your browser
+
+Click through the real desktop app: plan and run a task, hand off a chat, build your team or watch a project. A few clicks
+each, and the app points at every one. No install, no AI called.
+
+[![Try Chorus: click to start the guided tour](docs/media/try-chorus.png)](https://chorus-cli.web.app/tour)
 
 - **The real CLI, untouched.** Claude Code, Codex and Antigravity run as themselves, with every command, shortcut and feature you know. You keep working the way you already do; Chorus adds what's around it.
 - **No more ten terminal windows.** Every session sits in one sidebar.
@@ -15,12 +25,6 @@ Any AI you choose. All your work in one place. Grows with you. Always yours.
 - **One memory, one set of skills.** What one agent learns, every agent knows.
 
 ![Teammates, actions and processes; start a chat with a teammate or any agent; the Planner makes a task with steps; Workers run it; the Portal shows goals and failures](docs/media/teammates.gif)
-
-### Try it in your browser
-
-Pick what you want to see: plan and run a task, hand off a chat, build your team or watch a project. A few clicks each, and the app points at every one. No install, no AI called.
-
-[![Try Chorus: click to start the guided tour](docs/media/try-chorus.png)](https://chorus-cli.web.app/tour)
 
 ## Handoff: switch agents without losing anything
 
