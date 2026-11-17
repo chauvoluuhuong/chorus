@@ -1,6 +1,7 @@
 // `chorus mcp --thread <id> [--project <dir>]`: stdio MCP server each AI CLI starts for its session.
-// Stateless: every call reads the shared store (docs/architecture.md §6). All tools are read-only except request_approval,
-// which only records a question for the app that hosts the chat.
+// Stateless: every call reads the shared store (docs/architecture.md §6). All tools are read-only except request_approval and
+// show_artifact, which only record a question or a file for the app that hosts the chat. The chat is the one whose CLI started this
+// process (src/mcp/identity.ts), else --thread.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,52 +10,79 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { buildHandoff, pickSourceThread } from '../core/handoff.ts';
 import { knownSkills, readKnownSkill } from '../core/skillsync.ts';
-import { Store } from '../core/store.ts';
-import { addProTools } from './pro.ts';
+import { Store, type ThreadRow } from '../core/store.ts';
+import { ancestorPids, resolveThread } from './identity.ts';
+import type { ProModule } from '@chauvoluuhuong/chorus-core/pro-loader';
+import { addProTools, proRole, type RoleInfo } from './pro.ts';
 
-export const TOOL_NAMES = ['get_handoff_context', 'get_thread_turns', 'list_threads', 'list_artifacts', 'list_skills', 'get_skill', 'request_approval', 'show_artifact'] as const;
+export const TOOL_NAMES = ['get_handoff_context', 'get_thread_turns', 'list_threads', 'list_artifacts', 'list_skills', 'get_skill', 'request_approval', 'show_artifact', 'current_thread'] as const;
 
-/**
- * Said to every agent at start (plan 2026-11-13, item 5): there is no fixed folder for what it makes for the user; it reports each
- * file or link with show_artifact, and Chorus lists it in the chat's Artifacts view.
- */
-export const ARTIFACT_NOTE =
-  'Whenever you create a file meant for the user (a note, plan, report, mockup, export: anything that is not source code of the project) or find a link they should open, call the chorus MCP tool show_artifact with its path or the link and a short title, right after making it. Save the file wherever it fits the work. Chorus lists it in its Artifacts view, where the user opens it.';
+/** A chat's role in Chorus as the paid bundle gives it (chorus-core ThreadRole): tool-free texts, read live. */
+export type ThreadRole = NonNullable<ReturnType<NonNullable<ProModule['roleOf']>>>;
 
-/** Said to every chat (plan 2026-11-14, Stage 2 and 5): the sub thread tools exist, and how to use them. */
-export const SUBTHREADS_NOTE =
-  'When the user asks for another agent or teammate to do something, or a piece of work can run on its own, hand it over with the chorus MCP tool start_subthread (then send_to_subthread, list_subthreads, stop_subthread). After starting one, go on with your own work or end your turn: Chorus types a short report into this chat each time the sub thread ends a turn. Never check on it in a loop.';
+/** Line (1) of every start text (approved 2026-11-17). */
+export const CHORUS_LINE =
+  'You are working inside Chorus, an app where the user works with several AI coding agents in one place. Chorus is your harness for this chat: when one of its MCP tools (server `chorus`) fits what you are about to do, use it before your own way of doing it, and follow the chorus server\'s instructions.';
 
 /**
- * The first words of every chat Chorus starts (plan 2026-11-14, Stage 5; owner, 2026-11-16: "regardless the instruction we
- * always add this system prompt at the first place"). A teammate's or an action's instructions come after it, never before.
+ * The chorus server's own instructions (approved 2026-11-17): how to work in Chorus. Claude reads them as MCP instructions; Codex and
+ * agy don't show MCP instructions to the model, so launch.ts puts them after the start text there. Under 3 KB.
  */
-export const CHORUS_INTRO =
-  'You are running inside Chorus, an app where the user works with several AI coding agents in one place. Chorus is your working environment here: its MCP server, named chorus, is how you reach the user, the other chats and the team. When a chorus tool fits what you are about to do, use it before your own way of doing it.';
+export const MCP_INSTRUCTIONS = `How to work in Chorus:
+- The user answers you in Chorus. When you need the user to approve, confirm or choose something before you go on, ask through Chorus as an approval card, never as a line in your reply. A Chorus task's plan is the exception: never ask the user to approve it; Chorus shows its Approve button once the plan is finished.
+- Show every file or link meant for the user through Chorus right after you make it.
+- Work that can run on its own, or that the user wants another agent to do, goes to a sub thread. After starting one, go on with your work or end your turn; Chorus reports each time it ends a turn. Never check on it in a loop.
+- When you need to see or manage your sub threads, or know your parent chat, task or step, look them up with current_thread.`;
 
-/**
- * Said to every agent at start (MCP server instructions for Claude and agy, developer instructions for Codex): an approval the
- * agent wants from the user goes through Chorus, where it is a card the user answers from any chat, instead of a line in the
- * reply (agy's "click Proceed", Codex's "reply Approve") that Chorus cannot see.
- */
-export const APPROVAL_NOTE =
-  'The user answers you in Chorus. Whenever you would ask the user to approve, confirm or choose something before you go on (a plan, a risky or irreversible change, a choice between options, "click Proceed", "reply Approve"), do not ask in your reply: call the chorus MCP tool request_approval with the question, a short summary and the options, then end your turn. Chorus shows it to the user as an approval card and their answer arrives as their next message. Your own permission prompts for commands and edits stay as they are.';
+const PROPOSE = 'propose it to the user through Chorus with one line on why, before you start; this comes before any skill or workflow of your own. Never start an action yourself.';
+const KIND: Record<string, string> = { planner: 'Planner', worker: 'Worker', custom: 'Custom' };
 
-/**
- * Chorus's standing note for a chat, in its one fixed order: the intro, the thread id, artifacts, approvals, sub threads (the
- * team sentence joins at the end once Stage 5's tools exist). The same text reaches every CLI: the MCP server's instructions,
- * Claude's --append-system-prompt, Codex's developer instructions and agy's rules file (src/core/launch.ts). Under 3 KB:
- * Claude's MCP instructions stop near 4 KB.
- */
-export function standingNote(threadId: string): string {
-  return [CHORUS_INTRO, `This chat is Chorus thread ${threadId}.`, ARTIFACT_NOTE, APPROVAL_NOTE, SUBTHREADS_NOTE].join(' ');
+export interface StartTextOpts {
+  threadId: string;
+  /** a sub thread's main thread: its id, its title and the brief it gave */
+  parent?: { id: string; title: string; brief: string };
+  /** a teammate's chat (the bundle's ThreadRole) */
+  role?: ThreadRole;
+  /** a plain chat: every action label, when the bundle is there */
+  actionLabels?: string[];
 }
 
-export function createServer(project: string, threadId?: string, home?: string): McpServer & { addProTools(): Promise<void> } {
+/**
+ * What every chat Chorus starts is told first, in its system channel (approved 2026-11-17): the Chorus line, the thread id, the sub
+ * thread line, the role, the actions it may propose, what it is doing now and, for Planners, the project's goals. Each line only
+ * when it exists; no line names a tool. Claude gets it as --append-system-prompt, Codex as developer instructions, agy as its rules
+ * file (src/core/launch.ts).
+ */
+export function startText(o: StartTextOpts): string {
+  const lines = [CHORUS_LINE, `This chat is Chorus thread ${o.threadId}.`];
+  if (o.parent) {
+    const first = (o.parent.brief.split('\n').find(l => l.trim()) ?? '').trim().replace(/[.:;,]+$/, '');
+    lines.push(`This chat is a sub thread of Chorus thread ${o.parent.id} ("${o.parent.title}"), which started it to: ${first}. Your main thread is who you work for: when you need a decision, an approval or a fact before you can go on, ask your main thread through Chorus and end your turn, never the user. When your work is done, say so in your reply and end your turn: Chorus reports it to your main thread.`);
+  }
+  const r = o.role;
+  if (r) lines.push(`Your role: ${KIND[r.teammate.kind] ?? r.teammate.kind} (teammate "${r.teammate.name}"). Its instructions:\n${r.instructions}`);
+  if (!o.parent) {
+    if (r) {
+      if (r.teammate.kind !== 'worker' && r.actions.length) lines.push(`Your actions: ${r.actions.join(', ')}. When one of them fits what the user wants better than what you are doing, ${PROPOSE}`);
+    } else if (o.actionLabels?.length) {
+      lines.push(`Chorus actions: ${o.actionLabels.join(', ')}. When one of them fits what the user wants better than what you are doing (for example Create plan for work to be built in steps, Review changes for finished work), ${PROPOSE}`);
+    }
+  }
+  if (r?.action) lines.push(`Your action: ${r.action.text}`);
+  if (r?.goals.length) {
+    lines.push(`Active goals of this project:\n${r.goals.map(g => `- ${g.title} (id ${g.id}). Done when: ${g.doneWhen}`).join('\n')}`);
+  }
+  return lines.join('\n\n');
+}
+
+export function createServer(project: string, threadId?: string, home?: string, o: { role?: (home: string, threadId: string) => Promise<RoleInfo | undefined> } = {}): McpServer & { addProTools(): Promise<void> } {
   const store = new Store(project, { home });
-  // Every agent starts this server for its thread, so this text reaches all three: how it shows the user what it made, and asks
-  const instructions = threadId ? standingNote(threadId) : undefined;
+  // how to work in Chorus: Claude reads it here; Codex and agy get it in their start text (launch.ts). An AI app with no chat gets none
+  const instructions = threadId ? MCP_INSTRUCTIONS : undefined;
   const server = new McpServer({ name: 'chorus', version: '1.0.0' }, instructions ? { instructions } : undefined) as McpServer & { addProTools(): Promise<void> };
+
+  // the role lives in the paid bundle, which runs in `chorus serve`: asked once per call, never cached (it changes as a task moves)
+  const role = (): Promise<RoleInfo | undefined> => (threadId ? (o.role ?? proRole)(store.root, threadId) : Promise.resolve(undefined));
 
   const reply = (tool: string, text: string, isError = false) => {
     try {
@@ -127,7 +155,7 @@ export function createServer(project: string, threadId?: string, home?: string):
     'request_approval',
     {
       description:
-        "The way to get the user's approval, confirmation or choice in this chat: use it instead of asking in your reply whenever you need the user's OK on a plan, a risky or irreversible change, or a choice between options. Chorus shows it as a card with your options wherever the user is. Returns at once: end your turn after calling it. The user's answer arrives as their next message, starting with \"Chorus approval <id>:\" and the option they chose, or \"Other: <their own words>\" when none of your options fit (and maybe a note).",
+        "The way to get the user's approval, confirmation or choice in this chat: use it instead of asking in your reply whenever you need the user's OK on a risky or irreversible change, or a choice between options. Not for a Chorus task's plan: Chorus shows the user that plan's Approve button once the plan is finished; never ask for it here. A sub thread asks its main thread instead. Chorus shows it as a card with your options wherever the user is. Returns at once: end your turn after calling it. The user's answer arrives as their next message, starting with \"Chorus approval <id>:\" and the option they chose, or \"Other: <their own words>\" when none of your options fit (and maybe a note).",
       inputSchema: {
         question: z.string().min(1).describe('What you ask, in one sentence (e.g. "Apply the migration plan to the production database?")'),
         details: z.string().optional().describe('A short summary the user needs to decide: the plan, the command, what changes (a few lines; the full plan can be an artifact)'),
@@ -138,6 +166,8 @@ export function createServer(project: string, threadId?: string, home?: string):
     },
     async ({ question, details, options, kind, other }) => {
       if (!threadId) return reply('request_approval', 'This chat is not a Chorus thread: ask the user in your reply.', true);
+      if (isSubThread(store.getThread(threadId))) return reply('request_approval', SUB_REFUSAL, true);
+      if (planGuard((await role())?.role, kind, question)) return reply('request_approval', PLAN_REFUSAL, true);
       const r = store.createRequest({ threadId, question, details, options, kind, other });
       const skip = r.kind === 'question' ? ' If they skip it, the message is "Chorus approval <id>: skipped. Decide yourself and say what you chose.": then decide yourself, say what you chose, and go on.' : '';
       return reply('request_approval', `Shown to the user as approval card ${r.id} with the options: ${r.options.join(' / ')}. End your turn now without asking again in your reply. Their answer arrives as their next message: "Chorus approval ${r.id}: <option>"${r.other ? ', or "Other: <their own words>" when none fit' : ''}.${skip}`);
@@ -148,7 +178,7 @@ export function createServer(project: string, threadId?: string, home?: string):
     'show_artifact',
     {
       description:
-        'Show the user a file you made for them (or a link): it is listed in the chat\'s Artifacts view in Chorus, where they open it. Call it right after you create the file, wherever you saved it. A path can be absolute or relative to your working folder; the file must exist. A link must be http or https.',
+        'Show the user a file you made for them (or a link): it is listed in the chat\'s Artifacts view in Chorus, where they open it. Use it for every file or link meant for the user (a note, plan, report, mockup, export: not the project\'s source code), right after you create it, wherever you saved it. A path can be absolute or relative to your working folder; the file must exist. A link must be http or https.',
       inputSchema: {
         target: z.string().min(1).describe('The file\'s path, or an http(s) link'),
         title: z.string().optional().describe('A short title for the list (e.g. "Export button mockup"); default: the file name'),
@@ -176,12 +206,83 @@ export function createServer(project: string, threadId?: string, home?: string):
     },
   );
 
+  server.registerTool(
+    'current_thread',
+    {
+      description:
+        "This chat's own context: its id, agent and settings, its parent and sub threads, its role and action, and its task and step. Use it when you need to see or manage your sub threads or know any of these.",
+      inputSchema: {},
+    },
+    async () => {
+      const t = threadId ? store.getThread(threadId) : undefined;
+      if (!t) return reply('current_thread', 'This chat is not a Chorus thread.', true);
+      return reply('current_thread', JSON.stringify(currentThread(store, t, await role()), null, 1));
+    },
+  );
+
   server.addProTools = () => addProTools(server, store.root, threadId, reply);
   return server;
 }
 
+/**
+ * `chorus mcp`: the chat this server belongs to is the one whose CLI started it (an ancestor process), else --thread. agy starts its
+ * server lazily from a config every agy chat in a folder shares, so --thread can name another chat there (probe D, chorus-core 56b00d9).
+ */
 export async function runMcp(project: string, threadId?: string, home?: string) {
-  const server = createServer(project, threadId, home);
+  const store = new Store(project, { home });
+  let id = threadId;
+  try {
+    id = resolveThread(store, threadId, ancestorPids(process.pid));
+  } finally {
+    store.close();
+  }
+  const server = createServer(project, id, home);
   await server.addProTools();
   await server.connect(new StdioServerTransport());
+}
+
+/* ---------- current_thread, the request_approval guards ---------- */
+
+/** A sub thread a chat started with start_subthread; a task step's Worker ('task') asks its Planner instead. */
+export const isSubThread = (t: ThreadRow | undefined) => !!t?.sub_status && (t.sub_status as string) !== 'task';
+
+export const SUB_REFUSAL = 'You are a sub thread: ask your main thread instead (ask_main_thread), not the user.';
+export const PLAN_REFUSAL =
+  "Chorus asks the user to approve this task's plan itself. Finish the plan the way your role says: that turns on its Approve button. Ask here only for facts or choices you need to write the plan.";
+
+/** A chat writing a task's plan never asks the user to approve it: Chorus does, once the plan is finished. */
+export function planGuard(role: ThreadRole | null | undefined, kind: 'question' | 'approval' | undefined, question: string): boolean {
+  if (role?.action?.id !== 'createPlan' || role.task?.state !== 'planning') return false;
+  return (kind ?? 'approval') === 'approval' || (/approv/i.test(question) && /\bplan\b/i.test(question));
+}
+
+const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
+
+/** What current_thread returns: the chat as Chorus has it now. */
+export function currentThread(store: Store, t: ThreadRow, info: RoleInfo | undefined) {
+  const parent = t.parent_thread_id ? store.getThread(t.parent_thread_id) : undefined;
+  const sub = isSubThread(t);
+  const reported = store.reportedArtifacts(t.id);
+  const latest = reported[0];
+  return {
+    thread: {
+      id: t.id,
+      title: t.title,
+      agent: t.agent,
+      model: t.model,
+      effort: t.effort,
+      cli_version: t.cli_version,
+      permissions: info?.readOnly ? 'read-only' : t.skip_permissions ? 'skip' : 'prompts',
+      state: t.state,
+      project: t.project,
+      cwd: t.cwd,
+      created: t.created,
+    },
+    parent: parent ? { id: parent.id, title: parent.title, agent: parent.agent, asked: t.sub_brief ?? null } : null,
+    sub_threads: store.subThreads(t.id).map(s => ({ id: s.id, title: s.title, agent: s.agent, status: (s.sub_status as string) === 'task' ? 'task step' : s.sub_status, turns: s.sub_turns ?? 0, last_reply: clip(store.lastReply(s.id).replace(/\s+/g, ' ').trim(), 200) })),
+    role: info?.role ?? null,
+    artifacts: { count: reported.length, latest: latest ? { target: latest.target, title: latest.title, ts: latest.ts } : null },
+    open_requests: store.pendingRequests(t.id).map(r => ({ id: r.id, kind: r.kind, question: r.question, options: r.options, created: r.created })),
+    open_questions: (sub ? store.openAsks({ thread: t.id }) : store.openAsks({ parent: t.id })).map(a => ({ id: a.id, from: a.thread_id, to: a.parent_id, kind: a.kind, question: a.question, details: a.details, options: a.options, asked: a.created })),
+  };
 }

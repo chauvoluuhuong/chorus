@@ -229,7 +229,16 @@ export class ChorusServer {
     if (o.chatLaunch) o.chatLaunch.host = this.pro;
     this.subs = new SubThreads({
       store: this.c.store,
-      start: x => this.c.newThread({ agent: x.agent, model: x.model, effort: x.effort, title: x.title, prompt: x.prompt, cwd: x.cwd, skipPermissions: x.skipPermissions, parent: x.parent }).id,
+      start: x => {
+        // its start text names its main thread and what it was started to do (startText line 2b): the row gets its brief only after
+        const launch = this.o.chatLaunch;
+        if (launch) launch.nextSub = x.brief;
+        try {
+          return this.c.newThread({ agent: x.agent, model: x.model, effort: x.effort, title: x.title, prompt: x.prompt, cwd: x.cwd, skipPermissions: x.skipPermissions, parent: x.parent }).id;
+        } finally {
+          if (launch) launch.nextSub = undefined;
+        }
+      },
       send: (id, text) => this.sendToChat(id, text),
       stop: id => this.app.entry(id)?.host?.kill(),
       openApproval: id => this.approvalsNow().some(a => a.id === id) || this.c.store.pendingRequests(id).length > 0,
@@ -244,7 +253,7 @@ export class ChorusServer {
 
   private startChat(x: ChatStart): string {
     const launch = this.o.chatLaunch;
-    if (launch) launch.next = { note: x.note, readOnly: x.readOnly, skills: x.skills };
+    if (launch) launch.next = { role: x.role, readOnly: x.readOnly, skills: x.skills };
     try {
       return this.c.newThread({ agent: x.agent, model: x.model, effort: x.effort, title: x.title, prompt: x.prompt, cwd: x.cwd, skipPermissions: x.skipPermissions, parent: x.parent ? this.c.store.getThread(x.parent) : undefined }).id;
     } finally {
@@ -358,11 +367,14 @@ export class ChorusServer {
     app.bell = () => this.broadcast({ t: 'bell' });
     // a new process for a chat (new, resumed): it takes the desktop's terminal size, and clients looking at that chat follow it
     app.on('thread-started', (e: Entry, host: ThreadHost) => {
+      // `chorus mcp` finds its chat by its CLI's pid (src/mcp/identity.ts)
+      try { this.c.store.setCliPid(e.id, host.pid); } catch { /* a chat without a row (the doctor) */ }
       host.resize(this.size.cols, this.size.rows);
       for (const cl of this.clients) if (cl.attached === e.id) void cl.attach(e.id);
       this.pushState();
     });
     app.on('thread-exit', (e: Entry) => {
+      if (e?.id) try { this.c.store.setCliPid(e.id, null); } catch { /* gone */ }
       this.pro.chatEvent({ type: 'exit', thread: e?.id } as { type: string });
       this.pushState();
     });
@@ -701,6 +713,12 @@ export class ChorusServer {
       // a chat gets the sub thread tools whatever the paid module's state; an AI app the user connected does not
       const paid = await this.pro.mcpTools(app);
       return send(res, 200, { tools: app ? paid : [...SUB_TOOLS, ...paid.filter(t => !SUB_TOOL_NAMES.includes(t.name))] });
+    }
+    if (req.method === 'GET' && route === 'role') {
+      // the chat's role from the bundle, for current_thread and the request_approval guard (`chorus mcp` is its own process)
+      const thread = new URL(req.url ?? '/', 'http://x').searchParams.get('thread') ?? '';
+      const role = this.pro.roleOf(thread) ?? null;
+      return send(res, 200, { role, readOnly: !!this.pro.chatExtras(thread)?.readOnly, actionLabels: this.pro.allActionLabels() ?? [] });
     }
     if (req.method === 'POST' && route === 'call') {
       const b = await readJson(req);

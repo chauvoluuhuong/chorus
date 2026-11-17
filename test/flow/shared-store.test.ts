@@ -100,7 +100,7 @@ test('mcp: a chat in one project can load a chat from another through the shared
   assert.match(ctx, /Limiter in place/);
   const instr = c.getInstructions() ?? '';
   await c.close();
-  assert.ok(instr.includes('show_artifact'), 'what it makes for the user is reported, wherever it is saved');
+  assert.ok(instr.includes('Show every file or link meant for the user through Chorus'), 'what it makes for the user is reported, wherever it is saved');
   sa.close();
 });
 

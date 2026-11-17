@@ -200,6 +200,9 @@ Per project, in `<project>/.chorus/` (git-ignored):
 | **usage** | thread, turn seq, tokens in / out / cache, cost; latest plan-limit reading | status line, limit warning |
 | **artifacts** | thread, path, version (content hash), timestamp | artifacts view, handoff context |
 | **skills** | name, description, source path, which CLIs it is synced to, version | skills sync (Phase 2) |
+| **asks** | id, sub thread, its main thread, kind, question, details, options, asked, typed, answered | `ask_main_thread`, `current_thread` |
+
+`threads` also keeps `cli_pid` (the chat's CLI process while it runs) so `chorus mcp` can find its chat.
 
 **Not stored:** streaming chunks, thinking blocks, full tool output, system prompts, attachments.
 Raw output stays in `raw/` for `chorus trace` only.
@@ -222,17 +225,39 @@ Phase 1 fills in the TBDs. Current facts: [integrations/](integrations/README.md
 
 ## 6. MCP tools
 
-Bound to a thread by `chorus mcp --thread <id>` in the per-session MCP config (verified for Claude
-and Codex; open question for agy). All read-only: agents never have to write anything for Chorus
-to work.
+Each chat's CLI starts `chorus mcp --project <dir> --thread <id>` from its per-session MCP config. The server is bound to the
+chat whose CLI started it: `chorus serve` records each chat's CLI pid when it spawns it (`threads.cli_pid`), and the server walks
+its ancestor processes to the nearest live chat's CLI (`src/mcp/identity.ts`). `--thread` is the fallback (headless runs, tests,
+an AI app the user connected). This matters for agy, which starts the server lazily from the `.agents/mcp_config.json` every agy
+chat in a folder shares (probe D, chorus-core 56b00d9).
 
-| Tool | Returns |
+What a chat is told (approved 2026-11-17, `src/mcp/server.ts`):
+- **Start text** (`startText()`), in each CLI's system channel (Claude `--append-system-prompt`, Codex `developer_instructions`,
+  agy's rules file): the Chorus line, the thread id, for a sub thread its main thread and the first line of its brief, the role
+  (teammate and its instructions), the actions it may propose (a plain chat: every action of the bundle; a Worker or a sub thread:
+  none), what it is doing now, and for Planners the project's active goals. No line names a tool. The role comes from the paid
+  bundle (`ChatStart.role`, `extras().role`) through `src/serve/pro.ts` `ChatLaunch`.
+- **MCP instructions** (`MCP_INSTRUCTIONS`, 777 bytes): how to work in Chorus (approvals as cards, never for a task's plan;
+  show every file; sub threads; `current_thread` on demand). Codex and agy don't show MCP instructions to the model, so they get
+  them after the start text too.
+
+| Tool | Does |
 |---|---|
 | `get_handoff_context(thread_id?)` | Compact digest of the parent thread (or the given one): first request, recent turns, files touched, commands and test results, artifacts, last assistant message. A few thousand tokens at most. |
 | `get_thread_turns(thread_id, before?, limit?)` | Older turns, page by page |
 | `list_threads()` | Threads in this project |
 | `list_artifacts(thread_id?)` | Artifacts with paths, to read with the agent's own file tools |
 | `list_skills()` / `get_skill(name)` | Skills, for CLIs that can't load them natively (decided in Phase 2) |
+| `current_thread()` | This chat, live: id, title, agent, model, effort, CLI version, permissions, state, project, folder; its parent and what it asked; its sub threads; its role and action, task, step and goals (asked from `chorus serve`, `GET /api/pro/mcp/role`; null without the bundle); its artifacts; its open approvals; its open questions to or from sub threads |
+| `request_approval(question, …)` | An approval card for the user. Refused in a sub thread (it asks its main thread), and for plan approval while the chat writes a task's plan (role action `createPlan`, task `planning`): Chorus shows the plan's Approve button itself |
+| `show_artifact(target, title?)` | Lists a file or link in the chat's Artifacts view |
+
+Served by `chorus serve` through the bridge (`src/mcp/pro.ts` → `/api/pro/mcp/call`): the sub thread tools of
+`src/serve/subthreads.ts` (`start_subthread`, `send_to_subthread`, `list_subthreads`, `stop_subthread`, `ask_main_thread`) and the
+paid bundle's tools. `ask_main_thread` (sub threads only) stores the question in `asks` and types it into the main chat when it is
+idle, as a "Chorus:" line with the sub thread's title, id and the question id; it never makes a request, an Approvals item or a
+Needs you item. The main thread's next `send_to_subthread` to that sub thread answers it, and the sub thread's turn report does
+not repeat a question already asked.
 
 ## 7. Handoff = new thread that loads the previous one
 
