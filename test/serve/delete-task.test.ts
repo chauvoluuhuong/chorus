@@ -82,15 +82,15 @@ test('a plain chat: today\'s dialog, unchanged', async () => {
   }
 });
 
-test('a Planner chat: three choices naming the task', async () => {
+test('a Planner chat: two choices naming the task, no "Delete only the chat" (owner, 2026-11-17)', async () => {
   const s = stand(OWNER);
   const r = await rig(s.mod);
   try {
     const d = await r.del('t_plan');
-    assert.equal(d.title, 'Delete this chat?');
-    assert.deepEqual(d.options, [{ key: 'y', label: 'Delete only the chat' }, { key: 't', label: 'Delete the chat and task #7' }, { key: 'w', label: 'Keep it' }]);
+    assert.equal(d.title, 'Delete this chat and its task?');
+    assert.deepEqual(d.options, [{ key: 't', label: 'Delete the chat and task #7' }, { key: 'w', label: 'Keep it' }]);
     assert.match(d.lines.join('\n'), /"Planner chat" is the Planner of task #7 "Ship it"/);
-    assert.match(d.lines.join('\n'), /its 1 Worker chat is deleted/);
+    assert.match(d.lines.join('\n'), /Deleting it also deletes the task: its steps, comments and waiting items, and its 1 Worker chat\./);
     await r.api('POST', `/api/dialogs/${d.id}`, { value: 'w' });
   } finally {
     r.close();
@@ -102,24 +102,10 @@ test('a Planner chat of a plan still being made: "the plan", "Delete the chat an
   const r = await rig(s.mod);
   try {
     const d = await r.del('t_plan', 'w');
-    assert.equal(d.options![1].label, 'Delete the chat and its plan');
+    assert.equal(d.title, 'Delete this chat and its plan?');
+    assert.equal(d.options![0].label, 'Delete the chat and its plan');
+    assert.match(d.lines.join('\n'), /Deleting it also deletes the plan: its steps, comments and waiting items\./);
     assert.match(d.lines.join('\n'), /Planner of the plan "Ship it"/);
-  } finally {
-    r.close();
-  }
-});
-
-test('"Delete only the chat": the chat goes with no second dialog, the task stays', async () => {
-  const s = stand(OWNER);
-  const r = await rig(s.mod);
-  try {
-    await r.del('t_plan', 'y');
-    await r.until(() => !r.has('t_plan'), 'chat deleted');
-    await settle();
-    assert.equal(r.dialogs().length, 0, 'no "Delete this chat?" after the choice');
-    assert.equal(s.calls.filter(c => c.path === 'task/remove').length, 0);
-    assert.ok(s.events.some((e: any) => e.type === 'deleted' && e.thread === 't_plan'));
-    assert.ok(r.has('t_work'));
   } finally {
     r.close();
   }

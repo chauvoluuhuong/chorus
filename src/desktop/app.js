@@ -4,6 +4,7 @@
 import { shortCheckPassed } from './doctor-popup.js';
 import { askWho } from './ask-label.js';
 import { attachPicker } from './text-picker.js';
+import { md, mdInline } from './md.js';
 import { cliFitNote, newChatHint } from './cli-fit.js';
 import { nextSort, sortFolders, typeJump } from './folder-nav.js';
 
@@ -272,6 +273,18 @@ termEl.style.height = '100%';
 let termOpened = false;
 term.onData(d => S.attached && send({ t: 'in', id: S.attached, data: d }));
 term.onBinary(d => S.attached && send({ t: 'in', id: S.attached, data: d }));
+// Shift+Enter: a new line in the CLI's input, not a send. The bytes per CLI come with the state (NEWLINE_KEYS, probed in
+// docs/integrations); xterm's own "\r" for that key (keydown, keypress, keyup) is held back.
+term.attachCustomKeyEventHandler(e => {
+  if (e.key !== 'Enter' || !e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || !S.attached) return true;
+  const nl = S.state?.keys?.[S.state?.chats.find(c => c.id === S.attached)?.agent];
+  if (!nl) return true;
+  if (e.type === 'keydown') {
+    send({ t: 'in', id: S.attached, data: nl });
+    e.preventDefault();
+  }
+  return false;
+});
 let lastSize = '';
 function refit() {
   if (!termEl.isConnected || !termEl.clientWidth) return;
@@ -941,6 +954,8 @@ async function openNew(from, folder) {
   const src = S.info.from;
   const agent = src ? S.info.agents.find(a => a.id !== src.agent).id : (S.agentPref || localStorage.getItem('chorus.agent') || 'claude');
   S.form = { agent, model: 'default', effort: 'default', folder: folder ?? S.info.folder, skip: src ? src.skip : false, prompt: '', error: '', busy: false };
+  // a fresh New chat (not a hand-off): the module picks its default (the Planner with Just chat)
+  if (!src) window.choruspro?.newChatOpened?.();
   if (S.view.name === 'new') {
     renderChrome();
   renderDoctorDot();
@@ -2170,8 +2185,12 @@ function confirmProjectDelete(folder, n) {
 let ncPicker = null;
 let skillsList = null;
 /** Every skill Chorus sees (Sync skills), with its state per CLI: what "/" lists. */
-async function skillsOn() {
-  skillsList ??= api('GET', '/api/skills/all').then(r => r.skills ?? [], () => ((skillsList = null), []));
+let skillsKey = '';
+async function skillsOn(folder) {
+  // the chosen project's own skill folders count too: a new folder asks again
+  const key = folder ?? '';
+  if (key !== skillsKey) (skillsList = null), (skillsKey = key);
+  skillsList ??= api('GET', '/api/skills/all' + (folder ? `?folder=${encodeURIComponent(folder)}` : '')).then(r => r.skills ?? [], () => ((skillsList = null), []));
   return skillsList;
 }
 /** The CLI marks of a "/" item: built only from the page's own letters and class names, never from the skill's text. */
@@ -2211,7 +2230,7 @@ function confirmSkillSync(k, agentOrAgents) {
   });
 }
 /** The "/" trigger for skills: the marks per CLI, and the sync dialog for the agents in `agentsNow()` that lack the picked skill. */
-function skillTrigger(agentsNow) {
+function skillTrigger(agentsNow, folderNow = () => undefined) {
   return {
     chars: ['/'],
     label: 'Skills',
@@ -2220,7 +2239,7 @@ function skillTrigger(agentsNow) {
     query: /[\w.-]*/,
     items: async () => {
       const agents = agentsNow().filter(a => AGENT[a]);
-      return (await skillsOn()).map(k => {
+      return (await skillsOn(folderNow())).map(k => {
         const lack = agents.filter(a => !k.state?.[a]);
         return { key: k.name, main: `/${k.name}`, sub: k.description, marks: skillMarks(k), need: lack.length ? `Not on ${lack.map(a => AGENT[a].name).join(' and ')} yet · sync when you pick it` : '', skill: k };
       });
@@ -2243,11 +2262,17 @@ function skillPicker(textarea, agents) {
   modPickers.set(textarea, p);
   return p;
 }
+function ncAgents() {
+  if (!S.form) return [];
+  const t = !S.info?.from && window.choruspro?.teammatePicked?.() ? window.choruspro?.newChat?.({ pk: () => '', agentRows: '', agentLabel: '' })?.agent : undefined;
+  return [AGENT[t] ? t : S.form.agent];
+}
 function attachNcPicker(ta) {
   ncPicker?.destroy();
   skillsList = null;
   ncPicker = attachPicker(ta, [
-    skillTrigger(() => (S.form?.agent ? [S.form.agent] : [])),
+    // the agent that will really run it: a picked teammate's own agent, else the form's
+    skillTrigger(ncAgents, () => S.form?.folder),
     {
       chars: ['@', '＠'],
       label: 'Files',
@@ -2265,7 +2290,7 @@ function attachNcPicker(ta) {
 }
 /** The module starts its chats itself: the page names the skills there as the app's own routes do on the server. */
 async function withSkills(text) {
-  const names = new Set((await skillsOn()).map(k => k.name));
+  const names = new Set((await skillsOn(S.form?.folder)).map(k => k.name));
   return String(text ?? '').replace(/(^|\s)\/([\w-]+(?:\.[\w-]+)*)(?=\s|$|[,.;:!?)])/g, (all, pre, name) => (names.has(name) ? `${pre}Use the Chorus skill "${name}" (load it with the chorus get_skill tool).` : all));
 }
 /** 🗑 on a waiting item, wherever it shows (Approvals, Home, the card in a chat, the Approve / Deny line): one warning, one result. */
@@ -2433,8 +2458,8 @@ function askCard(a, dock = false) {
   const req = `data-arg="${esc(a.id)}" data-req="${esc(a.request)}"`;
   const more = S.askMore.has(a.request);
   // docked: the details fold to 3 lines, with Show more when they are longer
-  const details = !a.details ? '' : dock ? `<div class="what"><div class="${more ? '' : 'clamp'}">${esc(a.details)}</div></div><button class="ask-more" data-act="ask-more" data-arg="${esc(a.request)}" hidden>${more ? 'Show less' : 'Show more'}</button>` : `<div class="what">${esc(a.details)}</div>`;
-  return `<div class="ask-q">${esc(a.question)}</div>${details}
+  const details = !a.details ? '' : dock ? `<div class="what md"><div class="${more ? '' : 'clamp'}">${md(a.details)}</div></div><button class="ask-more" data-act="ask-more" data-arg="${esc(a.request)}" hidden>${more ? 'Show less' : 'Show more'}</button>` : `<div class="what md">${md(a.details)}</div>`;
+  return `<div class="ask-q">${mdInline(a.question)}</div>${details}
     <div class="acts">${optionButtons(a)}${a.other === false ? '' : '<button class="btn" data-act="other">Other…</button>'}${a.askKind === 'question' ? `<button class="btn" data-act="skip" ${req} title="The agent decides itself">Skip</button>` : ''}</div>
     ${a.other === false ? '' : `<div class="acts other-row" hidden><input type="text" class="other-input" placeholder="Your own answer" aria-label="Your own answer"><button class="btn primary" data-act="pick-other" ${req}>Send</button></div>`}
     <input type="text" class="note-input" placeholder="Add a note (optional)" aria-label="Note for the agent">`;

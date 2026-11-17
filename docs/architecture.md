@@ -249,12 +249,19 @@ What a chat is told (approved 2026-11-17, `src/mcp/server.ts`):
 | `list_artifacts(thread_id?)` | Artifacts with paths, to read with the agent's own file tools |
 | `list_skills()` / `get_skill(name)` | Skills, for CLIs that can't load them natively (decided in Phase 2) |
 | `current_thread()` | This chat, live: id, title, agent, model, effort, CLI version, permissions, state, project, folder; its parent and what it asked; its sub threads; its role and action, task, step and goals (asked from `chorus serve`, `GET /api/pro/mcp/role`; null without the bundle); its artifacts; its open approvals; its open questions to or from sub threads |
-| `request_approval(question, …)` | An approval card for the user. Refused in a sub thread (it asks its main thread), and for plan approval while the chat writes a task's plan (role action `createPlan`, task `planning`): Chorus shows the plan's Approve button itself |
+| `request_approval(question, …)` | An approval card for the user; its details may use Markdown (the card renders a safe subset). Refused in a sub thread (it asks its main thread) and in a task step's Worker (it uses `ask_planner`), and for plan approval while the chat writes a task's plan (role action `createPlan`, task `planning`): Chorus shows the plan's Approve button itself |
 | `show_artifact(target, title?)` | Lists a file or link in the chat's Artifacts view |
 
 Served by `chorus serve` through the bridge (`src/mcp/pro.ts` → `/api/pro/mcp/call`): the sub thread tools of
 `src/serve/subthreads.ts` (`start_subthread`, `send_to_subthread`, `list_subthreads`, `stop_subthread`, `ask_main_thread`) and the
-paid bundle's tools. `ask_main_thread` (sub threads only) stores the question in `asks` and types it into the main chat when it is
+paid bundle's tools, among them `list_teammates` (the project's teammates: agent, model, effort, permissions) and `start_thread`
+(teammate, action?, message): an independent main chat in the caller's project, with its own sidebar row like New chat, that gets the
+teammate's agent, model, effort, permissions and instructions; only a main chat may call it. `suggest_action` is refused in sub
+threads and Workers as well: only a main chat raises cards for the user. `MCP_INSTRUCTIONS` adds: before starting a new chat
+thread, call `list_teammates` and `list_actions`, propose the fitting teammate (and action) through `request_approval` (kind
+`question`), then call `start_thread` with what the user chose. In sub threads and Workers the CLI's own question tool is off
+where a per-session switch exists (`noNativeAsk`: Codex `-c features.default_mode_request_user_input=false`; Claude's
+AskUserQuestion is off in every chat; agy has none, see [integrations/antigravity-agy.md](integrations/antigravity-agy.md)). `ask_main_thread` (sub threads only) stores the question in `asks` and types it into the main chat when it is
 idle, as a "Chorus:" line with the sub thread's title, id and the question id; it never makes a request, an Approvals item or a
 Needs you item. The main thread's next `send_to_subthread` to that sub thread answers it, and the sub thread's turn report does
 not repeat a question already asked.

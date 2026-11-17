@@ -28,6 +28,13 @@ in one chunk read as a paste in the TUIs). It answers:
   room back. The terminal keeps its focus and its typing while a card is open.
 - Typing to the agent (an Enter in its terminal) while its card is open answers it by typing: the card is cancelled and leaves the
   chat and Approvals at once (`typedTo` in `src/serve/server.ts`). The idle → working rule from the previous plan stays as well.
+- The same Enter also closes Chorus's own open cards for that chat (2026-11-17): the "Start <action>?" suggestion and the chat's
+  goal question (`chatEvent` `typed` to the module). Shift+Enter is a new line, not a send: its bytes (`NEWLINE_KEYS`, `\x1b\r`)
+  never count as typing to the agent.
+- The card renders the question and its details as Markdown, a safe subset (`src/desktop/md.js`: text escaped first, only http(s)
+  links), so long details stay readable; folded details keep 4.5 lines.
+- Only a main chat raises cards for the user: `request_approval` refuses sub threads and task step Workers (they use
+  `ask_main_thread` / `ask_planner`), and `suggest_action` refuses them too.
 
 ## Delete from Approvals
 
@@ -80,6 +87,10 @@ knows nothing about the screen it is on.
   `.git`, `node_modules` and dot folders; any part of the path; at most 50; only folders the form offers: the project, a chat's or
   a recent folder, This computer, or one inside the home folder) and puts `@relative/path` in, sent as typed. With no folder chosen,
   `@` is plain text: no list, no request.
+- Before `/skill-name` goes in, the picker checks the skill against the agent that will really run it: on New chat with a
+  teammate picked, the teammate's agent, not the form's. A skill counts as present when that CLI sees it in its home skills
+  folder, synced by Chorus, or in the chosen project's own skill folder for that CLI (`GET skills/all?folder=`). Only a missing
+  skill opens the sync dialog. The same check runs in teammate and action instructions.
 
 ## Tests
 

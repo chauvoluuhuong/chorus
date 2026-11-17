@@ -40,17 +40,19 @@ export class ChatLaunch {
     this.store = store;
   }
 
-  extras(o: { threadId: string; project: string; cwd: string }, agent: AgentId): { role?: ThreadRole; readOnly?: boolean; moreTools?: string[]; parent?: { id: string; title: string; brief: string }; actionLabels?: string[] } {
+  extras(o: { threadId: string; project: string; cwd: string }, agent: AgentId): { role?: ThreadRole; readOnly?: boolean; moreTools?: string[]; parent?: { id: string; title: string; brief: string }; actionLabels?: string[]; noNativeAsk?: boolean } {
     const row = this.store?.getThread(o.threadId);
     const brief = this.nextSub ?? (isSubThread(row) ? row?.sub_brief : undefined);
     const main = brief != null && row?.parent_thread_id ? this.store?.getThread(row.parent_thread_id) : undefined;
     const parent = main ? { id: main.id, title: main.title, brief: brief ?? '' } : undefined;
     const e = this.next ?? this.host?.chatExtras(o.threadId);
     // a plain chat or sub thread: the bundle's tools need no prompt either (line 4 asks it to propose an action through Chorus)
-    if (!e) return { moreTools: this.host?.toolNames(), ...(parent ? { parent } : { actionLabels: this.host?.allActionLabels() }) };
+    // only a main chat asks the user: a sub thread or a step's Worker gets its CLI's own question tool turned off
+    const noNativeAsk = !!parent || !!row?.sub_status || !!e?.role?.step || undefined;
+    if (!e) return { moreTools: this.host?.toolNames(), noNativeAsk, ...(parent ? { parent } : { actionLabels: this.host?.allActionLabels() }) };
     exclude(o.cwd, ['.chorus/']); // a teammate's check reads `git status`
     if (e.skills) syncSkills(o.project, { agents: [agent], into: o.cwd, only: e.skills });
-    return { role: e.role, readOnly: e.readOnly, moreTools: this.host?.toolNames(), ...(parent ? { parent } : e.role ? {} : { actionLabels: this.host?.allActionLabels() }) };
+    return { role: e.role, readOnly: e.readOnly, moreTools: this.host?.toolNames(), noNativeAsk, ...(parent ? { parent } : e.role ? {} : { actionLabels: this.host?.allActionLabels() }) };
   }
 }
 

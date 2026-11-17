@@ -146,8 +146,8 @@ test('effort: the flag per CLI, only when a level is chosen, kept for resumed ch
   const w = tmp('lvlflags');
   const base = { cwd: w, project: w, threadId: 't_1' };
   for (const agent of ['claude', 'codex', 'agy'] as const) {
-    assert.ok(!buildInteractive(agent, base).args.some(a => /effort/.test(a)), `${agent}: nothing by default`);
-    assert.ok(!buildInteractive(agent, { ...base, effort: 'default' }).args.some(a => /effort/.test(a)), `${agent}: "default" passes no flag`);
+    assert.ok(!buildInteractive(agent, base).args.some(a => /^--effort$|reasoning_effort/.test(a)), `${agent}: nothing by default`);
+    assert.ok(!buildInteractive(agent, { ...base, effort: 'default' }).args.some(a => /^--effort$|reasoning_effort/.test(a)), `${agent}: "default" passes no flag`);
   }
   const claude = buildInteractive('claude', { ...base, effort: 'high' }).args;
   assert.deepEqual(claude.slice(claude.indexOf('--effort'), claude.indexOf('--effort') + 2), ['--effort', 'high']);

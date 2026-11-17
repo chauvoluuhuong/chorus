@@ -8,7 +8,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { createServer, PLAN_REFUSAL, SUB_REFUSAL, type ThreadRole } from '../../src/mcp/server.ts';
+import { createServer, PLAN_REFUSAL, SUB_REFUSAL, WORKER_REFUSAL, type ThreadRole } from '../../src/mcp/server.ts';
 import { ancestorPids, resolveThread } from '../../src/mcp/identity.ts';
 import type { RoleInfo } from '../../src/mcp/pro.ts';
 import { Store } from '../../src/core/store.ts';
@@ -96,7 +96,7 @@ test('current_thread: the chat, its parent and what it asked, its sub threads, r
   r.store.close();
 });
 
-test('request_approval: a sub thread is refused and pointed to its main thread; a step Worker is not', async () => {
+test('request_approval: a sub thread is refused and pointed to its main thread; a step Worker is pointed to its Planner', async () => {
   const r = rig();
   const main = r.store.createThread({ title: 'Main', agent: 'claude', cwd: r.project });
   const sub = r.store.createThread({ title: 'Sub', agent: 'claude', cwd: r.project, parent_thread_id: main.id });
@@ -109,7 +109,8 @@ test('request_approval: a sub thread is refused and pointed to its main thread; 
   const step = r.store.createThread({ title: 'Step', agent: 'claude', cwd: r.project, parent_thread_id: main.id });
   r.store.setSub(step.id, { sub_status: 'task' as any });
   const w = await r.connect(step.id);
-  assert.equal((await w.call('request_approval', { question: 'Run the migration?' })).error, false);
+  assert.deepEqual(await w.call('request_approval', { question: 'Run the migration?' }), { text: WORKER_REFUSAL, error: true });
+  assert.equal(r.store.pendingRequests(step.id).length, 0, 'nothing for Approvals from a Worker');
   await w.client.close();
   r.store.close();
 });

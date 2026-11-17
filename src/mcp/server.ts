@@ -32,7 +32,8 @@ export const MCP_INSTRUCTIONS = `How to work in Chorus:
 - The user answers you in Chorus. When you need the user to approve, confirm or choose something before you go on, ask through Chorus as an approval card, never as a line in your reply. A Chorus task's plan is the exception: never ask the user to approve it; Chorus shows its Approve button once the plan is finished.
 - Show every file or link meant for the user through Chorus right after you make it.
 - Work that can run on its own, or that the user wants another agent to do, goes to a sub thread. After starting one, go on with your work or end your turn; Chorus reports each time it ends a turn. Never check on it in a loop.
-- When you need to see or manage your sub threads, or know your parent chat, task or step, look them up with current_thread.`;
+- When you need to see or manage your sub threads, or know your parent chat, task or step, look them up with current_thread.
+- To start a new chat thread (not a sub thread): call list_teammates and list_actions, propose the fitting teammate and action to the user through an approval card (kind question, your pick first), then call start_thread with what the user chose; the new chat gets that teammate's agent, model, effort and permissions.`;
 
 const PROPOSE = 'propose it to the user through Chorus with one line on why, before you start; this comes before any skill or workflow of your own. Never start an action yourself.';
 const KIND: Record<string, string> = { planner: 'Planner', worker: 'Worker', custom: 'Custom' };
@@ -155,7 +156,7 @@ export function createServer(project: string, threadId?: string, home?: string, 
     'request_approval',
     {
       description:
-        "The way to get the user's approval, confirmation or choice in this chat: use it instead of asking in your reply whenever you need the user's OK on a risky or irreversible change, or a choice between options. Not for a Chorus task's plan: Chorus shows the user that plan's Approve button once the plan is finished; never ask for it here. A sub thread asks its main thread instead. Chorus shows it as a card with your options wherever the user is. Returns at once: end your turn after calling it. The user's answer arrives as their next message, starting with \"Chorus approval <id>:\" and the option they chose, or \"Other: <their own words>\" when none of your options fit (and maybe a note).",
+        "The way to get the user's approval, confirmation or choice in this chat: use it instead of asking in your reply whenever you need the user's OK on a risky or irreversible change, or a choice between options. Not for a Chorus task's plan: Chorus shows the user that plan's Approve button once the plan is finished; never ask for it here. A sub thread asks its main thread instead. Chorus shows it as a card with your options wherever the user is. Returns at once: end your turn after calling it. The user's answer arrives as their next message, starting with \"Chorus approval <id>:\" and the option they chose, or \"Other: <their own words>\" when none of your options fit (and maybe a note). The details may use Markdown (short paragraphs, - lists, **bold**, `code`).",
       inputSchema: {
         question: z.string().min(1).describe('What you ask, in one sentence (e.g. "Apply the migration plan to the production database?")'),
         details: z.string().optional().describe('A short summary the user needs to decide: the plan, the command, what changes (a few lines; the full plan can be an artifact)'),
@@ -167,6 +168,7 @@ export function createServer(project: string, threadId?: string, home?: string, 
     async ({ question, details, options, kind, other }) => {
       if (!threadId) return reply('request_approval', 'This chat is not a Chorus thread: ask the user in your reply.', true);
       if (isSubThread(store.getThread(threadId))) return reply('request_approval', SUB_REFUSAL, true);
+      if ((store.getThread(threadId)?.sub_status as string) === 'task') return reply('request_approval', WORKER_REFUSAL, true);
       if (planGuard((await role())?.role, kind, question)) return reply('request_approval', PLAN_REFUSAL, true);
       const r = store.createRequest({ threadId, question, details, options, kind, other });
       const skip = r.kind === 'question' ? ' If they skip it, the message is "Chorus approval <id>: skipped. Decide yourself and say what you chose.": then decide yourself, say what you chose, and go on.' : '';
@@ -247,6 +249,7 @@ export async function runMcp(project: string, threadId?: string, home?: string) 
 export const isSubThread = (t: ThreadRow | undefined) => !!t?.sub_status && (t.sub_status as string) !== 'task';
 
 export const SUB_REFUSAL = 'You are a sub thread: ask your main thread instead (ask_main_thread), not the user.';
+export const WORKER_REFUSAL = "You are a task step's Worker: ask your Planner with ask_planner, not the user.";
 export const PLAN_REFUSAL =
   "Chorus asks the user to approve this task's plan itself. Finish the plan the way your role says: that turns on its Approve button. Ask here only for facts or choices you need to write the plan.";
 

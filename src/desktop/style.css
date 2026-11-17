@@ -290,7 +290,19 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 .banner.ask .icon-btn.del, .ask-who .icon-btn.del { flex: none; }
 .ask-dock .ask-body { display: grid; gap: 10px; min-width: 0; }
 .ask-dock .what { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; line-height: 1.5; font-size: 13px; }
-.ask-dock .what .clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ask-dock .what .clamp { max-height: 4.5em; overflow: hidden; }
+/* an agent's question details, rendered as Markdown (src/desktop/md.js): small margins that fit the card, theme colours from the tokens */
+.what.md { white-space: normal; font-family: var(--f-sans); }
+.item .what.md { font-size: 13px; line-height: 1.5; }
+.what.md p, .what.md ul, .what.md ol, .what.md pre { margin: 0 0 6px; }
+.what.md > :last-child, .what.md .clamp > :last-child { margin-bottom: 0; }
+.what.md ul, .what.md ol { padding-left: 20px; }
+.what.md li + li { margin-top: 2px; }
+.what.md code { font-family: var(--f-mono); font-size: 0.92em; background: var(--hover); border-radius: 4px; padding: 1px 4px; }
+.what.md pre { font-family: var(--f-mono); font-size: 12px; background: var(--hover); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; word-break: break-word; }
+.what.md pre code { background: none; padding: 0; font-size: inherit; }
+.what.md a { color: var(--accent); }
+.ask-q code { font-family: var(--f-mono); font-size: 0.9em; font-weight: 500; background: var(--hover); border-radius: 4px; padding: 1px 4px; }
 .ask-dock .note-input, .ask-dock .other-input { background: var(--bg); }
 .ask-more[hidden] { display: none; }
 .ask-more { justify-self: start; border: 0; background: none; padding: 0; margin-top: -4px; color: var(--accent); font-size: 12.5px; font-weight: 600; }

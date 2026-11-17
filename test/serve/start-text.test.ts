@@ -44,8 +44,10 @@ async function rig(first: LoadResult) {
   const chatLaunch = new ChatLaunch(store);
   const texts = new Map<string, string>();
   const argv = new Map<string, string[]>();
+  const extras = new Map<string, ReturnType<ChatLaunch['extras']>>();
   const launcher = (agent: 'claude' | 'codex' | 'agy', o: Parameters<typeof buildInteractive>[1]) => {
-    const l = buildInteractive(agent, { ...o, ...chatLaunch.extras(o, agent) });
+    extras.set(o.threadId, chatLaunch.extras(o, agent));
+    const l = buildInteractive(agent, { ...o, ...extras.get(o.threadId) });
     texts.set(o.threadId, l.args[l.args.indexOf('--append-system-prompt') + 1]);
     argv.set(o.threadId, l.args);
     return { bin: process.execPath, args: [FAKE, agent], cwd: o.cwd };
@@ -64,7 +66,7 @@ async function rig(first: LoadResult) {
     await new Promise(r => setTimeout(r, 200));
     store.close();
   };
-  return { srv, store, project, texts, argv, api, chat, mcp, done };
+  return { srv, store, project, texts, argv, extras, chatLaunch, api, chat, mcp, done };
 }
 
 test('a plain chat is told every action of the bundle; without the bundle, none', async () => {
@@ -115,6 +117,37 @@ test('a sub thread is told its main thread and what it was started to do, and no
     const text = r.texts.get(sub)!;
     assert.match(text, new RegExp(`This chat is a sub thread of Chorus thread ${main} \\("Pricing page"\\), which started it to: Make the price list\\. Your main thread is who you work for`));
     assert.doesNotMatch(text, /actions/);
+  } finally {
+    await r.done();
+  }
+});
+
+test('only a main chat keeps its CLI\'s own question tool: a step\'s Worker and a sub thread get noNativeAsk (Codex: request_user_input pinned off)', async () => {
+  const s = stand();
+  const r = await rig(s.mod);
+  const OFF = 'features.default_mode_request_user_input=false';
+  try {
+    const main = s.ctx().startChat({ agent: 'codex', title: 'Main', prompt: 'hi', cwd: r.project });
+    assert.ok(!r.argv.get(main)!.includes(OFF), 'a main chat: unchanged');
+    const step: ThreadRole = { ...ROLE, teammate: { id: 'w', name: 'Worker', kind: 'worker' }, actions: [], step: { position: 1, of: 2, title: 'Do it' } };
+    const worker = s.ctx().startChat({ agent: 'codex', title: 'Step', prompt: 'hi', cwd: r.project, role: step });
+    assert.ok(r.argv.get(worker)!.includes(OFF), 'a step Worker');
+    assert.equal(r.extras.get(main)!.noNativeAsk, undefined);
+    // a sub thread (here a Claude one: the rig has only Claude signed in; Claude's AskUserQuestion is off in every chat already)
+    const plain = await r.chat();
+    const out = await r.mcp('start_subthread', { title: 'Sub', brief: 'Look it up.' }, plain);
+    const sub = String(out.text).match(/sub thread (t_\w+)/)?.[1];
+    assert.ok(sub, JSON.stringify(out));
+    assert.equal(r.extras.get(sub)!.noNativeAsk, true, 'a sub thread');
+    assert.equal(r.extras.get(plain)!.noNativeAsk, undefined, 'its main chat');
+    // resumed: the stored sub_status still says so
+    assert.equal(r.store.getThread(worker)!.sub_status, null);
+    r.store.setSub(worker, { sub_status: 'task' as never });
+    assert.equal(r.chatLaunch.extras({ threadId: worker, project: r.project, cwd: r.project }, 'codex').noNativeAsk, true, 'a resumed Worker');
+    assert.equal(r.chatLaunch.extras({ threadId: sub, project: r.project, cwd: r.project }, 'claude').noNativeAsk, true, 'a resumed sub thread');
+    // agy: one rules file per folder, so a sub thread's "never ask" is not written there (a main agy chat in that folder would read it)
+    buildInteractive('agy', { cwd: r.project, project: r.project, threadId: 't_agy', noNativeAsk: true });
+    assert.doesNotMatch(fs.readFileSync(path.join(r.project, '.agents/plugins/chorus/rules/AGENTS.md'), 'utf8'), /ask_question/);
   } finally {
     await r.done();
   }
