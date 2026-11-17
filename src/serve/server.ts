@@ -1283,6 +1283,8 @@ export class ChorusServer {
       notifications: this.o.notifications?.summary() ?? { unread: 0, checkedAt: null, checking: false, offline: false },
       current: this.app.current?.id ?? null,
       chats,
+      // Shift+Enter in a chat's terminal: the bytes that add a new line in each CLI's input (probed, docs/integrations)
+      keys: NEWLINE_KEYS,
       // when each request appeared (whole seconds), not "seconds waiting": the state must not change every push, or the
       // window would redraw the inbox under the mouse
       approvals: this.approvalsNow().map(({ waiting, ...x }) => ({ ...x, since: Math.round(Date.now() / 1000 - waiting) })),
