@@ -66,7 +66,7 @@ async function rig(first: LoadResult) {
     await new Promise(r => setTimeout(r, 200));
     store.close();
   };
-  return { srv, store, project, texts, argv, extras, api, chat, mcp, done };
+  return { srv, store, project, texts, argv, extras, chatLaunch, api, chat, mcp, done };
 }
 
 test('a plain chat is told every action of the bundle; without the bundle, none', async () => {
@@ -140,6 +140,14 @@ test('only a main chat keeps its CLI\'s own question tool: a step\'s Worker and 
     assert.ok(sub, JSON.stringify(out));
     assert.equal(r.extras.get(sub)!.noNativeAsk, true, 'a sub thread');
     assert.equal(r.extras.get(plain)!.noNativeAsk, undefined, 'its main chat');
+    // resumed: the stored sub_status still says so
+    assert.equal(r.store.getThread(worker)!.sub_status, null);
+    r.store.setSub(worker, { sub_status: 'task' as never });
+    assert.equal(r.chatLaunch.extras({ threadId: worker, project: r.project, cwd: r.project }, 'codex').noNativeAsk, true, 'a resumed Worker');
+    assert.equal(r.chatLaunch.extras({ threadId: sub, project: r.project, cwd: r.project }, 'claude').noNativeAsk, true, 'a resumed sub thread');
+    // agy: one rules file per folder, so a sub thread's "never ask" is not written there (a main agy chat in that folder would read it)
+    buildInteractive('agy', { cwd: r.project, project: r.project, threadId: 't_agy', noNativeAsk: true });
+    assert.doesNotMatch(fs.readFileSync(path.join(r.project, '.agents/plugins/chorus/rules/AGENTS.md'), 'utf8'), /ask_question/);
   } finally {
     await r.done();
   }
