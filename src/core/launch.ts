@@ -48,6 +48,8 @@ export interface InteractiveOpts {
   readOnly?: boolean;
   /** more chorus tools the agent may call without a prompt */
   moreTools?: string[];
+  /** a sub thread or a step's Worker: the CLI's own question tool off where a per-session switch exists (Codex; not agy) */
+  noNativeAsk?: boolean;
 }
 
 /**
@@ -87,5 +89,8 @@ export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
     mcp: o.moreTools ? { ...server(o), tools: [...server(o).tools, ...o.moreTools] } : server(o),
     instructions: systemText(agent, { threadId: o.threadId, role: o.role, parent: o.parent, actionLabels: o.actionLabels }),
     readOnly: o.readOnly,
+    // agy's rules file is one per folder, rewritten by every chat that starts there: a sub thread's "never ask" would reach a main
+    // agy chat in the same folder, so agy is left out (its ask_question has no per-session switch)
+    noNativeAsk: agent === 'agy' ? undefined : o.noNativeAsk,
   });
 }

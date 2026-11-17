@@ -123,7 +123,8 @@ test('the MCP instructions are the approved text, under 3 KB', () => {
 - The user answers you in Chorus. When you need the user to approve, confirm or choose something before you go on, ask through Chorus as an approval card, never as a line in your reply. A Chorus task's plan is the exception: never ask the user to approve it; Chorus shows its Approve button once the plan is finished.
 - Show every file or link meant for the user through Chorus right after you make it.
 - Work that can run on its own, or that the user wants another agent to do, goes to a sub thread. After starting one, go on with your work or end your turn; Chorus reports each time it ends a turn. Never check on it in a loop.
-- When you need to see or manage your sub threads, or know your parent chat, task or step, look them up with current_thread.`,
+- When you need to see or manage your sub threads, or know your parent chat, task or step, look them up with current_thread.
+- To start a new chat thread (not a sub thread): call list_teammates and list_actions, propose the fitting teammate and action to the user through an approval card (kind question, your pick first), then call start_thread with what the user chose; the new chat gets that teammate's agent, model, effort and permissions.`,
   );
   assert.ok(Buffer.byteLength(MCP_INSTRUCTIONS) < 3072, `${Buffer.byteLength(MCP_INSTRUCTIONS)} bytes`);
 });
