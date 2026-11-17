@@ -6,9 +6,11 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { artifactNote, mcpCommand } from '../../src/core/launch.ts';
+import { mcpCommand, systemText } from '../../src/core/launch.ts';
 import { Store } from '../../src/core/store.ts';
-import { APPROVAL_NOTE } from '../../src/mcp/server.ts';
+import { MCP_INSTRUCTIONS } from '../../src/mcp/server.ts';
+
+const APPROVAL_LINE = 'ask through Chorus as an approval card, never as a line in your reply';
 
 const text = (r: any) => r.content.map((x: any) => x.text).join('');
 
@@ -26,8 +28,8 @@ test('request_approval: the question becomes a pending card in the store and the
   const c = await client(proj, 't1');
   try {
     // Claude and agy read the server instructions, Codex its developer instructions: both carry the note
-    assert.ok(c.getInstructions()?.includes(APPROVAL_NOTE));
-    assert.ok(artifactNote(proj, 't1').includes(APPROVAL_NOTE));
+    assert.ok(c.getInstructions()?.includes(APPROVAL_LINE));
+    assert.ok(systemText('codex', { threadId: 't1' }).endsWith(MCP_INSTRUCTIONS));
     const r = await c.callTool({ name: 'request_approval', arguments: { question: 'Apply the plan?', details: '1. add hello.txt\n2. commit' } });
     assert.match(text(r), /approval card r_[0-9a-f]{8} with the options: Approve \/ Decline\. End your turn/);
     const p = store.pendingRequests('t1');
@@ -63,7 +65,7 @@ test('agy: a chat start writes the note as a rule of a Chorus workspace plugin, 
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'plugin.json'), 'utf8')), { name: 'chorus' });
   const rule = fs.readFileSync(path.join(dir, 'rules', 'AGENTS.md'), 'utf8');
   assert.ok(rule.includes('This chat is Chorus thread t_rule'));
-  assert.ok(rule.includes(APPROVAL_NOTE));
+  assert.ok(rule.includes(APPROVAL_LINE));
   assert.match(fs.readFileSync(path.join(proj, '.git', 'info', 'exclude'), 'utf8'), /^\.agents\/plugins\/chorus\/$/m);
   assert.ok(JSON.parse(fs.readFileSync(path.join(proj, '.agents', 'mcp_config.json'), 'utf8')).mcpServers.chorus, 'the MCP server too');
 });

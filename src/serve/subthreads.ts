@@ -20,7 +20,7 @@ const AGENTS: AgentId[] = ['claude', 'codex', 'agy'];
 export interface SubDeps {
   store: Store;
   /** starts a chat; returns its id */
-  start(x: { agent: AgentId; title: string; prompt: string; cwd: string; parent: ThreadRow; model?: string; effort?: string; skipPermissions: boolean }): string;
+  start(x: { agent: AgentId; title: string; prompt: string; brief: string; cwd: string; parent: ThreadRow; model?: string; effort?: string; skipPermissions: boolean }): string;
   /** types into a chat (an ended one is continued first): `ended` = try later, `gone` = its session is gone */
   send(id: string, text: string): Promise<'sent' | 'ended' | 'gone'>;
   stop(id: string): void;
@@ -47,17 +47,19 @@ interface Outgoing {
   about?: string;
   /** a message for a sub thread (send_to_subthread): its status goes back to working once typed */
   toSub?: boolean;
+  /** a sub thread's question (ask_main_thread): marked typed once typed */
+  ask?: string;
 }
 
 export const TOOLS = [
   {
     name: 'start_subthread',
-    description: 'Start a sub thread: another agent chat in this folder that does one piece of work from your brief. Chorus types a short report into this chat each time it ends a turn; read the rest with get_thread_turns. At most 3 working at a time; a sub thread cannot start its own.',
+    description: 'Start a sub thread: another agent chat in this folder that does one piece of work from your brief. Use it for work that can run on its own, or that the user wants another agent to do. Chorus types a short report into this chat each time it ends a turn; read the rest with get_thread_turns. At most 3 working at a time; a sub thread cannot start its own.',
     inputSchema: {
       type: 'object',
       properties: {
         title: { type: 'string', description: 'a short title' },
-        brief: { type: 'string', description: 'everything it needs to know to do the work' },
+        brief: { type: 'string', description: 'everything it needs to know to do the work; its first line says what it is for' },
         agent: { type: 'string', enum: AGENTS, description: 'claude, codex or agy (default: your own)' },
         model: { type: 'string' },
         effort: { type: 'string' },
@@ -67,11 +69,25 @@ export const TOOLS = [
   },
   {
     name: 'send_to_subthread',
-    description: 'Type a message into one of your sub threads (an answer, more work). Chorus types it when the sub thread is idle.',
+    description: 'Type a message into one of your sub threads (an answer, more work). Use it to answer a sub thread\'s report or question, or to give it more to do. Chorus types it when the sub thread is idle. It also answers the sub thread\'s open questions.',
     inputSchema: { type: 'object', properties: { id: { type: 'string' }, message: { type: 'string' } }, required: ['id', 'message'] },
   },
-  { name: 'list_subthreads', description: 'Your sub threads: id, title, agent, status, turns, minutes, the start of the last reply.', inputSchema: { type: 'object', properties: {} } },
-  { name: 'stop_subthread', description: 'Stop one of your sub threads (its chat is closed; its record stays).', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
+  { name: 'list_subthreads', description: 'Your sub threads: id, title, agent, status, turns, minutes, the start of the last reply. Use it when you need to see how your sub threads stand.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'stop_subthread', description: 'Stop one of your sub threads (its chat is closed; its record stays). Use it when its work is done or no longer needed.', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
+  {
+    name: 'ask_main_thread',
+    description: 'Sub threads only: ask your main thread for a decision, an approval or a fact you need before you can go on, instead of the user. End your turn after calling it; the answer arrives as your next message.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: ['approval', 'question'], description: '"approval": you want an OK for something you would do; "question": a choice or a fact' },
+        question: { type: 'string', description: 'what you ask, in one sentence' },
+        details: { type: 'string', description: 'what your main thread needs to answer (a few lines)' },
+        options: { type: 'array', items: { type: 'string' }, description: 'the answers you see, the one you suggest first' },
+      },
+      required: ['kind', 'question'],
+    },
+  },
 ] as const;
 export const TOOL_NAMES = TOOLS.map(t => t.name) as string[];
 
@@ -118,9 +134,14 @@ export class SubThreads {
         const message = String(args.message ?? '').trim();
         if (!message) return { error: 'message is empty' };
         this.outbox.push({ to: sub.id, text: message, toSub: true });
+        // its next message from the main thread answers what it asked
+        const answered = this.d.store.answerAsks(sub.id);
+        this.outbox = this.outbox.filter(o => !(o.ask && o.to === me.id && this.d.store.getAsk(o.ask)?.answered));
         void this.deliver();
-        return { text: `Chorus types it into ${sub.id} when it is idle (now, if it is).` };
+        return { text: `Chorus types it into ${sub.id} when it is idle (now, if it is).${answered ? ` It answers its open question${answered > 1 ? 's' : ''}.` : ''}` };
       }
+      case 'ask_main_thread':
+        return this.ask(me, args);
       case 'list_subthreads': {
         const subs = this.d.store.subThreads(me.id).filter(s => s.sub_status !== TASK);
         if (!subs.length) return { text: '(no sub threads)' };
@@ -139,6 +160,27 @@ export class SubThreads {
       }
     }
     return { error: `no tool ${name}` };
+  }
+
+  /**
+   * A sub thread asks its main thread (owner, 2026-11-17): typed into the main chat like a report, never a request, an Approvals or
+   * a Needs you item. The main thread answers with send_to_subthread, or asks the user itself when it cannot.
+   */
+  private ask(me: ThreadRow, a: Record<string, unknown>): { text: string } | { error: string } {
+    if (me.sub_status === TASK) return { error: 'You are a step of a task: ask your Planner through Chorus (ask_planner).' };
+    if (!me.sub_status || !me.parent_thread_id) return { error: 'Only a sub thread can ask its main thread. Ask the user with request_approval.' };
+    const main = this.d.store.getThread(me.parent_thread_id);
+    if (!main) return { error: 'Your main thread is gone: say what you need in your reply and end your turn.' };
+    const question = oneLine(String(a.question ?? ''));
+    if (!question) return { error: 'question is empty' };
+    const kind = a.kind === 'approval' ? 'approval' : 'question';
+    const details = typeof a.details === 'string' ? a.details.trim() : '';
+    const options = Array.isArray(a.options) ? a.options.map(x => oneLine(String(x))).filter(Boolean).slice(0, 6) : [];
+    const q = this.d.store.createAsk({ threadId: me.id, parentId: main.id, kind, question, details, options });
+    const text = `Chorus: sub thread "${me.title}" (${me.id}) asks [${q.id}] (${kind}): ${question}${details ? ` — ${clip(oneLine(details), 800)}` : ''}${options.length ? ` — options: ${options.join(' / ')}` : ''}. Answer it with send_to_subthread.`;
+    this.outbox.push({ to: main.id, text, ask: q.id });
+    void this.deliver();
+    return { text: `Asked your main thread (${q.id}). End your turn now: the answer arrives as your next message.` };
   }
 
   private own(me: ThreadRow, id: unknown) {
@@ -170,7 +212,7 @@ export class SubThreads {
     if (working >= MAX_WORKING) return { error: `You already have ${MAX_WORKING} sub threads working. Wait for a report, or stop one with stop_subthread.` };
     const title = String(a.title ?? '').trim(), brief = String(a.brief ?? '').trim();
     if (!title || !brief) return { error: 'title and brief are needed' };
-    const id = this.d.start({ agent, title, prompt: `${brief}\n\n${SUB_NOTE}`, cwd: me.cwd, parent: me, model: typeof a.model === 'string' ? a.model : undefined, effort: typeof a.effort === 'string' ? a.effort : undefined, skipPermissions: !!me.skip_permissions });
+    const id = this.d.start({ agent, title, prompt: `${brief}\n\n${SUB_NOTE}`, brief, cwd: me.cwd, parent: me, model: typeof a.model === 'string' ? a.model : undefined, effort: typeof a.effort === 'string' ? a.effort : undefined, skipPermissions: !!me.skip_permissions });
     const t = this.now();
     this.d.store.setSub(id, { sub_status: 'working', sub_brief: brief, sub_started: iso(t), sub_last_activity: iso(t), sub_turns: 0, sub_working_ms: 0, sub_reported: null, sub_ended: null });
     this.turnStart.set(id, t);
@@ -235,6 +277,11 @@ export class SubThreads {
     // reports due (also after a restart: the columns say which)
     for (const s of st.subThreads()) {
       if ((s.sub_status === 'stopped' || s.sub_status === 'ended') && !s.sub_reported && s.parent_thread_id && !this.outbox.some(o => o.about === s.id)) {
+        // a turn that ended on a question to its main thread: the question is typed in, its report would only repeat it
+        if (s.sub_status === 'stopped' && st.openAsks({ thread: s.id }).length) {
+          st.setSub(s.id, { sub_reported: iso(this.now()) });
+          continue;
+        }
         this.outbox.push({ to: s.parent_thread_id, about: s.id, text: this.report(s) });
       }
     }
@@ -290,6 +337,7 @@ export class SubThreads {
           this.outbox = this.outbox.filter(x => x !== o);
           const t = iso(this.now());
           if (o.about) st.setSub(o.about, { sub_reported: t });
+          if (o.ask) st.askTyped(o.ask);
           if (o.toSub) {
             st.setSub(o.to, { sub_status: 'working', sub_last_activity: t });
             this.turnStart.set(o.to, this.now());

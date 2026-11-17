@@ -43,6 +43,8 @@ export interface ThreadRow {
   sub_working_ms?: number;
   /** when its latest report was typed into the main chat (null: one is due) */
   sub_reported?: string | null;
+  /** the pid of the chat's CLI while it runs (set by `chorus serve` when it spawns it): `chorus mcp` finds its chat by it */
+  cli_pid?: number | null;
   created: string;
   updated: string;
 }
@@ -70,6 +72,23 @@ export interface RequestRow {
   answer: string | null;
   note: string | null;
   created: string;
+  answered: string | null;
+}
+
+/** A sub thread's question to its main thread (ask_main_thread): typed into the main chat, answered by send_to_subthread. */
+export interface AskRow {
+  id: string;
+  /** the sub thread that asks */
+  thread_id: string;
+  /** its main thread */
+  parent_id: string;
+  kind: 'approval' | 'question';
+  question: string;
+  details: string | null;
+  options: string[];
+  created: string;
+  /** when it was typed into the main chat */
+  typed: string | null;
   answered: string | null;
 }
 
@@ -128,6 +147,10 @@ CREATE TABLE IF NOT EXISTS requests (
   id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, question TEXT NOT NULL, details TEXT, options TEXT NOT NULL,
   status TEXT NOT NULL, answer TEXT, note TEXT, created TEXT NOT NULL, answered TEXT, kind TEXT NOT NULL DEFAULT 'approval', other INTEGER NOT NULL DEFAULT 1
 );
+CREATE TABLE IF NOT EXISTS asks (
+  id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, parent_id TEXT NOT NULL, kind TEXT NOT NULL, question TEXT NOT NULL, details TEXT,
+  options TEXT NOT NULL DEFAULT '[]', created TEXT NOT NULL, typed TEXT, answered TEXT
+);
 CREATE TABLE IF NOT EXISTS skill_sources (path TEXT PRIMARY KEY, kind TEXT NOT NULL, added TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS skills (dir TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', source TEXT NOT NULL, seen TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS skill_links (dir TEXT NOT NULL, cli TEXT NOT NULL, path TEXT NOT NULL, made TEXT NOT NULL, PRIMARY KEY (dir, cli));
@@ -180,6 +203,7 @@ export class Store {
     // sub threads (plan 2026-11-14, Stage 2): free, so on Chorus's own threads table
     for (const [col, type] of [['sub_status', 'TEXT'], ['sub_brief', 'TEXT'], ['sub_started', 'TEXT'], ['sub_last_activity', 'TEXT'], ['sub_ended', 'TEXT'], ['sub_turns', 'INTEGER NOT NULL DEFAULT 0'], ['sub_working_ms', 'INTEGER NOT NULL DEFAULT 0'], ['sub_reported', 'TEXT']])
       if (!cols.includes(col)) this.db.exec(`ALTER TABLE threads ADD COLUMN ${col} ${type}`);
+    if (!cols.includes('cli_pid')) this.db.exec('ALTER TABLE threads ADD COLUMN cli_pid INTEGER');
     const rcols = (this.db.prepare('PRAGMA table_info(requests)').all() as { name: string }[]).map(c => c.name);
     if (!rcols.includes('kind')) this.db.exec("ALTER TABLE requests ADD COLUMN kind TEXT NOT NULL DEFAULT 'approval'");
     if (!rcols.includes('other')) this.db.exec('ALTER TABLE requests ADD COLUMN other INTEGER NOT NULL DEFAULT 1');
@@ -292,7 +316,7 @@ export class Store {
     db.exec('BEGIN');
     try {
       db.prepare('UPDATE threads SET parent_thread_id = NULL WHERE parent_thread_id = ?').run(id);
-      for (const table of ['turns', 'tool_calls', 'usage', 'artifacts', 'approvals_log', 'mcp_calls', 'requests', 'attachments', 'reported']) db.prepare(`DELETE FROM ${table} WHERE thread_id = ?`).run(id);
+      for (const table of ['turns', 'tool_calls', 'usage', 'artifacts', 'approvals_log', 'mcp_calls', 'requests', 'attachments', 'reported', 'asks']) db.prepare(`DELETE FROM ${table} WHERE thread_id = ?`).run(id);
       db.prepare('DELETE FROM threads WHERE id = ?').run(id);
       db.exec('COMMIT');
     } catch (e) {
@@ -323,6 +347,44 @@ export class Store {
     const keys = Object.keys(patch) as (keyof SubFields)[];
     if (!keys.length) return;
     this.db.prepare(`UPDATE threads SET ${keys.map(k => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map(k => (patch[k] ?? null) as any), id);
+  }
+
+  /** The chat's CLI started (a pid) or ended (null). Like setSub, `updated` stays. */
+  setCliPid(id: string, pid: number | null) {
+    this.db.prepare('UPDATE threads SET cli_pid = ? WHERE id = ?').run(pid, id);
+  }
+
+  /** The chat whose CLI runs as this pid now (the newest, should a pid be reused). */
+  threadByCliPid(pid: number): ThreadRow | undefined {
+    return this.db.prepare("SELECT * FROM threads WHERE cli_pid = ? AND state != 'ended' ORDER BY updated DESC LIMIT 1").get(pid) as ThreadRow | undefined;
+  }
+
+  /* ---------- a sub thread asks its main thread (ask_main_thread) ---------- */
+
+  createAsk(a: { threadId: string; parentId: string; kind?: 'approval' | 'question'; question: string; details?: string; options?: string[] }): AskRow {
+    const id = `q_${randomBytes(4).toString('hex')}`;
+    this.db.prepare('INSERT INTO asks (id,thread_id,parent_id,kind,question,details,options,created) VALUES (?,?,?,?,?,?,?,?)').run(id, a.threadId, a.parentId, a.kind === 'approval' ? 'approval' : 'question', a.question, a.details?.trim() || null, JSON.stringify(a.options ?? []), now());
+    return this.getAsk(id)!;
+  }
+
+  getAsk(id: string): AskRow | undefined {
+    const r = this.db.prepare('SELECT * FROM asks WHERE id = ?').get(id) as any;
+    return r ? { ...r, options: JSON.parse(r.options) } : undefined;
+  }
+
+  /** Unanswered asks of a sub thread (`thread`) or waiting for a main thread (`parent`); oldest first. */
+  openAsks(o: { thread?: string; parent?: string }): AskRow[] {
+    const rows = (o.thread ? this.db.prepare('SELECT * FROM asks WHERE answered IS NULL AND thread_id = ? ORDER BY created').all(o.thread) : this.db.prepare('SELECT * FROM asks WHERE answered IS NULL AND parent_id = ? ORDER BY created').all(o.parent ?? '')) as any[];
+    return rows.map(r => ({ ...r, options: JSON.parse(r.options) }));
+  }
+
+  askTyped(id: string) {
+    this.db.prepare('UPDATE asks SET typed = ? WHERE id = ? AND typed IS NULL').run(now(), id);
+  }
+
+  /** The main thread answered the sub thread: every open ask of it is answered. Returns how many. */
+  answerAsks(thread: string): number {
+    return Number(this.db.prepare('UPDATE asks SET answered = ? WHERE thread_id = ? AND answered IS NULL').run(now(), thread).changes);
   }
 
   /** Every sub thread, or those of one main chat; oldest first. */
