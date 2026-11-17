@@ -153,3 +153,28 @@ test('skillsync: the project library is one more source; the MCP tools see every
     r.done();
   }
 });
+
+test('skillsync: a skill in the chosen project\'s own folder for a CLI counts as there for that CLI, never missing', () => {
+  const r = rig();
+  try {
+    const src = tmp('chorus-sksrc-');
+    skill(path.join(src, 'deploy-site'), 'deploy-site');
+    skill(path.join(src, 'lint-docs'), 'lint-docs');
+    assert.deepEqual(addSource(r.store, src, r.project, r.home), { ok: true, kind: 'folder' });
+    const other = tmp('chorus-skother-');
+    // the other project has deploy-site in Claude's project folder (a link) and lint-docs in the agents folder (a copy)
+    fs.mkdirSync(path.join(other, '.claude/skills'), { recursive: true });
+    fs.symlinkSync(path.join(src, 'deploy-site'), path.join(other, '.claude/skills/deploy-site'));
+    skill(path.join(other, '.agents/skills/lint-docs'), 'lint-docs');
+
+    const here = allSkills(r.store, r.project, r.home);
+    assert.deepEqual(row(here, 'deploy-site').state, { claude: '', codex: '', agy: '' }, 'not in this project');
+    const there = allSkills(r.store, r.project, r.home, other);
+    assert.deepEqual(row(there, 'deploy-site').state, { claude: 'there', codex: '', agy: '' });
+    assert.deepEqual(row(there, 'lint-docs').state, { claude: '', codex: 'there', agy: 'there' }, '.agents/skills: Codex and agy');
+    // the home folders still count as before
+    assert.equal(row(there, 'video-research').state.claude, 'own');
+  } finally {
+    r.done();
+  }
+});

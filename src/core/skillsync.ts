@@ -31,8 +31,20 @@ export const SHARED_SKILLS = '.agents/skills';
 
 export const skillsHome = () => process.env.CHORUS_SKILLS_HOME ?? os.homedir();
 export const homeSkillsDir = (cli: Cli, home = skillsHome()) => path.join(home, HOME_SKILLS[cli]);
-/** The folders that count as a CLI having a skill. */
-const cliDirs = (cli: Cli, home: string) => (cli === 'codex' ? [homeSkillsDir(cli, home), path.join(home, SHARED_SKILLS)] : [homeSkillsDir(cli, home)]);
+/**
+ * The project folders each CLI reads skills from, relative to the project (docs/integrations/skills.md §1, all ✅): a skill there
+ * counts as that CLI having it when it runs in that project. Chorus never writes here outside the project library's sync.
+ */
+export const PROJECT_SKILLS: Record<Cli, string[]> = {
+  claude: ['.claude/skills'],
+  codex: ['.agents/skills', '.codex/skills'],
+  agy: ['.agents/skills', '.agent/skills'],
+};
+/** The folders that count as a CLI having a skill: its home folders and, for a project, that project's own folders. */
+const cliDirs = (cli: Cli, home: string, folder?: string) => [
+  ...(cli === 'codex' ? [homeSkillsDir(cli, home), path.join(home, SHARED_SKILLS)] : [homeSkillsDir(cli, home)]),
+  ...(folder ? PROJECT_SKILLS[cli].map(d => path.join(folder, d)) : []),
+];
 
 export interface ScannedSkill {
   /** the real folder */
@@ -164,9 +176,9 @@ export interface CliIndex {
   names: Set<string>;
   reals: Set<string>;
 }
-export function cliIndex(cli: Cli, home = skillsHome()): CliIndex {
+export function cliIndex(cli: Cli, home = skillsHome(), folder?: string): CliIndex {
   const idx: CliIndex = { roots: [], names: new Set(), reals: new Set() };
-  for (const d of cliDirs(cli, home)) {
+  for (const d of cliDirs(cli, home, folder)) {
     idx.roots.push(real(d) ?? d);
     let entries: string[] = [];
     try {
@@ -194,12 +206,12 @@ export function skillState(skill: Pick<ScannedSkill, 'dir'>, cli: Cli, links: { 
   return '';
 }
 
-/** GET skills/all: every skill with its state per CLI, and the sources. */
-export function allSkills(store: Store, project: string, home = skillsHome()): { skills: SkillRow[]; sources: SourceInfo[] } {
+/** GET skills/all: every skill with its state per CLI, and the sources. `folder`: the project a chat will run in (its own skill folders count). */
+export function allSkills(store: Store, project: string, home = skillsHome(), folder: string = project): { skills: SkillRow[]; sources: SourceInfo[] } {
   const { skills, sources } = scanSkills(store, project, home);
   const links = store.skillLinks();
   const lib = real(sourceDir(project));
-  const idx = Object.fromEntries(SYNC_CLIS.map(c => [c, cliIndex(c, home)])) as Record<Cli, CliIndex>;
+  const idx = Object.fromEntries(SYNC_CLIS.map(c => [c, cliIndex(c, home, folder)])) as Record<Cli, CliIndex>;
   const h = real(home) ?? home;
   return {
     skills: skills.map(s => ({
