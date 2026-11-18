@@ -204,6 +204,10 @@ Per project, in `<project>/.chorus/` (git-ignored):
 
 `threads` also keeps `cli_pid` (the chat's CLI process while it runs) so `chorus mcp` can find its chat.
 
+Per user, beside the shared store (`<store root>`, normally `~/.chorus`): `projects.json` (each project's note, extra working
+folders and environment variable **names**, with why and who added each) and `project-env.json` (the variables' values, mode
+`0600`, read only for a launch). `ProjectSettings` in `src/core/projects.ts` owns both: [features/projects.md](features/projects.md).
+
 **Not stored:** streaming chunks, thinking blocks, full tool output, system prompts, attachments.
 Raw output stays in `raw/` for `chorus trace` only.
 
@@ -268,6 +272,18 @@ AskUserQuestion is off in every chat; agy has none, see [integrations/antigravit
 mail (nothing typed), with the sub thread's title, id and the question id; it never makes a request, an Approvals item or a
 Needs you item. The main thread's next `send_to_subthread` to that sub thread answers it, and the sub thread's turn report does
 not repeat a question already asked.
+
+**Project tools** (task #11, [features/projects.md](features/projects.md)): `get_project`, `propose_project_change`,
+`reload_project_settings` and `rename_chat` (`PROJECT_TOOL_NAMES`) are answered by `chorus serve` (`src/serve/project-tools.ts`),
+need no permission prompt and see only the calling chat's own project. `get_project` returns the project's note, working folders,
+variable names (never values), suggested folders, counts and whether this chat is stale; `propose_project_change` makes one card for
+the user (never a Planner) whose approval `ProjectSettings` applies, after which `ProjectRuntime` (`src/serve/project-runtime.ts`)
+brings a new folder live to running chats and marks them stale for anything else; `reload_project_settings` restarts the chat at
+turn end. Every launch gets the folders and variables through `ChatLaunch.extras` (`addDirs`, `env`, `liveDirs`) in
+`src/serve/pro.ts`; the counts, tasks and export of a project come from the paid module's `projectCounts`, `projectTasks` and
+`exportProject` hooks (empty without Pro). `rename_chat` goes through `POST /api/chats/:id/title` (`renameChat`), which sends a
+`renamed` event: the desktop shows the name with an Undo toast that calls the same route with `by: "you"`. It replaces the name
+taken from the first 28 characters of a chat's first message.
 
 ## 7. Handoff = new thread that loads the previous one
 
