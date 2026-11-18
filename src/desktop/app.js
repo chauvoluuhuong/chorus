@@ -9,6 +9,7 @@ import { attachPicker } from './text-picker.js';
 import { md, mdInline } from './md.js';
 import { cliFitNote, newChatHint } from './cli-fit.js';
 import { nextSort, sortFolders, typeJump } from './folder-nav.js';
+import { shareLine } from './share-line.js';
 import { deleteDialogHtml, deletedText, projectPageHtml, projectsListHtml, proposalCardHtml, variableDialogHtml } from './projects-ui.js';
 
 const $ = s => document.querySelector(s);
@@ -2143,6 +2144,7 @@ function drawSheet() {
   el.className = 'sheet-wrap';
   el.innerHTML = `<div class="sheet" role="dialog" aria-label="This chat"><div class="grab"></div>
     <div class="sh-meta"><div><span class="badge ${esc(c.agent)}">${esc(AGENT[c.agent]?.name ?? c.agent)}</span> ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}${c.skip ? ' <span class="badge warn">skip</span>' : ''}</div><div class="mono path">${esc(tilde(c.cwd))}</div>${meter(c.usage)}</div>
+    <button data-act="share" data-arg="${esc(c.id)}"><span class="i">⧉</span>Share</button>
     <button data-act="handoff" data-arg="${esc(c.id)}"><span class="i">⇄</span>Hand off to another agent</button>
     ${c.sub ? '' : `<button class="${artFlash(c.id).trim()}" data-act="drawer-to" data-arg="artifacts"><span class="i">▤</span>Artifacts${c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : ''}</button>
     <button data-act="drawer-to" data-arg="activity"><span class="i">≋</span>Activity</button>
@@ -2170,6 +2172,7 @@ function renderChatParts() {
     <div class="meta"><span class="dot ${esc(c.state)}"></span><span>${esc(STATE_LABEL[c.state] ?? c.state)}</span>
       ${c.model || c.effort ? `<span class="model">· ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}</span>` : ''}${c.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${meter(c.usage)}
       <span class="mono faint path" title="${esc(c.cwd)}">‎${esc(tilde(c.cwd))}‎</span>${c.toast ? `<span class="badge ok">${esc(c.toast)}</span>` : ''}</div>
+    <button class="btn" data-act="share" data-arg="${esc(c.id)}" title="Copy this chat's id and place, to paste into another Chorus chat" aria-label="Share">${S.size === 'desktop' ? '⧉ Share' : '⧉'}</button>
     <button class="btn" data-act="handoff" data-arg="${esc(c.id)}" title="Continue this chat with another agent" aria-label="Hand off">${S.size === 'desktop' ? '⇄ Hand off' : '⇄'}</button>
     ${c.sub ? '' : `${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰', '', countFlash(`taskrev:${c.id}`)) : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', artFlash(c.id))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}`}
     <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat" aria-label="Delete this chat">🗑</button>`;
@@ -2778,6 +2781,26 @@ document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$
 
 /* ---------- toasts ---------- */
 
+/** Copies text: the clipboard API, else a hidden textarea and execCommand (an older WebView, or no secure context). */
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = Object.assign(document.createElement('textarea'), { value: text });
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+    document.body.append(ta);
+    ta.select();
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch {}
+    ta.remove();
+    return ok;
+  }
+}
+
 function toast(text, opts = {}) {
   if (!text) return;
   const el = document.createElement('div');
@@ -3135,6 +3158,14 @@ document.addEventListener('click', async e => {
       await api('POST', `/api/signin/${pop.dataset.id}/close`, { done: el.dataset.value === 'done' }).catch(() => {});
       return drawDoctor();
     }
+    case 'share': {
+      // one line naming this chat, for another Chorus chat (owner, 2026-11-18); a WebView without the clipboard API copies by hand
+      const c = S.state?.chats.find(x => x.id === arg);
+      if (!c) return;
+      const line = shareLine(c, { computer: S.info?.computer, pro: window.choruspro });
+      if (await copyText(line)) return void toast(`Copied: ${line}`);
+      return void toast(line, { ms: 8000 });
+    }
     case 'doc-copy':
       return void navigator.clipboard.writeText(arg).then(() => toast('Copied'));
     case 'doc-notnow':
@@ -3281,8 +3312,6 @@ document.addEventListener('click', async e => {
     case 'proj-var-rm':
       if (!(await confirmBox(`Remove ${arg}?`, `Its value is deleted from this Mac. Chats that run now keep it until they restart.`, 'Remove'))) return;
       return projectChange('DELETE', '/api/projects/variables', { name: arg });
-    case 'proj-restart-idle':
-      return projectChange('POST', '/api/projects/restart-idle', {}, null, r => { const n = r.restarted?.length ?? 0, w = r.waiting?.length ?? 0; toast(`Restarting ${n} idle chat${n === 1 ? '' : 's'}${w ? `; ${w} restart${w === 1 ? 's' : ''} when ${w === 1 ? 'its' : 'their'} turn ends` : ''}.`); });
     case 'proj-export':
       return exportProject(S.view.folder);
     case 'pp-show':

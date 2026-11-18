@@ -9,8 +9,6 @@ page); on touch screens both are always shown. Delete is no longer in the sideba
 - **Header**: the project's name, its folder, and its counts: chats, tasks (only with Pro, from the paid module's `projectCounts`
   hook) and artifacts. A short **description** (the project's note) says what the project is and how its folders relate; every
   later chat reads it through `get_project`.
-- **Stale banner**: "N running chats still use the old folders and variables" with **Restart idle ones**. An idle chat is resumed
-  (conversation kept) with the new settings; a chat in the middle of a turn is never restarted: it waits until its turn ends.
 - **Working folders**: the project folder, then extra folders every chat started in the project gets, each with who added it
   (you, or the chat that asked) and why. Removing one leaves the folder on disk.
 - **Environment variables**: names only on the page (`••••••••`), with Edit and ×. The value is typed into a hidden field.
@@ -45,8 +43,9 @@ What reaches a **running** chat (`src/serve/project-runtime.ts`, `ProjectRuntime
   typed while the chat is idle, and Chorus answers "for this session"; Codex gets it through its `request_permissions` tool (turned
   on per chat with `-c features.request_permissions_tool=true`), answered "grant for this session" through the mailbox. Chorus never
   types over the user's input and never into a chat in the middle of a turn. If a live add fails, the chat restarts at turn end.
-- **A removed folder, a new, changed or removed variable** only marks the other running chats stale: they show in the banner and
-  get the change at their next resume or when the user presses Restart idle ones.
+- **A removed folder, a new, changed or removed variable** only marks the other running chats stale: they get the change at
+  their next start or resume, or when the chat calls `reload_project_settings` (`get_project` tells it what it is missing). The page
+  shows no banner for them (owner, 2026-11-18).
 - Idle and turn end come from the one watcher (TurnWatch, [watcher-and-mail.md](watcher-and-mail.md)).
 
 ## Model tools
