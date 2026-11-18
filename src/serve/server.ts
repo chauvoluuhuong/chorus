@@ -1478,7 +1478,14 @@ export class ChorusServer {
         const name = typeof b.name === 'string' ? b.name.trim() : '';
         if (method === 'DELETE') return this.changeProject(folder, { kind: 'remove_variable', name }, () => this.projectSettings.removeVariable(folder, name));
         if (typeof b.value !== 'string') return { error: 'the value must be text' };
-        return this.changeProject(folder, { kind: 'set_variable', name }, () => this.projectSettings.setVariable(folder, name, b.value, { by: 'you', why: typeof b.why === 'string' ? b.why.trim().slice(0, 500) : '' }));
+        const why = typeof b.why === 'string' ? b.why.trim().slice(0, 500) : '';
+        // Edit on the page with the value left empty: the value stays (the page never has it), only its why changes
+        if (b.keep === true && b.value === '') {
+          const kept = this.projectSettings.env(folder)[name];
+          if (kept === undefined) return { error: `Type a value for ${name}.` };
+          return this.changeProject(folder, { kind: 'note' }, () => this.projectSettings.setVariable(folder, name, kept, { by: 'you', why }));
+        }
+        return this.changeProject(folder, { kind: 'set_variable', name }, () => this.projectSettings.setVariable(folder, name, b.value, { by: 'you', why }));
       }
       case 'POST projects/note': {
         const folder = this.projectDir(b.folder);
