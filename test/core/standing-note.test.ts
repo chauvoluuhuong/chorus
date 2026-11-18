@@ -29,7 +29,7 @@ const cwd = () => fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-
 
 const L1 =
   'You are working inside Chorus, an app where the user works with several AI coding agents in one place. Chorus is your harness for this chat: when one of its MCP tools (server `chorus`) fits what you are about to do, use it before your own way of doing it, and follow the chorus server\'s instructions.';
-const PROPOSE = 'propose it to the user through Chorus with one line on why, before you start; this comes before any skill or workflow of your own. Never start an action yourself.';
+const PROPOSE = 'ask the user first through a Chorus question card: "Would you like me to <action>? <one line why>", before any skill or workflow of your own; start the action through Chorus only after they say yes, and end it through Chorus when its work and check are finished.';
 const ALL = ['Create plan', 'Review changes', 'Resolve conflict', 'Inspect failure', 'Find goals'];
 
 const PLANNER_INSTR = 'You are the Planner.\n\nWhen the user wants something built or changed, turn it into a Chorus task with its steps.';
@@ -108,7 +108,7 @@ test('a Worker gets no actions line even with actions; a sub thread none even wi
 });
 
 test('no line names a tool, and nothing says to call current_thread first', () => {
-  const tools = [...TOOL_NAMES, ...SUB_TOOL_NAMES, 'ask_planner', 'action_done', 'task_create', 'suggest_action'];
+  const tools = [...TOOL_NAMES, ...SUB_TOOL_NAMES, 'ask_planner', 'action_done', 'task_create', 'start_action', 'read_mail', 'list_watches'];
   for (const k of KINDS) {
     const t = startText({ ...k.opts, threadId: k.opts.threadId });
     for (const n of tools) assert.ok(!t.includes(n), `${k.kind}: names ${n}`);
@@ -124,7 +124,10 @@ test('the MCP instructions are the approved text, under 3 KB', () => {
 - Show every file or link meant for the user through Chorus right after you make it.
 - Work that can run on its own, or that the user wants another agent to do, goes to a sub thread. After starting one, go on with your work or end your turn; Chorus reports each time it ends a turn. Never check on it in a loop.
 - When you need to see or manage your sub threads, or know your parent chat, task or step, look them up with current_thread.
-- To start a new chat thread (not a sub thread): call list_teammates and list_actions, propose the fitting teammate and action to the user through an approval card (kind question, your pick first), then call start_thread with what the user chose; the new chat gets that teammate's agent, model, effort and permissions.`,
+- To start a new chat thread (not a sub thread): call list_teammates and list_actions, propose the fitting teammate and action to the user through an approval card (kind question, your pick first), then call start_thread with what the user chose; the new chat gets that teammate's agent, model, effort and permissions.
+- Messages from other chats and from Chorus arrive in your Chorus mail; read them with read_mail when Chorus tells you that you have mail, and answer with the tool the message names.
+- Chorus watches what you started (your action, your sub threads, your mail) and acts on it; see its watch records, their status and how long, with list_watches, instead of checking in a loop.
+- Chorus actions (Create plan, Review changes, …): ask "Would you like me to <action>? <why>" with a question card; after the user's yes, start it with start_action; finish with action_done. Chorus watches each turn end and reminds you if it is missing.`,
   );
   assert.ok(Buffer.byteLength(MCP_INSTRUCTIONS) < 3072, `${Buffer.byteLength(MCP_INSTRUCTIONS)} bytes`);
 });
@@ -153,8 +156,26 @@ test('Chorus\'s own sub thread tools never ask: Claude Code gets them in --allow
       if (agent === 'claude') {
         const allowed = l.args[l.args.indexOf('--allowedTools') + 1].split(',');
         for (const n of SUB) assert.ok(allowed.includes(`mcp__chorus__${n}`), `${what}: ${n}`);
-        for (const n of ['request_approval', 'current_thread']) assert.ok(allowed.includes(`mcp__chorus__${n}`), `${what}: ${n}`);
+        for (const n of ['request_approval', 'current_thread', 'read_mail', 'list_watches']) assert.ok(allowed.includes(`mcp__chorus__${n}`), `${what}: ${n}`);
       } else if (agent === 'codex') assert.ok(l.args.includes('mcp_servers.chorus.default_tools_approval_mode="approve"'), what);
     }
   }
 });
+
+test('the tool list has start_action, read_mail and list_watches', async () => {
+  const dir = cwd();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-note-home-'));
+  const server = createServer(dir, 't_tools', home, { role: async () => undefined });
+  // start_action comes from the paid module through chorus serve, like every action tool
+  server.registerTool('start_action', { description: 'x', inputSchema: {} }, async () => ({ content: [] }));
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  await server.connect(a);
+  const client = new Client({ name: 't', version: '1' });
+  await client.connect(b);
+  const names = (await client.listTools()).tools.map(t => t.name);
+  for (const n of ['start_action', 'read_mail', 'list_watches']) assert.ok(names.includes(n), n);
+  assert.ok(TOOL_NAMES.includes('read_mail' as never) && TOOL_NAMES.includes('list_watches' as never), 'pre-allowed with the other chorus tools');
+  await client.close();
+});
+
+test('the MCP instructions stay under 3 KB', () => assert.ok(Buffer.byteLength(MCP_INSTRUCTIONS) < 3072, `${Buffer.byteLength(MCP_INSTRUCTIONS)} bytes`));

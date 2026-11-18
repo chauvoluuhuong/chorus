@@ -18,6 +18,7 @@ import { App, projectName, type AppIO, type Entry } from '../app/app.ts';
 import { AGENTS, type Controller } from '../app/controller.ts';
 import type { ItemState, RichLine } from '../app/compositor.ts';
 import { effortsFor } from '../app/models.ts';
+import { listWatchesText, readMailText, SERVE_TOOL_NAMES } from '../mcp/server.ts';
 import { latestModels, Mailbox, NEWLINE_KEYS, TurnWatch, type ChatLook, type MailEvent, type Transport } from '@chauvoluuhuong/chorus-core';
 import { computerDir } from '../app/screens.ts';
 import type { ThreadHost } from '../app/thread-host.ts';
@@ -188,6 +189,8 @@ export class ChorusServer {
   readonly watch: TurnWatch;
   /** the one mailbox (chorus-core Mailbox): every message to a chat, delivered by its CLI's transport, never typed */
   readonly mail: Mailbox;
+  /** the watcher's and the mailbox's clock */
+  private now: () => number = Date.now;
   /** each running Claude chat's `chorus mcp` stream, for its channel pushes */
   readonly channels = new ChannelHub();
   private transports: Partial<Record<AgentId, Transport>>;
@@ -239,6 +242,7 @@ export class ChorusServer {
     // the notifications' installation ID; with notifications off (CHORUS_NOTIFICATIONS=0) the same file, made on first use
     this.reports = o.reports ?? new ReportSender({ version: versions().chorus, credentials: () => (this.o.notifications ?? (this.ownInbox ??= new NotificationInbox({ directory: path.join(process.env.CHORUS_HOME ?? path.join(os.homedir(), '.chorus'), 'notifications'), version: versions().chorus }))).credentials() });
     const now = o.now ?? Date.now;
+    this.now = now;
     this.transports = o.transports ?? makeTransports({ session: id => this.chatSession(id), hub: this.channels, channelWaitMs: o.channelWaitMs });
     this.watch = new TurnWatch({ look: id => this.look(id), store: this.c.store.watchStore(), now });
     this.mail = new Mailbox({ store: this.c.store.mailStore(), watch: this.watch, transports: this.transports, agentOf: id => this.c.store.getThread(id)?.agent, now, on: e => this.mailEvent(e) });
@@ -879,6 +883,14 @@ export class ChorusServer {
     if (req.method === 'POST' && route === 'call') {
       const b = await readJson(req);
       if (process.env.CHORUS_PRO_LOG) console.error(`[pro] mcp ${String(b.name)} thread ${String(b.threadId)}`);
+      if ((SERVE_TOOL_NAMES as readonly string[]).includes(String(b.name))) {
+        // read_mail and list_watches: free, every chat; the mailbox and the watcher live here
+        const thread = typeof b.threadId === 'string' ? b.threadId : '';
+        if (!this.c.store.getThread(thread)) return send(res, 400, { error: 'This chat is not a Chorus thread.' });
+        const args = (b.args ?? {}) as { id?: string; all?: boolean; key?: string; ended?: boolean };
+        const r = b.name === 'read_mail' ? readMailText(this.mail, thread, args) : listWatchesText({ store: this.c.store, watch: this.watch, thread, now: this.now() }, args);
+        return r.isError ? send(res, 400, { error: r.text }) : send(res, 200, { text: r.text });
+      }
       if (SUB_TOOL_NAMES.includes(String(b.name))) {
         const r = await this.subs.call(String(b.name), (b.args ?? {}) as Record<string, unknown>, typeof b.threadId === 'string' ? b.threadId : undefined);
         return 'error' in r ? send(res, 400, r) : send(res, 200, r);

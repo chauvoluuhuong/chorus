@@ -12,7 +12,7 @@ interface Listed {
   inputSchema: Parameters<typeof z.fromJSONSchema>[0];
 }
 
-function serveInfo(home: string): { url: string; mcpToken: string } | undefined {
+export function serveInfo(home: string): { url: string; mcpToken: string } | undefined {
   try {
     return JSON.parse(fs.readFileSync(path.join(home, 'serve.json'), 'utf8'));
   } catch {

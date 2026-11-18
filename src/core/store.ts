@@ -290,14 +290,7 @@ export class Store {
     const db = this.db;
     return {
       load: () =>
-        (db.prepare('SELECT * FROM watch WHERE ended_at IS NULL ORDER BY created_at').all() as any[]).map((r): WatchState => {
-          const x = parse<Partial<WatchState>>(r.extra, {});
-          return defined({
-            key: r.key, thread: r.thread, belongsTo: r.belongs_to, kind: r.kind, owner: r.owner, expect: r.expect, seen: opt(r.seen), since: opt(r.since),
-            waitsOn: parse<string[] | undefined>(r.waits_on, undefined), deadline: opt(r.deadline), waitOverAt: x.waitOverAt, idleAt: x.idleAt,
-            activity: x.activity, activityAt: x.activityAt, quietSent: x.quietSent, data: parse(r.data, {}), created_at: r.created_at, ended_at: opt(r.ended_at),
-          });
-        }),
+        (db.prepare('SELECT * FROM watch WHERE ended_at IS NULL ORDER BY created_at').all() as any[]).map(r => this.watchRow(r)),
       save: (s: WatchState) => {
         const extra = { waitOverAt: s.waitOverAt, idleAt: s.idleAt, activity: s.activity, activityAt: s.activityAt, quietSent: s.quietSent };
         db.prepare(
@@ -311,6 +304,26 @@ export class Store {
         db.prepare('INSERT INTO watch_event (key,thread,belongs_to,type,at,detail,action) VALUES (?,?,?,?,?,?,?)').run(e.key, e.thread, e.belongsTo, e.type, e.at, json(e.detail), e.action ?? null);
       },
     };
+  }
+
+  private watchRow(r: any): WatchState {
+    const x = parse<Partial<WatchState>>(r.extra, {});
+    return defined({
+      key: r.key, thread: r.thread, belongsTo: r.belongs_to, kind: r.kind, owner: r.owner, expect: r.expect, seen: opt(r.seen), since: opt(r.since),
+      waitsOn: parse<string[] | undefined>(r.waits_on, undefined), deadline: opt(r.deadline), waitOverAt: x.waitOverAt, idleAt: x.idleAt,
+      activity: x.activity, activityAt: x.activityAt, quietSent: x.quietSent, data: parse(r.data, {}), created_at: r.created_at, ended_at: opt(r.ended_at),
+    });
+  }
+
+  /** One watch record, open or ended. */
+  watchRecord(key: string): WatchState | undefined {
+    const r = this.db.prepare('SELECT * FROM watch WHERE key = ?').get(key);
+    return r ? this.watchRow(r) : undefined;
+  }
+
+  /** Watch records kept for one chat that ended at or after `since`, newest first (list_watches with ended). */
+  endedWatches(belongsTo: string, since: number, limit = 20): WatchState[] {
+    return (this.db.prepare('SELECT * FROM watch WHERE belongs_to = ? AND ended_at IS NOT NULL AND ended_at >= ? ORDER BY ended_at DESC LIMIT ?').all(belongsTo, since, limit) as any[]).map(r => this.watchRow(r));
   }
 
   /** The watcher's log of one watch (key) or of everything kept for one chat (belongsTo); oldest first. */

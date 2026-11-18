@@ -13,9 +13,13 @@ import { knownSkills, readKnownSkill } from '../core/skillsync.ts';
 import { Store, type ThreadRow } from '../core/store.ts';
 import { ancestorPids, resolveThread } from './identity.ts';
 import type { ProModule } from '@chauvoluuhuong/chorus-core/pro-loader';
-import { addProTools, listenChannel, proRole, type RoleInfo } from './pro.ts';
+import { addProTools, listenChannel, proRole, serveInfo, type RoleInfo } from './pro.ts';
+import { QUIET_MS, type MailMessage, type WatchState } from '@chauvoluuhuong/chorus-core';
 
-export const TOOL_NAMES = ['get_handoff_context', 'get_thread_turns', 'list_threads', 'list_artifacts', 'list_skills', 'get_skill', 'request_approval', 'show_artifact', 'current_thread'] as const;
+export const TOOL_NAMES = ['get_handoff_context', 'get_thread_turns', 'list_threads', 'list_artifacts', 'list_skills', 'get_skill', 'request_approval', 'show_artifact', 'current_thread', 'read_mail', 'list_watches'] as const;
+
+/** Free tools `chorus serve` answers from its mailbox and watcher (task #10): `chorus mcp` passes them on through /api/pro/mcp/call. */
+export const SERVE_TOOL_NAMES = ['read_mail', 'list_watches'] as const;
 
 /** A chat's role in Chorus as the paid bundle gives it (chorus-core ThreadRole): tool-free texts, read live. */
 export type ThreadRole = NonNullable<ReturnType<NonNullable<ProModule['roleOf']>>>;
@@ -33,9 +37,12 @@ export const MCP_INSTRUCTIONS = `How to work in Chorus:
 - Show every file or link meant for the user through Chorus right after you make it.
 - Work that can run on its own, or that the user wants another agent to do, goes to a sub thread. After starting one, go on with your work or end your turn; Chorus reports each time it ends a turn. Never check on it in a loop.
 - When you need to see or manage your sub threads, or know your parent chat, task or step, look them up with current_thread.
-- To start a new chat thread (not a sub thread): call list_teammates and list_actions, propose the fitting teammate and action to the user through an approval card (kind question, your pick first), then call start_thread with what the user chose; the new chat gets that teammate's agent, model, effort and permissions.`;
+- To start a new chat thread (not a sub thread): call list_teammates and list_actions, propose the fitting teammate and action to the user through an approval card (kind question, your pick first), then call start_thread with what the user chose; the new chat gets that teammate's agent, model, effort and permissions.
+- Messages from other chats and from Chorus arrive in your Chorus mail; read them with read_mail when Chorus tells you that you have mail, and answer with the tool the message names.
+- Chorus watches what you started (your action, your sub threads, your mail) and acts on it; see its watch records, their status and how long, with list_watches, instead of checking in a loop.
+- Chorus actions (Create plan, Review changes, …): ask "Would you like me to <action>? <why>" with a question card; after the user's yes, start it with start_action; finish with action_done. Chorus watches each turn end and reminds you if it is missing.`;
 
-const PROPOSE = 'propose it to the user through Chorus with one line on why, before you start; this comes before any skill or workflow of your own. Never start an action yourself.';
+const PROPOSE = 'ask the user first through a Chorus question card: "Would you like me to <action>? <one line why>", before any skill or workflow of your own; start the action through Chorus only after they say yes, and end it through Chorus when its work and check are finished.';
 const KIND: Record<string, string> = { planner: 'Planner', worker: 'Worker', custom: 'Custom' };
 
 export interface StartTextOpts {
@@ -210,6 +217,38 @@ export function createServer(project: string, threadId?: string, home?: string, 
     },
   );
 
+  // read_mail and list_watches: chorus serve holds the mailbox and the watcher, so the call goes there (the route the paid tools use)
+  const viaServe = async (tool: string, args: Record<string, unknown>) => {
+    if (!threadId) return reply(tool, 'This chat is not a Chorus thread.', true);
+    const info = serveInfo(store.root);
+    if (!info) return reply(tool, 'Chorus is not running, so this tool is not available right now.', true);
+    try {
+      const r = await fetch(`${info.url}/api/pro/mcp/call`, { method: 'POST', headers: { authorization: `Bearer ${info.mcpToken}`, 'x-chorus': '1', 'content-type': 'application/json' }, body: JSON.stringify({ name: tool, args, threadId }), signal: AbortSignal.timeout(10_000) });
+      const j = (await r.json()) as { text?: string; error?: string };
+      return r.ok ? reply(tool, j.text ?? '') : reply(tool, j.error ?? 'This tool is not available right now.', true);
+    } catch {
+      return reply(tool, 'Chorus is not running, so this tool is not available right now.', true);
+    }
+  };
+
+  server.registerTool(
+    'read_mail',
+    {
+      description: 'Your Chorus messages (reports, questions, answers, reminders) from other chats and from Chorus. Without an id: the unread ones, which are then marked read. With an id: that message in full.',
+      inputSchema: { id: z.string().optional().describe('A message id, to read that one message'), all: z.boolean().optional().describe('true: the read ones too (newest 20)') },
+    },
+    async ({ id, all }) => viaServe('read_mail', { id, all }),
+  );
+
+  server.registerTool(
+    'list_watches',
+    {
+      description: 'The watch records Chorus keeps for this chat: what it expects, on which chat, its status and for how long, and what fires next. Use it instead of checking chats yourself.',
+      inputSchema: { key: z.string().optional().describe('A record\'s key, for that record in full with its last events'), ended: z.boolean().optional().describe('true: also the records ended in the last 24 hours') },
+    },
+    async ({ key, ended }) => viaServe('list_watches', { key, ended }),
+  );
+
   server.registerTool(
     'current_thread',
     {
@@ -304,5 +343,107 @@ export function currentThread(store: Store, t: ThreadRow, info: RoleInfo | undef
     artifacts: { count: reported.length, latest: latest ? { target: latest.target, title: latest.title, ts: latest.ts } : null },
     open_requests: store.pendingRequests(t.id).map(r => ({ id: r.id, kind: r.kind, question: r.question, options: r.options, created: r.created })),
     open_questions: (sub ? store.openAsks({ thread: t.id }) : store.openAsks({ parent: t.id })).map(a => ({ id: a.id, from: a.thread_id, to: a.parent_id, kind: a.kind, question: a.question, details: a.details, options: a.options, asked: a.created })),
+  };
+}
+
+/* ---------- read_mail and list_watches (answered in chorus serve) ---------- */
+
+/** A duration as people say it: "45s", "3m 20s", "1h 05m". */
+export function human(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`.replace(/ 00s$/, '');
+  return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}m`;
+}
+
+function mailText(m: MailMessage): string {
+  const f = m.from;
+  const who = f.who === 'chorus' && !f.thread ? 'Chorus' : `thread ${f.thread ?? '?'}`;
+  const extra = [f.teammate && `teammate "${f.teammate}"`, f.role].filter(Boolean).join(', ');
+  const refs = Object.entries(m.refs ?? {}).filter(([, v]) => v).map(([k, v]) => `${k} ${v}`).join(', ');
+  return [`### ${m.id} · ${m.kind}`, `From: ${who}${extra ? ` (${extra})` : ''}`, `Subject: ${m.subject}`, ...(refs ? [`Refs: ${refs}`] : []), '', m.body].join('\n');
+}
+
+/** read_mail: the unread messages (marked read), one by id, or with `all` the newest 20 whatever their state. */
+export function readMailText(mail: { read(thread: string, id?: string): MailMessage[]; list(q: { to?: string }): MailMessage[] }, thread: string, args: { id?: string; all?: boolean }): { text: string; isError?: boolean } {
+  if (args.id) {
+    const [m] = mail.read(thread, args.id);
+    return m ? { text: mailText(m) } : { text: `No message ${args.id} for this chat.`, isError: true };
+  }
+  const unread = mail.read(thread);
+  const msgs = args.all ? mail.list({ to: thread }).slice(-20).reverse() : unread;
+  if (!msgs.length) return { text: args.all ? 'No messages for this chat.' : 'No unread messages.' };
+  return { text: msgs.map(mailText).join('\n\n---\n\n') };
+}
+
+const DAY = 86_400_000;
+
+/** What a watch fires next and in how long, from its deadline (or the quiet check while it works). */
+function nextOf(w: WatchState, now: number): string {
+  if (w.ended_at) return '—';
+  const missed = Number(w.data?.missed ?? 0);
+  const label = w.kind === 'action' ? (missed >= 1 ? 'Stopped card' : 'reminder') : w.kind === 'mail' ? 'reminder' : 'idle check';
+  const options: [number, string][] = [];
+  if (w.deadline) options.push([w.deadline, label]);
+  if (w.seen === 'working' && !w.quietSent && !w.waitsOn?.includes('card')) options.push([(w.activityAt ?? w.since ?? now) + QUIET_MS, w.kind === 'thread' ? '"may be stuck"' : 'quiet check']);
+  if (!options.length) return '—';
+  const [at, what] = options.sort((a, b) => a[0] - b[0])[0];
+  return `${what} in ${human(at - now)}`;
+}
+
+function statusOf(w: WatchState): string {
+  if (w.ended_at || w.seen === 'ended') return 'ended';
+  if (w.waitsOn?.length) return `waiting on ${w.waitsOn.join(', ')}`;
+  if (w.seen === 'working') return 'working';
+  if (w.seen === 'waiting') return 'idle';
+  return 'not seen yet';
+}
+
+/** list_watches: the records kept for `thread` (watch.belongs_to), live state from the watcher; one in full with its events by key. */
+export function listWatchesText(o: { store: Pick<Store, 'getThread' | 'endedWatches' | 'watchEvents' | 'watchRecord'>; watch: { get(key: string): WatchState | undefined; list(q: { belongsTo?: string }): WatchState[] }; thread: string; now: number }, args: { key?: string; ended?: boolean }): { text: string; isError?: boolean } {
+  const { store, thread, now } = o;
+  const live = (w: WatchState) => o.watch.get(w.key) ?? w;
+  const chat = (id: string) => (id === thread ? 'this chat' : `${id} ${store.getThread(id)?.title ?? ''}`.trim());
+  const last = (key: string) => {
+    const e = store.watchEvents({ key }).at(-1);
+    return e ? `${e.type} ${human(now - e.at)} ago → ${e.action ?? '—'}` : '—';
+  };
+  const fields = (w: WatchState) => ({
+    key: w.key,
+    kind: w.kind,
+    chat: chat(w.thread),
+    expects: w.expect,
+    status: statusOf(w),
+    for: w.since !== undefined ? human((w.ended_at ?? now) - w.since) : '—',
+    open: human((w.ended_at ?? now) - w.created_at),
+    missed: String(Number(w.data?.missed ?? 0)),
+    next: nextOf(w, now),
+    last: last(w.key),
+  });
+  if (args.key) {
+    const rec = o.watch.get(args.key) ?? store.watchRecord(args.key);
+    if (!rec || rec.belongsTo !== thread) return { text: `No watch record ${args.key} for this chat.`, isError: true };
+    const f = fields(live(rec));
+    const events = store.watchEvents({ key: args.key }).slice(-20).reverse();
+    return {
+      text: [
+        `- key: ${f.key}`, `- kind: ${f.kind}`, `- watched chat: ${f.chat}`, `- expects: ${f.expects}`, `- status: ${f.status}`, `- for: ${f.for}`,
+        `- open for: ${f.open}`, `- missed: ${f.missed}`, `- next: ${f.next}`, `- last event: ${f.last}`, '',
+        'Last events (newest first):',
+        ...(events.length ? events.map(e => `- ${new Date(e.at).toISOString()} ${e.type}${e.detail !== undefined ? ` ${JSON.stringify(e.detail)}` : ''} → ${e.action ?? '—'}`) : ['- none']),
+      ].join('\n'),
+    };
+  }
+  const open = o.watch.list({ belongsTo: thread }).map(live);
+  const ended = args.ended ? store.endedWatches(thread, now - DAY, 20).filter(w => !open.some(x => x.key === w.key)) : [];
+  const rows = [...open, ...ended].sort((a, b) => a.created_at - b.created_at);
+  if (!rows.length) return { text: 'No watch records for this chat.' };
+  const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  return {
+    text: [
+      '| key | kind | watched chat | expects | status | for | open for | missed | next | last event |',
+      '|---|---|---|---|---|---|---|---|---|---|',
+      ...rows.map(fields).map(f => `| ${[f.key, f.kind, f.chat, f.expects, f.status, f.for, f.open, f.missed, f.next, f.last].map(cell).join(' | ')} |`),
+    ].join('\n'),
   };
 }
