@@ -36,6 +36,14 @@ chat closed; what was open is remembered per chat (`ui.json` key `side`). A clic
 Artifacts, Activity and Record; Task stays open; a click on the ask card does not count. The terminal refits when the sidebar
 opens or closes.
 
+**Task** flashes when its task changes (the module's `task.rev` goes up), with the same animation and rules as Artifacts: the button
+grows and turns yellow for about a second. The revision is counted under `taskrev:<chat>` (`src/desktop/counts.js`) and noted at
+start and on refresh, so nothing flashes on launch (2026-11-18).
+
+The agent's screen draws through `@xterm/addon-webgl` (the DOM renderer when WebGL is missing), with `smoothScrollDuration` 80 ms
+for a wheel notch and `scrollSensitivity` 1; a redraw never refits the terminal. Codex and agy full-screen views scroll themselves,
+so these settings don't apply there (2026-11-18).
+
 ## Update Chorus
 
 The launch check ([notifications.md](../notifications.md), Release notices) offers a newer production version in a band under

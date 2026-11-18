@@ -1014,7 +1014,8 @@ test('serve: a chat whose folder is not on this computer is shown, not started, 
 
 test('typing into a chat (the Planner loop): sent, one message at a time; an ended chat is resumed first; gone without its session; not now while a prompt waits', async () => {
   const r = await rig(undefined, undefined, undefined, { sessionExists: row => row.native_session_id !== 'sess-gone' });
-  const send = (id: string, text: string) => (r.srv as any).sendToChat(id, text) as Promise<string>;
+  // ProCtx.sendToChat: kept only for an older paid bundle (task #10: chorus serve itself types nothing into a chat)
+  const send = (id: string, text: string) => (r.srv.pro as any).ctx.sendToChat(id, text) as Promise<string>;
   try {
     const v = await viewer(r.url, r.srv.token);
     const a = (await r.api('POST', '/api/chats', { agent: 'codex', folder: r.project })).json.id as string;

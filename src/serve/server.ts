@@ -18,7 +18,8 @@ import { App, projectName, type AppIO, type Entry } from '../app/app.ts';
 import { AGENTS, type Controller } from '../app/controller.ts';
 import type { ItemState, RichLine } from '../app/compositor.ts';
 import { effortsFor } from '../app/models.ts';
-import { latestModels, NEWLINE_KEYS } from '@chauvoluuhuong/chorus-core';
+import { listWatchesText, readMailText, SERVE_TOOL_NAMES } from '../mcp/server.ts';
+import { latestModels, Mailbox, NEWLINE_KEYS, TurnWatch, type ChatLook, type MailEvent, type Transport } from '@chauvoluuhuong/chorus-core';
 import { computerDir } from '../app/screens.ts';
 import type { ThreadHost } from '../app/thread-host.ts';
 import { transcriptPath } from '../core/capture.ts';
@@ -38,6 +39,7 @@ import { NotificationInbox } from './notifications.ts';
 import { imageType, parseReport, ReportSender } from './reports.ts';
 import { ChatLaunch, ProHost, type ProLoader } from './pro.ts';
 import { SubThreads, TOOLS as SUB_TOOLS, TOOL_NAMES as SUB_TOOL_NAMES } from './subthreads.ts';
+import { answerChannelWarning, ChannelHub, makeTransports, wakeFor, type ChatSession } from './mail.ts';
 import { SignIns } from './signin.ts';
 import { inContainer } from '../cli/screen.ts';
 import type { UpdateCheck } from './updates.ts';
@@ -51,6 +53,7 @@ const VENDOR: Record<string, string> = {
   'xterm.js': 'node_modules/@xterm/xterm/lib/xterm.js',
   'xterm.css': 'node_modules/@xterm/xterm/css/xterm.css',
   'addon-fit.js': 'node_modules/@xterm/addon-fit/lib/addon-fit.js',
+  'addon-webgl.js': 'node_modules/@xterm/addon-webgl/lib/addon-webgl.js',
 };
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const DEFAULT_SIZE = { cols: 120, rows: 36 };
@@ -146,9 +149,14 @@ export interface ServeOpts {
   container?: boolean;
   /** whether the CLI still has a chat's session (tests); its transcript on disk otherwise */
   sessionExists?: (row: ThreadRow) => boolean;
-  /** sub threads' watchdog and gap between messages typed into one chat (tests: short ones) */
+  /** sub threads' watchdog (tests: a short one); the watcher's QUIET_MS otherwise */
   subQuietMs?: number;
-  subGapMs?: number;
+  /** the watcher's and the mailbox's clock (tests: a fake one) */
+  now?: () => number;
+  /** the mail transports, one per CLI (tests: fakes); the real ones otherwise (src/serve/mail.ts) */
+  transports?: Partial<Record<AgentId, Transport>>;
+  /** how long Claude's push waits for the chat's `chorus mcp` stream (tests: short) */
+  channelWaitMs?: number;
 }
 
 const plain = (l: RichLine): string => (typeof l === 'string' ? l : l.map(s => s[0]).join(''));
@@ -178,6 +186,15 @@ export class ChorusServer {
   readonly pro: ProHost;
   /** main thread and sub threads: free, so the tools are served also when the paid module is locked or absent */
   readonly subs: SubThreads;
+  /** the one watcher (chorus-core TurnWatch): ticked by the 500 ms ticker, shared with SubThreads and the paid module */
+  readonly watch: TurnWatch;
+  /** the one mailbox (chorus-core Mailbox): every message to a chat, delivered by its CLI's transport, never typed */
+  readonly mail: Mailbox;
+  /** the watcher's and the mailbox's clock */
+  private now: () => number = Date.now;
+  /** each running Claude chat's `chorus mcp` stream, for its channel pushes */
+  readonly channels = new ChannelHub();
+  private transports: Partial<Record<AgentId, Transport>>;
   /** sub threads the user unlocked (watch-only otherwise: their keys are dropped), and the line each is typing */
   private unlocked = new Map<string, string>();
   readonly reports: ReportSender;
@@ -225,10 +242,19 @@ export class ChorusServer {
     this.signIns = o.signIns ?? new SignIns({ onChange: s => { if (s.state === 'done') void this.checkAgents({ quiet: true }).catch(e => this.noteError('doctor check', e)); } });
     // the notifications' installation ID; with notifications off (CHORUS_NOTIFICATIONS=0) the same file, made on first use
     this.reports = o.reports ?? new ReportSender({ version: versions().chorus, credentials: () => (this.o.notifications ?? (this.ownInbox ??= new NotificationInbox({ directory: path.join(process.env.CHORUS_HOME ?? path.join(os.homedir(), '.chorus'), 'notifications'), version: versions().chorus }))).credentials() });
-    this.pro = new ProHost({ homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.sendToChat(id, text), dismissApproval: (thread, request) => this.dismissApproval(thread, request), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.approvalsNow().filter(a => !a.hidden).map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))], watchOnly: (thread, mainThread) => this.subs.watchOnly(thread, mainThread), deleteChat: id => this.deleteChatQuietly(id), threadKind: id => { const t = this.c.store.getThread(id); if (!t) return undefined; return !t.sub_status ? 'main' : (t.sub_status as string) === 'task' ? 'task' : 'sub'; } }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
+    const now = o.now ?? Date.now;
+    this.now = now;
+    this.transports = o.transports ?? makeTransports({ session: id => this.chatSession(id), hub: this.channels, channelWaitMs: o.channelWaitMs });
+    this.watch = new TurnWatch({ look: id => this.look(id), store: this.c.store.watchStore(), now });
+    this.mail = new Mailbox({ store: this.c.store.mailStore(), watch: this.watch, transports: this.transports, agentOf: id => this.c.store.getThread(id)?.agent, now, on: e => this.mailEvent(e) });
+    if (o.chatLaunch) o.chatLaunch.wake = (agent, thread) => wakeFor(this.transports, agent, thread);
+    this.pro = new ProHost({ watch: this.watch, mail: this.mail, homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.c.sendToChat(id, text, row => (this.o.sessionExists ?? sessionOnDisk)(row)), dismissApproval: (thread, request) => this.dismissApproval(thread, request), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.approvalsNow().filter(a => !a.hidden).map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state, ...(t.parent_thread_id ? { parent: t.parent_thread_id } : {}), ...(t.sub_status ? { sub: (t.sub_status as string) === 'task' ? 'task' : 'sub' } : {}) })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))], watchOnly: (thread, mainThread) => this.subs.watchOnly(thread, mainThread), deleteChat: id => this.deleteChatQuietly(id), threadKind: id => { const t = this.c.store.getThread(id); if (!t) return undefined; return !t.sub_status ? 'main' : (t.sub_status as string) === 'task' ? 'task' : 'sub'; } }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     if (o.chatLaunch) o.chatLaunch.host = this.pro;
     this.subs = new SubThreads({
       store: this.c.store,
+      watch: this.watch,
+      mail: this.mail,
+      now,
       start: x => {
         // its start text names its main thread and what it was started to do (startText line 2b): the row gets its brief only after
         const launch = this.o.chatLaunch;
@@ -239,13 +265,9 @@ export class ChorusServer {
           if (launch) launch.nextSub = undefined;
         }
       },
-      send: (id, text) => this.sendToChat(id, text),
       stop: id => this.app.entry(id)?.host?.kill(),
-      openApproval: id => this.approvalsNow().some(a => a.id === id) || this.c.store.pendingRequests(id).length > 0,
       usable: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent as AgentId),
-      ended: id => this.app.entry(id)?.host?.state === 'ended',
       quietMs: o.subQuietMs,
-      gapMs: o.subGapMs,
       changed: () => this.pushState(),
     });
     this.bridge();
@@ -261,9 +283,115 @@ export class ChorusServer {
     }
   }
 
-  /** The optional module types into a chat (the Planner loop): an ended chat is continued first; `gone` when its session is gone. */
-  private sendToChat(id: string, text: string) {
-    return this.c.sendToChat(id, text, row => (this.o.sessionExists ?? sessionOnDisk)(row));
+  /* ---------- the one watcher and the one mailbox (task #10) ---------- */
+
+  /** chats with an approval or question card open, worked out once per tick */
+  private cardsAt = -1;
+  private cards = new Set<string>();
+  /** agy chats resumed in this run whose screen has not shown the conversation yet: id → the text to look for */
+  private agyResumed = new Map<string, string>();
+  /** when each chat was last continued for its mail (one try at a time) */
+  private woken = new Map<string, number>();
+  private mailScanAt = 0;
+
+  private openCard(id: string) {
+    const t = Date.now();
+    if (t - this.cardsAt > 400) {
+      this.cards = new Set([...this.approvalsNow().map(a => a.id), ...this.c.store.pendingRequests().map(r => r.thread_id)]);
+      this.cardsAt = t;
+    }
+    return this.cards.has(id);
+  }
+
+  /**
+   * One look at a chat for the watcher: its state, an activity mark, and 'card' while an approval or question card of it is open.
+   * Working sub threads are not in the look: a wait in the look holds every watch of that chat, so a main chat's mail (another sub
+   * thread's report, a Worker's report to its Planner) would wait for all of them. The watch that needs them adds them itself
+   * (chorus-core's action watch: Watch.waits() from ctx.chats() parent).
+   */
+  look(id: string): ChatLook | undefined {
+    const st = this.c.store;
+    const t = st.getThread(id);
+    if (!t) return undefined;
+    const ended = t.state === 'ended' || this.app.entry(id)?.host?.state === 'ended';
+    return { state: ended ? 'ended' : t.state, activity: st.activityMark(id), ...(this.openCard(id) ? { waitsOn: ['card'] } : {}) };
+  }
+
+  /** How a chat stands for the transports. */
+  private chatSession(id: string): ChatSession | undefined {
+    const row = this.c.store.getThread(id);
+    if (!row) return undefined;
+    const host = this.app.entry(id)?.host;
+    const running = host?.state === 'running';
+    const lost = !running && (!row.native_session_id || !(this.o.sessionExists ?? sessionOnDisk)(row));
+    return { agent: row.agent, native: row.native_session_id ?? undefined, running, pid: running ? host!.pid : undefined, cwd: row.cwd, lost, unconfirmed: row.agent === 'agy' && running && !this.agyShows(id) };
+  }
+
+  /** agy after a resume: confirmed once its screen shows the conversation (its last turn), or new activity was recorded. */
+  private agyShows(id: string) {
+    const want = this.agyResumed.get(id);
+    if (want === undefined) return true;
+    const screen = (this.app.entry(id)?.host?.screen.text() ?? []).join(' ').replace(/\s+/g, ' ');
+    if (!want || screen.includes(want)) {
+      this.agyResumed.delete(id);
+      return true;
+    }
+    return false;
+  }
+
+  /** What the mailbox says: the paid module raises its cards from it; 'ended' asks for the chat to be continued. */
+  private mailEvent(e: MailEvent) {
+    this.pro.chatEvent({ type: 'mail', event: e } as { type: string });
+    if (e.type === 'ended') this.wakeChat(e.message.to.thread);
+  }
+
+  /**
+   * A chat has mail but its CLI is not running: it is continued the way a send continued it before (its CLI's resume), with no
+   * message typed; the mailbox delivers once it is idle. A lost session is left to the Restore card. An agy chat whose resume came
+   * up empty is closed and resumed again once its old process has exited.
+   */
+  private wakeChat(id: string) {
+    const at = Date.now();
+    if (at - (this.woken.get(id) ?? -Infinity) < 20_000 || this.closed) return;
+    const row = this.c.store.getThread(id), e = this.app.entry(id);
+    if (!row || !e) return;
+    const host = e.host;
+    if (host?.state === 'running') {
+      if (row.agent !== 'agy' || this.agyShows(id)) return;
+      this.woken.set(id, at);
+      host.once('exit', () => setTimeout(() => this.resumeChat(id), 500));
+      host.kill();
+      return;
+    }
+    if (!row.native_session_id || !(this.o.sessionExists ?? sessionOnDisk)(row)) return;
+    this.woken.set(id, at);
+    this.resumeChat(id);
+  }
+
+  private resumeChat(id: string) {
+    const e = this.app.entry(id);
+    if (!e || e.host?.state === 'running' || this.closed || !this.c.store.getThread(id)) return;
+    // the Controller's own resume (as its send did): the CLI app's code stays as it is
+    (this.c as unknown as { resume(e: Entry): void }).resume(e);
+    this.pushState();
+  }
+
+  /** Every 2 s: mail queued for a chat whose CLI is not running continues that chat. */
+  private scanMail() {
+    const at = Date.now();
+    if (at - this.mailScanAt < 2000) return;
+    this.mailScanAt = at;
+    for (const to of new Set(this.mail.list({ state: ['queued'] }).map(m => m.to.thread))) {
+      if (this.app.entry(to)?.host?.state !== 'running') this.wakeChat(to);
+    }
+  }
+
+  /** A chat was deleted: its mail is dropped (its senders told), and the watches on it and kept for it end. */
+  private chatDeleted(id: string) {
+    this.mail.drop(id);
+    this.subs.forget(id);
+    for (const w of [...this.watch.list({ thread: id }), ...this.watch.list({ belongsTo: id })]) this.watch.unwatch(w.key, 'chat deleted');
+    this.pro.chatEvent({ type: 'deleted', thread: id } as { type: string });
   }
 
   /** Command prompts deleted from Approvals: hidden there until the prompt changes; their Approve/Deny line stays in the chat. */
@@ -374,6 +502,14 @@ export class ChorusServer {
     app.on('thread-started', (e: Entry, host: ThreadHost) => {
       // `chorus mcp` finds its chat by its CLI's pid (src/mcp/identity.ts)
       try { this.c.store.setCliPid(e.id, host.pid); } catch { /* a chat without a row (the doctor) */ }
+      // Claude's development-channels warning (its mail transport's flag): answered once per launch, only when it shows
+      if (e.agent === 'claude') answerChannelWarning(host);
+      // agy: a resume must show the conversation before mail goes to it (antigravity-agy.md §16)
+      const row = this.c.store.getThread(e.id);
+      if (e.agent === 'agy' && row && this.c.store.getTurns(e.id, { limit: 1 }).length) {
+        const last = this.c.store.getTurns(e.id, { limit: 1 })[0];
+        this.agyResumed.set(e.id, (last?.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 24));
+      }
       host.resize(this.size.cols, this.size.rows);
       for (const cl of this.clients) if (cl.attached === e.id) void cl.attach(e.id);
       this.pushState();
@@ -403,7 +539,7 @@ export class ChorusServer {
     } finally {
       this.quietDelete--;
     }
-    if (!this.c.store.getThread(id)) this.pro.chatEvent({ type: 'deleted', thread: id } as { type: string });
+    if (!this.c.store.getThread(id)) this.chatDeleted(id);
     this.pushState();
   }
 
@@ -426,7 +562,7 @@ export class ChorusServer {
         await c.deleteThread(t.id);
         if (c.store.getThread(t.id)) continue;
         removed++;
-        this.pro.chatEvent({ type: 'deleted', thread: t.id } as { type: string });
+        this.chatDeleted(t.id);
       }
     } finally {
       this.deletingProject = false;
@@ -487,9 +623,22 @@ export class ChorusServer {
     const named = this.o.host && !WILDCARD.has(this.o.host) ? this.o.host : '127.0.0.1';
     this.url = `http://${named.includes(':') ? `[${named}]` : named}:${bound}`;
     this.hostNames = hostNames(this.o.host);
+    // before the first tick: the mailbox's and the sub threads' watches are registered again (the watcher kept their data)
+    try {
+      this.mail.restore();
+      this.subs.restore();
+    } catch (e) {
+      this.noteError('watch restore', e);
+    }
     this.ticker = setInterval(() => {
       try {
+        this.watch.tick();
+      } catch (e) {
+        this.noteError('watch', e);
+      }
+      try {
         this.subs.tick();
+        this.scanMail();
       } catch (e) {
         this.noteError('sub threads', e);
       }
@@ -557,6 +706,7 @@ export class ChorusServer {
 
   close() {
     this.closed = true;
+    this.channels.close();
     this.pro.close();
     this.signIns.close();
     try {
@@ -725,9 +875,23 @@ export class ChorusServer {
       const role = this.pro.roleOf(thread) ?? null;
       return send(res, 200, { role, readOnly: !!this.pro.chatExtras(thread)?.readOnly, actionLabels: this.pro.allActionLabels() ?? [] });
     }
+    if (req.method === 'GET' && route.startsWith('channel')) {
+      // a Claude chat's `chorus mcp` holds this open: its channel pushes come down it (src/serve/mail.ts ChannelHub)
+      const thread = new URL(req.url ?? '/', 'http://x').searchParams.get('thread') ?? '';
+      if (!this.c.store.getThread(thread)) return send(res, 404, { error: 'no such chat' });
+      return this.channels.open(thread, res);
+    }
     if (req.method === 'POST' && route === 'call') {
       const b = await readJson(req);
       if (process.env.CHORUS_PRO_LOG) console.error(`[pro] mcp ${String(b.name)} thread ${String(b.threadId)}`);
+      if ((SERVE_TOOL_NAMES as readonly string[]).includes(String(b.name))) {
+        // read_mail and list_watches: free, every chat; the mailbox and the watcher live here
+        const thread = typeof b.threadId === 'string' ? b.threadId : '';
+        if (!this.c.store.getThread(thread)) return send(res, 400, { error: 'This chat is not a Chorus thread.' });
+        const args = (b.args ?? {}) as { id?: string; all?: boolean; key?: string; ended?: boolean };
+        const r = b.name === 'read_mail' ? readMailText(this.mail, thread, args) : listWatchesText({ store: this.c.store, watch: this.watch, thread, now: this.now() }, args);
+        return r.isError ? send(res, 400, { error: r.text }) : send(res, 200, { text: r.text });
+      }
       if (SUB_TOOL_NAMES.includes(String(b.name))) {
         const r = await this.subs.call(String(b.name), (b.args ?? {}) as Record<string, unknown>, typeof b.threadId === 'string' ? b.threadId : undefined);
         return 'error' in r ? send(res, 400, r) : send(res, 200, r);
@@ -994,7 +1158,7 @@ export class ChorusServer {
           if (!own?.id) {
             // once it is gone, the optional module closes its waiting items (plan approvals, gates) and withdraws what it asked
             await c.deleteThread(id);
-            if (!c.store.getThread(id)) this.pro.chatEvent({ type: 'deleted', thread: id } as { type: string });
+            if (!c.store.getThread(id)) this.chatDeleted(id);
             this.pushState();
             return;
           }
