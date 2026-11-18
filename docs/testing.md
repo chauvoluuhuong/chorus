@@ -80,6 +80,15 @@ Rules:
 - **Report issue and the Welcome strip**: `node test/smoke/proof-report-images.ts [--admin <chorus-admin checkout>]` (no model calls, ~1 min): the Welcome's strip, New chat's line with Codex and Antigravity, the report dialog with two screenshots (one made smaller), all details, the backend not reached (Try again), sent with a reference; a fake backend checks the two requests, or a local chorus-admin run stores it. Pairs beside the mockup scenes in `.chorus/proof/<branch>/` ([`features/report-issue.md`](features/report-issue.md)).
 - **First launch**: `npm run proof:first-run` (`test/smoke/proof-first-run.ts`, no model calls, ~30 s) drives the page in Chrome over a fresh Chorus home: the Welcome (Community or Pro) first while the Doctor waits, Keep Community opens the Doctor, a second launch shows neither, and the trial-ended text. `--plans <file>` shows given Welcome words (a backend change not deployed yet). PNGs in `.chorus/proof/first-run/`.
 - **Sizes**: `npm run proof:desktop -- --sizes` (`test/smoke/proof-sizes.ts`) opens every screen at a phone, a tablet and a desktop size, light and dark, with fake agents, and checks sideways scroll, cut-off controls and touch sizes; desktop screens are compared with the newest release. Details: [`features/responsive.md`](features/responsive.md).
+- **Mail watchdog** (task #14): `npm run smoke:courier [claude,codex,agy] [--only 1,5,2,3,4]` (`test/smoke/courier.ts`, real CLIs on
+  their cheapest models, serve in-process on a temp `CHORUS_HOME`, `CHORUS_COURIER_MS=20000`, ~10 min per CLI): (1) a sub thread's
+  report arrives through the transport and is read; (5) a second serve on the same home starts and stops, and mail still arrives;
+  (2) with the transport broken (Claude: the push finds no stream; Codex and agy: a stub `codex`/`agy` on PATH that exits 1) and a
+  2-line, then a wrapped draft in an idle chat, the line is typed, read, and the draft comes back unsent with a key pressed meanwhile
+  after it; (3) a busy chat queues the typed line, `delivered_at` stays empty until its turn starts; (4) nothing is typed while a
+  permission dialog is up, and the line goes once it is answered. Log and final screens in `.chorus/proof/<branch>/smoke/`.
+  `node test/smoke/proof-mail-courier.ts` (no model calls) screens the type-in overlay (scenes 1–3, desktop, phone, dark);
+  `test/smoke/proof-mail-courier-pro.ts` is a Pro-harness stage for the Task button and the border highlight (scenes 3–5).
 - **Chrome driver** `test/smoke/chrome.ts`: headless Chrome over the DevTools protocol with real clicks and key presses, used by `proof:desktop` and other e2e runs.
 - **Risk harness** `tools/risk/` (`npm run risk -- free|cheap|<case>`): probes known risks with the real CLIs and writes the findings to [risks/](risks/README.md); not part of `npm test`.
 - `npm run typecheck`.

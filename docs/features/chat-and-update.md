@@ -40,6 +40,20 @@ opens or closes.
 grows and turns yellow for about a second. The revision is counted under `taskrev:<chat>` (`src/desktop/counts.js`) and noted at
 start and on refresh, so nothing flashes on launch (2026-11-18).
 
+**Task shows for every chat that belongs to a task**, also a chat that started as a plain chat (a Just chat) and then ran Create
+plan: such a thread has two sessions, and the module's `liveThreads()` gives one row per thread (the newest session, with the task of
+the newest session that has one), so the page's lookups find the task (task #14; chorus-core `test/pro/live-threads.test.ts`).
+
+**The lasting border highlight** (task #14, mockup `mail-courier.html` v3, scenes 3–5; `src/desktop/highlight.js`): when the chat's
+task changes or its artifacts change (a new one, or a new version: `artifacts + artifactsRev`), **Task** or **Artifacts** gets a
+border in the count flash's yellow (`--hl`: `#d99a00` light, `#f7c948` dark). It glows twice (1 s each), then stays lit; fill, text
+and badge are unchanged. Clicking the button (opening its panel) clears it, and nothing lights while that panel is open. A per-chat
+"seen" mark `{task, artifacts}` is kept by the server (`ui.json` key `seenMarks`, browser storage as the copy), so another device
+clears it too; the first value a chat shows is its starting point. The short count flash stays on top while it runs; a redraw keeps
+the glow in step (a negative `animation-delay`, as the count flash does). On a phone the **Steps** tab (its ring drawn inside the
+segmented control) and an **Artifacts** button beside the chat's ⋯ carry it. Tests: `test/serve/highlight.test.ts`,
+`test/serve/desktop-courier.test.ts`; proof: `test/smoke/proof-mail-courier-pro.ts`.
+
 The agent's screen draws through `@xterm/addon-webgl` (the DOM renderer when WebGL is missing), with `smoothScrollDuration` 80 ms
 for a wheel notch and `scrollSensitivity` 1; a redraw never refits the terminal. Codex and agy full-screen views scroll themselves,
 so these settings don't apply there (2026-11-18).
