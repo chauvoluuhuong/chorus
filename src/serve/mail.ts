@@ -4,9 +4,10 @@
 //   serve (ChannelHub); Codex and agy are told whether the chat's CLI runs, its session id, pid and folder;
 // - what a chat's launch adds per session (`wake`), and the answer to Claude's development-channels warning at each launch;
 // - after an agy resume, whether it really loaded the conversation (agy sometimes opens an empty one: antigravity-agy.md §16).
-// Nothing here types a Chorus message into a chat.
+// Nothing here types a Chorus message into a chat, except the mail watchdog's last resort (typeLine, task #14): one short line, with
+// the user's draft put back.
 import type http from 'node:http';
-import { agyTransport, CLAUDE_CHANNEL_WARNING, claudeTransport, codexTransport, type DeliverResult, type Transport, type TransportLaunch } from '@chauvoluuhuong/chorus-core';
+import { agyTransport, CLAUDE_CHANNEL_WARNING, claudeTransport, clearKeys, codexTransport, inputState, restoreKeys, type DeliverResult, type ScreenLine, type Transport, type TransportLaunch, type TypeInResult } from '@chauvoluuhuong/chorus-core';
 import type { AgentId } from '../core/types.ts';
 
 /** What a chat's `chorus mcp` stream gets: one JSON line per push. */
@@ -161,4 +162,117 @@ export function answerChannelWarning(host: { on(ev: 'update', cb: () => void): u
   t.unref?.();
   host.on('update', onUpdate);
   return stop;
+}
+
+/* ---------- the mail watchdog's type-in (task #14) ---------- */
+
+/** A chat's screen as rows with xterm's wrap flag (what inputState reads): the visible viewport of its headless terminal. */
+export function screenRows(screen: { term: any }): ScreenLine[] {
+  const b = screen.term.buffer.active;
+  const out: ScreenLine[] = [];
+  for (let y = b.viewportY; y < b.viewportY + screen.term.rows; y++) {
+    const line = b.getLine(y);
+    out.push({ text: line?.translateToString(true) ?? '', wrapped: !!line?.isWrapped });
+  }
+  return out;
+}
+
+/** What typeLine needs of a chat's CLI: its screen rows (with xterm's wrap flag), and its own write (not the guarded one). */
+export interface TypeInTarget {
+  agent: AgentId;
+  running(): boolean;
+  rows(): ScreenLine[];
+  cols(): number;
+  write(data: string): void;
+}
+
+export interface TypeInSteps {
+  sleep(ms: number): Promise<void>;
+  /** the page's overlay: shown once the keys are held, gone at the end */
+  start(): void;
+  end(ok: boolean): void;
+  /** hold every other write and the user's keys; release sends them, the user's through the user path */
+  hold(): void;
+  release(): void;
+  log?(line: string): void;
+}
+
+/** How long typeLine waits at each step (the probe: a turn starts 0.4–0.5 s after Enter). */
+export const TYPE_TIMES = { clearMs: 300, lineMs: 400, leaveMs: 5_000, restoreMs: 400, pollMs: 200 };
+
+/**
+ * Types the watchdog's line into an idle or busy chat and puts the user's draft back (typein-probe B, C): read the input, hold the
+ * keys, clear with Ctrl+U, type the line and Enter, wait for it to leave the input, type the draft back with Option+Enter between its
+ * lines, release. 'not-ready' when the input is not on screen (a dialog, a launch screen), the draft holds an attachment, or a step
+ * did not take; the draft is put back whenever it was cleared.
+ */
+export async function typeLine(t: TypeInTarget, line: string, s: TypeInSteps, times = TYPE_TIMES): Promise<TypeInResult> {
+  if (!t.running()) return 'not-ready';
+  const read = () => inputState(t.agent, t.rows(), t.cols());
+  const first = read();
+  if (!first.ready || first.attachment) {
+    s.log?.(`not ready: ${first.attachment ? 'the draft holds an attachment' : first.dialog ?? 'no input'}`);
+    return 'not-ready';
+  }
+  const draft = first.draft;
+  s.hold();
+  s.start();
+  let ok = false;
+  let cleared = false;
+  try {
+    // clear: Ctrl+U per input row and once more; a wrapped draft can need a press or two more (probe D)
+    let cur = first;
+    for (let i = 0; i < 3 && cur.draft; i++) {
+      t.write(clearKeys(t.agent, cur));
+      await s.sleep(times.clearMs);
+      cur = read();
+      if (!cur.ready) break;
+    }
+    if (!cur.ready || cur.draft) {
+      s.log?.(`not cleared: ${cur.ready ? JSON.stringify(cur.draft.slice(0, 40)) : cur.dialog ?? 'no input'}`);
+      // only what was cleared goes back (Ctrl+U removes from the end)
+      if (cur.ready && draft.startsWith(cur.draft) && cur.draft.length < draft.length) t.write(restoreKeys(t.agent, draft.slice(cur.draft.length)));
+      return 'not-ready';
+    }
+    cleared = true;
+    t.write(line);
+    await s.sleep(times.lineMs);
+    t.write('\r');
+    // the line leaves the input: a turn starts, or the CLI queues it for after the running turn
+    const mark = line.match(/m_[a-z0-9]+/)?.[0] ?? line.slice(0, 24);
+    const end = Date.now() + times.leaveMs;
+    let left = false;
+    while (Date.now() < end) {
+      await s.sleep(times.pollMs);
+      const st = read();
+      if (st.ready && !st.draft.includes(mark)) {
+        left = true;
+        break;
+      }
+      if (!st.ready && st.dialog !== 'no-input') break;
+    }
+    if (!left) {
+      // still in the input (or a dialog came up): take the line out again; the draft goes back below
+      const st = read();
+      if (st.ready && st.draft) t.write(clearKeys(t.agent, st));
+      s.log?.('the line did not leave the input');
+      await s.sleep(times.clearMs);
+    }
+    ok = left;
+    return left ? 'typed' : 'not-ready';
+  } finally {
+    if (cleared && draft) {
+      // never into a dialog that came up meanwhile (its keys would answer it): wait for the input to be back
+      let st = read();
+      for (const until = Date.now() + times.leaveMs; !st.ready && Date.now() < until; st = read()) await s.sleep(times.pollMs);
+      if (st.ready) {
+        t.write(restoreKeys(t.agent, draft));
+        await s.sleep(times.restoreMs);
+        const back = read();
+        if (!back.ready || back.draft !== draft) s.log?.(`draft not seen back as typed: ${JSON.stringify(back.draft?.slice(0, 40))}`);
+      } else s.log?.('the draft could not be put back: the input did not come back');
+    }
+    s.release();
+    s.end(ok);
+  }
 }

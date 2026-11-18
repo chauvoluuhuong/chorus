@@ -20,7 +20,7 @@ import type { ItemState, RichLine } from '../app/compositor.ts';
 import { effortsFor } from '../app/models.ts';
 import { listWatchesText, PROJECT_TOOL_NAMES, readMailText, SERVE_TOOL_NAMES } from '../mcp/server.ts';
 import { MCP_TOKEN_ENV, SERVE_URL_ENV } from '../mcp/pro.ts';
-import { latestModels, liveAddDirDone, liveAddDirInput, liveAddDirKeys, codexGrantMessage, Mailbox, NEWLINE_KEYS, TurnWatch, type ChatLook, type MailEvent, type Transport } from '@chauvoluuhuong/chorus-core';
+import { latestModels, liveAddDirDone, liveAddDirInput, liveAddDirKeys, codexGrantMessage, Mailbox, NEWLINE_KEYS, transcriptHas, TurnWatch, type ChatLook, type MailEvent, type Transport } from '@chauvoluuhuong/chorus-core';
 import { computerDir } from '../app/screens.ts';
 import type { ThreadHost } from '../app/thread-host.ts';
 import { transcriptPath } from '../core/capture.ts';
@@ -43,7 +43,8 @@ import { SubThreads, TOOLS as SUB_TOOLS, TOOL_NAMES as SUB_TOOL_NAMES } from './
 import { ProjectSettings } from '../core/projects.ts';
 import { ProjectRuntime, type LiveWay } from './project-runtime.ts';
 import { APPROVE_RESTART, CREATE_OPEN, DECLINE, appliedLine, checkNewProject, checkProposal, getProject, isComputer, needsRestart, newProjectCard, parseProposal, placeName, proposalCard, type AskerResult } from './project-tools.ts';
-import { answerChannelWarning, ChannelHub, makeTransports, wakeFor, type ChatSession } from './mail.ts';
+import { answerChannelWarning, CHANNEL_WAIT_MS, ChannelHub, makeTransports, screenRows, typeLine, wakeFor, type ChatSession } from './mail.ts';
+import { TermLocks } from './termlock.ts';
 import { SignIns } from './signin.ts';
 import { inContainer } from '../cli/screen.ts';
 import type { UpdateCheck } from './updates.ts';
@@ -271,11 +272,16 @@ export class ChorusServer {
     this.now = now;
     this.transports = o.transports ?? makeTransports({ session: id => this.chatSession(id), hub: this.channels, channelWaitMs: o.channelWaitMs });
     this.watch = new TurnWatch({ look: id => this.look(id), store: this.c.store.watchStore(), now });
-    this.mail = new Mailbox({ store: this.c.store.mailStore(), watch: this.watch, transports: this.transports, agentOf: id => this.c.store.getThread(id)?.agent, now, on: e => this.mailEvent(e) });
+    const courierMs = Number(process.env.CHORUS_COURIER_MS) > 0 ? Number(process.env.CHORUS_COURIER_MS) : undefined;
+    this.mail = new Mailbox({
+      store: this.c.store.mailStore(), watch: this.watch, transports: this.transports, agentOf: id => this.c.store.getThread(id)?.agent, now, on: e => this.mailEvent(e),
+      // the watchdog's hooks (task #14): it runs on this TurnWatch, ticked below; no loop or timer of its own
+      courierMs, transportUp: id => this.transportUp(id), seen: (id, ids) => this.seenInTranscript(id, ids), typeIn: (id, line) => this.typeIn(id, line),
+    });
     if (o.chatLaunch) o.chatLaunch.wake = (agent, thread) => wakeFor(this.transports, agent, thread);
     // each chat's `chorus mcp` finds this serve through its launch env, not the shared serve.json (task #14)
     if (o.chatLaunch) o.chatLaunch.serveEnv = () => (this.url ? { [SERVE_URL_ENV]: this.url, [MCP_TOKEN_ENV]: this.mcpToken } : undefined);
-    this.pro = new ProHost({ watch: this.watch, mail: this.mail, homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.c.sendToChat(id, text, row => (this.o.sessionExists ?? sessionOnDisk)(row)), dismissApproval: (thread, request) => this.dismissApproval(thread, request), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.approvalsNow().filter(a => !a.hidden).map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request && parseProposal(this.c.store.getRequest(request)) ? this.answerProposal(request, answer, {}).catch(e => this.noteError('proposal answer', e)) : request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state, ...(t.parent_thread_id ? { parent: t.parent_thread_id } : {}), ...(t.sub_status ? { sub: (t.sub_status as string) === 'task' ? 'task' : 'sub' } : {}) })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))], watchOnly: (thread, mainThread) => this.subs.watchOnly(thread, mainThread), deleteChat: id => this.deleteChatQuietly(id), threadKind: id => { const t = this.c.store.getThread(id); if (!t) return undefined; return !t.sub_status ? 'main' : (t.sub_status as string) === 'task' ? 'task' : 'sub'; } }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
+    this.pro = new ProHost({ watch: this.watch, mail: this.mail, homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.locks.run(id, () => this.c.sendToChat(id, text, row => (this.o.sessionExists ?? sessionOnDisk)(row))), dismissApproval: (thread, request) => this.dismissApproval(thread, request), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.approvalsNow().filter(a => !a.hidden).map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request && parseProposal(this.c.store.getRequest(request)) ? this.answerProposal(request, answer, {}).catch(e => this.noteError('proposal answer', e)) : this.typedVia(id, () => (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)))), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state, ...(t.parent_thread_id ? { parent: t.parent_thread_id } : {}), ...(t.sub_status ? { sub: (t.sub_status as string) === 'task' ? 'task' : 'sub' } : {}) })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))], watchOnly: (thread, mainThread) => this.subs.watchOnly(thread, mainThread), deleteChat: id => this.deleteChatQuietly(id), threadKind: id => { const t = this.c.store.getThread(id); if (!t) return undefined; return !t.sub_status ? 'main' : (t.sub_status as string) === 'task' ? 'task' : 'sub'; } }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     if (o.chatLaunch) o.chatLaunch.host = this.pro;
     this.subs = new SubThreads({
       store: this.c.store,
@@ -355,7 +361,7 @@ export class ChorusServer {
       const host = e.host;
       if (host?.state !== 'running' || e.agent !== 'claude') continue;
       const keys = this.projects.launchScreenKeys(e.id, (host.screen.text() ?? []).join('\n'), os.homedir());
-      if (keys) host.write(keys);
+      if (keys) void this.locks.run(e.id, () => host.write(keys));
     }
   }
 
@@ -379,9 +385,11 @@ export class ChorusServer {
     if (way === 'slash') {
       const input = liveAddDirInput(agent, dir);
       if (!input) return false;
-      host.write(input);
-      await sleep(400);
-      host.write('\r');
+      await this.locks.run(id, async () => {
+        host.write(input);
+        await sleep(400);
+        host.write('\r');
+      });
     } else {
       this.mail.send({ from: { who: 'chorus' }, to: { thread: id }, kind: 'note', subject: 'Working folder added', body: codexGrantMessage([dir]), refs: {} });
     }
@@ -393,7 +401,7 @@ export class ChorusServer {
       if (liveAddDirDone(agent, sc, dir)) return true;
       const keys = liveAddDirKeys(agent, sc);
       if (keys && (keys !== last || Date.now() - lastAt > 1500)) {
-        host.write(keys);
+        await this.locks.run(id, () => host.write(keys));
         last = keys;
         lastAt = Date.now();
       }
@@ -457,6 +465,115 @@ export class ChorusServer {
     return { state, activity, ...(this.openCard(id) ? { waitsOn: ['card'] } : {}) };
   }
 
+  /* ---------- the mail watchdog's hooks (task #14) ---------- */
+
+  /** One lock per chat for every write into its CLI that is not the user's (src/serve/termlock.ts). */
+  readonly locks = new TermLocks();
+  /** chats the watchdog is typing into: the user's keys pressed meanwhile, to send after it */
+  private keyHold = new Map<string, string[]>();
+  /** the sender of the mail the watchdog is about to type for, per receiving chat (its courier 'typing' event) */
+  private typingFrom = new Map<string, string | undefined>();
+
+  /**
+   * A write into a chat's CLI that is not the user's own keys: one at a time with the chat's other writers, and the lock is kept
+   * `tailMs` after it so a delayed Enter stays inside (the Controller's answer types its text, then Enter 700 ms later). Resolves with
+   * fn's result as soon as it ran.
+   */
+  private typedVia<T>(thread: string | undefined, fn: () => T, tailMs = 800): Promise<T> {
+    if (!thread) return Promise.resolve(fn());
+    return new Promise<T>((resolve, reject) => {
+      void this.locks.run(thread, async () => {
+        try {
+          resolve(fn());
+        } catch (e) {
+          return reject(e);
+        }
+        await sleep(tailMs);
+      });
+    });
+  }
+
+  /** False for a running Claude chat whose `chorus mcp` stream is still not open CHANNEL_WAIT_MS after its CLI started. */
+  private transportUp(id: string): boolean {
+    const t = this.c.store.getThread(id), host = this.app.entry(id)?.host;
+    if (t?.agent !== 'claude' || host?.state !== 'running') return true;
+    if (this.channels.connected(id)) return true;
+    const start = this.processMarks.get(host);
+    return !start || this.now() - start.at < CHANNEL_WAIT_MS;
+  }
+
+  /** The chat's transcript holds a user message with every id (the typed line or a delivery reached the model). Its last 4 MB. */
+  private seenInTranscript(id: string, ids: string[]): boolean {
+    const t = this.c.store.getThread(id);
+    if (!t?.transcript_path) return false;
+    try {
+      const size = fs.statSync(t.transcript_path).size;
+      const from = Math.max(0, size - 4_000_000);
+      const fd = fs.openSync(t.transcript_path, 'r');
+      try {
+        const buf = Buffer.alloc(size - from);
+        fs.readSync(fd, buf, 0, buf.length, from);
+        return transcriptHas(t.agent, buf.toString('utf8'), ids);
+      } finally {
+        fs.closeSync(fd);
+      }
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * The watchdog's last resort: one short line typed into the chat's CLI, the user's draft put back (typeLine). Under the chat's
+   * terminal lock, never while a dialog is on screen; the user's keys pressed meanwhile are held and replayed through the user path.
+   * The open page dims the window while it types (mail-typing).
+   */
+  private async typeIn(id: string, line: string): Promise<'typed' | 'not-ready' | 'gone'> {
+    const row = this.c.store.getThread(id);
+    if (!row) return 'gone';
+    const host = this.app.entry(id)?.host;
+    if (host?.state !== 'running') {
+      // not running: it is continued first (its CLI's resume), then typed into at a next try
+      this.wakeChat(id);
+      return 'not-ready';
+    }
+    const raw = this.locks.guard(id, host);
+    const from = this.typingFrom.get(id);
+    const sender = from ? this.c.store.getThread(from) : undefined;
+    return this.locks.run(id, () =>
+      typeLine(
+        {
+          agent: row.agent,
+          running: () => host.state === 'running',
+          cols: () => host.screen.cols,
+          rows: () => screenRows(host.screen),
+          write: raw,
+        },
+        line,
+        {
+          sleep,
+          hold: () => {
+            this.keyHold.set(id, []);
+            this.locks.hold(id);
+          },
+          release: () => {
+            this.locks.release(id, host);
+            const keys = this.keyHold.get(id) ?? [];
+            this.keyHold.delete(id);
+            // the user's keys go out after the line and the draft, as the user's: they count as typed
+            for (const d of keys) {
+              host.write(d);
+              this.noteTyped(id, d);
+              this.typedTo(id, d);
+            }
+          },
+          start: () => this.broadcast({ t: 'mail-typing', thread: id, phase: 'start', from: { title: sender?.title ?? 'Chorus', agent: sender?.agent ?? null } }),
+          end: ok => this.broadcast({ t: 'mail-typing', thread: id, phase: 'end', ok }),
+          log: l => console.error(`[mail] type-in ${id}: ${l}`),
+        },
+      ),
+    );
+  }
+
   /** Each chat CLI process, as serve first saw it: its chat's activity mark then (look()). */
   private processMarks = new WeakMap<object, { mark: string; at: number }>();
 
@@ -484,6 +601,12 @@ export class ChorusServer {
 
   /** What the mailbox says: the paid module raises its cards from it; 'ended' asks for the chat to be continued. */
   private mailEvent(e: MailEvent) {
+    // the watchdog's steps go to the log only; the page gets 'mail-typing' from the type-in itself
+    if (e.type === 'courier') {
+      if (e.phase === 'typing') this.typingFrom.set(e.to, e.from);
+      console.error(`[mail] watchdog ${e.phase}: ${e.message.id} ${e.from ?? 'chorus'} → ${e.to}`);
+      return;
+    }
     this.pro.chatEvent({ type: 'mail', event: e } as { type: string });
     if (e.type === 'ended') this.wakeChat(e.message.to.thread);
   }
@@ -646,8 +769,10 @@ export class ChorusServer {
     app.on('thread-started', (e: Entry, host: ThreadHost) => {
       // `chorus mcp` finds its chat by its CLI's pid (src/mcp/identity.ts)
       try { this.c.store.setCliPid(e.id, host.pid); } catch { /* a chat without a row (the doctor) */ }
+      // every write to this chat's CLI that is not the user's waits while the mail watchdog holds its terminal (src/serve/termlock.ts)
+      this.locks.guard(e.id, host);
       // Claude's development-channels warning (its mail transport's flag): answered once per launch, only when it shows
-      if (e.agent === 'claude') answerChannelWarning(host);
+      if (e.agent === 'claude') answerChannelWarning({ on: (ev, cb) => host.on(ev, cb), off: (ev, cb) => host.off(ev, cb), screen: host.screen, write: d => void this.locks.run(e.id, () => host.write(d)) });
       // agy: a resume must show the conversation before mail goes to it (antigravity-agy.md §16)
       const row = this.c.store.getThread(e.id);
       if (e.agent === 'agy' && row && this.c.store.getTurns(e.id, { limit: 1 }).length) {
@@ -849,7 +974,7 @@ export class ChorusServer {
     if (this.app.entry(r.thread_id)?.host?.state !== 'running') return { ok: false, error: 'That chat is not running: open it, then answer.' };
     if (!r.options.includes(option)) return { ok: false, error: `Choose one of: ${r.options.join(', ')}.` };
     if (option === DECLINE) {
-      const ok = c.answerRequest(r.id, 'declined');
+      const ok = await this.typedVia(r.thread_id, () => c.answerRequest(r.id, 'declined'));
       this.pushState();
       return { ok, text: 'declined' };
     }
@@ -894,7 +1019,7 @@ export class ChorusServer {
     const restart = option === APPROVE_RESTART && needsRestart(p.changes);
     const tail = !restartNeeded ? '' : restart ? '. This chat restarts when this turn ends to get them; other running chats get them when they restart.' : '. This chat and the other running chats get them when they restart: call reload_project_settings to restart this one when your turn ends.';
     const text = `approved: ${lines.join('; ')}${tail}`;
-    const ok = c.answerRequest(r.id, text);
+    const ok = await this.typedVia(r.thread_id, () => c.answerRequest(r.id, text));
     if (ok && restart) this.projects.restartAtTurnEnd(r.thread_id, { settle: true });
     this.pushState();
     return { ok, text };
@@ -916,7 +1041,7 @@ export class ChorusServer {
     } catch (e) {
       // the folder became a project or appeared since the card was made: nothing is made; the chat hears why (a path, never a value)
       const text = `not done: ${(e as Error).message}`;
-      const ok = c.answerRequest(requestId, text);
+      const ok = await this.typedVia(c.store.getRequest(requestId)?.thread_id, () => c.answerRequest(requestId, text));
       this.pushState();
       return { ok, text, error: (e as Error).message };
     }
@@ -933,7 +1058,7 @@ export class ChorusServer {
     }
     const n = (k: number, one: string) => `${k} ${one}${k === 1 ? '' : 's'}`;
     const text = `approved: created project ${placeName(folder)} at ${tilde(folder)} with ${n(folders, 'folder')} and ${n(vars, 'variable')} (values hidden). Chats started there get them.${failed.length ? ` ${failed.join('; ')}.` : ''}`;
-    const ok = c.answerRequest(requestId, text);
+    const ok = await this.typedVia(c.store.getRequest(requestId)?.thread_id, () => c.answerRequest(requestId, text));
     this.pushState();
     return { ok, text, ...(option === CREATE_OPEN ? { open: folder } : {}) };
   }
@@ -1705,7 +1830,7 @@ export class ChorusServer {
       }
       case 'POST chats/:id/approve':
       case 'POST chats/:id/deny': {
-        const ok = c.answer(sub === 'approve', id);
+        const ok = await this.typedVia(id, () => c.answer(sub === 'approve', id));
         this.pushState();
         return { ok };
       }
@@ -1715,7 +1840,7 @@ export class ChorusServer {
           return this.answerProposal(b.request, b.option, { values: b.values, note: b.note });
         }
         // a request_approval card: the option (and note) becomes the user's next message to that agent
-        const ok = typeof b.request === 'string' && typeof b.option === 'string' && c.answerRequest(b.request, b.option, typeof b.note === 'string' ? b.note : undefined);
+        const ok = typeof b.request === 'string' && typeof b.option === 'string' && (await this.typedVia(c.store.getRequest(b.request)?.thread_id, () => c.answerRequest(b.request, b.option, typeof b.note === 'string' ? b.note : undefined)));
         this.pushState();
         return { ok };
       }
@@ -2199,6 +2324,9 @@ export class ChorusServer {
         if (process.env.CHORUS_DEBUG_INPUT) fs.appendFileSync(process.env.CHORUS_DEBUG_INPUT, JSON.stringify(m.data) + '\n');
         // a sub thread is watch-only: its keys are dropped unless the user unlocked it (its CLI's prompts are answered by the card)
         if (typeof m.id === 'string' && !this.watchOnlyLets(m.id, m.data)) return;
+        // the mail watchdog is typing into this chat: the user's keys wait and go after it, still as the user's (typeIn)
+        const held = typeof m.id === 'string' ? this.keyHold.get(m.id) : undefined;
+        if (held) return void held.push(m.data);
         host?.write(m.data);
         if (host && typeof m.id === 'string') {
           this.noteTyped(m.id, m.data);
