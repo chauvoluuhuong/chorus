@@ -73,6 +73,8 @@ export interface RequestRow {
   answer: string | null;
   note: string | null;
   created: string;
+  /** propose_project_change (task #11): the proposed changes as JSON (names, paths, why: never a value); null for other cards */
+  proposal?: string | null;
   answered: string | null;
 }
 
@@ -349,6 +351,7 @@ export class Store {
     const rcols = (this.db.prepare('PRAGMA table_info(requests)').all() as { name: string }[]).map(c => c.name);
     if (!rcols.includes('kind')) this.db.exec("ALTER TABLE requests ADD COLUMN kind TEXT NOT NULL DEFAULT 'approval'");
     if (!rcols.includes('other')) this.db.exec('ALTER TABLE requests ADD COLUMN other INTEGER NOT NULL DEFAULT 1');
+    if (!rcols.includes('proposal')) this.db.exec('ALTER TABLE requests ADD COLUMN proposal TEXT');
   }
 
   /**
@@ -667,10 +670,10 @@ export class Store {
    * An agent asks the user something (the chorus request_approval tool); the app that hosts the chat shows it. One open ask per
    * chat: the chat's older pending asks are cancelled (not answered, so nothing goes to the approvals log).
    */
-  createRequest(r: { threadId: string; question: string; details?: string; options?: string[]; kind?: 'question' | 'approval'; other?: boolean }): RequestRow {
+  createRequest(r: { threadId: string; question: string; details?: string; options?: string[]; kind?: 'question' | 'approval'; other?: boolean; proposal?: unknown }): RequestRow {
     const id = `r_${randomBytes(4).toString('hex')}`;
     this.db.prepare("UPDATE requests SET status = 'cancelled', answered = ? WHERE thread_id = ? AND status = 'pending'").run(now(), r.threadId);
-    this.db.prepare("INSERT INTO requests (id,thread_id,question,details,options,status,created,kind,other) VALUES (?,?,?,?,?,'pending',?,?,?)").run(id, r.threadId, r.question, r.details ?? null, JSON.stringify(r.options?.length ? r.options : ['Approve', 'Decline']), now(), r.kind === 'question' ? 'question' : 'approval', r.other === false ? 0 : 1);
+    this.db.prepare("INSERT INTO requests (id,thread_id,question,details,options,status,created,kind,other,proposal) VALUES (?,?,?,?,?,'pending',?,?,?,?)").run(id, r.threadId, r.question, r.details ?? null, JSON.stringify(r.options?.length ? r.options : ['Approve', 'Decline']), now(), r.kind === 'question' ? 'question' : 'approval', r.other === false ? 0 : 1, r.proposal === undefined ? null : JSON.stringify(r.proposal));
     return this.getRequest(id)!;
   }
 

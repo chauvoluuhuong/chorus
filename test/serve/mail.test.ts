@@ -184,11 +184,11 @@ test('launch: each agent gets its transport\'s `wake`; agy\'s token goes in its 
     assert.ok(!codex.args.some(a => /development-channels|ANTIGRAVITY/.test(a)));
     const agy = build('agy', 't_g');
     const agy2 = build('agy', 't_h');
-    assert.equal(agy.bin, '/usr/bin/env');
-    assert.match(agy.args[0], /^ANTIGRAVITY_SERVER_CSRF_TOKEN=[0-9a-f-]{36}$/);
-    assert.equal(agy.args[1], 'agy');
-    assert.notEqual(agy.args[0], agy2.args[0], 'a token per session');
-    assert.equal('env' in agy, false);
+    // since task #11 the Controller passes Launch.env to the PTY: the token is in the process environment, not on the command line
+    assert.equal(agy.bin, 'agy');
+    assert.match(agy.env?.ANTIGRAVITY_SERVER_CSRF_TOKEN ?? '', /^[0-9a-f-]{36}$/);
+    assert.ok(!agy.args.some(a => a.includes(agy.env!.ANTIGRAVITY_SERVER_CSRF_TOKEN)), 'never in args');
+    assert.notEqual(agy.env?.ANTIGRAVITY_SERVER_CSRF_TOKEN, agy2.env?.ANTIGRAVITY_SERVER_CSRF_TOKEN, 'a token per session');
     // a launch with no env is left as it is
     const plain = { bin: 'x', args: ['a'], cwd };
     assert.equal(withEnv(plain), plain);

@@ -8,6 +8,7 @@ import { attachPicker } from './text-picker.js';
 import { md, mdInline } from './md.js';
 import { cliFitNote, newChatHint } from './cli-fit.js';
 import { nextSort, sortFolders, typeJump } from './folder-nav.js';
+import { deleteDialogHtml, deletedText, projectPageHtml, projectsListHtml, proposalCardHtml, variableDialogHtml } from './projects-ui.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -119,6 +120,13 @@ const S = {
   cl: { q: '', filter: 'all', proj: '', focus: false },
   sheet: null,
   chatTab: 'chat',
+  // Settings › Projects: the list, the project open (its folder and GET projects/one), the page's own state (the note being
+  // edited), an export running; and what the user typed on propose_project_change cards so far, per request (values stay here)
+  projList: null,
+  proj: null,
+  projUi: {},
+  projExporting: false,
+  pp: {},
 };
 
 /* ---------- the socket ---------- */
@@ -174,6 +182,7 @@ function onMessage(m) {
     return drawTermOver();
   }
   if (m.t === 'flash') return flash(m.text);
+  if (m.t === 'renamed') return renamed(m);
   if (m.t === 'pro-status') return void onProStatus(m.status);
   if (m.t === 'pro-signed-in') return void onProStatus(m.status).then(() => {
     if (!m.status.unlocked) return toast(m.status.message || 'Signing in did not work. Try again.');
@@ -242,9 +251,10 @@ function onState(st) {
   if (doctorChanged) (drawDoctor(), doctorIfNeeded());
   else renderDoctorDot();
   if (S.view.name === 'chat') renderChatParts();
-  else if (['approvals', 'home'].includes(S.view.name) && !$('#view').contains(document.activeElement?.closest('.note-input, .other-input'))) renderView();
+  else if (['approvals', 'home'].includes(S.view.name) && !$('#view').contains(document.activeElement?.closest('.note-input, .other-input, .pp-input'))) renderView();
   else if (S.view.name === 'chats' || S.view.name === 'more') renderView();
   else if (S.view.name === 'new' && S.form) renderAgentsOnly();
+  else if (S.view.name === 'project') projectSoon();
 }
 
 /* ---------- the terminal: the agent's own screen ---------- */
@@ -399,6 +409,11 @@ function go(view, push = true) {
   if (view.name === 'memory') void loadMemory();
   if (view.name === 'skills') void loadSkills();
   if (view.name === 'approvals') void loadDecided();
+  if (view.name === 'projects') void loadProjects();
+  if (view.name === 'project') {
+    if (S.proj?.folder !== view.folder) S.projUi = {};
+    void loadProject(view.folder);
+  }
   if (view.name === 'doctor') void loadDoctor().then(() => renderView());
   renderChrome();
   renderDoctorDot();
@@ -639,7 +654,7 @@ function treeHtml(keep) {
     const bang = all.filter(waitsOnYou).length;
     // the project in front: the chat you look at is in it, or the New chat form starts there. Its ＋ always shows; others on hover.
     const here = (v.name === 'chat' && chats.some(c => c.id === v.id)) || (v.name === 'new' && !v.from && (S.form?.folder ?? v.folder) === cwd);
-    tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-rm" data-act="rm-project" data-arg="${esc(cwd)}" title="Delete ${esc(base(cwd))} from Chorus…" aria-label="Delete ${esc(base(cwd))} from Chorus">×</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button></div>`;
+    tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button><button class="proj-more${v.name === 'project' && v.folder === cwd ? ' on' : ''}" data-act="project-page" data-arg="${esc(cwd)}" title="Project settings" aria-label="Settings for ${esc(base(cwd))}">⋯</button></div>`;
     if (folded) continue;
     if (!keep) tree += `<div data-pro-slot="project" data-cwd="${esc(cwd)}"></div>`;
     // a main chat and its sub threads: the main chat first, its sub threads right under it (plan 2026-11-14, Package 4A)
@@ -714,6 +729,7 @@ function renderChrome() {
       <button class="${on('approvals').trim()}${countFlash('approvals')}" data-act="approvals"><span class="ico">⚑</span>Approvals${waiting ? `<span class="count">${countNum('approvals', waiting)}</span>` : ''}</button>
       <button class="${on('memory').trim()}" data-act="memory"><span class="ico">◫</span>Memory</button>
       <button class="${on('skills').trim()}" data-act="skills"><span class="ico">⇄</span>Sync skills</button>
+      <button class="${v.name === 'projects' || v.name === 'project' ? 'on' : ''}" data-act="projects"><span class="ico">▣</span>Projects</button>
       ${proSlot('nav')}
     </nav>
     ${proSlot('side')}
@@ -733,6 +749,8 @@ function renderChrome() {
     if (chat) crumbs = `<a data-act="fold-open" data-arg="${esc(chat.cwd)}">${esc(base(chat.cwd))}</a><span class="sep">›</span><span class="here">${window.choruspro?.chatCrumb?.(chat.id) ?? esc(chat.title)}</span>`;
     else if (v.name === 'new') crumbs = `<span>${esc(base(S.form?.folder ?? st?.project ?? ''))}</span><span class="sep">›</span><span class="here">${v.from ? 'Hand off' : 'New chat'}</span>`;
     else if (v.name === 'pro') crumbs = window.choruspro?.crumbs?.(v.id) ?? '';
+    else if (v.name === 'projects') crumbs = '<span>Settings</span><span class="sep">›</span><span class="here">Projects</span>';
+    else if (v.name === 'project') crumbs = `<span>Settings</span><span class="sep">›</span><a data-act="projects">Projects</a><span class="sep">›</span><span class="here">${esc(base(v.folder))}</span>`;
     else crumbs = `<span class="here">${{ approvals: 'Approvals', memory: 'Memory', skills: 'Sync skills', doctor: 'Doctor' }[v.name] ?? ''}</span>`;
     $('#top').className = '';
     $('#top').innerHTML = `
@@ -786,6 +804,10 @@ function phoneTop(chat) {
     icons = chat ? ico('chat-menu', 'This chat: hand off, artifacts, activity, record, delete', '⋯') : '';
   } else if (v.name === 'memory') {
     title = v.rec ? esc(S.mem.items.find(i => i.id === v.rec)?.title ?? 'Memory') : 'Memory';
+  } else if (v.name === 'projects') {
+    title = 'Projects';
+  } else if (v.name === 'project') {
+    title = v.part === 'folders' ? 'Working folders' : v.part === 'variables' ? 'Variables' : esc(base(v.folder));
   } else if (v.name === 'pro') {
     const t = document.createElement('template');
     t.innerHTML = window.choruspro?.crumbs?.(v.id) ?? '';
@@ -830,9 +852,9 @@ function renderView() {
   // focus, caret and scroll back, and an open "/" or "@" list opens again at the caret
   const typing = document.activeElement?.id && el.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName) ? document.activeElement : null;
   const keep = typing && { id: typing.id, start: typing.selectionStart, end: typing.selectionEnd, dir: typing.selectionDirection, top: typing.scrollTop, list: typing.id === 'nc-prompt' && !!ncPicker?.isOpen() };
-  el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml, unlock: unlockHtml, welcome: welcomeHtml, trying: tryingHtml, paying: payingHtml, 'pro-paid': paidHtml, 'pro-started': startedHtml, 'pro-ended': endedHtml, home: homeHtml, chats: chatsHtml, more: moreHtml, pro: () => `<div data-pro-slot="view" data-id="${esc(v.id ?? '')}" style="height:100%"></div>` }[v.name]?.() ?? '';
+  el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml, unlock: unlockHtml, welcome: welcomeHtml, trying: tryingHtml, paying: payingHtml, 'pro-paid': paidHtml, 'pro-started': startedHtml, 'pro-ended': endedHtml, home: homeHtml, chats: chatsHtml, more: moreHtml, projects: () => projectsListHtml(S.projList, H), project: () => projectPageHtml(S.proj?.folder === v.folder ? S.proj.data : null, { ...S.projUi, part: v.part, phone: S.size === 'phone', exporting: S.projExporting }, H), pro: () => `<div data-pro-slot="view" data-id="${esc(v.id ?? '')}" style="height:100%"></div>` }[v.name]?.() ?? '';
   // a state push redraws a phone's Home and Chats: where you were stays (another screen starts at its top)
-  if (['home', 'chats', 'more', 'approvals'].includes(v.name) && el.dataset.v === v.name) el.scrollTop = scroll;
+  if (['home', 'chats', 'more', 'approvals', 'projects', 'project'].includes(v.name) && el.dataset.v === v.name) el.scrollTop = scroll;
   // a phone's cards: Show more only where the details are longer than their 4 lines
   if (S.size === 'phone' && ['home', 'approvals'].includes(v.name)) fitMore(el);
   el.dataset.v = v.name;
@@ -940,6 +962,7 @@ function moreHtml() {
   const parts = !window.choruspro || !!window.choruspro.sideTabs;
   return `<div class="more">
     <div><div class="hm-h">Library</div><div class="card">${r('memory', '◫', 'Memory')}${r('skills', '⇄', 'Sync skills', on != null ? `${on}` : '')}</div></div>
+    <div><div class="hm-h">Workspace</div><div class="card">${r('projects', '▣', 'Projects', `${S.projList?.length ?? new Set((st?.chats ?? []).map(c => c.cwd)).size}`)}</div></div>
     <div><div class="hm-h">Team</div><div class="card">${parts ? proSlot('nav', ' data-part="team"') : proSlot('nav', ' class="nav old-nav"')}</div></div>
     <div><div class="hm-h">This Mac</div><div class="card">${parts ? proSlot('nav', ' data-part="mac"') : ''}${r('doctor', '✚', 'Doctor', marks)}${r('news-toggle', '♢', 'Notifications', unread ? `${unread} new` : '')}${r('export', '⤓', S.exporting ? 'Exporting…' : 'Export all chats', 'to Downloads')}${st?.update ? r('update-toggle', '↑', `Update to ${esc(st.update.version)}`) : ''}</div></div>
     ${planBox() ? `<div><div class="hm-h">Plan</div>${planBox()}</div>` : ''}
@@ -1066,8 +1089,9 @@ async function startChat() {
 /* Folder browser (Browse… and "+ add") */
 
 /** Picking a folder opens Chorus's own dialog at once (one read, drawn by the page); the system's dialog is a button in it. */
-function pickFolder(dir, then) {
-  return openBrowse(dir, then);
+/** `opts`: {title, why: true} for a project's "＋ Add folder…": its own title, a "What is it for?" field, and no system dialog. */
+function pickFolder(dir, then, opts) {
+  return openBrowse(dir, then, opts);
 }
 /** "Mac's folder dialog…": the system picker, for someone who wants it (it starts slowly and runs in another process). */
 async function systemPick() {
@@ -1092,10 +1116,11 @@ async function systemPick() {
 
 /** Type to jump in the folder dialog (folder-nav.js): one per page, started again in each folder. */
 const browseJump = typeJump();
-async function openBrowse(dir, then) {
+async function openBrowse(dir, then, opts) {
   browseJump.reset();
+  const why = $('#br-why')?.value ?? S.browse?.why;
   try {
-    S.browse = { ...(await api('GET', `/api/folders?dir=${encodeURIComponent(dir)}`)), then: then ?? S.browse?.then, sel: null };
+    S.browse = { ...(await api('GET', `/api/folders?dir=${encodeURIComponent(dir)}`)), then: then ?? S.browse?.then, opts: opts ?? S.browse?.opts, why, sel: null };
   } catch (e) {
     return toast(e.message);
   }
@@ -1115,11 +1140,14 @@ function drawBrowse() {
   const order = browseOrder();
   const day = ms => (ms ? new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '');
   const sortBtn = (by, label, arrows) => `<button class="${sort.by === by ? 'on' : ''}" data-act="br-sort" data-arg="${by}" aria-pressed="${sort.by === by}" title="Sort by ${label.toLowerCase()}${sort.by === by ? ' (click to flip)' : ''}">${label}${sort.by === by ? ` ${arrows[sort.dir]}` : ''}</button>`;
-  el.innerHTML = `<div class="dialog br-dialog" role="dialog" aria-label="Choose a project folder" tabindex="-1"><h2>Choose a project folder<span class="seg br-sort">${sortBtn('name', 'Name', { asc: 'A→Z', desc: 'Z→A' })}${sortBtn('created', 'Created', { desc: 'newest', asc: 'oldest' })}</span></h2>
+  const o = b.opts ?? {};
+  const why = $('#br-why')?.value ?? b.why ?? '';
+  el.innerHTML = `<div class="dialog br-dialog" role="dialog" aria-label="${esc(o.title ?? 'Choose a project folder')}" tabindex="-1"><h2>${esc(o.title ?? 'Choose a project folder')}<span class="seg br-sort">${sortBtn('name', 'Name', { asc: 'A→Z', desc: 'Z→A' })}${sortBtn('created', 'Created', { desc: 'newest', asc: 'oldest' })}</span></h2>
     <div class="body"><div class="mono">${esc(tilde(b.dir))}</div><div class="muted" style="font-size:12.5px">${order.length} folder${order.length === 1 ? '' : 's'} · type a name to jump to it</div>
     <div class="folders" role="listbox" aria-label="Folders">${b.parent ? '<button data-act="br-up">‹ ..</button>' : ''}${order.map(f => `<button class="${f.name === b.sel ? 'on' : ''}" role="option" aria-selected="${f.name === b.sel}" data-act="br-open" data-arg="${esc(f.name)}">▸ ${esc(f.name)}${sort.by === 'created' ? `<span class="br-when">${esc(day(f.created))}</span>` : ''}</button>`).join('')}</div>
+    ${o.why ? `<label class="f" for="br-why">What is it for? <span class="faint">(optional)</span></label><input id="br-why" class="in" autocomplete="off" value="${esc(why)}">` : ''}
     ${b.error ? `<div class="br-error" role="alert">${esc(b.error)}</div>` : ''}</div>
-    <div class="foot"><button class="btn" data-act="br-new">New folder…</button>${MQ_TOUCH.matches && !NATIVE ? '' : `<button class="btn" data-act="br-system">${isMac ? "Mac's folder dialog…" : 'System folder dialog…'}</button>`}<span style="flex:1"></span><button class="btn" data-act="br-cancel">Cancel</button><button class="btn primary" data-act="br-use" title="Use this folder (${isMac ? '⌘' : 'Ctrl+'}Enter)">Use this folder</button></div></div>`;
+    <div class="foot"><button class="btn" data-act="br-new">New folder…</button>${(MQ_TOUCH.matches && !NATIVE) || o.why ? '' : `<button class="btn" data-act="br-system">${isMac ? "Mac's folder dialog…" : 'System folder dialog…'}</button>`}<span style="flex:1"></span><button class="btn" data-act="br-cancel">Cancel</button><button class="btn primary" data-act="br-use" title="Use this folder (${isMac ? '⌘' : 'Ctrl+'}Enter)">Use this folder</button></div></div>`;
   // the keys work at once, without a click into the list; the selected folder stays in view
   if (!el.contains(document.activeElement) || document.activeElement === el) el.querySelector('.br-dialog').focus({ preventScroll: true });
   el.querySelector('.folders .on')?.scrollIntoView({ block: 'nearest' });
@@ -2171,26 +2199,6 @@ function confirmDelete({ what }) {
   });
 }
 
-/** The × on a project: "Delete <name> from Chorus?", what goes and what stays; resolves true on "Delete everything". */
-function confirmProjectDelete(folder, n) {
-  return new Promise(resolve => {
-    const el = document.createElement('div');
-    el.className = 'scrim';
-    const name = base(folder);
-    el.innerHTML = `<div class="dialog proj-del" role="dialog" aria-label="Delete ${esc(name)} from Chorus?"><h2>Delete ${esc(name)} from Chorus?</h2><div class="body"><p>This removes everything Chorus keeps for this project: its ${n} chats with their records, artifacts lists and approvals, and its tasks, goals and failure notes. Running chats are stopped. This cannot be undone.</p><p>The folder <span class="mono">${esc(tilde(folder))}</span> and every file in it stay on your disk.</p></div><div class="foot"><button class="btn" data-x="no">Cancel</button><button class="btn danger-fill" data-x="yes">Delete everything</button></div></div>`;
-    const done = ok => (el.remove(), resolve(ok));
-    el.addEventListener('click', e => {
-      const x = e.target.closest('[data-x]')?.dataset.x;
-      if (x === 'yes' || x === 'no') done(x === 'yes');
-      else if (e.target === el) done(false);
-    });
-    el.addEventListener('keydown', e => e.key === 'Escape' && (e.stopPropagation(), done(false)));
-    $('#dialogs').append(el);
-    // Cancel has the focus: Enter does not delete
-    el.querySelector('[data-x="no"]').focus();
-  });
-}
-
 /* ---------- New chat and the hand-off form: "/" names a skill, "@" a file of the chosen folder (plan 2026-11-13, item 8) ---------- */
 
 let ncPicker = null;
@@ -2471,6 +2479,7 @@ function optionButtons(a, cls = 'btn') {
 }
 /** The agent's options, "Other…" for an answer of your own (sent as "Other: <your words>"), and a note for any of them. */
 function askCard(a, dock = false) {
+  if (a.proposal) return `<div class="pp-card">${proposalCardHtml(a, S.pp[a.request], H)}</div>`;
   const req = `data-arg="${esc(a.id)}" data-req="${esc(a.request)}"`;
   const more = S.askMore.has(a.request);
   // docked: the details fold to 3 lines, with Show more when they are longer; a phone's Home and Approvals cards fold to 4
@@ -2666,6 +2675,216 @@ function toast(text, opts = {}) {
   setTimeout(() => el.remove(), opts.ms ?? 4000);
   return el;
 }
+/* ---------- Settings › Projects (task #11): the list, a project's page, its dialogs, the proposal card, the rename toast ---------- */
+
+const H = { esc, md, tilde, base };
+
+async function loadProjects() {
+  try {
+    S.projList = await api('GET', '/api/projects');
+  } catch {
+    S.projList = [];
+  }
+  if (['projects', 'more'].includes(S.view.name)) renderView();
+}
+async function loadProject(folder) {
+  let data;
+  try {
+    data = await api('GET', `/api/projects/one?folder=${encodeURIComponent(folder)}`);
+  } catch (e) {
+    data = { error: e.message };
+  }
+  if (data?.error && S.proj?.folder === folder && S.proj.data && !S.proj.data.error && !/^No project/.test(data.error)) return;
+  S.proj = { folder, data };
+  if (S.view.name === 'project' && S.view.folder === folder) renderView();
+}
+/** A state push while a project's page is open: its counts and the stale banner may have changed (at most one load a second). */
+let projTimer = 0;
+function projectSoon() {
+  if (projTimer) return;
+  projTimer = setTimeout(() => {
+    projTimer = 0;
+    if (S.view.name === 'project') void loadProject(S.view.folder);
+  }, 1000);
+}
+/** One change on the page: the route answers with the project as it is now. */
+async function projectChange(method, url, body, before, after) {
+  const folder = S.view.folder;
+  let r;
+  try {
+    r = await api(method, url, { folder, ...body });
+  } catch (e) {
+    return toast(e.message);
+  }
+  if (r?.error) return toast(r.error);
+  before?.();
+  after?.(r);
+  if (r?.folder === folder && r.chats) S.proj = { folder, data: r };
+  else await loadProject(folder);
+  renderView();
+}
+
+async function exportProject(folder) {
+  if (S.projExporting) return;
+  S.projExporting = true;
+  renderView();
+  try {
+    const r = await api('POST', '/api/export', { project: folder });
+    if (r.error) toast(r.error);
+    else toast(`Exported ${base(folder)}: ${r.chats} chat${r.chats === 1 ? '' : 's'} to ${r.file.split('/').pop()} in Downloads (${(r.bytes / 1e6).toFixed(r.bytes < 1e7 ? 1 : 0)} MB)`, { ms: 20000, buttons: '<button class="btn" data-act="export-reveal">Show in Finder</button>' });
+    return !r.error;
+  } catch (e) {
+    toast(`Could not export: ${e.message}`);
+    return false;
+  } finally {
+    S.projExporting = false;
+    if (S.view.name === 'project') renderView();
+  }
+}
+
+/** A small yes/no dialog in the page's own style; resolves true on the OK button. */
+function confirmBox(title, text, ok) {
+  return new Promise(resolve => {
+    const el = document.createElement('div');
+    el.className = 'scrim';
+    el.innerHTML = `<div class="dialog" role="dialog" aria-label="${esc(title)}"><h2>${esc(title)}</h2><div class="body"><p>${esc(text)}</p></div><div class="foot"><button class="btn" data-x="cancel">Cancel</button><button class="btn danger-fill" data-x="ok">${esc(ok)}</button></div></div>`;
+    const done = v => (el.remove(), resolve(v));
+    el.addEventListener('click', e => {
+      const x = e.target.closest('[data-x]')?.dataset.x;
+      if (x) done(x === 'ok');
+      else if (e.target === el) done(false);
+    });
+    el.addEventListener('keydown', e => e.key === 'Escape' && (e.stopPropagation(), done(false)));
+    $('#dialogs').append(el);
+    el.querySelector('[data-x="cancel"]').focus();
+  });
+}
+
+/** Scene 5: add a variable, or edit one (the value field starts empty: left empty, the value is kept). */
+function variableDialog(v) {
+  const p = S.proj?.data;
+  if (!p) return;
+  const el = document.createElement('div');
+  el.className = 'scrim';
+  el.innerHTML = variableDialogHtml(p, v, H);
+  const err = el.querySelector('[data-x="err"]');
+  const close = () => el.remove();
+  const submit = async () => {
+    const name = el.querySelector('#pv-name').value.trim();
+    const value = el.querySelector('#pv-value').value;
+    const why = el.querySelector('#pv-why').value.trim();
+    const say = m => ((err.textContent = m), (err.hidden = false));
+    if (!name) return say('Give the variable a name.');
+    if (!v && !value) return say('Type its value.');
+    let r;
+    try {
+      r = await api('POST', '/api/projects/variables', { folder: p.folder, name, value, why, ...(v ? { keep: true } : {}) });
+    } catch (e) {
+      return say(e.message);
+    }
+    if (r?.error) return say(r.error);
+    close();
+    if (r?.folder === p.folder && r.chats) S.proj = { folder: p.folder, data: r };
+    renderView();
+  };
+  el.addEventListener('click', e => {
+    const x = e.target.closest('[data-x]')?.dataset.x;
+    if (x === 'cancel' || e.target === el) return close();
+    if (x === 'ok') return void submit();
+    if (x === 'show') {
+      const i = el.querySelector('#pv-value');
+      i.type = i.type === 'password' ? 'text' : 'password';
+      e.target.textContent = i.type === 'password' ? 'Show' : 'Hide';
+    }
+  });
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Escape') return e.stopPropagation(), close();
+    if (e.key === 'Enter' && e.target.tagName === 'INPUT') return e.preventDefault(), void submit();
+  });
+  $('#dialogs').append(el);
+  el.querySelector(v ? '#pv-value' : '#pv-name').focus();
+}
+
+/** Scene 6: what goes and what stays; "Export first" exports and keeps the dialog; Delete waits for the project's name. */
+async function deleteProjectAsked(folder) {
+  if (S.proj?.folder !== folder || !S.proj.data || S.proj.data.error) await loadProject(folder);
+  const p = S.proj?.data;
+  if (!p || p.error) return toast(p?.error ?? 'No such project');
+  const ok = await new Promise(resolve => {
+    const el = document.createElement('div');
+    el.className = 'scrim';
+    el.innerHTML = deleteDialogHtml(p, H);
+    const del = el.querySelector('[data-x="ok"]');
+    const input = el.querySelector('[data-x="name"]');
+    const done = v => (el.remove(), resolve(v));
+    input.addEventListener('input', () => (del.disabled = input.value.trim() !== p.name));
+    el.addEventListener('click', async e => {
+      const x = e.target.closest('[data-x]')?.dataset.x;
+      if (x === 'cancel' || e.target === el) return done(false);
+      if (x === 'ok' && !del.disabled) return done(true);
+      if (x === 'export') {
+        const b = e.target.closest('button');
+        b.disabled = true;
+        b.textContent = 'Exporting…';
+        const good = await exportProject(folder);
+        b.textContent = good ? '✓ Exported' : 'Export first';
+        b.disabled = !!good;
+      }
+    });
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Escape') return e.stopPropagation(), done(false);
+      if (e.key === 'Enter' && e.target === input && !del.disabled) done(true);
+    });
+    $('#dialogs').append(el);
+    input.focus();
+  });
+  if (!ok) return;
+  let r;
+  try {
+    r = await api('DELETE', '/api/projects', { folder });
+  } catch (err) {
+    return toast(err.message);
+  }
+  if (r.error) return toast(r.error);
+  delete S.hidden[folder];
+  remember('hidden', S.hidden);
+  if (S.folded.delete(folder)) remember('folded', [...S.folded]);
+  toast(deletedText(p, r.removed), { ms: 8000 });
+  S.proj = null;
+  S.projList = null;
+  return go({ name: 'projects' }, false);
+}
+
+/** Approve or Decline on a propose_project_change card: the typed values and the edited description go with the answer. */
+async function answerProposal(el) {
+  const req = el.dataset.req;
+  const card = el.closest('.pp-card');
+  const t = S.pp[req] ?? { values: {} };
+  const values = {};
+  for (const i of card?.querySelectorAll('.pp-val') ?? []) if (i.value) values[i.dataset.name] = i.value;
+  const note = card?.querySelector('.pp-note')?.value ?? t.note;
+  for (const b of card?.querySelectorAll('[data-act="pp-pick"]') ?? []) b.disabled = true;
+  let r;
+  try {
+    r = await api('POST', `/api/chats/${el.dataset.arg}/answer`, { request: req, option: el.dataset.value, ...(el.dataset.value === 'Decline' ? {} : { values, note }) });
+  } catch (e) {
+    r = { error: e.message };
+  }
+  if (r?.error || r?.ok === false) {
+    for (const b of card?.querySelectorAll('[data-act="pp-pick"]') ?? []) b.disabled = false;
+    return toast(r.error ?? 'The card was not answered.');
+  }
+  delete S.pp[req];
+  document.activeElement?.blur();
+  return loadDecided();
+}
+
+/** rename_chat: the new name shows at once (the state push); a model's rename gets a toast with Undo for 8 seconds. */
+function renamed(m) {
+  if (m.by !== 'model' || m.from === m.to) return;
+  toast(`${m.from} is now "${m.to}"`, { ms: 8000, cls: 'rename', buttons: `<button class="btn" data-act="rename-undo" data-arg="${esc(m.id)}" data-value="${esc(m.from)}">Undo</button>` });
+}
+
 /* ---------- input ---------- */
 
 /** Esc on a dialog, or a tap on the dim area around a phone's sheet: cancel it the way its own Cancel does. */
@@ -2913,26 +3132,53 @@ document.addEventListener('click', async e => {
       remember('folded', [...S.folded]);
       renderChrome();
       return S.view.name === 'chats' ? renderView() : undefined;
-    case 'rm-project': {
-      // the most destructive thing the app does: one warning that says what goes and what stays, then the server deletes it
-      const n = (S.state?.chats ?? []).filter(c => c.cwd === arg).length;
-      if (!(await confirmProjectDelete(arg, n))) return;
-      let r;
-      try {
-        r = await api('DELETE', '/api/projects', { folder: arg });
-      } catch (err) {
-        return toast(err.message);
-      }
-      if (r.error) return toast(r.error);
-      delete S.hidden[arg];
-      remember('hidden', S.hidden);
-      if (S.folded.delete(arg)) remember('folded', [...S.folded]);
-      toast(`Deleted ${base(arg)} from Chorus: ${r.removed} chat${r.removed === 1 ? '' : 's'}. The folder stays on your disk.`);
-      const open = S.view.name === 'chat' && !S.state?.chats.some(c => c.id === S.view.id && c.cwd !== arg);
-      if (open || (S.view.name === 'new' && S.form?.folder === arg)) return go(startView());
-      renderChrome();
-      return S.view.name === 'chats' || S.view.name === 'home' ? renderView() : undefined;
+    case 'rm-project':
+      // only from a project's page (its Danger zone): the warning of scene 6, the typed name, then the server deletes it
+      return deleteProjectAsked(arg);
+    case 'projects':
+      return go({ name: 'projects' });
+    case 'project-page':
+      return go({ name: 'project', folder: arg });
+    case 'proj-part':
+      return go({ name: 'project', folder: S.view.folder, part: arg });
+    case 'proj-note-edit':
+      S.projUi = { ...S.projUi, editNote: true, noteDraft: S.proj?.data?.note ?? '' };
+      renderView();
+      return $('#proj-note')?.focus();
+    case 'proj-note-cancel':
+      S.projUi = { ...S.projUi, editNote: false, noteDraft: undefined };
+      return renderView();
+    case 'proj-note-save':
+      return projectChange('POST', '/api/projects/note', { note: $('#proj-note')?.value ?? '' }, () => (S.projUi = { ...S.projUi, editNote: false, noteDraft: undefined }));
+    case 'proj-folder-add': {
+      const p = S.proj?.data;
+      if (!p) return;
+      return pickFolder(p.folder.replace(/\/[^/]+$/, '') || p.folder, (dir, why) => projectChange('POST', '/api/projects/folders', { dir, why }), { title: `Add a working folder to "${p.name}"`, why: true });
     }
+    case 'proj-folder-rm':
+      return projectChange('DELETE', '/api/projects/folders', { dir: arg });
+    case 'proj-var-add':
+    case 'proj-var-edit':
+      return variableDialog(act === 'proj-var-edit' ? S.proj?.data?.variables.find(x => x.name === arg) : undefined);
+    case 'proj-var-rm':
+      if (!(await confirmBox(`Remove ${arg}?`, `Its value is deleted from this Mac. Chats that run now keep it until they restart.`, 'Remove'))) return;
+      return projectChange('DELETE', '/api/projects/variables', { name: arg });
+    case 'proj-restart-idle':
+      return projectChange('POST', '/api/projects/restart-idle', {}, null, r => { const n = r.restarted?.length ?? 0, w = r.waiting?.length ?? 0; toast(`Restarting ${n} idle chat${n === 1 ? '' : 's'}${w ? `; ${w} restart${w === 1 ? 's' : ''} when ${w === 1 ? 'its' : 'their'} turn ends` : ''}.`); });
+    case 'proj-export':
+      return exportProject(S.view.folder);
+    case 'pp-show':
+    case 'pv-show': {
+      const input = el.parentElement.querySelector('input');
+      input.type = input.type === 'password' ? 'text' : 'password';
+      el.textContent = input.type === 'password' ? 'Show' : 'Hide';
+      return;
+    }
+    case 'pp-pick':
+      return answerProposal(el);
+    case 'rename-undo':
+      el.closest('.toast')?.remove();
+      return api('POST', `/api/chats/${arg}/title`, { title: el.dataset.value, by: 'you' }).catch(err => toast(err.message));
     case 'fold-open':
       S.folded.delete(arg);
       return renderChrome();
@@ -3068,9 +3314,10 @@ document.addEventListener('click', async e => {
       return drawBrowse();
     case 'br-use': {
       const { dir, then } = S.browse;
+      const why = $('#br-why')?.value ?? '';
       S.browse = null;
       drawBrowse();
-      return then?.(dir);
+      return then?.(dir, why);
     }
     case 'br-new': {
       // made only inside the folder the dialog shows; an error stays in the dialog
@@ -3191,6 +3438,24 @@ document.addEventListener('input', e => {
     case 'nc-prompt':
       S.form.prompt = el.value;
       return;
+    case 'proj-note':
+      S.projUi.noteDraft = el.value;
+      return;
+    case 'pp-val':
+    case 'pp-note': {
+      const t = (S.pp[el.dataset.req] ??= { values: {} });
+      if (el.dataset.input === 'pp-note') t.note = el.value;
+      else t.values[el.dataset.name] = el.value;
+      // Approve waits for every variable's value: the buttons follow without a redraw (the field keeps the focus)
+      const card = el.closest('.pp-card');
+      const a = listed().find(x => x.request === el.dataset.req);
+      if (!card || !a?.proposal) return;
+      const missing = a.proposal.changes.filter(c => c.kind === 'set_variable' && !(t.values[c.name] ?? c.suggested_value ?? '')).map(c => c.name);
+      for (const b of card.querySelectorAll('[data-act="pp-pick"]')) if (b.dataset.value !== 'Decline') b.disabled = missing.length > 0;
+      const w = card.querySelector('.pp-wait');
+      if (w) w.hidden = !missing.length;
+      return;
+    }
     case 'cl-q':
       S.cl.q = el.value;
       S.cl.focus = true;
@@ -3309,7 +3574,8 @@ function fromHash() {
   if (name === 'new' && a === 'from' && b) return { name, from: b };
   if (name === 'new' && a === 'in' && b) return { name, folder: decodeURIComponent(b) };
   if (name === 'pro' && a) return { name, id: a };
-  if (['approvals', 'memory', 'skills', 'doctor', 'unlock', 'welcome', 'trying', 'paying', 'pro-paid', 'pro-started', 'pro-ended', 'home', 'chats', 'more'].includes(name)) return { name };
+  if (name === 'project' && a === 'in' && b) return { name, folder: decodeURIComponent(b) };
+  if (['projects', 'approvals', 'memory', 'skills', 'doctor', 'unlock', 'welcome', 'trying', 'paying', 'pro-paid', 'pro-started', 'pro-ended', 'home', 'chats', 'more'].includes(name)) return { name };
   return name === 'new' ? { name } : startView();
 }
 

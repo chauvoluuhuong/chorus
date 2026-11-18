@@ -21,6 +21,10 @@ export interface LaunchOpts {
   model?: string;
   /** shared store folder, passed to the MCP server so it opens the same database */
   home?: string;
+  /** the project's extra working folders (src/core/projects.ts): `--add-dir` at every start and resume */
+  addDirs?: string[];
+  /** the project's variables: the process environment only (Launch.env), never the command line */
+  env?: Record<string, string>;
 }
 
 export interface InteractiveOpts {
@@ -52,11 +56,18 @@ export interface InteractiveOpts {
   noNativeAsk?: boolean;
   /** what the chat's mail transport adds to this launch (chorus-core Transport.launch()): per-session flags, environment, files */
   wake?: { args?: string[]; env?: Record<string, string>; files?: Record<string, string> };
+  /** the project's extra working folders (src/core/projects.ts): `--add-dir` at every start and resume */
+  addDirs?: string[];
+  /** the project's variables: the process environment only (Launch.env), never the command line */
+  env?: Record<string, string>;
+  /** the chat can get a folder added while it runs (chorus-core src/livedir.ts; Codex's default mode gets its per-session flag) */
+  liveDirs?: boolean;
 }
 
 /**
- * A launch's own environment (Launch.env, e.g. agy's per-session token), for a start that only takes a command line: the CLI app's
- * PTY start passes no environment, so `env` sets it for this one process. Nothing else changes.
+ * A launch's own environment (Launch.env), for a start that only takes a command line: `env` sets it for this one process. Not used
+ * for the chats' launches since task #11 (the Controller passes Launch.env to the PTY, so a project variable's value is never on a
+ * command line); kept for tools that run a Launch as one command.
  */
 export function withEnv(l: Launch): Launch {
   if (!l.env || !Object.keys(l.env).length) return l;
@@ -83,15 +94,16 @@ export function mcpCommand(project: string, threadId: string, home?: string) {
 const server = (o: { project: string; threadId: string; home?: string }): McpServer => ({ name: 'chorus', ...mcpCommand(o.project, o.threadId, o.home), tools: [...TOOL_NAMES, ...SUB_TOOL_NAMES] });
 
 export function buildHeadless(agent: AgentId, o: LaunchOpts): Launch {
-  return coreHeadless(agent, { prompt: o.prompt, cwd: o.cwd, resumeId: o.resumeId, model: o.model, mcp: server(o), instructions: systemText(agent, { threadId: o.threadId }) });
+  return coreHeadless(agent, { prompt: o.prompt, cwd: o.cwd, resumeId: o.resumeId, model: o.model, mcp: server(o), instructions: systemText(agent, { threadId: o.threadId }), addDirs: o.addDirs, env: o.env });
 }
 
 /**
  * Command line that opens the agent's own screen with the Chorus MCP server attached for this thread.
  * Unlike headless runs there is no auto-approve flag: the agent asks and the user (or a Chorus card) answers.
+ * Its environment (the mail transport's token, the project's variables) is in Launch.env, for the process only.
  */
 export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
-  return withEnv(coreInteractive(agent, {
+  return coreInteractive(agent, {
     prompt: o.prompt,
     cwd: o.cwd,
     resumeId: o.resumeId,
@@ -105,5 +117,8 @@ export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
     // agy chat in the same folder, so agy is left out (its ask_question has no per-session switch)
     noNativeAsk: agent === 'agy' ? undefined : o.noNativeAsk,
     wake: o.wake,
-  }));
+    addDirs: o.addDirs,
+    env: o.env,
+    liveDirs: o.liveDirs,
+  });
 }

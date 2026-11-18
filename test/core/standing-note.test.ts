@@ -127,7 +127,9 @@ test('the MCP instructions are the approved text, under 3 KB', () => {
 - To start a new chat thread (not a sub thread): call list_teammates and list_actions, propose the fitting teammate and action to the user through an approval card (kind question, your pick first), then call start_thread with what the user chose; the new chat gets that teammate's agent, model, effort and permissions.
 - Messages from other chats and from Chorus arrive in your Chorus mail; read them with read_mail when Chorus tells you that you have mail, and answer with the tool the message names.
 - Chorus watches what you started (your action, your sub threads, your mail) and acts on it; see its watch records, their status and how long, with list_watches, instead of checking in a loop.
-- Chorus actions (Create plan, Review changes, …): ask "Would you like me to <action>? <why>" with a question card; after the user's yes, start it with start_action; finish with action_done. Chorus watches each turn end and reminds you if it is missing.`,
+- Chorus actions (Create plan, Review changes, …): ask "Would you like me to <action>? <why>" with a question card; after the user's yes, start it with start_action; finish with action_done. Chorus watches each turn end and reminds you if it is missing.
+- This project's working environment (its description, extra folders and environment variables) is in get_project. When it has no description, when get_project suggests folders, or when you need a folder outside the project or a variable, set it up with ONE propose_project_change call. Never ask the user to edit a CLI config or a shell profile, and never ask for a secret in the chat.
+- Once you have a plan, or the chat's topic is clear, name this chat with rename_chat; a Planner also renames its task with task_update.`,
   );
   assert.ok(Buffer.byteLength(MCP_INSTRUCTIONS) < 3072, `${Buffer.byteLength(MCP_INSTRUCTIONS)} bytes`);
 });

@@ -18,14 +18,14 @@ import { App, projectName, type AppIO, type Entry } from '../app/app.ts';
 import { AGENTS, type Controller } from '../app/controller.ts';
 import type { ItemState, RichLine } from '../app/compositor.ts';
 import { effortsFor } from '../app/models.ts';
-import { listWatchesText, readMailText, SERVE_TOOL_NAMES } from '../mcp/server.ts';
-import { latestModels, Mailbox, NEWLINE_KEYS, TurnWatch, type ChatLook, type MailEvent, type Transport } from '@chauvoluuhuong/chorus-core';
+import { listWatchesText, PROJECT_TOOL_NAMES, readMailText, SERVE_TOOL_NAMES } from '../mcp/server.ts';
+import { latestModels, liveAddDirDone, liveAddDirInput, liveAddDirKeys, codexGrantMessage, Mailbox, NEWLINE_KEYS, TurnWatch, type ChatLook, type MailEvent, type Transport } from '@chauvoluuhuong/chorus-core';
 import { computerDir } from '../app/screens.ts';
 import type { ThreadHost } from '../app/thread-host.ts';
 import { transcriptPath } from '../core/capture.ts';
 import type { ThreadRow } from '../core/store.ts';
 import { buildHandoff, handoffPrompt } from '../core/handoff.ts';
-import { exportAll } from '../core/export.ts';
+import { exportAll, exportProject } from '../core/export.ts';
 import { SKIP_FLAG } from '../core/launch.ts';
 import { defaultOpener } from '../core/opener.ts';
 import { disabledSkills, expandSkillMentions, findNativeSkills, importSkill, listSkills, setSkillEnabled, sourceDir, syncSkills } from '../core/skills.ts';
@@ -39,11 +39,16 @@ import { NotificationInbox } from './notifications.ts';
 import { imageType, parseReport, ReportSender } from './reports.ts';
 import { ChatLaunch, ProHost, type ProLoader } from './pro.ts';
 import { SubThreads, TOOLS as SUB_TOOLS, TOOL_NAMES as SUB_TOOL_NAMES } from './subthreads.ts';
+import { ProjectSettings } from '../core/projects.ts';
+import { ProjectRuntime, type LiveWay } from './project-runtime.ts';
+import { APPROVE_RESTART, DECLINE, appliedLine, checkProposal, getProject, needsRestart, parseProposal, proposalCard, type AskerResult } from './project-tools.ts';
 import { answerChannelWarning, ChannelHub, makeTransports, wakeFor, type ChatSession } from './mail.ts';
 import { SignIns } from './signin.ts';
 import { inContainer } from '../cli/screen.ts';
 import type { UpdateCheck } from './updates.ts';
 import type { ChatStart } from '@chauvoluuhuong/chorus-core/pro-loader';
+
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(import.meta.dirname, '../..');
@@ -85,7 +90,7 @@ export function hostNames(host?: string, interfaces: ReturnType<typeof os.networ
   else if (host) add(host);
   return [...names];
 }
-const LITERAL = new Set(['POST ui', 'POST folders/pick', 'POST skills/import', 'GET skills/all', 'POST skills/sync', 'POST skills/sources', 'POST skills/sources/pick', 'POST skills/sources/remove', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/image', 'POST doctor/issue/send']);
+const LITERAL = new Set(['POST ui', 'POST folders/pick', 'POST skills/import', 'GET skills/all', 'POST skills/sync', 'POST skills/sources', 'POST skills/sources/pick', 'POST skills/sources/remove', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/image', 'POST doctor/issue/send', 'GET projects', 'GET projects/one', 'POST projects/folders', 'DELETE projects/folders', 'POST projects/variables', 'DELETE projects/variables', 'POST projects/restart-idle', 'POST projects/note']);
 
 /** The App without a terminal: input and output go nowhere, the Controller drives it as usual. */
 export function headlessIO(): AppIO {
@@ -190,6 +195,10 @@ export class ChorusServer {
   readonly watch: TurnWatch;
   /** the one mailbox (chorus-core Mailbox): every message to a chat, delivered by its CLI's transport, never typed */
   readonly mail: Mailbox;
+  /** the projects' folders and variables, and what each running chat got of them (task #11) */
+  readonly projects: ProjectRuntime;
+  /** the projects' folders, variable names and values files (src/core/projects.ts): the page's routes and Delete write it */
+  readonly projectSettings: ProjectSettings;
   /** the watcher's and the mailbox's clock */
   private now: () => number = Date.now;
   /** each running Claude chat's `chorus mcp` stream, for its channel pushes */
@@ -248,7 +257,7 @@ export class ChorusServer {
     this.watch = new TurnWatch({ look: id => this.look(id), store: this.c.store.watchStore(), now });
     this.mail = new Mailbox({ store: this.c.store.mailStore(), watch: this.watch, transports: this.transports, agentOf: id => this.c.store.getThread(id)?.agent, now, on: e => this.mailEvent(e) });
     if (o.chatLaunch) o.chatLaunch.wake = (agent, thread) => wakeFor(this.transports, agent, thread);
-    this.pro = new ProHost({ watch: this.watch, mail: this.mail, homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.c.sendToChat(id, text, row => (this.o.sessionExists ?? sessionOnDisk)(row)), dismissApproval: (thread, request) => this.dismissApproval(thread, request), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.approvalsNow().filter(a => !a.hidden).map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state, ...(t.parent_thread_id ? { parent: t.parent_thread_id } : {}), ...(t.sub_status ? { sub: (t.sub_status as string) === 'task' ? 'task' : 'sub' } : {}) })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))], watchOnly: (thread, mainThread) => this.subs.watchOnly(thread, mainThread), deleteChat: id => this.deleteChatQuietly(id), threadKind: id => { const t = this.c.store.getThread(id); if (!t) return undefined; return !t.sub_status ? 'main' : (t.sub_status as string) === 'task' ? 'task' : 'sub'; } }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
+    this.pro = new ProHost({ watch: this.watch, mail: this.mail, homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.c.sendToChat(id, text, row => (this.o.sessionExists ?? sessionOnDisk)(row)), dismissApproval: (thread, request) => this.dismissApproval(thread, request), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.approvalsNow().filter(a => !a.hidden).map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request && parseProposal(this.c.store.getRequest(request)) ? this.answerProposal(request, answer, {}).catch(e => this.noteError('proposal answer', e)) : request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state, ...(t.parent_thread_id ? { parent: t.parent_thread_id } : {}), ...(t.sub_status ? { sub: (t.sub_status as string) === 'task' ? 'task' : 'sub' } : {}) })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))], watchOnly: (thread, mainThread) => this.subs.watchOnly(thread, mainThread), deleteChat: id => this.deleteChatQuietly(id), threadKind: id => { const t = this.c.store.getThread(id); if (!t) return undefined; return !t.sub_status ? 'main' : (t.sub_status as string) === 'task' ? 'task' : 'sub'; } }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     if (o.chatLaunch) o.chatLaunch.host = this.pro;
     this.subs = new SubThreads({
       store: this.c.store,
@@ -270,7 +279,108 @@ export class ChorusServer {
       quietMs: o.subQuietMs,
       changed: () => this.pushState(),
     });
+    const settings = o.chatLaunch?.projects ?? new ProjectSettings(this.c.store.root);
+    this.projectSettings = settings;
+    this.projects = new ProjectRuntime({
+      settings,
+      running: () => this.app.entries.filter(e => e.host?.state === 'running').map(e => e.id),
+      chat: id => {
+        const t = this.c.store.getThread(id);
+        return t ? { agent: t.agent, project: t.project ?? t.cwd, skip: !!t.skip_permissions } : undefined;
+      },
+      idle: id => this.watch.isIdle(id),
+      typing: id => this.isTyping(id),
+      restart: id => this.restartChat(id),
+      liveAdd: (id, agent, dir, way) => this.liveAddDir(id, agent, dir, way),
+      onTurnEnd: (id, fn, again) => this.onTurnEnd(id, fn, again),
+    });
+    if (o.chatLaunch) o.chatLaunch.launched = (id, project, dirs, env) => this.projects.launched(id, project, dirs, env);
     this.bridge();
+  }
+
+  /* ---------- project settings and running chats (task #11 step 6) ---------- */
+
+  /** what the user has typed into each chat's input since its last line end, and when */
+  private typed = new Map<string, { line: string; at: number }>();
+  private turnEndSeq = 0;
+
+  private noteTyped(id: string, data: string) {
+    let line = this.typed.get(id)?.line ?? '';
+    for (const ch of data.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[O\]P].?|\x1b\[20[01]~/g, '')) {
+      if (ch === '\r' || ch === '\n' || ch === '\x03') line = '';
+      else if (ch === '\x7f' || ch === '\b') line = line.slice(0, -1);
+      else if (ch >= ' ') line += ch;
+    }
+    this.typed.set(id, { line: line.slice(-2000), at: Date.now() });
+  }
+
+  /** The user has text in the chat's input, or pressed a key in it in the last 3 s. */
+  private isTyping(id: string) {
+    const t = this.typed.get(id);
+    return !!t && (t.line.length > 0 || Date.now() - t.at < 3000);
+  }
+
+  /** Calls fn once, when the chat is idle with nothing waited on (#10's watcher): at once if it is now; `again` after 5 s more of it. */
+  private onTurnEnd(id: string, fn: () => void, again?: boolean) {
+    const key = `projects:${id}:${++this.turnEndSeq}`;
+    this.watch.watch({ key, thread: id, belongsTo: id, kind: 'thread', owner: 'projects', expect: 'its turn ends, then it gets the project settings', ...(again ? { idleFor: 5000 } : {}), on: (e, w) => {
+      if (e.type === 'idle') {
+        this.watch.unwatch(w.key, 'turn ended');
+        fn();
+      } else if (e.type === 'gone') this.watch.unwatch(w.key, 'chat ended');
+    } });
+  }
+
+  /** Claude's "Adding a new directory" screen for a folder the chat was launched with: "Yes, add it" for this session (ProjectRuntime). */
+  private answerLaunchScreens() {
+    for (const e of this.app.entries) {
+      const host = e.host;
+      if (host?.state !== 'running' || e.agent !== 'claude') continue;
+      const keys = this.projects.launchScreenKeys(e.id, (host.screen.text() ?? []).join('\n'), os.homedir());
+      if (keys) host.write(keys);
+    }
+  }
+
+  /** Stops the chat's process and resumes it (conversation kept), the way #10 continues an agy chat: it launches with the current settings. */
+  private restartChat(id: string) {
+    const host = this.app.entry(id)?.host;
+    if (!host || host.state !== 'running' || this.closed) return;
+    host.once('exit', () => setTimeout(() => this.resumeChat(id), 500));
+    host.kill();
+  }
+
+  /**
+   * A new working folder reaches a running chat through its CLI's own way (chorus-core src/livedir.ts): Claude and agy get
+   * `/add-dir <dir>` typed into their empty input and their screens answered with the session-only choice; Codex (default mode) is
+   * asked through its transport to request the folder, and its grant card is answered "for this session". True once the CLI says so.
+   */
+  private async liveAddDir(id: string, agent: AgentId, dir: string, way: LiveWay, timeoutMs = way === 'grant' ? 180_000 : 30_000): Promise<boolean> {
+    const host = this.app.entry(id)?.host;
+    if (!host || host.state !== 'running' || way === 'none') return way === 'none';
+    const screen = () => (host.screen.text() ?? []).join('\n');
+    if (way === 'slash') {
+      const input = liveAddDirInput(agent, dir);
+      if (!input) return false;
+      host.write(input);
+      await sleep(400);
+      host.write('\r');
+    } else {
+      this.mail.send({ from: { who: 'chorus' }, to: { thread: id }, kind: 'note', subject: 'Working folder added', body: codexGrantMessage([dir]), refs: {} });
+    }
+    const end = Date.now() + timeoutMs;
+    let last = '', lastAt = 0;
+    while (Date.now() < end && host.state === 'running' && !this.closed) {
+      await sleep(300);
+      const sc = screen();
+      if (liveAddDirDone(agent, sc, dir)) return true;
+      const keys = liveAddDirKeys(agent, sc);
+      if (keys && (keys !== last || Date.now() - lastAt > 1500)) {
+        host.write(keys);
+        last = keys;
+        lastAt = Date.now();
+      }
+    }
+    return false;
   }
 
   private startChat(x: ChatStart): string {
@@ -423,7 +533,8 @@ export class ChorusServer {
     const items = c.approvalItems('all').flatMap((a): (ReturnType<Controller['approvalItems']>[number] & { hidden: boolean; askKind?: 'question' | 'approval'; other?: boolean })[] => {
       if (a.kind !== 'ask') return [{ ...a, hidden: this.hiddenPrompts.get(a.id) === a.what }];
       const r = c.store.getRequest(a.request);
-      return r && r.status === 'pending' ? [{ ...a, askKind: r.kind ?? 'approval', other: r.other !== 0, hidden: false }] : [];
+      const proposal = parseProposal(r);
+      return r && r.status === 'pending' ? [{ ...a, askKind: r.kind ?? 'approval', other: r.other !== 0, hidden: false, ...(proposal ? { proposal } : {}) }] : [];
     });
     for (const [id, what] of this.hiddenPrompts) if (!items.some(a => a.kind === 'permission' && a.id === id && a.what === what)) this.hiddenPrompts.delete(id);
     return items;
@@ -516,6 +627,10 @@ export class ChorusServer {
     });
     app.on('thread-exit', (e: Entry) => {
       if (e?.id) try { this.c.store.setCliPid(e.id, null); } catch { /* gone */ }
+      if (e?.id) {
+        this.projects.exited(e.id);
+        this.typed.delete(e.id);
+      }
       this.pro.chatEvent({ type: 'exit', thread: e?.id } as { type: string });
       this.pushState();
     });
@@ -541,6 +656,202 @@ export class ChorusServer {
     }
     if (!this.c.store.getThread(id)) this.chatDeleted(id);
     this.pushState();
+  }
+
+  /* ---------- Settings › Projects (task #11 step 7) ---------- */
+
+  /** A project's folder from a request: absolute after ~ is expanded, or undefined. */
+  private projectDir(folder: unknown): string | undefined {
+    if (typeof folder !== 'string' || !folder.trim()) return undefined;
+    const dir = expand(folder.trim());
+    return path.isAbsolute(dir) ? path.resolve(dir) : undefined;
+  }
+
+  /** Every chat of each project (its folder: the chat's project, or its own folder), "This computer" left out. */
+  private projectChats(): Map<string, { id: string; updated: string }[]> {
+    const m = new Map<string, { id: string; updated: string }[]>();
+    const none = computerDir();
+    for (const t of this.c.store.listThreads()) {
+      const p = t.project ?? t.cwd;
+      if (!p || p === none) continue;
+      (m.get(p) ?? m.set(p, []).get(p)!).push({ id: t.id, updated: String(t.updated ?? t.created ?? '') });
+    }
+    return m;
+  }
+
+  /** GET projects: every project that has a chat, newest activity first; tasks only when the paid module counts them. */
+  async listProjects() {
+    const out = [];
+    for (const [folder, chats] of this.projectChats()) {
+      const counts = await this.pro.projectCounts(folder);
+      const last = chats.reduce((a, c) => (c.updated > a ? c.updated : a), '');
+      out.push({ folder, name: path.basename(folder) || folder, chats: chats.length, ...(counts ? { tasks: counts.tasks } : {}), last });
+    }
+    return out.sort((a, b) => (a.last < b.last ? 1 : a.last > b.last ? -1 : 0)).map(({ last, ...p }) => p);
+  }
+
+  /** GET projects/one: the project's page. Names only: no variable's value ever leaves the values file here. */
+  async oneProject(folder: string) {
+    const ids = (this.projectChats().get(folder) ?? []).map(c => c.id);
+    const rec = this.projectSettings.get(folder);
+    if (!ids.length && !rec.version) return { error: `No project at ${folder}` };
+    const running = new Set(this.app.entries.filter(e => e.host?.state === 'running').map(e => e.id));
+    const counts = await this.pro.projectCounts(folder);
+    const artifacts = ids.length ? (this.c.store.db.prepare(`SELECT COUNT(*) AS n FROM artifacts WHERE thread_id IN (${ids.map(() => '?').join(',')})`).get(...ids) as { n: number }).n : 0;
+    return {
+      folder,
+      name: path.basename(folder) || folder,
+      chats: { total: ids.length, running: ids.filter(id => running.has(id)).length },
+      ...(counts ? { tasks: { total: counts.tasks, open: counts.open } } : {}),
+      artifacts,
+      note: rec.note,
+      note_by: rec.note_by,
+      folders: rec.folders.map(f => {
+        const d = this.projectSettings.describeFolder(f.path);
+        return { path: f.path, why: f.why, by: f.by, at: f.at, created: !!f.created, exists: d.exists && d.is_dir, git: d.git };
+      }),
+      variables: rec.variables.map(v => ({ name: v.name, why: v.why, by: v.by, at: v.at })),
+      stale: this.projects.staleChats(folder).length,
+    };
+  }
+
+  /**
+   * The page's own changes (by "you"), decisions 1 and 13: a new folder reaches every running chat of the project live (the CLI's own
+   * way, or a restart at its turn end); a removed folder or any variable change only marks them stale (`restart: false`), so the page's
+   * banner offers "Restart idle ones". Open pages update through the state push.
+   */
+  private async changeProject(folder: string, change: Parameters<ProjectRuntime['applyToRunning']>[1], apply: () => void) {
+    try {
+      apply();
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+    await this.projects.applyToRunning(folder, change, change.kind === 'add_folder' ? {} : { restart: false }).catch(e => this.noteError('project change', e));
+    this.pushState();
+    return this.oneProject(folder);
+  }
+
+  /* ---------- the model's project tools (task #11 step 8) ---------- */
+
+  /** get_project, propose_project_change, reload_project_settings and rename_chat for the chat `threadId`: its own project only. */
+  async projectTool(name: string, args: Record<string, unknown>, threadId: string): Promise<{ text: string; isError?: boolean }> {
+    const t = this.c.store.getThread(threadId);
+    if (!t) return { text: 'This chat is not a Chorus thread.', isError: true };
+    const folder = path.resolve(t.project ?? t.cwd);
+    if (name === 'get_project') {
+      const running = () => new Set(this.app.entries.filter(e => e.host?.state === 'running').map(e => e.id));
+      const info = await getProject({ store: this.c.store, settings: this.projectSettings, runtime: this.projects, running, counts: f => this.pro.projectCounts(f), tasks: f => this.pro.projectTasks(f, 20) }, t);
+      return { text: JSON.stringify(info, null, 1) };
+    }
+    if (name === 'propose_project_change') {
+      const ok = checkProposal(this.projectSettings, folder, args.changes);
+      if ('error' in ok) return { text: ok.error, isError: true };
+      const reason = typeof args.reason === 'string' && args.reason.trim() ? args.reason.trim().slice(0, 1000) : undefined;
+      const card = proposalCard(folder, ok.changes, reason);
+      // always the user's card: from a main chat, a sub thread or a Worker alike, never a Planner's
+      const r = this.c.store.createRequest({ threadId: t.id, ...card, kind: 'approval', other: false, proposal: { project: folder, changes: ok.changes, ...(reason ? { reason } : {}) } });
+      this.pushState();
+      return { text: `Shown to the user as card ${r.id} with the options: ${r.options.join(' / ')}. End your turn now; the answer arrives as your next message: "Chorus approval ${r.id}: approved: <what was done>" or "Chorus approval ${r.id}: declined". Values the user types are never shown to you.` };
+    }
+    if (name === 'reload_project_settings') {
+      if (this.app.entry(t.id)?.host?.state !== 'running') return { text: 'This chat is not running in Chorus, so it cannot be restarted from here.', isError: true };
+      this.projects.restartAtTurnEnd(t.id);
+      return { text: "This chat restarts with the project's current folders and variables when this turn ends; the conversation is kept." };
+    }
+    if (name === 'rename_chat') {
+      const r = this.renameChat(t.id, args.title, 'model');
+      return 'error' in r ? { text: r.error, isError: true } : { text: `This chat is now named "${r.to}".` };
+    }
+    return { text: `Unknown tool ${name}`, isError: true };
+  }
+
+  /**
+   * A chat's new name (rename_chat, and Undo on its toast): trimmed, whitespace collapsed, one line, 1–60 characters. The store row
+   * and the app's entry change at once; every window gets {t: 'renamed', id, from, to, by}, which shows the toast with Undo.
+   */
+  renameChat(id: string, raw: unknown, by: 'model' | 'you'): { ok: true; from: string; to: string } | { error: string } {
+    const t = this.c.store.getThread(id);
+    if (!t) return { error: 'No such chat.' };
+    if (typeof raw !== 'string') return { error: 'The title must be text.' };
+    if (/[\r\n]/.test(raw.trim())) return { error: 'The title must be one line.' };
+    const to = raw.replace(/\s+/g, ' ').trim();
+    if (!to) return { error: 'The title is empty: give the chat a short name.' };
+    if (to.length > 60) return { error: `The title is too long: ${to.length} characters, at most 60.` };
+    const from = t.title;
+    if (to !== from) {
+      this.c.store.updateThread(id, { title: to });
+      const e = this.app.entry(id);
+      if (e) e.title = to;
+    }
+    this.broadcast({ t: 'renamed', id, from, to, by });
+    this.pushState();
+    return { ok: true, from, to };
+  }
+
+  /**
+   * The user's answer to a propose_project_change card. Decline: nothing changes. Approve: every change is applied with its why, who
+   * asked and this card; a new folder goes live to every running chat of the project (the asking one too), a removed folder and
+   * variable changes only mark the other running chats stale, and "Approve and restart this chat" restarts the asking chat when the
+   * turn the answer starts has ended. Then the chat reads a text built here: what was done, never a value. A set_variable without a
+   * typed value refuses the whole answer: nothing is applied and the card stays.
+   */
+  async answerProposal(requestId: string, option: string, o: { values?: unknown; note?: unknown }): Promise<{ ok: boolean; text?: string; error?: string }> {
+    const c = this.c;
+    const r = c.store.getRequest(requestId);
+    const p = parseProposal(r);
+    if (!r || !p) return { ok: false, error: 'No such card.' };
+    if (r.status !== 'pending') return { ok: false, error: 'This card was already answered.' };
+    if (this.app.entry(r.thread_id)?.host?.state !== 'running') return { ok: false, error: 'That chat is not running: open it, then answer.' };
+    if (!r.options.includes(option)) return { ok: false, error: `Choose one of: ${r.options.join(', ')}.` };
+    if (option === DECLINE) {
+      const ok = c.answerRequest(r.id, 'declined');
+      this.pushState();
+      return { ok, text: 'declined' };
+    }
+    const values = (o.values && typeof o.values === 'object' ? o.values : {}) as Record<string, unknown>;
+    const missing = p.changes.filter(ch => ch.kind === 'set_variable' && !(typeof values[ch.name!] === 'string' && (values[ch.name!] as string).length)).map(ch => ch.name!);
+    if (missing.length) return { ok: false, error: `Type a value for ${missing.join(', ')}, or decline.` };
+    const asker = c.store.getThread(r.thread_id);
+    const origin = { by: asker ? `${asker.title} (${asker.agent})` : 'a chat', by_thread: r.thread_id, approval: r.id };
+    const folder = p.project;
+    const s = this.projectSettings;
+    const lines: string[] = [];
+    let restartNeeded = false;
+    for (const ch of p.changes) {
+      let result: AskerResult;
+      try {
+        if (ch.kind === 'set_note') {
+          const note = typeof o.note === 'string' && o.note.trim() ? o.note : ch.note!;
+          s.setNote(folder, note, origin.by);
+        } else if (ch.kind === 'add_folder' || ch.kind === 'create_folder') {
+          s.addFolder(folder, ch.path!, { ...origin, why: ch.why, create: ch.kind === 'create_folder' });
+          result = (await this.projects.applyToRunning(folder, { kind: 'add_folder', path: ch.path! }).catch(e => (this.noteError('proposal folder', e), {} as Record<string, AskerResult>)))[r.thread_id];
+        } else if (ch.kind === 'remove_folder') {
+          s.removeFolder(folder, ch.path!);
+          await this.projects.applyToRunning(folder, { kind: 'remove_folder', path: ch.path! }, { restart: false });
+          restartNeeded = true;
+        } else if (ch.kind === 'set_variable') {
+          s.setVariable(folder, ch.name!, values[ch.name!] as string, { ...origin, why: ch.why });
+          await this.projects.applyToRunning(folder, { kind: 'set_variable', name: ch.name! }, { restart: false });
+          restartNeeded = true;
+        } else {
+          s.removeVariable(folder, ch.name!);
+          await this.projects.applyToRunning(folder, { kind: 'remove_variable', name: ch.name! }, { restart: false });
+          restartNeeded = true;
+        }
+        lines.push(appliedLine(ch, result));
+      } catch (e) {
+        // the message names a path or a variable name, never a value
+        lines.push(`not done: ${(e as Error).message}`);
+      }
+    }
+    const restart = option === APPROVE_RESTART && needsRestart(p.changes);
+    const tail = !restartNeeded ? '' : restart ? '. This chat restarts when this turn ends to get them; other running chats get them when they restart.' : '. This chat and the other running chats get them when they restart: call reload_project_settings to restart this one when your turn ends.';
+    const text = `approved: ${lines.join('; ')}${tail}`;
+    const ok = c.answerRequest(r.id, text);
+    if (ok && restart) this.projects.restartAtTurnEnd(r.thread_id, { settle: true });
+    this.pushState();
+    return { ok, text };
   }
 
   /**
@@ -574,6 +885,8 @@ export class ChorusServer {
     fs.writeFileSync(path.join(c.store.root, 'ui.json'), JSON.stringify(ui, null, 2));
     // Chorus's own records of skill folders inside it (never a file, never a link)
     for (const src of c.store.skillSources()) if (src.path === dir || src.path.startsWith(dir + path.sep)) c.store.removeSkillSource(src.path);
+    // its working folders, variable names and values (projects.json, project-env.json); the folders themselves stay on disk
+    this.projectSettings.forget(dir);
     this.pro.chatEvent({ type: 'project-deleted', project: dir } as { type: string });
     this.pushState();
     return { removed };
@@ -635,6 +948,11 @@ export class ChorusServer {
         this.watch.tick();
       } catch (e) {
         this.noteError('watch', e);
+      }
+      try {
+        this.answerLaunchScreens();
+      } catch (e) {
+        this.noteError('launch folders', e);
       }
       try {
         this.subs.tick();
@@ -892,6 +1210,11 @@ export class ChorusServer {
         const r = b.name === 'read_mail' ? readMailText(this.mail, thread, args) : listWatchesText({ store: this.c.store, watch: this.watch, thread, now: this.now() }, args);
         return r.isError ? send(res, 400, { error: r.text }) : send(res, 200, { text: r.text });
       }
+      if ((PROJECT_TOOL_NAMES as readonly string[]).includes(String(b.name))) {
+        // get_project, propose_project_change, reload_project_settings, rename_chat: free, every chat, its own project only
+        const r = await this.projectTool(String(b.name), (b.args ?? {}) as Record<string, unknown>, typeof b.threadId === 'string' ? b.threadId : '');
+        return r.isError ? send(res, 400, { error: r.text }) : send(res, 200, { text: r.text });
+      }
       if (SUB_TOOL_NAMES.includes(String(b.name))) {
         const r = await this.subs.call(String(b.name), (b.args ?? {}) as Record<string, unknown>, typeof b.threadId === 'string' ? b.threadId : undefined);
         return 'error' in r ? send(res, 400, r) : send(res, 200, r);
@@ -1043,6 +1366,18 @@ export class ChorusServer {
     const c = this.c;
     if (a === 'export' && method === 'POST') {
       // the top bar's Export: everything, in one .zip in Downloads (plan stage 11, free for everyone)
+      if (!id && b.project !== undefined) {
+        // Settings › Projects › <project> › Export: only its chats and artifacts, and its tasks with Pro (never pro.db, never a value)
+        const project = this.projectDir(b.project);
+        if (!project) return { error: 'the project folder is needed' };
+        try {
+          const r = exportProject({ home: c.store.root, version: versions().chorus, dir: this.o.exportDir, project, pro: await this.pro.exportProject(project) });
+          this.lastExport = r.file;
+          return r;
+        } catch (e) {
+          return { error: `Could not export: ${(e as Error).message}` };
+        }
+      }
       if (!id) {
         try {
           const r = exportAll({ home: c.store.root, version: versions().chorus, dir: this.o.exportDir });
@@ -1135,6 +1470,51 @@ export class ChorusServer {
       }
       case 'DELETE projects':
         return this.deleteProject(String(b.folder ?? q.get('folder') ?? ''));
+      case 'GET projects':
+        return this.listProjects();
+      case 'GET projects/one': {
+        const folder = this.projectDir(q.get('folder'));
+        return folder ? this.oneProject(folder) : { error: 'the project folder is needed' };
+      }
+      case 'POST projects/folders':
+      case 'DELETE projects/folders': {
+        const folder = this.projectDir(b.folder);
+        const dir = this.projectDir(b.dir);
+        if (!folder) return { error: 'the project folder is needed' };
+        if (!dir) return { error: 'the folder must be an absolute path' };
+        return method === 'POST'
+          ? this.changeProject(folder, { kind: 'add_folder', path: dir }, () => this.projectSettings.addFolder(folder, dir, { by: 'you', why: typeof b.why === 'string' ? b.why.trim().slice(0, 500) : '' }))
+          : this.changeProject(folder, { kind: 'remove_folder', path: dir }, () => this.projectSettings.removeFolder(folder, dir));
+      }
+      case 'POST projects/variables':
+      case 'DELETE projects/variables': {
+        const folder = this.projectDir(b.folder);
+        if (!folder) return { error: 'the project folder is needed' };
+        const name = typeof b.name === 'string' ? b.name.trim() : '';
+        if (method === 'DELETE') return this.changeProject(folder, { kind: 'remove_variable', name }, () => this.projectSettings.removeVariable(folder, name));
+        if (typeof b.value !== 'string') return { error: 'the value must be text' };
+        const why = typeof b.why === 'string' ? b.why.trim().slice(0, 500) : '';
+        // Edit on the page with the value left empty: the value stays (the page never has it), only its why changes
+        if (b.keep === true && b.value === '') {
+          const kept = this.projectSettings.env(folder)[name];
+          if (kept === undefined) return { error: `Type a value for ${name}.` };
+          return this.changeProject(folder, { kind: 'note' }, () => this.projectSettings.setVariable(folder, name, kept, { by: 'you', why }));
+        }
+        return this.changeProject(folder, { kind: 'set_variable', name }, () => this.projectSettings.setVariable(folder, name, b.value, { by: 'you', why }));
+      }
+      case 'POST projects/note': {
+        const folder = this.projectDir(b.folder);
+        if (!folder) return { error: 'the project folder is needed' };
+        if (typeof b.note !== 'string') return { error: 'the note must be text' };
+        return this.changeProject(folder, { kind: 'note' }, () => this.projectSettings.setNote(folder, b.note, 'you'));
+      }
+      case 'POST projects/restart-idle': {
+        const folder = this.projectDir(b.folder);
+        if (!folder) return { error: 'the project folder is needed' };
+        const r = this.projects.restartIdle(folder);
+        this.pushState();
+        return r;
+      }
       case 'POST chats': {
         const agent = asAgent(b.agent);
         if (!agent) return { error: 'agent must be claude, codex or agy' };
@@ -1216,10 +1596,19 @@ export class ChorusServer {
         return { ok };
       }
       case 'POST chats/:id/answer': {
+        // a propose_project_change card: applied here first; the values typed on it go only to the values file
+        if (typeof b.request === 'string' && typeof b.option === 'string' && parseProposal(c.store.getRequest(b.request))) {
+          return this.answerProposal(b.request, b.option, { values: b.values, note: b.note });
+        }
         // a request_approval card: the option (and note) becomes the user's next message to that agent
         const ok = typeof b.request === 'string' && typeof b.option === 'string' && c.answerRequest(b.request, b.option, typeof b.note === 'string' ? b.note : undefined);
         this.pushState();
         return { ok };
+      }
+      case 'POST chats/:id/title': {
+        // rename_chat (by "model") and the Undo on its toast (by "you")
+        if (!thread) return undefined;
+        return this.renameChat(id, b.title, b.by === 'model' ? 'model' : 'you');
       }
       case 'POST chats/:id/dismiss':
         // Approvals' delete (the page warned first): the item only, the agent is not answered
@@ -1686,7 +2075,10 @@ export class ChorusServer {
         // a sub thread is watch-only: its keys are dropped unless the user unlocked it (its CLI's prompts are answered by the card)
         if (typeof m.id === 'string' && !this.watchOnlyLets(m.id, m.data)) return;
         host?.write(m.data);
-        if (host && typeof m.id === 'string') this.typedTo(m.id, m.data);
+        if (host && typeof m.id === 'string') {
+          this.noteTyped(m.id, m.data);
+          this.typedTo(m.id, m.data);
+        }
       }
       else if (m.t === 'resize' && m.cols > 0 && m.rows > 0 && this.setsSize(cl)) {
         this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
