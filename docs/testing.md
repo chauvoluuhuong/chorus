@@ -20,6 +20,9 @@ Rules:
 - Every L3 run saves its raw capture. When it fails, the capture becomes a new fixture and an L1
   test that reproduces the bug.
 - `fake-agent` behaviour is derived from fixtures, not invented.
+- **Proofs and smokes always use a temp `CHORUS_HOME`**, never `~/.chorus`: a second `chorus serve` on the real home once took the
+  running one's `serve.json` and every Claude chat lost its channel (task #14, 2026-11-18). Serve now keeps a live one's file, but a
+  test still has no business in the user's home.
 
 ## Where each CLI can run
 

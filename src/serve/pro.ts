@@ -41,6 +41,8 @@ export class ChatLaunch {
   readonly store: Store | undefined;
   /** the projects' folders and variables (src/core/projects.ts), in the store's folder */
   readonly projects: ProjectSettings | undefined;
+  /** the address and token of the serve that starts the chat, for its `chorus mcp` (CHORUS_SERVE_URL, CHORUS_MCP_TOKEN; task #14) */
+  serveEnv: (() => Record<string, string> | undefined) | undefined;
   /** told what each start or resume got (chorus serve: ProjectRuntime.launched) */
   launched: ((threadId: string, project: string, addDirs: string[], env: Record<string, string>) => void) | undefined;
 
@@ -49,9 +51,10 @@ export class ChatLaunch {
     this.projects = store ? new ProjectSettings(store.root) : undefined;
   }
 
-  extras(o: { threadId: string; project: string; cwd: string }, agent: AgentId): { role?: ThreadRole; readOnly?: boolean; moreTools?: string[]; parent?: { id: string; title: string; brief: string }; actionLabels?: string[]; noNativeAsk?: boolean; wake?: ReturnType<NonNullable<ChatLaunch['wake']>>; addDirs?: string[]; env?: Record<string, string>; liveDirs?: boolean } {
+  extras(o: { threadId: string; project: string; cwd: string }, agent: AgentId): { role?: ThreadRole; readOnly?: boolean; moreTools?: string[]; parent?: { id: string; title: string; brief: string }; actionLabels?: string[]; noNativeAsk?: boolean; wake?: ReturnType<NonNullable<ChatLaunch['wake']>>; addDirs?: string[]; env?: Record<string, string>; liveDirs?: boolean; mcpEnv?: Record<string, string> } {
     const wake = this.wake?.(agent, o.threadId);
-    return { ...this.extrasOf(o, agent), ...(wake ? { wake } : {}), ...this.projectOf(o) };
+    const mcpEnv = this.serveEnv?.();
+    return { ...this.extrasOf(o, agent), ...(wake ? { wake } : {}), ...this.projectOf(o), ...(mcpEnv ? { mcpEnv } : {}) };
   }
 
   /**

@@ -19,6 +19,7 @@ import { AGENTS, type Controller } from '../app/controller.ts';
 import type { ItemState, RichLine } from '../app/compositor.ts';
 import { effortsFor } from '../app/models.ts';
 import { listWatchesText, PROJECT_TOOL_NAMES, readMailText, SERVE_TOOL_NAMES } from '../mcp/server.ts';
+import { MCP_TOKEN_ENV, SERVE_URL_ENV } from '../mcp/pro.ts';
 import { latestModels, liveAddDirDone, liveAddDirInput, liveAddDirKeys, codexGrantMessage, Mailbox, NEWLINE_KEYS, TurnWatch, type ChatLook, type MailEvent, type Transport } from '@chauvoluuhuong/chorus-core';
 import { computerDir } from '../app/screens.ts';
 import type { ThreadHost } from '../app/thread-host.ts';
@@ -79,6 +80,14 @@ export function boxLoginCommand(agent: AgentId, name = 'chorus') {
 }
 
 /** --host values that mean every address of this machine */
+/** A home folder as one string, whatever link or relative path led to it. */
+const realHome = (p: string) => {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
+};
 const WILDCARD = new Set(['0.0.0.0', '::', '[::]']);
 
 /**
@@ -259,6 +268,8 @@ export class ChorusServer {
     this.watch = new TurnWatch({ look: id => this.look(id), store: this.c.store.watchStore(), now });
     this.mail = new Mailbox({ store: this.c.store.mailStore(), watch: this.watch, transports: this.transports, agentOf: id => this.c.store.getThread(id)?.agent, now, on: e => this.mailEvent(e) });
     if (o.chatLaunch) o.chatLaunch.wake = (agent, thread) => wakeFor(this.transports, agent, thread);
+    // each chat's `chorus mcp` finds this serve through its launch env, not the shared serve.json (task #14)
+    if (o.chatLaunch) o.chatLaunch.serveEnv = () => (this.url ? { [SERVE_URL_ENV]: this.url, [MCP_TOKEN_ENV]: this.mcpToken } : undefined);
     this.pro = new ProHost({ watch: this.watch, mail: this.mail, homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.c.sendToChat(id, text, row => (this.o.sessionExists ?? sessionOnDisk)(row)), dismissApproval: (thread, request) => this.dismissApproval(thread, request), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.approvalsNow().filter(a => !a.hidden).map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request && parseProposal(this.c.store.getRequest(request)) ? this.answerProposal(request, answer, {}).catch(e => this.noteError('proposal answer', e)) : request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state, ...(t.parent_thread_id ? { parent: t.parent_thread_id } : {}), ...(t.sub_status ? { sub: (t.sub_status as string) === 'task' ? 'task' : 'sub' } : {}) })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))], watchOnly: (thread, mainThread) => this.subs.watchOnly(thread, mainThread), deleteChat: id => this.deleteChatQuietly(id), threadKind: id => { const t = this.c.store.getThread(id); if (!t) return undefined; return !t.sub_status ? 'main' : (t.sub_status as string) === 'task' ? 'task' : 'sub'; } }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     if (o.chatLaunch) o.chatLaunch.host = this.pro;
     this.subs = new SubThreads({
@@ -1015,8 +1026,12 @@ export class ChorusServer {
       }
       this.pushState();
     }, 500);
-    // openUrl: the page's address with its token, printed by `chorus` after the window opens (a browser tab on the same Chorus)
-    fs.writeFileSync(this.serveFile, JSON.stringify({ url: this.url, openUrl: this.openUrl, mcpToken: this.mcpToken }), { mode: 0o600 });
+    // openUrl: the page's address with its token, printed by `chorus` after the window opens (a browser tab on the same Chorus).
+    // A second serve on the same home leaves a running one's file alone (it never wrote it, so close() never deletes it): the chats
+    // of the first find their serve through their launch env, and the window still opens the first (task #14)
+    const other = await this.otherServe();
+    if (other) console.error(`[serve] another Chorus is running on this home (${other}): its serve.json is kept`);
+    else fs.writeFileSync(this.serveFile, JSON.stringify({ url: this.url, openUrl: this.openUrl, mcpToken: this.mcpToken }), { mode: 0o600 });
     void this.pro.start();
     const tested = JSON.stringify(remoteTested());
     if (this.o.notifications)
@@ -1073,6 +1088,25 @@ export class ChorusServer {
 
   private get serveFile() {
     return path.join(this.c.store.root, 'serve.json');
+  }
+
+  /** The address of another serve that serve.json names, when it answers serve's health route for this same home. */
+  private async otherServe(): Promise<string | undefined> {
+    let info: { url?: string; mcpToken?: string };
+    try {
+      info = JSON.parse(fs.readFileSync(this.serveFile, 'utf8'));
+    } catch {
+      return undefined;
+    }
+    if (!info.url || !info.mcpToken || info.url === this.url) return undefined;
+    try {
+      const r = await fetch(`${info.url}/api/pro/mcp/health`, { headers: { authorization: `Bearer ${info.mcpToken}`, 'x-chorus': '1' }, signal: AbortSignal.timeout(1500) });
+      if (!r.ok) return undefined;
+      const j = (await r.json()) as { home?: string };
+      return j.home === realHome(this.c.store.root) ? info.url : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   close() {
@@ -1234,6 +1268,8 @@ export class ChorusServer {
   }
 
   private async proMcp(req: http.IncomingMessage, res: http.ServerResponse, route: string) {
+    // a second `chorus serve` on the same home asks whether this one is alive before it touches serve.json (task #14)
+    if (req.method === 'GET' && route === 'health') return send(res, 200, { home: realHome(this.c.store.root), url: this.url });
     if (req.method === 'GET' && route === 'tools') {
       const app = new URL(req.url ?? '/', 'http://x').searchParams.get('app') === '1';
       // a chat gets the sub thread tools whatever the paid module's state; an AI app the user connected does not
