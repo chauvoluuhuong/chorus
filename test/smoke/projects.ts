@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // L3 (task #11 step 10): projects with the real CLIs, through `chorus serve` on a temp Chorus home.
 //
-//   node test/smoke/projects.ts [--agents claude,codex,agy] [--only A,A2,B,C,D] [--keep]
+//   node test/smoke/projects.ts [--agents claude,codex,agy] [--only A,A2,B,C,D,E] [--keep]
 //
 //   A   a working folder and two variables added through the API reach a NEW chat of each CLI, and again after the chat was parked
 //       (serve restarted) and RESUMED
@@ -12,6 +12,9 @@
 //       restart get_project shows it all and the chat uses it. The value appears nowhere but project-env.json (grep: 0 hits)
 //   C   Export this project and Delete it through the API: the zip has only its chats; the folders stay on disk
 //   D   Claude and Codex name their own chat with rename_chat; Undo (POST chats/:id/title by "you") restores the old name
+//   E   a real Claude chat in This computer (a stand-in …/.chorus/computer under the run folder, never the owner's) creates a NEW
+//       project through ONE propose_new_project card; "Create" with a typed value; the project lists with 0 chats and "+2 folders";
+//       This computer's entry is unchanged; a new chat there sees it all in get_project; the value is nowhere but project-env.json
 //
 // Every test folder lives under ~/.cache/chorus/projects-smoke/<run>/ (never $TMPDIR: Codex may write there anyway) and is removed at
 // the end (--keep leaves it). Expected strings never appear in a prompt, so an echoed prompt cannot pass.
@@ -28,7 +31,7 @@ const ROOT = path.resolve(import.meta.dirname, '../..');
 const argv = process.argv.slice(2);
 const arg = (n: string, d: string) => (argv.includes(`--${n}`) ? argv[argv.indexOf(`--${n}`) + 1] : d);
 const AGENTS = arg('agents', 'claude,codex,agy').split(',');
-const ONLY = new Set(arg('only', 'A,A2,B,C,D').split(','));
+const ONLY = new Set(arg('only', 'A,A2,B,C,D,E').split(','));
 const KEEP = argv.includes('--keep');
 const HOME = os.homedir();
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -548,9 +551,64 @@ async function partD() {
   }));
 }
 
+/* ---------- E: a chat in This computer creates a new project ---------- */
+
+const E_SECRET = 'dummy-secret-123';
+
+async function partE(): Promise<{ transcripts: string[] }> {
+  const dir = mkFolder(path.join(RUN, 'E'));
+  const computer = mkFolder(path.join(RUN, 'E-home', '.chorus', 'computer'));
+  const lib = mkFolder(path.join(dir, 'dummy-lib'), { 'index.js': 'module.exports = 1;\n' });
+  const app = path.join(dir, 'dummy-app');
+  const notes = path.join(dir, 'dummy-notes');
+  const pj = path.join(CHOME, 'projects.json');
+  const before = JSON.stringify((fs.existsSync(pj) ? JSON.parse(fs.readFileSync(pj, 'utf8')) : {})[computer] ?? null);
+  const model = process.env.SMOKE_B_MODEL ?? 'sonnet';
+  const prompt = `${CONTEXT}First check where this chat is with get_project. Then set me up a new project called dummy-app at ${dir}/dummy-app (create it), with a short description, a working folder ${lib} (exists) and a new folder ${notes}, and a variable DUMMY_TOKEN the app needs.`;
+  const chat = await Chat.start('claude', computer, prompt, `E claude (${model})`, { model });
+  let card: any;
+  await chat.until(async () => {
+    const st = await api('GET', '/api/state');
+    card = (st.approvals as any[]).find(a => a.id === chat.id && a.proposal);
+    return !!card;
+  }, 360_000, 'the new-project card');
+  const gp = getProjectResults(claudeTranscript(thread(chat.id)?.native_session_id))[0];
+  const calls = mcpCalls(chat.id).map(m => m.tool);
+  check('E get_project in This computer said is_project false', gp?.is_project === false && gp?.place === 'This computer', `calls: ${calls.join(', ')}; is_project ${gp?.is_project}; place ${gp?.place}`);
+  const cards = ((await api('GET', '/api/state')).approvals as any[]).filter(a => a.id === chat.id && a.proposal);
+  const p = card?.proposal ?? {};
+  const ch = (p.changes ?? []) as any[];
+  const shape = p.kind === 'new_project' && p.project === app && p.create === true && ch.some(c => c.kind === 'set_note' && c.note) && ch.some(c => c.kind === 'add_folder' && c.path === lib) && ch.some(c => c.kind === 'create_folder' && c.path === notes) && ch.some(c => c.kind === 'set_variable' && c.name === 'DUMMY_TOKEN');
+  check('E ONE propose_new_project card (not propose_project_change): folder created, note, dummy-lib, dummy-notes new, DUMMY_TOKEN', cards.length === 1 && shape && calls.includes('propose_new_project') && !calls.includes('propose_project_change'), `${cards.length} card(s): ${p.kind} ${tilde(p.project ?? '')} create ${p.create}; ${ch.map(c => `${c.kind}${c.path ? ` ${tilde(c.path)}` : ''}${c.name ? ` ${c.name}` : ''}`).join('; ')}; options ${card?.options?.join(' / ')}`);
+  if (!card) return { transcripts: [] };
+  const ans = await api('POST', `/api/chats/${chat.id}/answer`, { request: card.request, option: 'Create', values: { DUMMY_TOKEN: E_SECRET } });
+  check('E approved with "Create": dummy-app and dummy-notes made', ans.ok === true && fs.existsSync(app) && fs.existsSync(notes), tilde(ans.text ?? ans.error ?? ''));
+  const list = (await api('GET', '/api/projects')) as any[];
+  const row = list.find(x => x.folder === app);
+  check('E GET projects lists dummy-app with 0 chats', row?.chats === 0, JSON.stringify(row ? { ...row, folder: tilde(row.folder) } : null));
+  const side = ((await api('GET', '/api/state')).projects as any[]).find(x => x.folder === app);
+  check('E the page state\'s sidebar has dummy-app with "+2 folders"', side?.registered === true && side?.folders?.length === 2, JSON.stringify(side ? { registered: side.registered, folders: side.folders.map(tilde) } : null));
+  const after = JSON.stringify((fs.existsSync(pj) ? JSON.parse(fs.readFileSync(pj, 'utf8')) : {})[computer] ?? null);
+  check('E the This computer entry is unchanged', before === after, `${before} → ${after}`);
+  await chat.idle(180_000);
+  chat.close();
+  // a new chat in the new project sees it all
+  const c2 = await Chat.start('claude', app, `${CONTEXT}Call get_project and say in one line how many working folders and variables this project has.`, `E claude in dummy-app (${model})`, { model });
+  await c2.until(() => getProjectResults(claudeTranscript(thread(c2.id)?.native_session_id)).length > 0, 300_000, 'get_project in dummy-app');
+  await c2.idle(120_000);
+  const g2 = getProjectResults(claudeTranscript(thread(c2.id)?.native_session_id)).at(-1);
+  const wf = (g2?.working_folders ?? []) as any[];
+  const l = wf.find(f => f.path === lib), n = wf.find(f => f.path === notes);
+  const v = (g2?.variables ?? []).find((x: any) => x.name === 'DUMMY_TOKEN');
+  check('E new chat in dummy-app: get_project shows the note, both folders with why, DUMMY_TOKEN in_this_chat', !!g2?.note && g2?.is_project === true && !!l?.why && !!n?.why && n?.created === true && v?.in_this_chat === true, `note ${g2?.note ? 'yes' : 'no'}; dummy-lib why "${l?.why ?? '-'}"; dummy-notes why "${n?.why ?? '-'}" created ${n?.created}; DUMMY_TOKEN in_this_chat ${v?.in_this_chat}`);
+  c2.close();
+  return { transcripts: [claudeTranscript(thread(chat.id)?.native_session_id), claudeTranscript(thread(c2.id)?.native_session_id)].filter(Boolean) as string[] };
+}
+
 /* ---------- the secret appears nowhere ---------- */
 
-function grepSecret(extra: string[]) {
+function grepSecret(extra: string[], SECRET_ = SECRET) {
+  const SECRET = SECRET_;
   const hits: string[] = [];
   const scan = (f: string) => {
     if (path.basename(f) === 'project-env.json') return;
@@ -594,6 +652,12 @@ try {
     zip = await partC(a.P, a.D);
   }
   if (ONLY.has('D')) await partD();
+  let e: { transcripts: string[] } = { transcripts: [] };
+  if (ONLY.has('E')) e = await partE();
+  if (ONLY.has('E')) {
+    const g = grepSecret(e.transcripts, E_SECRET);
+    check(`E "${E_SECRET}" outside project-env.json (the Chorus home, the serve log, ${e.transcripts.length} transcript(s)): 0 hits`, !g.hits.length, `${g.hits.length} hits${g.hits.length ? `: ${g.hits.join(', ')}` : ''}`);
+  }
   if (ONLY.has('B')) {
     // an export of S too, so the grep covers an export that holds the chat which handled the value
     const exS = b.S ? await api('POST', '/api/export', { project: b.S }) : {};

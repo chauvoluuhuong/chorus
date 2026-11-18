@@ -41,7 +41,7 @@ import { ChatLaunch, ProHost, type ProLoader } from './pro.ts';
 import { SubThreads, TOOLS as SUB_TOOLS, TOOL_NAMES as SUB_TOOL_NAMES } from './subthreads.ts';
 import { ProjectSettings } from '../core/projects.ts';
 import { ProjectRuntime, type LiveWay } from './project-runtime.ts';
-import { APPROVE_RESTART, DECLINE, appliedLine, checkProposal, getProject, needsRestart, parseProposal, proposalCard, type AskerResult } from './project-tools.ts';
+import { APPROVE_RESTART, CREATE_OPEN, DECLINE, appliedLine, checkNewProject, checkProposal, getProject, isComputer, needsRestart, newProjectCard, parseProposal, placeName, proposalCard, type AskerResult } from './project-tools.ts';
 import { answerChannelWarning, ChannelHub, makeTransports, wakeFor, type ChatSession } from './mail.ts';
 import { SignIns } from './signin.ts';
 import { inContainer } from '../cli/screen.ts';
@@ -675,18 +675,21 @@ export class ChorusServer {
     const none = computerDir();
     for (const t of this.c.store.listThreads()) {
       const p = t.project ?? t.cwd;
-      if (!p || p === none) continue;
+      if (!p || p === none || isComputer(p)) continue;
       (m.get(p) ?? m.set(p, []).get(p)!).push({ id: t.id, updated: String(t.updated ?? t.created ?? '') });
     }
     return m;
   }
 
-  /** GET projects: every project that has a chat, newest activity first; tasks only when the paid module counts them. */
+  /** GET projects: every project that has a chat or was created by a card (0 chats), newest activity first; tasks only with Pro. */
   async listProjects() {
     const out = [];
-    for (const [folder, chats] of this.projectChats()) {
+    const all = this.projectChats();
+    for (const folder of this.projectSettings.registered()) if (!all.has(folder) && !isComputer(folder)) all.set(folder, []);
+    for (const [folder, chats] of all) {
       const counts = await this.pro.projectCounts(folder);
-      const last = chats.reduce((a, c) => (c.updated > a ? c.updated : a), '');
+      const rec = this.projectSettings.get(folder);
+      const last = chats.reduce((a, c) => (c.updated > a ? c.updated : a), rec.registered_at ?? '');
       out.push({ folder, name: path.basename(folder) || folder, chats: chats.length, ...(counts ? { tasks: counts.tasks } : {}), last });
     }
     return out.sort((a, b) => (a.last < b.last ? 1 : a.last > b.last ? -1 : 0)).map(({ last, ...p }) => p);
@@ -751,9 +754,18 @@ export class ChorusServer {
       const reason = typeof args.reason === 'string' && args.reason.trim() ? args.reason.trim().slice(0, 1000) : undefined;
       const card = proposalCard(folder, ok.changes, reason);
       // always the user's card: from a main chat, a sub thread or a Worker alike, never a Planner's
-      const r = this.c.store.createRequest({ threadId: t.id, ...card, kind: 'approval', other: false, proposal: { project: folder, changes: ok.changes, ...(reason ? { reason } : {}) } });
+      const r = this.c.store.createRequest({ threadId: t.id, ...card, kind: 'approval', other: false, proposal: { project: folder, name: placeName(folder), changes: ok.changes, ...(reason ? { reason } : {}) } });
       this.pushState();
       return { text: `Shown to the user as card ${r.id} with the options: ${r.options.join(' / ')}. End your turn now; the answer arrives as your next message: "Chorus approval ${r.id}: approved: <what was done>" or "Chorus approval ${r.id}: declined". Values the user types are never shown to you.` };
+    }
+    if (name === 'propose_new_project') {
+      // any chat, This computer too; always the user's card, never a Planner's
+      const chatsIn = new Set(this.c.store.listThreads().map(x => path.resolve(x.project ?? x.cwd)));
+      const ok = checkNewProject(this.projectSettings, args, dir => chatsIn.has(dir));
+      if ('error' in ok) return { text: ok.error, isError: true };
+      const r = this.c.store.createRequest({ threadId: t.id, ...newProjectCard(ok.proposal), kind: 'approval', other: false, proposal: ok.proposal });
+      this.pushState();
+      return { text: `Shown to the user as card ${r.id} with the options: ${r.options.join(' / ')}. End your turn now; the answer arrives as your next message: "Chorus approval ${r.id}: approved: created project …" or "Chorus approval ${r.id}: declined". Values the user types are never shown to you. This chat stays where it is.` };
     }
     if (name === 'reload_project_settings') {
       if (this.app.entry(t.id)?.host?.state !== 'running') return { text: 'This chat is not running in Chorus, so it cannot be restarted from here.', isError: true };
@@ -817,6 +829,7 @@ export class ChorusServer {
     const origin = { by: asker ? `${asker.title} (${asker.agent})` : 'a chat', by_thread: r.thread_id, approval: r.id };
     const folder = p.project;
     const s = this.projectSettings;
+    if (p.kind === 'new_project') return this.createProject(r.id, option, p, values, o.note, origin);
     const lines: string[] = [];
     let restartNeeded = false;
     for (const ch of p.changes) {
@@ -854,6 +867,44 @@ export class ChorusServer {
     if (ok && restart) this.projects.restartAtTurnEnd(r.thread_id, { settle: true });
     this.pushState();
     return { ok, text };
+  }
+
+  /**
+   * An approved propose_new_project card: the main folder is made (with create) and registered, then the note, the folders (made
+   * when asked) and the variables (the values typed on the card, straight to project-env.json) are set, all with who asked and this
+   * card. No chat is started: "Create and open New chat there" only tells the answering page to open New chat with that folder. The
+   * asking chat stays where it is and reads a text built here, never a value.
+   */
+  private async createProject(requestId: string, option: string, p: NonNullable<ReturnType<typeof parseProposal>>, values: Record<string, unknown>, note: unknown, origin: { by: string; by_thread: string; approval: string }): Promise<{ ok: boolean; text?: string; error?: string; open?: string }> {
+    const c = this.c;
+    const s = this.projectSettings;
+    const folder = p.project;
+    const chatsIn = c.store.listThreads().some(x => path.resolve(x.project ?? x.cwd) === folder);
+    try {
+      s.register(folder, { ...origin, create: !!p.create, hasChat: chatsIn });
+    } catch (e) {
+      // the folder became a project or appeared since the card was made: nothing is made; the chat hears why (a path, never a value)
+      const text = `not done: ${(e as Error).message}`;
+      const ok = c.answerRequest(requestId, text);
+      this.pushState();
+      return { ok, text, error: (e as Error).message };
+    }
+    const failed: string[] = [];
+    let folders = 0, vars = 0;
+    for (const ch of p.changes) {
+      try {
+        if (ch.kind === 'set_note') s.setNote(folder, typeof note === 'string' && note.trim() ? note : ch.note!, origin.by);
+        else if (ch.kind === 'add_folder' || ch.kind === 'create_folder') (s.addFolder(folder, ch.path!, { ...origin, why: ch.why, create: ch.kind === 'create_folder' }), folders++);
+        else if (ch.kind === 'set_variable') (s.setVariable(folder, ch.name!, values[ch.name!] as string, { ...origin, why: ch.why }), vars++);
+      } catch (e) {
+        failed.push(`not done: ${(e as Error).message}`);
+      }
+    }
+    const n = (k: number, one: string) => `${k} ${one}${k === 1 ? '' : 's'}`;
+    const text = `approved: created project ${placeName(folder)} at ${tilde(folder)} with ${n(folders, 'folder')} and ${n(vars, 'variable')} (values hidden). Chats started there get them.${failed.length ? ` ${failed.join('; ')}.` : ''}`;
+    const ok = c.answerRequest(requestId, text);
+    this.pushState();
+    return { ok, text, ...(option === CREATE_OPEN ? { open: folder } : {}) };
   }
 
   /**
@@ -1849,11 +1900,22 @@ export class ChorusServer {
       // window would redraw the inbox under the mouse
       approvals: this.approvalsNow().map(({ waiting, ...x }) => ({ ...x, since: Math.round(Date.now() / 1000 - waiting) })),
       ui: this.ui(),
+      // projects the sidebar lists with no chat yet (made by a propose_new_project card), and each project's extra folders: the sidebar
+      // shows a project once, under its main folder, with "+N folders"
+      projects: this.sideProjects(),
       notice: this.noticeNow(),
       dialogs: [...this.dialogs.values()].map(x => x.d),
       // the doctor's short check, the one status of the agents (null until the first one is done)
       doctor: this.agentCheck ? { at: this.agentCheck.at, ms: this.agentCheck.report.ms, checking: this.checkShown, agents: this.agentCheck.report.agents } : this.checking ? { checking: true, agents: null } : null,
     };
+  }
+
+  private sideProjects() {
+    const s = this.projectSettings;
+    return s.list().flatMap(folder => {
+      const r = s.get(folder);
+      return r.registered || r.folders.length ? [{ folder, registered: !!r.registered, folders: r.folders.map(f => f.path) }] : [];
+    });
   }
 
   /** Edits of reported artifacts seen per chat (in memory: after a restart it counts from 0, and nothing flashes on page load). */

@@ -93,3 +93,39 @@ test('the proposal card: titles, rows per change, Approve waits for a typed valu
   assert.match(setup, /value="dev"/);
   assert.doesNotMatch(setup, /disabled/);
 });
+
+test('the new-project card: its title, the main folder with "new folder", the rows, Create / Create and open / Decline', () => {
+  const a = {
+    id: 't_1',
+    request: 'r_9',
+    options: ['Create', 'Create and open New chat there', 'Decline'],
+    proposal: {
+      kind: 'new_project',
+      project: '/Users/you/dummy-app',
+      create: true,
+      name: 'dummy-app',
+      reason: 'The user asked for it.',
+      changes: [
+        { kind: 'set_note', note: 'A dummy app.', why: 'the description of the new project' },
+        { kind: 'add_folder', path: '/Users/you/dummy-lib', why: 'its library' },
+        { kind: 'create_folder', path: '/Users/you/dummy-notes', why: 'notes' },
+        { kind: 'set_variable', name: 'DUMMY_TOKEN', why: 'the API' },
+      ],
+    },
+  };
+  const html = proposalCardHtml(a, { values: {} }, h);
+  assert.match(html, /<div class="ask-q">Create project "dummy-app"\?<\/div>/);
+  assert.match(html, /Project folder<\/label><div class="in mono">~\/dummy-app<span class="tag new">new folder<\/span>/);
+  assert.match(html, /~\/dummy-lib/);
+  assert.match(html, /~\/dummy-notes<span class="tag new">new folder/);
+  assert.match(html, /data-name="DUMMY_TOKEN"/);
+  assert.match(html, /A dummy app\./);
+  // Decline first, Create last and lit; the two Create buttons wait for the typed value
+  const btns = [...html.matchAll(/<button class="btn( primary)?" data-act="pp-pick"[^>]*data-value="([^"]+)"( disabled)?/g)].map(m => [m[2], !!m[1], !!m[3]]);
+  assert.deepEqual(btns, [['Decline', false, false], ['Create and open New chat there', false, true], ['Create', true, true]]);
+  assert.doesNotMatch(proposalCardHtml({ ...a, proposal: { ...a.proposal, create: false } }, { values: { DUMMY_TOKEN: 'x' } }, h), /~\/dummy-app<span class="tag new">/);
+});
+
+test('a card for This computer says This computer, never "computer"', () => {
+  assert.equal(proposalTitle({ project: '/Users/you/.chorus/computer', name: 'This computer', changes: [{ kind: 'set_note', note: 'n', why: 'w' }] }, h), 'Set up "This computer"?');
+});

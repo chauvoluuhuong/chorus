@@ -641,9 +641,17 @@ function chatsByProject() {
     if (!groups.has(c.cwd)) groups.set(c.cwd, []);
     groups.get(c.cwd).push(c);
   }
+  // a project made by a propose_new_project card shows before its first chat (nothing under it)
+  for (const p of S.state?.projects ?? []) if (p.registered && !groups.has(p.folder) && !S.hidden[p.folder]) groups.set(p.folder, []);
   // a project with tasks is listed even with no chat left: taken off the sidebar, it stays off until a new chat starts there
   for (const [cwd, chats] of groups) if (S.hidden[cwd] && !chats.length) groups.delete(cwd);
   return groups;
+}
+
+/** "+N folders" after a project's name when its chats get extra working folders (the title lists them): never a row per folder. */
+function moreFolders(cwd) {
+  const f = (S.state?.projects ?? []).find(p => p.folder === cwd)?.folders ?? [];
+  return f.length ? `<span class="pmore" title="${esc(f.map(tilde).join('\n'))}">+${f.length} folder${f.length === 1 ? '' : 's'}</span>` : '';
 }
 
 /** The project tree of the sidebar, and of a phone's Chats tab. `keep`: only these chats, and only projects that have one. */
@@ -657,7 +665,7 @@ function treeHtml(keep) {
     const bang = all.filter(waitsOnYou).length;
     // the project in front: the chat you look at is in it, or the New chat form starts there. Its ＋ always shows; others on hover.
     const here = (v.name === 'chat' && chats.some(c => c.id === v.id)) || (v.name === 'new' && !v.from && (S.form?.folder ?? v.folder) === cwd);
-    tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button><button class="proj-more${v.name === 'project' && v.folder === cwd ? ' on' : ''}" data-act="project-page" data-arg="${esc(cwd)}" title="Project settings" aria-label="Settings for ${esc(base(cwd))}">⋯</button></div>`;
+    tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${moreFolders(cwd)}${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button><button class="proj-more${v.name === 'project' && v.folder === cwd ? ' on' : ''}" data-act="project-page" data-arg="${esc(cwd)}" title="Project settings" aria-label="Settings for ${esc(base(cwd))}">⋯</button></div>`;
     if (folded) continue;
     if (!keep) tree += `<div data-pro-slot="project" data-cwd="${esc(cwd)}"></div>`;
     // a main chat and its sub threads: the main chat first, its sub threads right under it (plan 2026-11-14, Package 4A)
@@ -3011,6 +3019,8 @@ async function answerProposal(el) {
   }
   delete S.pp[req];
   document.activeElement?.blur();
+  // "Create and open New chat there": the new project's folder is chosen; the user picks who and sends (Chorus starts nothing)
+  if (r?.open) return go({ name: 'new', folder: r.open });
   return loadDecided();
 }
 

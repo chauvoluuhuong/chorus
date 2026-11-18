@@ -118,6 +118,8 @@ a { color: var(--accent); }
 .proj-row { display: flex; align-items: center; position: relative; }
 .proj-row .proj { flex: 1; min-width: 0; }
 .proj .pname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* "+N folders": a project's extra working folders, after its name (one row per project, never a row per folder) */
+.proj .pmore { flex: none; margin-left: 6px; font-size: 11px; font-weight: 400; color: var(--faint); white-space: nowrap; }
 .proj-add { flex: none; width: 20px; height: 20px; margin: 0 8px 0 2px; border: 0; border-radius: 50%; padding: 0; display: grid; place-items: center; background: transparent; color: var(--accent); opacity: 0; }
 .proj-add + .proj-more { margin-left: -6px; }
 /* ⋯ after ＋: the project's page in Settings (shown with ＋ on hover; always on a touch screen) */
