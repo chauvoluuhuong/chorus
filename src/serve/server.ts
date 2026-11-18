@@ -62,6 +62,8 @@ const VENDOR: Record<string, string> = {
 };
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const DEFAULT_SIZE = { cols: 120, rows: 36 };
+/** Follow Chorus: the channels the page's follow modal links to (the same two as FOLLOW_LINKS in src/desktop/follow.js) */
+export const FOLLOW_LINKS: Record<string, string> = { youtube: 'https://www.youtube.com/@luuhuongtech?sub_confirmation=1', facebook: 'https://www.facebook.com/luuhuongtech/' };
 /** a reported artifact served to a device: what a browser can show by itself */
 const FILE_TYPES: Record<string, string> = { '.md': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.json': 'application/json', '.csv': 'text/plain; charset=utf-8', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.pdf': 'application/pdf' };
 /** The system's open command for a file or a link (macOS open, Linux xdg-open): an argument, never a shell string. */
@@ -1427,6 +1429,11 @@ export class ChorusServer {
       }
       return undefined;
     }
+    if (a === 'follow' && method === 'POST' && id === 'open' && parts.length === 2) {
+      // Follow Chorus from the native window (src/desktop/follow.js): only its two channels open
+      const url = Object.hasOwn(FOLLOW_LINKS, String(b.to)) ? FOLLOW_LINKS[String(b.to)] : undefined;
+      return url ? this.openLink(url, this.o.openLink) : { error: 'unknown channel' };
+    }
     const thread = id ? c.store.getThread(id) : undefined;
     // literal routes first ("skills/import"), then the ones with an id ("skills/:id/toggle")
     const literal = `${method} ${parts.join('/')}`;
@@ -2234,7 +2241,7 @@ function readJson(req: http.IncomingMessage, limit = 1_000_000): Promise<Record<
 }
 
 /** What the page may save on the server (`POST ui`). */
-const UI_KEYS = new Set(['browseSort', 'hidden', 'folded', 'agent', 'drawer', 'side', 'sideW', 'noDelAsk', 'welcome', 'ended', 'banner']);
+const UI_KEYS = new Set(['browseSort', 'hidden', 'folded', 'agent', 'drawer', 'side', 'sideW', 'noDelAsk', 'welcome', 'ended', 'banner', 'doctorTip']);
 const asAgent = (s: unknown): AgentId | undefined => (AGENTS.includes(s as AgentId) ? (s as AgentId) : undefined);
 const expand = (p: string) => p.replace(/^~(?=\/|$)/, process.env.HOME ?? '~');
 

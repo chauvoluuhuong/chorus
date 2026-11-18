@@ -1118,3 +1118,73 @@ textarea.in.pp-note { display: block; font: 13px/1.5 var(--f-sans); resize: vert
   .prow .p { flex-basis: 100%; order: 3; }
 }
 .proj-page.phone > .card + .card { margin-top: 12px; }
+
+/* Follow Chorus (src/desktop/follow.js, @workspace/mockups/doctor-tip.html): the Doctor page's card and the follow modal */
+.shape-card { margin-top: 18px; display: flex; align-items: center; gap: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 14px 16px; }
+.shape-card .hi, .fd .ty { border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex: none; }
+.shape-card .hi { width: 38px; height: 38px; }
+.shape-card .hi svg { width: 20px; height: 20px; }
+.shape-card .t { flex: 1; min-width: 0; }
+.shape-card b { display: block; font: 500 16px var(--f-serif); }
+.shape-card p { margin: 0; color: var(--muted); font-size: 13px; }
+.scrim.follow { background: rgba(20, 20, 19, 0.45); backdrop-filter: blur(2px); padding: 16px; }
+.fd { position: relative; width: min(420px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 26px 22px 18px; text-align: center; box-shadow: 0 30px 90px -20px rgba(20, 20, 19, 0.35); }
+.fd .fx { position: absolute; top: 12px; right: 12px; width: 30px; height: 30px; border-radius: 8px; border: 0; background: transparent; color: var(--faint); font-size: 20px; line-height: 1; cursor: pointer; }
+.fd .fx:hover { background: var(--hover); color: var(--ink); }
+.fd .ty { width: 56px; height: 56px; margin: 0 auto 14px; }
+.fd .ty svg { width: 30px; height: 30px; }
+.fd h3 { font: 500 23px/1.2 var(--f-serif); margin: 0 0 8px; }
+.fd p { color: var(--muted); margin: 0 0 18px; font-size: 14.5px; }
+.fd .w { display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); background: var(--bg); border-radius: 12px; padding: 10px 10px 10px 14px; text-align: left; }
+.fd .w + .w { margin-top: 10px; }
+.fd .fw-ic { width: 26px; height: 26px; flex: none; }
+.fd .who { display: grid; line-height: 1.3; flex: 1; }
+.fd .who b { font-size: 14.5px; }
+.fd .who small { color: var(--muted); font-size: 12.5px; }
+.fd .pill { border: 0; border-radius: 999px; padding: 8px 16px; font-size: 13.5px; font-weight: 600; text-decoration: none; }
+.fd .pill.yt { background: #0f0f0f; color: #fff; }
+.fd .pill.fb { background: #1877f2; color: #fff; }
+.fd .later { display: block; margin: 12px auto 0; background: transparent; border: 0; color: var(--faint); font-size: 13.5px; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+.fd .later:hover { color: var(--ink); }
+@media (prefers-reduced-motion: no-preference) {
+  .fd { animation: fd-pop 0.22s ease-out; }
+  .fd .ty { animation: fd-beat 1.6s ease-in-out 0.3s 2; }
+}
+@keyframes fd-pop { from { opacity: 0; translate: 0 8px; } }
+@keyframes fd-beat { 0%, 100% { scale: 1; } 30% { scale: 1.14; } 50% { scale: 0.96; } }
+@media (max-width: 640px) {
+  .scrim.follow { place-items: center; }
+  .shape-card { flex-direction: column; align-items: stretch; text-align: left; }
+  .shape-card .hi { align-self: flex-start; }
+  .shape-card .btn { justify-content: center; min-height: 40px; }
+}
+
+/* Meet Doctor (app.js openDoctorTip, @workspace/mockups/doctor-tip.html scene 1): the app dims, the Doctor button (a phone: the
+   More tab) pulses in teal above the dim, a card points at it; the follow modal (.scrim, z-index 20) opens above it all */
+#doctor-tip .dim { position: fixed; inset: 0; z-index: 15; background: rgba(20, 20, 19, 0.28); animation: fade 0.12s ease-out; }
+.tip-spot { position: relative; z-index: 16; background: var(--panel) !important; color: var(--ink) !important; border-radius: 8px; }
+#tabs .tip-spot { background: var(--side) !important; color: var(--accent) !important; border-radius: 12px; }
+@media (prefers-reduced-motion: no-preference) {
+  .tip-spot { animation: tip-ring 1.6s ease-out infinite; }
+  #doctor-tip .pop { animation: tip-pop 0.22s ease-out; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tip-spot { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 5px var(--accent); }
+}
+@keyframes tip-ring { 0%, 100% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 5px var(--accent); } 70% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 11px rgba(15, 118, 110, 0); } }
+@keyframes tip-pop { from { opacity: 0; translate: -6px 0; } }
+#doctor-tip .pop { position: fixed; z-index: 17; width: 330px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow), 0 24px 60px rgba(20, 20, 19, 0.2); padding: 16px 16px 14px; }
+#doctor-tip .pop::before { content: ''; position: absolute; width: 12px; height: 12px; background: var(--panel); border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+#doctor-tip .pop[data-side='left']::before { left: -7px; top: var(--arrow, 50%); transform: rotate(45deg); }
+#doctor-tip .pop[data-side='up']::before { bottom: -7px; left: var(--arrow, 50%); transform: rotate(-45deg); }
+#doctor-tip .pop[data-side='up'] { animation-name: fade; }
+#doctor-tip h3 { font: 500 18px/1.25 var(--f-serif); margin: 0 0 6px; display: flex; align-items: center; gap: 8px; }
+#doctor-tip h3 svg { width: 20px; height: 20px; color: var(--accent); flex: none; }
+#doctor-tip .say { margin: 0 0 12px; color: var(--ink-2); font-size: 13.5px; }
+#doctor-tip .shape { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
+#doctor-tip .hi { width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex: none; }
+#doctor-tip .hi svg { width: 16px; height: 16px; }
+#doctor-tip .shape .t { flex: 1; font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+#doctor-tip .shape .t b { display: block; color: var(--ink); font-size: 13px; }
+#doctor-tip .shape .btn { white-space: nowrap; }
+#doctor-tip .foot { display: flex; justify-content: flex-end; margin-top: 12px; }
