@@ -26,11 +26,23 @@ export interface Proposal {
   project: string;
   changes: ProposedChange[];
   reason?: string;
+  /** propose_new_project: the card creates the project (its main folder too with `create`) */
+  kind?: 'new_project';
+  create?: boolean;
+  /** the name the card shows: the folder's name, or "This computer" */
+  name?: string;
 }
 
 export const APPROVE_RESTART = 'Approve and restart this chat';
 export const APPROVE = 'Approve';
 export const DECLINE = 'Decline';
+export const CREATE = 'Create';
+export const CREATE_OPEN = 'Create and open New chat there';
+
+/** "This computer" (~/.chorus/computer, or any …/.chorus/computer): a place for chats that belong to no project. */
+export const isComputer = (dir: string) => /\/\.chorus\/computer$/.test(path.resolve(dir));
+/** What a card or a reply calls a project: its folder's name, or "This computer". */
+export const placeName = (dir: string) => (isComputer(dir) ? 'This computer' : path.basename(path.resolve(dir)) || dir);
 
 export const tilde = (p: string) => {
   const h = os.homedir();
@@ -99,6 +111,55 @@ export function checkProposal(settings: ProjectSettings, folder: string, raw: un
   return errors.length ? { error: `Nothing was proposed. Fix these and call propose_project_change again:\n- ${errors.join('\n- ')}` } : { changes: out };
 }
 
+/**
+ * propose_new_project's arguments checked before any card: the main folder (ProjectSettings.checkNewProject: not /, home, Chorus's
+ * own folders or an existing project), the note, and the folders and variables with checkProposal's own rules. All errors at once.
+ */
+export function checkNewProject(settings: ProjectSettings, raw: Record<string, unknown>, hasChat: (dir: string) => boolean): { proposal: Proposal } | { error: string } {
+  const errors: string[] = [];
+  const f = typeof raw.folder === 'string' ? expandHome(raw.folder.trim()) : '';
+  const create = raw.create === true;
+  const folder = f && path.isAbsolute(f) ? path.resolve(f) : '';
+  if (!folder) errors.push(`folder: the project's main folder must be an absolute path${raw.folder ? `: ${String(raw.folder)}` : ''}`);
+  else {
+    const bad = settings.checkNewProject(folder, { create, hasChat: hasChat(folder) });
+    if (bad) errors.push(`folder: ${bad}`);
+  }
+  const why = typeof raw.why === 'string' ? raw.why.replace(/\s+/g, ' ').trim() : '';
+  if (!why) errors.push('why: say in one or two lines why the user wants this project');
+  else if (why.length > 1000) errors.push('why is too long: at most 1000 characters');
+  const changes: unknown[] = [];
+  if (typeof raw.note !== 'string' || !raw.note.trim()) errors.push('note: give the description: what the project is and how its folders relate');
+  else changes.push({ kind: 'set_note', note: raw.note, why: 'the description of the new project' });
+  const folders = raw.folders ?? [];
+  const variables = raw.variables ?? [];
+  if (!Array.isArray(folders) || folders.length > 12) errors.push('folders: a list of at most 12 folders');
+  else for (const x of folders) { const o = (x ?? {}) as Record<string, unknown>; changes.push({ kind: o.create === true ? 'create_folder' : 'add_folder', path: o.path, why: o.why }); }
+  if (!Array.isArray(variables) || variables.length > 12) errors.push('variables: a list of at most 12 variables');
+  else for (const x of variables) { const o = (x ?? {}) as Record<string, unknown>; changes.push({ kind: 'set_variable', name: o.name, why: o.why, suggested_value: o.suggested_value }); }
+  let checked: ProposedChange[] = [];
+  if (folder && changes.length) {
+    const ok = checkProposal(settings, folder, changes);
+    if ('error' in ok) errors.push(...ok.error.split('\n- ').slice(1).map(e => e.replace(/^change (\d+) \((\w+)\)/, (_m, _n, k) => (k === 'set_note' ? 'note' : k === 'set_variable' ? 'variable' : 'folder')).replace(/: to make a new folder use create_folder$/, ': set create on it to make it')));
+    else checked = ok.changes;
+  }
+  if (errors.length) return { error: `Nothing was proposed. Fix these and call propose_new_project again:\n- ${errors.join('\n- ')}` };
+  return { proposal: { kind: 'new_project', project: folder, create, name: placeName(folder), changes: checked, reason: why } };
+}
+
+/** The new-project card: its question, what it makes, and Create / Create and open New chat there / Decline. */
+export function newProjectCard(p: Proposal): { question: string; details: string; options: string[] } {
+  const name = path.basename(p.project) || p.project;
+  const details = [
+    ...(p.reason ? [p.reason, ''] : []),
+    `- Project folder \`${tilde(p.project)}\`${p.create ? ' (Chorus creates it)' : ''}`,
+    ...p.changes.map(c => `- ${lineOf(c)}${c.kind === 'set_note' ? '' : `: "${c.why}"`}`),
+    '',
+    'Nothing is made until you choose.',
+  ].join('\n');
+  return { question: `Create project "${name}"?`, details, options: [CREATE, CREATE_OPEN, DECLINE] };
+}
+
 const lineOf = (c: ProposedChange) => {
   switch (c.kind) {
     case 'set_note': return `Set the project's description: "${c.note}"`;
@@ -112,7 +173,7 @@ const lineOf = (c: ProposedChange) => {
 
 /** The card: one question, the changes with their why, and the options (folders and the note need no restart: Approve / Decline). */
 export function proposalCard(project: string, changes: ProposedChange[], reason?: string): { question: string; details: string; options: string[] } {
-  const name = path.basename(project) || project;
+  const name = placeName(project);
   const one = changes.length === 1 ? changes[0] : undefined;
   const question = !one
     ? `Set up "${name}": ${changes.length} changes?`
@@ -176,14 +237,17 @@ export async function getProject(d: GetProjectDeps, t: ThreadRow) {
   };
   const pending = d.runtime.restartPending(t.id);
   const lacking = missing.folders.length + missing.variables.length > 0;
-  const suggested_folders = s.suggestFolders(folder);
+  const suggested_folders = isComputer(folder) ? [] : s.suggestFolders(folder);
   const counts = await d.counts(folder);
   const last = chats[0]?.updated ?? null;
-  const name = path.basename(folder) || folder;
+  const name = placeName(folder);
+  const computer = isComputer(folder);
   const setupBits = [!rec.note && 'no description', suggested_folders.length && `${suggested_folders.length} likely folder${suggested_folders.length > 1 ? 's' : ''} not added yet`].filter(Boolean);
   return {
     name,
     folder,
+    is_project: !computer,
+    ...(computer ? { place: 'This computer' } : {}),
     note: rec.note,
     note_by: rec.note_by,
     git: s.describeFolder(folder).git,
@@ -206,8 +270,8 @@ export async function getProject(d: GetProjectDeps, t: ThreadRow) {
     ...(counts ? { tasks: { total: counts.tasks, open: counts.open, list: await d.tasks(folder) } } : {}),
     artifacts,
     last_activity: last,
-    ...(setupBits.length ? { setup_hint: `This project has ${setupBits.join(' and ')}: set it up with one propose_project_change call.` } : {}),
-    how_to_change: 'propose_project_change (the user approves on one card)',
+    ...(computer ? { setup_hint: 'This chat is in This computer, not a project. To set up a project, use propose_new_project.' } : setupBits.length ? { setup_hint: `This project has ${setupBits.join(' and ')}: set it up with one propose_project_change call.` } : {}),
+    how_to_change: computer ? 'propose_new_project to make a project; propose_project_change changes This computer itself' : 'propose_project_change (the user approves on one card)',
   };
 }
 

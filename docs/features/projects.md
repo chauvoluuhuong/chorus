@@ -50,20 +50,25 @@ What reaches a **running** chat (`src/serve/project-runtime.ts`, `ProjectRuntime
 
 ## Model tools
 
-All four are in Chorus's MCP server (`src/mcp/server.ts`, `PROJECT_TOOL_NAMES`), answered by `chorus serve`
-(`src/serve/project-tools.ts`), callable without a permission prompt, and limited to the calling chat's own project.
+All five are in Chorus's MCP server (`src/mcp/server.ts`, `PROJECT_TOOL_NAMES`), answered by `chorus serve`
+(`src/serve/project-tools.ts`), callable without a permission prompt, and limited to the calling chat's own project (`propose_new_project` makes a new one).
 
 | Tool | Does |
 |---|---|
 | `get_project()` | The chat's project: name, folder, note, working folders (why, by, created, exists), variable **names** with `in_this_chat`, `suggested_folders` (e.g. a sibling folder its `package.json` depends on), chats `{total, running}`, tasks `{total, open}` (only with Pro, from `projectTasks`), artifact count, last activity, `pending_restart` and `this_chat.missing`. Never a value, never another project. |
 | `propose_project_change(changes, reason?)` | One card for the **user** with a list of changes: `set_note`, `add_folder`, `create_folder` (its parent must exist), `remove_folder`, `set_variable` (name only; an optional `suggested_value` that is not secret), `remove_variable`, each with its own why. Every change is checked first; all errors come back together and no card is made. The card goes to the user from any chat, Workers and sub threads included, never to a Planner. The chat reads only "approved/declined" and "<NAME> is set (value hidden)". |
+| `propose_new_project(folder, create?, note, folders?, variables?, why)` | Creates a **new** project from any chat, This computer too (below). |
 | `reload_project_settings()` | Restart this chat at the end of its current turn, conversation kept, so it gets the project's current folders and variables. |
 | `rename_chat(title)` | Names this chat (below). |
 
 `MCP_INSTRUCTIONS` tells models: when the project has no description, when `get_project` suggests folders, or when a folder outside
 the project or a variable is needed, set it up with one `propose_project_change` call; never ask the user to edit a CLI config or a
 shell profile, and never ask for a secret in the chat; once there is a plan, name the chat with `rename_chat` (a Planner also
-renames its task with `task_update`).
+renames its task with `task_update`); to set up a NEW project, use `propose_new_project` (works from any chat, This computer too).
+
+In This computer (a chat whose folder ends with `/.chorus/computer`) `get_project` adds `is_project: false`, `place: "This computer"`
+and the hint to use `propose_new_project`; other chats get `is_project: true`. `propose_project_change` still works there, and its
+card names "This computer".
 
 ### The proposal card
 
@@ -73,6 +78,28 @@ description. Choices: **Decline**, **Approve** (or Add folder / Set variable for
 Approving applies every change with who asked, why and the card's id; `create_folder` makes exactly one folder. A new folder goes live
 to every running chat of the project, the asking one included. "Approve and restart" restarts the asking chat once the turn that
 reads the answer has ended. A `set_variable` without a typed value refuses the whole answer: nothing is applied and the card stays.
+
+## New project: `propose_new_project`
+
+Asked to "set up a project" from This computer, a model used to save the description and folders onto This computer, because
+`propose_project_change` only changes the calling chat's own project. `propose_new_project` makes a separate project:
+
+- **Checked first**, all errors at once, no card: the main folder is absolute and is not `/`, the home folder, anything in Chorus's
+  own folders (`~/.chorus`, the store root, This computer) or a folder that already is a project (settings or a chat: change that one
+  with `propose_project_change` from a chat there). With `create` it must not exist and its parent must; otherwise it must exist. The
+  folders and variables follow `propose_project_change`'s rules.
+- **One card for the user** (never a Planner), titled `Create project "<name>"?`: the main folder (with "new folder" when Chorus makes
+  it), the editable description, each folder and variable row as on the setup card, and **Decline**, **Create and open New chat
+  there**, **Create**.
+- **Create** makes the main folder when asked, registers it (`ProjectSettings.register`: `registered: true, registered_at`, who and
+  the card), then sets the note, adds or makes the folders and sets the variables from the values typed on the card, all with who
+  asked and this card. "Create and open New chat there" also opens New chat with that folder chosen; Chorus starts nothing by itself,
+  and the asking chat stays where it is. The chat reads "approved: created project <name> at <path> with <n> folders and <m>
+  variables (values hidden). Chats started there get them." Decline makes nothing.
+- **Before its first chat** the project shows in the sidebar (the same row, ＋ and ⋯ on hover, nothing under it) and on the Projects
+  page with "0 chats" (`GET projects` adds `ProjectSettings.registered()`; the page state has `projects: [{folder, registered,
+  folders}]`). A project with extra folders shows once, under its main folder, with a faint "+N folders" after its name (the title
+  lists them). Delete works with no chats: it forgets the registration and settings; every folder stays on disk.
 
 ## Naming a chat: `rename_chat`
 
@@ -97,6 +124,8 @@ to the chat process (`env: launch.env`; ThreadHost already accepted `env`). With
 
 `test/core/projects.test.ts`, `test/core/export-project.test.ts`, `test/serve/projects-api.test.ts`,
 `test/serve/project-launch.test.ts`, `test/serve/proposal-answer.test.ts`, `test/serve/projects-ui.test.ts`,
-`test/mcp/get-project.test.ts`, `test/mcp/propose-project-change.test.ts`, `test/mcp/rename-chat.test.ts`; e2e with the real CLIs:
+`test/mcp/get-project.test.ts`, `test/mcp/propose-project-change.test.ts`, `test/mcp/propose-new-project.test.ts`,
+`test/mcp/rename-chat.test.ts`; e2e with the real CLIs:
 `npm run smoke:projects` (`test/smoke/projects.ts`: new and resumed chats, the live folder add, a Claude chat setting a project up
-by itself, export and delete, rename and Undo).
+by itself, export and delete, rename and Undo, and part E: a Claude chat in This computer creating a new project through one
+`propose_new_project` card).
