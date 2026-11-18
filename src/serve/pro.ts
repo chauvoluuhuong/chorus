@@ -235,6 +235,27 @@ export class ProHost {
     return this.module?.chatExtras?.(this.ctx, thread);
   }
 
+  /** A project's task counts (Settings › Projects): undefined without the module, locked, or with an older bundle. Free code never reads pro.db. */
+  async projectCounts(project: string): Promise<{ tasks: number; open: number } | undefined> {
+    await this.ready;
+    try {
+      const c = this.module?.projectCounts?.(this.ctx, project);
+      return c && typeof c.tasks === 'number' ? { tasks: c.tasks, open: Number(c.open) || 0 } : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** The project's task files for Export this project (paths under pro/): none without the module or with an older bundle. */
+  async exportProject(project: string): Promise<{ path: string; data: string | Buffer }[]> {
+    await this.ready;
+    try {
+      return this.module?.exportProject?.(this.ctx, project) ?? [];
+    } catch {
+      return [];
+    }
+  }
+
   /** A chat's role, live (current_thread, the request_approval guard): none without the bundle or for a plain chat. Not gated. */
   roleOf(thread: string): ThreadRole | undefined {
     try {

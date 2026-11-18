@@ -25,7 +25,7 @@ import type { ThreadHost } from '../app/thread-host.ts';
 import { transcriptPath } from '../core/capture.ts';
 import type { ThreadRow } from '../core/store.ts';
 import { buildHandoff, handoffPrompt } from '../core/handoff.ts';
-import { exportAll } from '../core/export.ts';
+import { exportAll, exportProject } from '../core/export.ts';
 import { SKIP_FLAG } from '../core/launch.ts';
 import { defaultOpener } from '../core/opener.ts';
 import { disabledSkills, expandSkillMentions, findNativeSkills, importSkill, listSkills, setSkillEnabled, sourceDir, syncSkills } from '../core/skills.ts';
@@ -89,7 +89,7 @@ export function hostNames(host?: string, interfaces: ReturnType<typeof os.networ
   else if (host) add(host);
   return [...names];
 }
-const LITERAL = new Set(['POST ui', 'POST folders/pick', 'POST skills/import', 'GET skills/all', 'POST skills/sync', 'POST skills/sources', 'POST skills/sources/pick', 'POST skills/sources/remove', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/image', 'POST doctor/issue/send']);
+const LITERAL = new Set(['POST ui', 'POST folders/pick', 'POST skills/import', 'GET skills/all', 'POST skills/sync', 'POST skills/sources', 'POST skills/sources/pick', 'POST skills/sources/remove', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/image', 'POST doctor/issue/send', 'GET projects', 'GET projects/one', 'POST projects/folders', 'DELETE projects/folders', 'POST projects/variables', 'DELETE projects/variables', 'POST projects/restart-idle']);
 
 /** The App without a terminal: input and output go nowhere, the Controller drives it as usual. */
 export function headlessIO(): AppIO {
@@ -196,6 +196,8 @@ export class ChorusServer {
   readonly mail: Mailbox;
   /** the projects' folders and variables, and what each running chat got of them (task #11) */
   readonly projects: ProjectRuntime;
+  /** the projects' folders, variable names and values files (src/core/projects.ts): the page's routes and Delete write it */
+  readonly projectSettings: ProjectSettings;
   /** the watcher's and the mailbox's clock */
   private now: () => number = Date.now;
   /** each running Claude chat's `chorus mcp` stream, for its channel pushes */
@@ -277,6 +279,7 @@ export class ChorusServer {
       changed: () => this.pushState(),
     });
     const settings = o.chatLaunch?.projects ?? new ProjectSettings(this.c.store.root);
+    this.projectSettings = settings;
     this.projects = new ProjectRuntime({
       settings,
       running: () => this.app.entries.filter(e => e.host?.state === 'running').map(e => e.id),
@@ -643,6 +646,73 @@ export class ChorusServer {
     this.pushState();
   }
 
+  /* ---------- Settings › Projects (task #11 step 7) ---------- */
+
+  /** A project's folder from a request: absolute after ~ is expanded, or undefined. */
+  private projectDir(folder: unknown): string | undefined {
+    if (typeof folder !== 'string' || !folder.trim()) return undefined;
+    const dir = expand(folder.trim());
+    return path.isAbsolute(dir) ? path.resolve(dir) : undefined;
+  }
+
+  /** Every chat of each project (its folder: the chat's project, or its own folder), "This computer" left out. */
+  private projectChats(): Map<string, { id: string; updated: string }[]> {
+    const m = new Map<string, { id: string; updated: string }[]>();
+    const none = computerDir();
+    for (const t of this.c.store.listThreads()) {
+      const p = t.project ?? t.cwd;
+      if (!p || p === none) continue;
+      (m.get(p) ?? m.set(p, []).get(p)!).push({ id: t.id, updated: String(t.updated ?? t.created ?? '') });
+    }
+    return m;
+  }
+
+  /** GET projects: every project that has a chat, newest activity first; tasks only when the paid module counts them. */
+  async listProjects() {
+    const out = [];
+    for (const [folder, chats] of this.projectChats()) {
+      const counts = await this.pro.projectCounts(folder);
+      const last = chats.reduce((a, c) => (c.updated > a ? c.updated : a), '');
+      out.push({ folder, name: path.basename(folder) || folder, chats: chats.length, ...(counts ? { tasks: counts.tasks } : {}), last });
+    }
+    return out.sort((a, b) => (a.last < b.last ? 1 : a.last > b.last ? -1 : 0)).map(({ last, ...p }) => p);
+  }
+
+  /** GET projects/one: the project's page. Names only: no variable's value ever leaves the values file here. */
+  async oneProject(folder: string) {
+    const ids = (this.projectChats().get(folder) ?? []).map(c => c.id);
+    const rec = this.projectSettings.get(folder);
+    if (!ids.length && !rec.version) return { error: `No project at ${folder}` };
+    const running = new Set(this.app.entries.filter(e => e.host?.state === 'running').map(e => e.id));
+    const counts = await this.pro.projectCounts(folder);
+    const artifacts = ids.length ? (this.c.store.db.prepare(`SELECT COUNT(*) AS n FROM artifacts WHERE thread_id IN (${ids.map(() => '?').join(',')})`).get(...ids) as { n: number }).n : 0;
+    return {
+      folder,
+      name: path.basename(folder) || folder,
+      chats: { total: ids.length, running: ids.filter(id => running.has(id)).length },
+      ...(counts ? { tasks: { total: counts.tasks, open: counts.open } } : {}),
+      artifacts,
+      folders: rec.folders.map(f => ({ path: f.path, why: f.why, by: f.by, at: f.at })),
+      variables: rec.variables.map(v => ({ name: v.name, why: v.why, by: v.by, at: v.at })),
+      stale: this.projects.staleChats(folder).length,
+    };
+  }
+
+  /**
+   * The page's own changes (by "you"). A new folder reaches running chats live where the CLI can take it; a removed folder or any
+   * variable change only marks them stale, so the page's banner offers "Restart idle ones". Open pages update through the state push.
+   */
+  private async changeProject(folder: string, change: Parameters<ProjectRuntime['applyToRunning']>[1], apply: () => void) {
+    try {
+      apply();
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+    await this.projects.applyToRunning(folder, change, { restart: false }).catch(e => this.noteError('project change', e));
+    this.pushState();
+    return this.oneProject(folder);
+  }
+
   /**
    * Deletes everything Chorus keeps for one project (the × on a project, after its warning): each chat whose folder is exactly
    * this one is stopped and deleted as DELETE chats/:id does (its rows in every table go, the paid module hears each one), the
@@ -674,6 +744,8 @@ export class ChorusServer {
     fs.writeFileSync(path.join(c.store.root, 'ui.json'), JSON.stringify(ui, null, 2));
     // Chorus's own records of skill folders inside it (never a file, never a link)
     for (const src of c.store.skillSources()) if (src.path === dir || src.path.startsWith(dir + path.sep)) c.store.removeSkillSource(src.path);
+    // its working folders, variable names and values (projects.json, project-env.json); the folders themselves stay on disk
+    this.projectSettings.forget(dir);
     this.pro.chatEvent({ type: 'project-deleted', project: dir } as { type: string });
     this.pushState();
     return { removed };
@@ -1143,6 +1215,18 @@ export class ChorusServer {
     const c = this.c;
     if (a === 'export' && method === 'POST') {
       // the top bar's Export: everything, in one .zip in Downloads (plan stage 11, free for everyone)
+      if (!id && b.project !== undefined) {
+        // Settings › Projects › <project> › Export: only its chats and artifacts, and its tasks with Pro (never pro.db, never a value)
+        const project = this.projectDir(b.project);
+        if (!project) return { error: 'the project folder is needed' };
+        try {
+          const r = exportProject({ home: c.store.root, version: versions().chorus, dir: this.o.exportDir, project, pro: await this.pro.exportProject(project) });
+          this.lastExport = r.file;
+          return r;
+        } catch (e) {
+          return { error: `Could not export: ${(e as Error).message}` };
+        }
+      }
       if (!id) {
         try {
           const r = exportAll({ home: c.store.root, version: versions().chorus, dir: this.o.exportDir });
@@ -1235,6 +1319,38 @@ export class ChorusServer {
       }
       case 'DELETE projects':
         return this.deleteProject(String(b.folder ?? q.get('folder') ?? ''));
+      case 'GET projects':
+        return this.listProjects();
+      case 'GET projects/one': {
+        const folder = this.projectDir(q.get('folder'));
+        return folder ? this.oneProject(folder) : { error: 'the project folder is needed' };
+      }
+      case 'POST projects/folders':
+      case 'DELETE projects/folders': {
+        const folder = this.projectDir(b.folder);
+        const dir = this.projectDir(b.dir);
+        if (!folder) return { error: 'the project folder is needed' };
+        if (!dir) return { error: 'the folder must be an absolute path' };
+        return method === 'POST'
+          ? this.changeProject(folder, { kind: 'add_folder', path: dir }, () => this.projectSettings.addFolder(folder, dir, { by: 'you', why: typeof b.why === 'string' ? b.why.trim().slice(0, 500) : '' }))
+          : this.changeProject(folder, { kind: 'remove_folder', path: dir }, () => this.projectSettings.removeFolder(folder, dir));
+      }
+      case 'POST projects/variables':
+      case 'DELETE projects/variables': {
+        const folder = this.projectDir(b.folder);
+        if (!folder) return { error: 'the project folder is needed' };
+        const name = typeof b.name === 'string' ? b.name.trim() : '';
+        if (method === 'DELETE') return this.changeProject(folder, { kind: 'remove_variable', name }, () => this.projectSettings.removeVariable(folder, name));
+        if (typeof b.value !== 'string') return { error: 'the value must be text' };
+        return this.changeProject(folder, { kind: 'set_variable', name }, () => this.projectSettings.setVariable(folder, name, b.value, { by: 'you' }));
+      }
+      case 'POST projects/restart-idle': {
+        const folder = this.projectDir(b.folder);
+        if (!folder) return { error: 'the project folder is needed' };
+        const r = this.projects.restartIdle(folder);
+        this.pushState();
+        return r;
+      }
       case 'POST chats': {
         const agent = asAgent(b.agent);
         if (!agent) return { error: 'agent must be claude, codex or agy' };
