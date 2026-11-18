@@ -1,6 +1,8 @@
 // The optional module's seam. This file only passes calls on: with nothing loaded there is no code to run, so patching the check below
 // gains nothing. The loader and its formats live in the core package.
+import path from 'node:path';
 import { exclude } from '@chauvoluuhuong/chorus-core';
+import { ProjectSettings } from '../core/projects.ts';
 import type { AgentId } from '../core/types.ts';
 import { syncSkills } from '../core/skills.ts';
 import type { Store } from '../core/store.ts';
@@ -37,14 +39,32 @@ export class ChatLaunch {
   /** what the chat's mail transport adds to its launch (set by chorus serve: its transports' launch()) */
   wake: ((agent: AgentId, thread: string) => { args?: string[]; env?: Record<string, string>; files?: Record<string, string> } | undefined) | undefined;
   readonly store: Store | undefined;
+  /** the projects' folders and variables (src/core/projects.ts), in the store's folder */
+  readonly projects: ProjectSettings | undefined;
+  /** told what each start or resume got (chorus serve: ProjectRuntime.launched) */
+  launched: ((threadId: string, project: string, addDirs: string[], env: Record<string, string>) => void) | undefined;
 
   constructor(store?: Store) {
     this.store = store;
+    this.projects = store ? new ProjectSettings(store.root) : undefined;
   }
 
-  extras(o: { threadId: string; project: string; cwd: string }, agent: AgentId): { role?: ThreadRole; readOnly?: boolean; moreTools?: string[]; parent?: { id: string; title: string; brief: string }; actionLabels?: string[]; noNativeAsk?: boolean; wake?: ReturnType<NonNullable<ChatLaunch['wake']>> } {
+  extras(o: { threadId: string; project: string; cwd: string }, agent: AgentId): { role?: ThreadRole; readOnly?: boolean; moreTools?: string[]; parent?: { id: string; title: string; brief: string }; actionLabels?: string[]; noNativeAsk?: boolean; wake?: ReturnType<NonNullable<ChatLaunch['wake']>>; addDirs?: string[]; env?: Record<string, string>; liveDirs?: boolean } {
     const wake = this.wake?.(agent, o.threadId);
-    return { ...this.extrasOf(o, agent), ...(wake ? { wake } : {}) };
+    return { ...this.extrasOf(o, agent), ...(wake ? { wake } : {}), ...this.projectOf(o) };
+  }
+
+  /**
+   * The chat's project settings, at every start and every resume: its folders (`--add-dir`) and its variables (the process
+   * environment only). liveDirs: a folder added later can reach the running chat (Codex's default mode gets its per-session flag).
+   */
+  private projectOf(o: { threadId: string; project: string; cwd: string }): { addDirs?: string[]; env?: Record<string, string>; liveDirs?: boolean } {
+    if (!this.projects) return {};
+    const project = path.resolve(o.project || o.cwd);
+    const addDirs = this.projects.addDirs(project);
+    const env = this.projects.env(project);
+    this.launched?.(o.threadId, project, addDirs, env);
+    return { ...(addDirs.length ? { addDirs } : {}), ...(Object.keys(env).length ? { env } : {}), liveDirs: true };
   }
 
   private extrasOf(o: { threadId: string; project: string; cwd: string }, agent: AgentId): { role?: ThreadRole; readOnly?: boolean; moreTools?: string[]; parent?: { id: string; title: string; brief: string }; actionLabels?: string[]; noNativeAsk?: boolean } {
@@ -213,6 +233,38 @@ export class ProHost {
 
   chatExtras(thread: string) {
     return this.module?.chatExtras?.(this.ctx, thread);
+  }
+
+  /** A project's task counts (Settings › Projects): undefined without the module, locked, or with an older bundle. Free code never reads pro.db. */
+  async projectCounts(project: string): Promise<{ tasks: number; open: number } | undefined> {
+    await this.ready;
+    try {
+      const c = this.module?.projectCounts?.(this.ctx, project);
+      return c && typeof c.tasks === 'number' ? { tasks: c.tasks, open: Number(c.open) || 0 } : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** A project's open tasks, newest first (get_project): none without the module, locked, or with an older bundle. */
+  async projectTasks(project: string, limit = 20): Promise<{ number: number; title: string; state: string }[]> {
+    await this.ready;
+    try {
+      const l = this.module?.projectTasks?.(this.ctx, project, limit);
+      return Array.isArray(l) ? l.map(t => ({ number: Number(t.number), title: String(t.title), state: String(t.state) })) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** The project's task files for Export this project (paths under pro/): none without the module or with an older bundle. */
+  async exportProject(project: string): Promise<{ path: string; data: string | Buffer }[]> {
+    await this.ready;
+    try {
+      return this.module?.exportProject?.(this.ctx, project) ?? [];
+    } catch {
+      return [];
+    }
   }
 
   /** A chat's role, live (current_thread, the request_approval guard): none without the bundle or for a plain chat. Not gated. */

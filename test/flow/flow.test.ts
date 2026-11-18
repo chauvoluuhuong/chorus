@@ -58,7 +58,7 @@ test('mcp: get_handoff_context returns the parent thread and the call is logged'
   const t = setTimeout(() => void c.close(), 20000);
   t.unref();
   const tools = (await c.listTools()).tools.map(t => t.name).sort();
-  assert.deepEqual(tools, ['current_thread', 'get_handoff_context', 'get_skill', 'get_thread_turns', 'list_artifacts', 'list_skills', 'list_threads', 'list_watches', 'read_mail', 'request_approval', 'show_artifact']);
+  assert.deepEqual(tools, ['current_thread', 'get_handoff_context', 'get_project', 'get_skill', 'get_thread_turns', 'list_artifacts', 'list_skills', 'list_threads', 'list_watches', 'propose_project_change', 'read_mail', 'reload_project_settings', 'rename_chat', 'request_approval', 'show_artifact']);
   const out = text(await c.callTool({ name: 'get_handoff_context', arguments: {} }));
   assert.match(out, /parent work/);
   assert.match(out, /echo the probe string/);

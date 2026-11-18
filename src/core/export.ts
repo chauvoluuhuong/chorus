@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { DatabaseSync } from 'node:sqlite';
+import { ProjectSettings } from './projects.ts';
 
 /** A small ZIP writer: deflated entries, written as they come so a big export never sits in memory at once. */
 class Zip {
@@ -115,17 +116,17 @@ function markdown(chat: any) {
   return lines.join('\n');
 }
 
-/** Writes the export to `dir` (default the Downloads folder) and says what is in it. */
-export function exportAll(o: { home: string; version: string; dir?: string; now?: Date }): ExportResult {
-  const now = o.now ?? new Date();
-  const dir = o.dir ?? path.join(os.homedir(), 'Downloads');
-  fs.mkdirSync(dir, { recursive: true });
-  const stamp = now.toISOString().slice(0, 10);
-  let file = path.join(dir, `chorus-export-${stamp}.zip`);
-  for (let i = 2; fs.existsSync(file); i++) file = path.join(dir, `chorus-export-${stamp} (${i}).zip`);
-  const db = new DatabaseSync(path.join(o.home, 'chorus.db'), { readOnly: true });
-  const all = (sql: string, ...a: any[]) => db.prepare(sql).all(...a) as any[];
-  const has = (t: string) => !!db.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(t);
+interface Db {
+  all(sql: string, ...a: any[]): any[];
+  has(t: string): boolean;
+}
+
+/**
+ * Adds the chats (all, or those `only` keeps) to the zip: each as a Markdown page, with its artifacts and dropped files, and returns
+ * them for chorus.json. Shared by Export all and Export this project.
+ */
+function addChats(db: Db, zip: Zip, only: (t: any) => boolean = () => true): { chats: any[]; files: number } {
+  const { all, has } = db;
   const by = (rows: any[]) => rows.reduce((m, r) => (m.get(r.thread_id) ?? m.set(r.thread_id, []).get(r.thread_id)).push(r) && m, new Map<string, any[]>());
   const turns = by(all('SELECT * FROM turns ORDER BY thread_id, seq'));
   const tools = by(all('SELECT * FROM tool_calls ORDER BY thread_id, turn_seq'));
@@ -134,39 +135,80 @@ export function exportAll(o: { home: string; version: string; dir?: string; now?
   const arts = by(has('artifacts') ? all('SELECT * FROM artifacts ORDER BY ts') : []);
   const atts = by(has('attachments') ? all('SELECT * FROM attachments ORDER BY id') : []);
   const usage = new Map(all('SELECT * FROM usage').map(u => [u.thread_id, u]));
-  const zip = new Zip(file);
   let files = 0;
-  try {
-    const chats = all('SELECT * FROM threads ORDER BY created').map(t => {
-      const project = t.project ?? t.cwd;
-      const where = `files/${name(project)}/${t.id}`;
-      const chatDir = path.join(project, '.chorus', 'threads', t.id);
-      // the files themselves: what agents saved for the user, and what the user dropped and asked to copy
-      for (const sub of ['artifacts', 'attachments']) {
-        for (const rel of walk(path.join(chatDir, sub))) {
-          try {
-            zip.add(`${where}/${sub}/${rel}`, fs.readFileSync(path.join(chatDir, sub, rel)));
-            files++;
-          } catch {
-            /* a file that went away while exporting */
-          }
+  const chats = all('SELECT * FROM threads ORDER BY created').filter(only).map(t => {
+    const project = t.project ?? t.cwd;
+    const where = `files/${name(project)}/${t.id}`;
+    const chatDir = path.join(project, '.chorus', 'threads', t.id);
+    // the files themselves: what agents saved for the user, and what the user dropped and asked to copy
+    for (const sub of ['artifacts', 'attachments']) {
+      for (const rel of walk(path.join(chatDir, sub))) {
+        try {
+          zip.add(`${where}/${sub}/${rel}`, fs.readFileSync(path.join(chatDir, sub, rel)));
+          files++;
+        } catch {
+          /* a file that went away while exporting */
         }
       }
-      const u = usage.get(t.id);
-      const chat = {
-        id: t.id, title: t.title, project, agent: t.agent, model: t.model ?? null, effort: t.effort ?? null, cliVersion: t.cli_version ?? null,
-        parent: t.parent_thread_id ?? null, state: t.state, skipPermissions: !!t.skip_permissions, session: t.native_session_id ?? null, created: t.created, updated: t.updated,
-        turns: (turns.get(t.id) ?? []).map((x: any) => ({ seq: x.seq, role: x.role, text: x.text, at: x.ts ?? null })),
-        toolCalls: (tools.get(t.id) ?? []).map((x: any) => ({ id: x.call_id, turn: x.turn_seq, tool: x.tool, target: x.target, status: x.status, result: x.result ?? null, ms: x.duration_ms ?? null, note: x.note ?? null })),
-        approvals: (approvals.get(t.id) ?? []).map((x: any) => ({ what: x.what, decision: x.decision, at: x.ts })),
-        questions: (questions.get(t.id) ?? []).map((x: any) => ({ id: x.id, question: x.question, details: x.details ?? null, options: JSON.parse(x.options || '[]'), status: x.status, answer: x.answer ?? null, note: x.note ?? null, at: x.created, answered: x.answered ?? null })),
-        artifacts: (arts.get(t.id) ?? []).map((x: any) => ({ path: x.path, version: x.version, at: x.ts, file: `${where}/artifacts/${x.path}` })),
-        attachments: (atts.get(t.id) ?? []).map((x: any) => ({ file: x.copied ? `${where}/attachments/${path.basename(x.path)}` : null, path: x.path, from: x.original_path ?? null, copied: !!x.copied, bytes: x.bytes ?? null, at: x.created })),
-        usage: u ? { input: u.input_tokens, output: u.output_tokens, cacheRead: u.cache_read_tokens, costUsd: u.cost_usd } : null,
-      };
-      zip.add(`chats/${name(project)}/${String(t.created).slice(0, 10)} ${safe(t.title)} - ${t.id}.md`, markdown(chat));
-      return chat;
-    });
+    }
+    const u = usage.get(t.id);
+    const chat = {
+      id: t.id, title: t.title, project, agent: t.agent, model: t.model ?? null, effort: t.effort ?? null, cliVersion: t.cli_version ?? null,
+      parent: t.parent_thread_id ?? null, state: t.state, skipPermissions: !!t.skip_permissions, session: t.native_session_id ?? null, created: t.created, updated: t.updated,
+      turns: (turns.get(t.id) ?? []).map((x: any) => ({ seq: x.seq, role: x.role, text: x.text, at: x.ts ?? null })),
+      toolCalls: (tools.get(t.id) ?? []).map((x: any) => ({ id: x.call_id, turn: x.turn_seq, tool: x.tool, target: x.target, status: x.status, result: x.result ?? null, ms: x.duration_ms ?? null, note: x.note ?? null })),
+      approvals: (approvals.get(t.id) ?? []).map((x: any) => ({ what: x.what, decision: x.decision, at: x.ts })),
+      questions: (questions.get(t.id) ?? []).map((x: any) => ({ id: x.id, question: x.question, details: x.details ?? null, options: JSON.parse(x.options || '[]'), status: x.status, answer: x.answer ?? null, note: x.note ?? null, at: x.created, answered: x.answered ?? null })),
+      artifacts: (arts.get(t.id) ?? []).map((x: any) => ({ path: x.path, version: x.version, at: x.ts, file: `${where}/artifacts/${x.path}` })),
+      attachments: (atts.get(t.id) ?? []).map((x: any) => ({ file: x.copied ? `${where}/attachments/${path.basename(x.path)}` : null, path: x.path, from: x.original_path ?? null, copied: !!x.copied, bytes: x.bytes ?? null, at: x.created })),
+      usage: u ? { input: u.input_tokens, output: u.output_tokens, cacheRead: u.cache_read_tokens, costUsd: u.cost_usd } : null,
+    };
+    zip.add(`chats/${name(project)}/${String(t.created).slice(0, 10)} ${safe(t.title)} - ${t.id}.md`, markdown(chat));
+    return chat;
+  });
+  return { chats, files };
+}
+
+/** The zip's path in `dir` (default Downloads): `<base>-<date>.zip`, or `<base>-<date> (2).zip` when that one exists. */
+function target(dir: string | undefined, base: string, now: Date) {
+  const d = dir ?? path.join(os.homedir(), 'Downloads');
+  fs.mkdirSync(d, { recursive: true });
+  const stamp = now.toISOString().slice(0, 10);
+  let file = path.join(d, `${base}-${stamp}.zip`);
+  for (let i = 2; fs.existsSync(file); i++) file = path.join(d, `${base}-${stamp} (${i}).zip`);
+  return file;
+}
+
+/** Opens the store read-only, runs `fn` with a zip at `file`, and removes the half-written zip when it fails. */
+function writing<T>(home: string, file: string, fn: (db: Db, zip: Zip) => T): T {
+  const sqlite = new DatabaseSync(path.join(home, 'chorus.db'), { readOnly: true });
+  const db: Db = {
+    all: (sql, ...a) => sqlite.prepare(sql).all(...a) as any[],
+    has: t => !!sqlite.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(t),
+  };
+  const zip = new Zip(file);
+  try {
+    const r = fn(db, zip);
+    zip.close();
+    return r;
+  } catch (e) {
+    try {
+      fs.rmSync(file, { force: true });
+    } catch {
+      /* nothing to clean */
+    }
+    throw e;
+  } finally {
+    sqlite.close();
+  }
+}
+
+/** Writes the export to `dir` (default the Downloads folder) and says what is in it. */
+export function exportAll(o: { home: string; version: string; dir?: string; now?: Date }): ExportResult {
+  const now = o.now ?? new Date();
+  const file = target(o.dir, 'chorus-export', now);
+  const r = writing(o.home, file, (db, zip) => {
+    const { chats, files } = addChats(db, zip);
     const projects = [...new Set(chats.map(c => c.project))].map(p => ({ path: p, name: name(p), chats: chats.filter(c => c.project === p).length }));
     let ui: unknown = null;
     try {
@@ -182,16 +224,47 @@ export function exportAll(o: { home: string; version: string; dir?: string; now?
     const pro = ['pro.db', 'pro.db-wal'].filter(f => fs.existsSync(path.join(o.home, f)));
     for (const f of pro) zip.add(`pro/${f}`, fs.readFileSync(path.join(o.home, f)));
     zip.add('manifest.json', JSON.stringify({ format: 'chorus-export', version: 1, made: now.toISOString(), chorus: o.version, counts: { projects: projects.length, chats: chats.length, turns: chats.reduce((n, c) => n + c.turns.length, 0), files }, included: { files: true, skills: true, pro: pro.length > 0, transcripts: false } }, null, 2));
-    zip.close();
-    return { file, bytes: fs.statSync(file).size, chats: chats.length, projects: projects.length, files };
-  } catch (e) {
-    try {
-      fs.rmSync(file, { force: true });
-    } catch {
-      /* nothing to clean */
+    return { file, bytes: 0, chats: chats.length, projects: projects.length, files };
+  });
+  return { ...r, bytes: fs.statSync(file).size };
+}
+
+/** A file the paid module gives for a project's export (its `exportProject` hook): a path relative to the zip root. */
+export interface ProFile {
+  path: string;
+  data: string | Buffer;
+}
+
+/**
+ * Export this project (Settings › Projects › <project>): one .zip with only the chats whose project is `project` (with their
+ * Markdown pages, artifacts and dropped files), project.json (the folder, its note, its working folders and its variable NAMES, never
+ * a value: the values file is not read), and the paid module's task files under pro/ when it gives any. Never pro.db, never the
+ * skill library or another project.
+ */
+export function exportProject(o: { home: string; version: string; project: string; dir?: string; now?: Date; pro?: ProFile[] }): ExportResult & { proFiles: number } {
+  const now = o.now ?? new Date();
+  const project = path.resolve(o.project);
+  const file = target(o.dir, `chorus-${name(project)}`, now);
+  const rec = new ProjectSettings(o.home).get(project);
+  const r = writing(o.home, file, (db, zip) => {
+    const { chats, files } = addChats(db, zip, t => path.resolve(t.project ?? t.cwd) === project);
+    zip.add('chorus.json', JSON.stringify({ project: { path: project, name: name(project), chats: chats.length }, chats }, null, 2));
+    zip.add('project.json', JSON.stringify({
+      folder: project,
+      name: path.basename(project),
+      note: rec.note,
+      working_folders: rec.folders.map(f => ({ path: f.path, why: f.why, by: f.by, at: f.at })),
+      variables: rec.variables.map(v => ({ name: v.name, why: v.why, by: v.by, at: v.at })),
+    }, null, 2));
+    let pro = 0;
+    for (const f of o.pro ?? []) {
+      const rel = path.posix.normalize(String(f.path).replace(/\\/g, '/')).replace(/^(\.\/)+/, '').replace(/^pro\//, '');
+      if (!rel || rel.startsWith('..') || path.posix.isAbsolute(rel)) continue;
+      zip.add(`pro/${rel}`, f.data);
+      pro++;
     }
-    throw e;
-  } finally {
-    db.close();
-  }
+    zip.add('manifest.json', JSON.stringify({ format: 'chorus-project-export', version: 1, made: now.toISOString(), chorus: o.version, project, counts: { chats: chats.length, turns: chats.reduce((n, c) => n + c.turns.length, 0), files, proFiles: pro }, included: { files: true, skills: false, pro: pro > 0, values: false, transcripts: false } }, null, 2));
+    return { file, bytes: 0, chats: chats.length, projects: 1, files, proFiles: pro };
+  });
+  return { ...r, bytes: fs.statSync(file).size };
 }

@@ -130,7 +130,17 @@ log(`project: ${project}\nshared database: ${sharedHome}\nscreenshots: ${OUT}\n`
 await cdp('Page.navigate', { url });
 log('1. the window opens on New chat');
 check('the page loads from chorus serve and the token leaves the address bar', await until(async () => (await js<string>('location.search')) === '' && !!(await js('window.chorus && chorus.S.state')), 15000));
-check('New chat shows the three agents with their versions, model, effort, folder and the skip switch', await until(async () => (await js<number>('document.querySelectorAll(".agent").length')) === 3 && (await has('.agent', /Claude Code\s*2\.\d+\.\d+/)) && (await has('.agent', /Codex\s*0\.\d+/)), 30000) && (await js<string>('document.querySelector("#nc-folder").value')).endsWith(path.basename(project)) && (await has('.toggle', /Skip permission prompts/)));
+// New chat is one message box: agent, folder, model and permissions are picker menus under it. With the
+// optional module the first picker is "who" (teammates, then any agent); without it, the agent
+const openAgentMenu = () => click('[data-act="nc-menu"][data-arg="agent"], [data-act="nc-menu"][data-arg="who"]');
+await openAgentMenu();
+const agentsOk = await until(async () => (await js<number>('document.querySelectorAll("[data-act=nc-agent]").length')) === 3 && (await has('[data-act="nc-agent"]', /Claude Code\s*2\.\d+\.\d+/)) && (await has('[data-act="nc-agent"]', /Codex\s*0\.\d+/)), 30000);
+await click('[data-act="nc-agent"][data-arg="claude"]');
+await until(() => js<boolean>('!!document.querySelector(\'[data-act="nc-menu"][data-arg="perm"]\')'), 5000);
+await click('[data-act="nc-menu"][data-arg="perm"]');
+const skipOk = await until(() => has('[data-act="nc-skip"]', /Skip permission prompts/), 3000);
+await click('[data-act="nc-menu"][data-arg="perm"]');
+check('New chat shows the three agents with their versions, model, effort, folder and the skip switch', agentsOk && skipOk && (await js<string>('chorus.S.form?.folder ?? ""')).endsWith(path.basename(project)) && (await has('.nc-pk', new RegExp(path.basename(project)))));
 check('the sidebar lists the chat recorded in another project (one shared database)', await has('.proj', new RegExp(path.basename(otherProject))) && (await has('.chat-row', /Rate limiter/)));
 // the first launch opens the Doctor over the page
 if (await until(() => has('button', /Skip, start using Chorus/), 8000)) await click('button', 'Skip, start using Chorus');
@@ -144,12 +154,20 @@ await click('[data-act="new"]');
 await until(async () => (await js<string>('chorus.S.form?.folder ?? ""')) === project, 15000);
 
 log('2. Claude with a first message');
-await click('.agent', 'Claude Code');
+await openAgentMenu();
+await until(() => has('[data-act="nc-agent"]', /Claude Code/), 5000);
+await click('[data-act="nc-agent"][data-arg="claude"]');
+await until(async () => (await js<string>('chorus.S.form.agent')) === 'claude', 5000);
+// the model and effort selects live in the Model picker's menu: open it first
+await click('[data-act="nc-menu"][data-arg="model"]');
+await until(() => js<boolean>('!!document.querySelector("#nc-model")'), 5000);
+const claudeModels = await js<string[]>('[...document.querySelectorAll("#nc-model option")].map(o => o.value)');
 await js(`(() => { const s = document.querySelector('#nc-model'); s.value = 'haiku'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
 await sleep(200);
+if (await js<boolean>('!!document.querySelector("#nc-model")')) await click('[data-act="nc-menu"][data-arg="model"]');
 await click('#nc-prompt');
 await cdp('Input.insertText', { text: TASK });
-check('the model list is Claude\'s and haiku is chosen', (await js<string>('chorus.S.form.model')) === 'haiku' && (await js<string[]>('[...document.querySelectorAll("#nc-model option")].map(o => o.value)')).includes('sonnet'));
+check('the model list is Claude\'s and haiku is chosen', (await js<string>('chorus.S.form.model')) === 'haiku' && claudeModels.includes('sonnet'));
 await shot('new-chat-filled', 'Claude Code + haiku in this folder, with the task as the first message. The first message is passed to the agent when it starts; you can also type it in the agent\'s own screen');
 await click('[data-act="nc-start"]');
 check('Start opens the chat with the agent\'s own screen', await until(async () => (await view()).name === 'chat' && /claude/i.test(await term()), 60000), await term());
@@ -163,14 +181,22 @@ await shot('claude-working', 'Chat 1: Claude Code (haiku) works in its own scree
 
 log('3. a second chat (Codex, effort low, skip permissions)');
 await click('[data-act="new"]');
-await until(async () => (await js<number>('document.querySelectorAll(".agent").length')) === 3, 10000);
-await click('.agent', 'Codex');
-await sleep(200);
+await until(async () => (await js<string>('chorus.S.form?.folder ?? ""')) !== '', 10000);
+await openAgentMenu();
+await until(async () => (await js<number>('document.querySelectorAll("[data-act=nc-agent]").length')) === 3, 10000);
+await click('[data-act="nc-agent"][data-arg="codex"]');
+await until(async () => (await js<string>('chorus.S.form.agent')) === 'codex', 5000);
+await click('[data-act="nc-menu"][data-arg="model"]');
+await until(() => js<boolean>('!!document.querySelector("#nc-effort")'), 5000);
 const efforts = await js<string[]>('[...document.querySelectorAll("#nc-effort option")].map(o => o.value)');
 check('the effort list follows the agent (Codex lists its own levels)', efforts.includes('low') && efforts.includes('high'), efforts.join(','));
 await js(`(() => { const s = document.querySelector('#nc-effort'); s.value = 'low'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-await click('.toggle input');
-check('ticking skip shows what it means and the Codex flag', await until(() => has('.toggle', /--dangerously-bypass-approvals-and-sandbox/), 3000) && (await has('.toggle', /Nothing reaches the approvals inbox/)));
+await sleep(200);
+if (await js<boolean>('!!document.querySelector("#nc-effort")')) await click('[data-act="nc-menu"][data-arg="model"]');
+await click('[data-act="nc-menu"][data-arg="perm"]');
+await until(() => has('[data-act="nc-skip"]', /Skip permission prompts/), 3000);
+await click('[data-act="nc-skip"][data-arg="1"]');
+check('choosing skip shows what it means and the Codex flag', await until(() => has('.nc-warn', /--dangerously-bypass-approvals-and-sandbox/), 3000) && (await has('.nc-warn', /nothing from this chat reaches Approvals/)));
 await shot('new-chat-skip', '+ New chat: Codex with effort low and "Skip permission prompts" ticked; the form says what that means and which flag is used (per chat, never global)');
 await click('[data-act="nc-start"]');
 await until(async () => (await view()).id !== claudeId && /codex|OpenAI/i.test(await term()), 60000);
@@ -228,9 +254,13 @@ await until(async () => (await state()).chats.find((c: any) => c.id === claudeId
 check('the Claude chat settles as "waiting for you" and the store has its turns, the node call and usage', await until(async () => (await has('.chat-head', /waiting for you/)), 10000) && (() => { const s = store(); return s.getTurns(claudeId).length >= 2 && s.getToolCalls(claudeId).some(c => /node -e/.test(c.target) && c.status === 'ok') && (s.getUsage(claudeId)?.outputTokens ?? 0) > 0; })());
 await js(`localStorage.removeItem('chorus.side')`);
 await click('[data-act="side"][data-arg="artifacts"]');
-check('Artifacts lists notes.md with its version and the files the tools wrote', await until(() => has('.drawer .art', /notes\.md/), 8000) && (await has('.drawer', /calc\.js/)));
-await shot('artifacts', 'The Artifacts drawer next to the agent\'s screen: notes.md (v1) with Open, Show in folder, Copy path, and the files Claude\'s tools wrote');
-const preview = await js<{ url: string }>(`fetch('/api/chats/${claudeId}/preview', { method: 'POST', headers: { 'x-chorus': '1', 'content-type': 'application/json' }, body: JSON.stringify({ path: 'notes.md' }) }).then(r => r.json())`);
+// the drawer lists what the agent reported with show_artifact, wherever it saved it (plan 2026-11-13, item 5)
+check('Artifacts lists notes.md, the note Claude reported, with Open', await until(() => has('.drawer .art-row', /notes\.md/), 8000) && (await has('.drawer .art-row', /Open/)));
+await shot('artifacts', 'The Artifacts drawer next to the agent\'s screen: the note Claude reported with show_artifact, where it saved it, and Open');
+// the live preview serves a file in the chat's own artifacts folder
+fs.mkdirSync(store().artifactsDir(claudeId), { recursive: true });
+fs.writeFileSync(path.join(store().artifactsDir(claudeId), 'preview.md'), '# calc.js\n\nadd(a, b) returns a + b.\n');
+const preview = await js<{ url: string }>(`fetch('/api/chats/${claudeId}/preview', { method: 'POST', headers: { 'x-chorus': '1', 'content-type': 'application/json' }, body: JSON.stringify({ path: 'preview.md' }) }).then(r => r.json())`);
 const page = await (await fetch(preview.url)).text().catch(() => '');
 check('Open serves the artifact on a local page that reloads while the agent edits it', /calc/i.test(page) && /EventSource/.test(page), page.slice(0, 200));
 await click('[data-act="side"][data-arg="activity"]');
@@ -268,7 +298,7 @@ const sawRed = await until(async () => {
 }, 150000, 1500);
 check('Claude saw the image: it answers "red"', sawRed, store().getTurns(claudeId).slice(-2).map(t => t.text).join(' | ').slice(0, 300));
 
-await click('.chat-row', /Reply with only/);
+await click(`.chat-row[data-arg="${codexId}"]`);
 await until(async () => (await view()).id === codexId && /Ask Codex|›/.test(await screen()), 15000);
 await drop('enter', [doc], 'copy');
 await drop('drop', [doc], 'copy');
@@ -303,7 +333,7 @@ await until(async () => (await view()).id === claudeId, 5000);
 
 log('6. hand off the Claude chat to Codex');
 await click('[data-act="handoff"]', 'Hand off');
-check('Hand off opens the form for the chat, another agent chosen first', await until(() => has('.handoff-src', /Create calc\.js/), 8000) && (await js<string>('chorus.S.form.agent')) === 'codex');
+check('Hand off opens the form for the chat, another agent chosen first', await until(() => has('.nc-src', /Create calc\.js/), 8000) && (await js<string>('chorus.S.form.agent')) === 'codex');
 await shot('handoff-form', 'Hand off: the same form, for the chat that continues "Create calc.js…"; the other agent comes first and the folder is the source\'s');
 await click('[data-act="nc-start"]');
 await until(async () => { const v = await view(); return v.name === 'chat' && v.id !== claudeId && v.id !== codexId; }, 30000);

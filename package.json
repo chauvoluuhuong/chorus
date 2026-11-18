@@ -37,6 +37,7 @@
     "proof:first-run": "node test/smoke/proof-first-run.ts",
     "serve": "node src/cli/index.ts serve --open",
     "smoke:ask": "node test/smoke/ask.ts",
+    "smoke:projects": "node test/smoke/projects.ts",
     "release:downloads": "node scripts/release-downloads.mjs",
     "deploy:site": "npm --prefix ../chorus-admin run deploy:site",
     "release:fetch": "node scripts/release-fetch.mjs"

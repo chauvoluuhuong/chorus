@@ -436,6 +436,11 @@ test('serve: deleting a project removes its chats from every table and its sideb
     await r.api('POST', '/api/ui', { key: 'folded', value: [r.project, other] });
     r.store.addSkillSource(path.join(r.project, 'skills'), 'folder');
     r.store.addSkillSource(other, 'folder');
+    // its working folder and variable (task #11): the settings and the value go, the folder stays on disk
+    const wf = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-wf-')));
+    r.srv.projectSettings.addFolder(r.project, wf);
+    r.srv.projectSettings.setVariable(r.project, 'DEL_TOKEN', 'del-value-91ab');
+    r.srv.projectSettings.setVariable(other, 'KEEP_TOKEN', 'keep-value');
     const before = fs.readdirSync(r.project).sort();
 
     const out = (await r.api('DELETE', '/api/projects', { folder: r.project })).json;
@@ -460,6 +465,12 @@ test('serve: deleting a project removes its chats from every table and its sideb
     // the module: each chat's deletion, then the project once
     assert.deepEqual(events.filter(e => e.type === 'deleted').map(e => e.thread).sort(), [a1, a2].sort());
     assert.deepEqual(events.filter(e => e.type === 'project-deleted'), [{ type: 'project-deleted', project: r.project }]);
+    // its settings and the value are gone; the working folder and the other project's variable stay
+    assert.equal(r.srv.projectSettings.get(r.project).version, 0);
+    assert.deepEqual(r.srv.projectSettings.env(r.project), {});
+    assert.doesNotMatch(fs.readFileSync(path.join(r.store.root, 'project-env.json'), 'utf8'), /del-value-91ab/);
+    assert.deepEqual(r.srv.projectSettings.env(other), { KEEP_TOKEN: 'keep-value' });
+    assert.ok(fs.existsSync(wf));
     // nothing on disk is touched: the folder, its files, its .chorus/
     assert.deepEqual(fs.readdirSync(r.project).sort(), before);
     assert.equal(fs.readFileSync(path.join(r.project, 'src', 'app.ts'), 'utf8'), 'code');
