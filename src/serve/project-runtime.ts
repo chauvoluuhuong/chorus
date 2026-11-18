@@ -109,8 +109,11 @@ export class ProjectRuntime {
     return { restarted, waiting };
   }
 
-  /** Restarts the chat once its current turn has ended and the user is not typing in it (reload_project_settings, step 8). */
-  restartAtTurnEnd(threadId: string) {
+  /**
+   * Restarts the chat once its current turn has ended and the user is not typing in it (reload_project_settings, step 8). `settle`:
+   * the chat is about to get a message (an approved proposal's answer), so a turn end counts only after a few seconds of idle.
+   */
+  restartAtTurnEnd(threadId: string, o: { settle?: boolean } = {}) {
     if (this.atTurnEnd.has(threadId)) return;
     this.atTurnEnd.add(threadId);
     const go = () => {
@@ -119,7 +122,7 @@ export class ProjectRuntime {
       this.atTurnEnd.delete(threadId);
       this.d.restart(threadId);
     };
-    this.d.onTurnEnd(threadId, go);
+    this.d.onTurnEnd(threadId, go, o.settle);
   }
 
   /** Whether a restart is queued for the chat. */

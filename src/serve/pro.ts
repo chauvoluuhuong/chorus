@@ -246,6 +246,17 @@ export class ProHost {
     }
   }
 
+  /** A project's open tasks, newest first (get_project): none without the module, locked, or with an older bundle. */
+  async projectTasks(project: string, limit = 20): Promise<{ number: number; title: string; state: string }[]> {
+    await this.ready;
+    try {
+      const l = this.module?.projectTasks?.(this.ctx, project, limit);
+      return Array.isArray(l) ? l.map(t => ({ number: Number(t.number), title: String(t.title), state: String(t.state) })) : [];
+    } catch {
+      return [];
+    }
+  }
+
   /** The project's task files for Export this project (paths under pro/): none without the module or with an older bundle. */
   async exportProject(project: string): Promise<{ path: string; data: string | Buffer }[]> {
     await this.ready;

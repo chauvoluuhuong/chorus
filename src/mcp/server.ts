@@ -16,7 +16,10 @@ import type { ProModule } from '@chauvoluuhuong/chorus-core/pro-loader';
 import { addProTools, listenChannel, proRole, serveInfo, type RoleInfo } from './pro.ts';
 import { QUIET_MS, type MailMessage, type WatchState } from '@chauvoluuhuong/chorus-core';
 
-export const TOOL_NAMES = ['get_handoff_context', 'get_thread_turns', 'list_threads', 'list_artifacts', 'list_skills', 'get_skill', 'request_approval', 'show_artifact', 'current_thread', 'read_mail', 'list_watches'] as const;
+export const TOOL_NAMES = ['get_handoff_context', 'get_thread_turns', 'list_threads', 'list_artifacts', 'list_skills', 'get_skill', 'request_approval', 'show_artifact', 'current_thread', 'read_mail', 'list_watches', 'get_project', 'propose_project_change', 'reload_project_settings', 'rename_chat'] as const;
+
+/** The project tools (task #11): free, answered in `chorus serve` (the project settings, the running chats and the cards live there). */
+export const PROJECT_TOOL_NAMES = ['get_project', 'propose_project_change', 'reload_project_settings', 'rename_chat'] as const;
 
 /** Free tools `chorus serve` answers from its mailbox and watcher (task #10): `chorus mcp` passes them on through /api/pro/mcp/call. */
 export const SERVE_TOOL_NAMES = ['read_mail', 'list_watches'] as const;
@@ -40,7 +43,9 @@ export const MCP_INSTRUCTIONS = `How to work in Chorus:
 - To start a new chat thread (not a sub thread): call list_teammates and list_actions, propose the fitting teammate and action to the user through an approval card (kind question, your pick first), then call start_thread with what the user chose; the new chat gets that teammate's agent, model, effort and permissions.
 - Messages from other chats and from Chorus arrive in your Chorus mail; read them with read_mail when Chorus tells you that you have mail, and answer with the tool the message names.
 - Chorus watches what you started (your action, your sub threads, your mail) and acts on it; see its watch records, their status and how long, with list_watches, instead of checking in a loop.
-- Chorus actions (Create plan, Review changes, …): ask "Would you like me to <action>? <why>" with a question card; after the user's yes, start it with start_action; finish with action_done. Chorus watches each turn end and reminds you if it is missing.`;
+- Chorus actions (Create plan, Review changes, …): ask "Would you like me to <action>? <why>" with a question card; after the user's yes, start it with start_action; finish with action_done. Chorus watches each turn end and reminds you if it is missing.
+- This project's working environment (its description, extra folders and environment variables) is in get_project. When it has no description, when get_project suggests folders, or when you need a folder outside the project or a variable, set it up with ONE propose_project_change call. Never ask the user to edit a CLI config or a shell profile, and never ask for a secret in the chat.
+- Once you have a plan, or the chat's topic is clear, name this chat with rename_chat; a Planner also renames its task with task_update.`;
 
 const PROPOSE = 'ask the user first through a Chorus question card: "Would you like me to <action>? <one line why>", before any skill or workflow of your own; start the action through Chorus only after they say yes, and end it through Chorus when its work and check are finished.';
 const KIND: Record<string, string> = { planner: 'Planner', worker: 'Worker', custom: 'Custom' };
@@ -247,6 +252,61 @@ export function createServer(project: string, threadId?: string, home?: string, 
       inputSchema: { key: z.string().optional().describe('A record\'s key, for that record in full with its last events'), ended: z.boolean().optional().describe('true: also the records ended in the last 24 hours') },
     },
     async ({ key, ended }) => viaServe('list_watches', { key, ended }),
+  );
+
+  server.registerTool(
+    'get_project',
+    {
+      description:
+        "This chat's own project: its folder and description, the extra working folders and environment variable NAMES every chat in it gets (each with why and who added it, and whether this chat has it yet), folders it probably needs (suggested_folders), its chats, tasks and artifacts. Never a variable's value. Call it before working outside the project folder, when you need a variable, and before propose_project_change.",
+      inputSchema: {},
+    },
+    async () => viaServe('get_project', {}),
+  );
+
+  server.registerTool(
+    'propose_project_change',
+    {
+      description:
+        "Set up or change this project's working environment, all on ONE card the user approves: its description (set_note: what the project is and how its folders relate, for every later chat), the extra folders its chats need (add_folder for an existing folder, e.g. one from get_project's suggested_folders; create_folder for a new one: its parent must exist), and the environment variables they need (set_variable: you give only the NAME and why; the user types the value). Call get_project first. Nothing changes until the user approves. Returns at once: end your turn; the answer arrives as your next message and never contains a value.",
+      inputSchema: {
+        changes: z
+          .array(
+            z.object({
+              kind: z.enum(['set_note', 'add_folder', 'create_folder', 'remove_folder', 'set_variable', 'remove_variable']),
+              path: z.string().optional().describe('add_folder, create_folder, remove_folder: the folder\'s absolute path'),
+              name: z.string().optional().describe('set_variable, remove_variable: the variable\'s name, like POLAR_TOKEN'),
+              note: z.string().optional().describe('set_note: the description'),
+              why: z.string().min(1).describe('One line: what this change is for. Kept with it, so later chats see it'),
+              suggested_value: z.string().optional().describe('set_variable only: a value that is NOT secret (a URL, a mode); never a token or a password'),
+            }),
+          )
+          .min(1)
+          .max(15),
+        reason: z.string().optional().describe('One or two lines on the whole proposal, shown at the top of the card'),
+      },
+    },
+    async ({ changes, reason }) => viaServe('propose_project_change', { changes, reason }),
+  );
+
+  server.registerTool(
+    'reload_project_settings',
+    {
+      description:
+        "Restart this chat when its current turn ends, conversation kept, so it gets the project's current working folders and variables (get_project's this_chat.missing lists what it lacks). Finish your turn after calling it.",
+      inputSchema: {},
+    },
+    async () => viaServe('reload_project_settings', {}),
+  );
+
+  server.registerTool(
+    'rename_chat',
+    {
+      description:
+        "Give this chat a short name that says what it is about (e.g. 'Plan: Projects page'). Call it once you have a plan or the chat's topic is clear, and again when the topic changes. A Planner also gives its task the same name with task_update. Only this chat; the user can undo it.",
+      inputSchema: { title: z.string().min(1).max(60).describe('The new name: one line, at most 60 characters') },
+    },
+    async ({ title }) => viaServe('rename_chat', { title }),
   );
 
   server.registerTool(

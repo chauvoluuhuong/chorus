@@ -18,7 +18,7 @@ import { App, projectName, type AppIO, type Entry } from '../app/app.ts';
 import { AGENTS, type Controller } from '../app/controller.ts';
 import type { ItemState, RichLine } from '../app/compositor.ts';
 import { effortsFor } from '../app/models.ts';
-import { listWatchesText, readMailText, SERVE_TOOL_NAMES } from '../mcp/server.ts';
+import { listWatchesText, PROJECT_TOOL_NAMES, readMailText, SERVE_TOOL_NAMES } from '../mcp/server.ts';
 import { latestModels, liveAddDirDone, liveAddDirInput, liveAddDirKeys, codexGrantMessage, Mailbox, NEWLINE_KEYS, TurnWatch, type ChatLook, type MailEvent, type Transport } from '@chauvoluuhuong/chorus-core';
 import { computerDir } from '../app/screens.ts';
 import type { ThreadHost } from '../app/thread-host.ts';
@@ -41,6 +41,7 @@ import { ChatLaunch, ProHost, type ProLoader } from './pro.ts';
 import { SubThreads, TOOLS as SUB_TOOLS, TOOL_NAMES as SUB_TOOL_NAMES } from './subthreads.ts';
 import { ProjectSettings } from '../core/projects.ts';
 import { ProjectRuntime, type LiveWay } from './project-runtime.ts';
+import { APPROVE_RESTART, DECLINE, appliedLine, checkProposal, getProject, needsRestart, parseProposal, proposalCard, type AskerResult } from './project-tools.ts';
 import { answerChannelWarning, ChannelHub, makeTransports, wakeFor, type ChatSession } from './mail.ts';
 import { SignIns } from './signin.ts';
 import { inContainer } from '../cli/screen.ts';
@@ -256,7 +257,7 @@ export class ChorusServer {
     this.watch = new TurnWatch({ look: id => this.look(id), store: this.c.store.watchStore(), now });
     this.mail = new Mailbox({ store: this.c.store.mailStore(), watch: this.watch, transports: this.transports, agentOf: id => this.c.store.getThread(id)?.agent, now, on: e => this.mailEvent(e) });
     if (o.chatLaunch) o.chatLaunch.wake = (agent, thread) => wakeFor(this.transports, agent, thread);
-    this.pro = new ProHost({ watch: this.watch, mail: this.mail, homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.c.sendToChat(id, text, row => (this.o.sessionExists ?? sessionOnDisk)(row)), dismissApproval: (thread, request) => this.dismissApproval(thread, request), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.approvalsNow().filter(a => !a.hidden).map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state, ...(t.parent_thread_id ? { parent: t.parent_thread_id } : {}), ...(t.sub_status ? { sub: (t.sub_status as string) === 'task' ? 'task' : 'sub' } : {}) })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))], watchOnly: (thread, mainThread) => this.subs.watchOnly(thread, mainThread), deleteChat: id => this.deleteChatQuietly(id), threadKind: id => { const t = this.c.store.getThread(id); if (!t) return undefined; return !t.sub_status ? 'main' : (t.sub_status as string) === 'task' ? 'task' : 'sub'; } }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
+    this.pro = new ProHost({ watch: this.watch, mail: this.mail, homeDir: this.c.store.root, appVersion: versions().chorus, skills: project => listSkills(project || this.c.project).map(s => s.name), signedIn: () => this.agentCheck?.report.agents.filter(a => a.state === 'ready' || a.state === 'untested').map(a => a.agent), emit: (event, data) => this.broadcast({ t: 'pro', event, data }), startChat: x => this.startChat(x), stopChat: id => this.app.entry(id)?.host?.kill(), sendToChat: (id, text) => this.c.sendToChat(id, text, row => (this.o.sessionExists ?? sessionOnDisk)(row)), dismissApproval: (thread, request) => this.dismissApproval(thread, request), handoffPrompt: id => handoffPrompt(this.c.store.getThread(id)!), resumeChat: id => { if (!this.c.store.getThread(id)?.native_session_id || this.app.entry(id)?.state !== 'parked') return false; this.select(id); return true; }, approvals: () => this.approvalsNow().filter(a => !a.hidden).map((a: any) => ({ thread: a.id, kind: a.kind, what: a.what ?? a.question ?? '', request: a.request, options: a.options, details: a.details, waiting: a.waiting })), answerApproval: (id, answer, request, note) => void (request && parseProposal(this.c.store.getRequest(request)) ? this.answerProposal(request, answer, {}).catch(e => this.noteError('proposal answer', e)) : request ? this.c.answerRequest(request, answer, note) : this.c.answer(answer === 'ok', id)), chatInfo: id => { const t = this.c.store.getThread(id); return t ? { title: t.title, cwd: t.cwd, agent: t.agent, state: t.state } : undefined; }, port: () => (this.http?.address() as AddressInfo | null)?.port, chats: () => this.c.store.listThreads().map(t => ({ id: t.id, title: t.title, cwd: t.cwd, agent: t.agent, state: t.state, ...(t.parent_thread_id ? { parent: t.parent_thread_id } : {}), ...(t.sub_status ? { sub: (t.sub_status as string) === 'task' ? 'task' : 'sub' } : {}) })), chatRecord: id => { const t = this.c.store.getThread(id); return t ? buildHandoff(this.c.store, t).text : undefined; }, projects: () => [...new Set(this.c.store.listThreads().map(t => t.cwd).filter(Boolean))], watchOnly: (thread, mainThread) => this.subs.watchOnly(thread, mainThread), deleteChat: id => this.deleteChatQuietly(id), threadKind: id => { const t = this.c.store.getThread(id); if (!t) return undefined; return !t.sub_status ? 'main' : (t.sub_status as string) === 'task' ? 'task' : 'sub'; } }, () => this.broadcast({ t: 'pro-status', status: this.pro.status() }), o.proLoader);
     if (o.chatLaunch) o.chatLaunch.host = this.pro;
     this.subs = new SubThreads({
       store: this.c.store,
@@ -522,7 +523,8 @@ export class ChorusServer {
     const items = c.approvalItems('all').flatMap((a): (ReturnType<Controller['approvalItems']>[number] & { hidden: boolean; askKind?: 'question' | 'approval'; other?: boolean })[] => {
       if (a.kind !== 'ask') return [{ ...a, hidden: this.hiddenPrompts.get(a.id) === a.what }];
       const r = c.store.getRequest(a.request);
-      return r && r.status === 'pending' ? [{ ...a, askKind: r.kind ?? 'approval', other: r.other !== 0, hidden: false }] : [];
+      const proposal = parseProposal(r);
+      return r && r.status === 'pending' ? [{ ...a, askKind: r.kind ?? 'approval', other: r.other !== 0, hidden: false, ...(proposal ? { proposal } : {}) }] : [];
     });
     for (const [id, what] of this.hiddenPrompts) if (!items.some(a => a.kind === 'permission' && a.id === id && a.what === what)) this.hiddenPrompts.delete(id);
     return items;
@@ -717,6 +719,129 @@ export class ChorusServer {
     await this.projects.applyToRunning(folder, change, change.kind === 'add_folder' ? {} : { restart: false }).catch(e => this.noteError('project change', e));
     this.pushState();
     return this.oneProject(folder);
+  }
+
+  /* ---------- the model's project tools (task #11 step 8) ---------- */
+
+  /** get_project, propose_project_change, reload_project_settings and rename_chat for the chat `threadId`: its own project only. */
+  async projectTool(name: string, args: Record<string, unknown>, threadId: string): Promise<{ text: string; isError?: boolean }> {
+    const t = this.c.store.getThread(threadId);
+    if (!t) return { text: 'This chat is not a Chorus thread.', isError: true };
+    const folder = path.resolve(t.project ?? t.cwd);
+    if (name === 'get_project') {
+      const running = () => new Set(this.app.entries.filter(e => e.host?.state === 'running').map(e => e.id));
+      const info = await getProject({ store: this.c.store, settings: this.projectSettings, runtime: this.projects, running, counts: f => this.pro.projectCounts(f), tasks: f => this.pro.projectTasks(f, 20) }, t);
+      return { text: JSON.stringify(info, null, 1) };
+    }
+    if (name === 'propose_project_change') {
+      const ok = checkProposal(this.projectSettings, folder, args.changes);
+      if ('error' in ok) return { text: ok.error, isError: true };
+      const reason = typeof args.reason === 'string' && args.reason.trim() ? args.reason.trim().slice(0, 1000) : undefined;
+      const card = proposalCard(folder, ok.changes, reason);
+      // always the user's card: from a main chat, a sub thread or a Worker alike, never a Planner's
+      const r = this.c.store.createRequest({ threadId: t.id, ...card, kind: 'approval', other: false, proposal: { project: folder, changes: ok.changes, ...(reason ? { reason } : {}) } });
+      this.pushState();
+      return { text: `Shown to the user as card ${r.id} with the options: ${r.options.join(' / ')}. End your turn now; the answer arrives as your next message: "Chorus approval ${r.id}: approved: <what was done>" or "Chorus approval ${r.id}: declined". Values the user types are never shown to you.` };
+    }
+    if (name === 'reload_project_settings') {
+      if (this.app.entry(t.id)?.host?.state !== 'running') return { text: 'This chat is not running in Chorus, so it cannot be restarted from here.', isError: true };
+      this.projects.restartAtTurnEnd(t.id);
+      return { text: "This chat restarts with the project's current folders and variables when this turn ends; the conversation is kept." };
+    }
+    if (name === 'rename_chat') {
+      const r = this.renameChat(t.id, args.title, 'model');
+      return 'error' in r ? { text: r.error, isError: true } : { text: `This chat is now named "${r.to}".` };
+    }
+    return { text: `Unknown tool ${name}`, isError: true };
+  }
+
+  /**
+   * A chat's new name (rename_chat, and Undo on its toast): trimmed, whitespace collapsed, one line, 1–60 characters. The store row
+   * and the app's entry change at once; every window gets {t: 'renamed', id, from, to, by}, which shows the toast with Undo.
+   */
+  renameChat(id: string, raw: unknown, by: 'model' | 'you'): { ok: true; from: string; to: string } | { error: string } {
+    const t = this.c.store.getThread(id);
+    if (!t) return { error: 'No such chat.' };
+    if (typeof raw !== 'string') return { error: 'The title must be text.' };
+    if (/[\r\n]/.test(raw.trim())) return { error: 'The title must be one line.' };
+    const to = raw.replace(/\s+/g, ' ').trim();
+    if (!to) return { error: 'The title is empty: give the chat a short name.' };
+    if (to.length > 60) return { error: `The title is too long: ${to.length} characters, at most 60.` };
+    const from = t.title;
+    if (to !== from) {
+      this.c.store.updateThread(id, { title: to });
+      const e = this.app.entry(id);
+      if (e) e.title = to;
+    }
+    this.broadcast({ t: 'renamed', id, from, to, by });
+    this.pushState();
+    return { ok: true, from, to };
+  }
+
+  /**
+   * The user's answer to a propose_project_change card. Decline: nothing changes. Approve: every change is applied with its why, who
+   * asked and this card; a new folder goes live to every running chat of the project (the asking one too), a removed folder and
+   * variable changes only mark the other running chats stale, and "Approve and restart this chat" restarts the asking chat when the
+   * turn the answer starts has ended. Then the chat reads a text built here: what was done, never a value. A set_variable without a
+   * typed value refuses the whole answer: nothing is applied and the card stays.
+   */
+  async answerProposal(requestId: string, option: string, o: { values?: unknown; note?: unknown }): Promise<{ ok: boolean; text?: string; error?: string }> {
+    const c = this.c;
+    const r = c.store.getRequest(requestId);
+    const p = parseProposal(r);
+    if (!r || !p) return { ok: false, error: 'No such card.' };
+    if (r.status !== 'pending') return { ok: false, error: 'This card was already answered.' };
+    if (this.app.entry(r.thread_id)?.host?.state !== 'running') return { ok: false, error: 'That chat is not running: open it, then answer.' };
+    if (!r.options.includes(option)) return { ok: false, error: `Choose one of: ${r.options.join(', ')}.` };
+    if (option === DECLINE) {
+      const ok = c.answerRequest(r.id, 'declined');
+      this.pushState();
+      return { ok, text: 'declined' };
+    }
+    const values = (o.values && typeof o.values === 'object' ? o.values : {}) as Record<string, unknown>;
+    const missing = p.changes.filter(ch => ch.kind === 'set_variable' && !(typeof values[ch.name!] === 'string' && (values[ch.name!] as string).length)).map(ch => ch.name!);
+    if (missing.length) return { ok: false, error: `Type a value for ${missing.join(', ')}, or decline.` };
+    const asker = c.store.getThread(r.thread_id);
+    const origin = { by: asker ? `${asker.title} (${asker.agent})` : 'a chat', by_thread: r.thread_id, approval: r.id };
+    const folder = p.project;
+    const s = this.projectSettings;
+    const lines: string[] = [];
+    let restartNeeded = false;
+    for (const ch of p.changes) {
+      let result: AskerResult;
+      try {
+        if (ch.kind === 'set_note') {
+          const note = typeof o.note === 'string' && o.note.trim() ? o.note : ch.note!;
+          s.setNote(folder, note, origin.by);
+        } else if (ch.kind === 'add_folder' || ch.kind === 'create_folder') {
+          s.addFolder(folder, ch.path!, { ...origin, why: ch.why, create: ch.kind === 'create_folder' });
+          result = (await this.projects.applyToRunning(folder, { kind: 'add_folder', path: ch.path! }).catch(e => (this.noteError('proposal folder', e), {} as Record<string, AskerResult>)))[r.thread_id];
+        } else if (ch.kind === 'remove_folder') {
+          s.removeFolder(folder, ch.path!);
+          await this.projects.applyToRunning(folder, { kind: 'remove_folder', path: ch.path! }, { restart: false });
+          restartNeeded = true;
+        } else if (ch.kind === 'set_variable') {
+          s.setVariable(folder, ch.name!, values[ch.name!] as string, { ...origin, why: ch.why });
+          await this.projects.applyToRunning(folder, { kind: 'set_variable', name: ch.name! }, { restart: false });
+          restartNeeded = true;
+        } else {
+          s.removeVariable(folder, ch.name!);
+          await this.projects.applyToRunning(folder, { kind: 'remove_variable', name: ch.name! }, { restart: false });
+          restartNeeded = true;
+        }
+        lines.push(appliedLine(ch, result));
+      } catch (e) {
+        // the message names a path or a variable name, never a value
+        lines.push(`not done: ${(e as Error).message}`);
+      }
+    }
+    const restart = option === APPROVE_RESTART && needsRestart(p.changes);
+    const tail = !restartNeeded ? '' : restart ? '. This chat restarts when this turn ends to get them; other running chats get them when they restart.' : '. This chat and the other running chats get them when they restart: call reload_project_settings to restart this one when your turn ends.';
+    const text = `approved: ${lines.join('; ')}${tail}`;
+    const ok = c.answerRequest(r.id, text);
+    if (ok && restart) this.projects.restartAtTurnEnd(r.thread_id, { settle: true });
+    this.pushState();
+    return { ok, text };
   }
 
   /**
@@ -1070,6 +1195,11 @@ export class ChorusServer {
         const r = b.name === 'read_mail' ? readMailText(this.mail, thread, args) : listWatchesText({ store: this.c.store, watch: this.watch, thread, now: this.now() }, args);
         return r.isError ? send(res, 400, { error: r.text }) : send(res, 200, { text: r.text });
       }
+      if ((PROJECT_TOOL_NAMES as readonly string[]).includes(String(b.name))) {
+        // get_project, propose_project_change, reload_project_settings, rename_chat: free, every chat, its own project only
+        const r = await this.projectTool(String(b.name), (b.args ?? {}) as Record<string, unknown>, typeof b.threadId === 'string' ? b.threadId : '');
+        return r.isError ? send(res, 400, { error: r.text }) : send(res, 200, { text: r.text });
+      }
       if (SUB_TOOL_NAMES.includes(String(b.name))) {
         const r = await this.subs.call(String(b.name), (b.args ?? {}) as Record<string, unknown>, typeof b.threadId === 'string' ? b.threadId : undefined);
         return 'error' in r ? send(res, 400, r) : send(res, 200, r);
@@ -1348,7 +1478,7 @@ export class ChorusServer {
         const name = typeof b.name === 'string' ? b.name.trim() : '';
         if (method === 'DELETE') return this.changeProject(folder, { kind: 'remove_variable', name }, () => this.projectSettings.removeVariable(folder, name));
         if (typeof b.value !== 'string') return { error: 'the value must be text' };
-        return this.changeProject(folder, { kind: 'set_variable', name }, () => this.projectSettings.setVariable(folder, name, b.value, { by: 'you' }));
+        return this.changeProject(folder, { kind: 'set_variable', name }, () => this.projectSettings.setVariable(folder, name, b.value, { by: 'you', why: typeof b.why === 'string' ? b.why.trim().slice(0, 500) : '' }));
       }
       case 'POST projects/note': {
         const folder = this.projectDir(b.folder);
@@ -1444,10 +1574,19 @@ export class ChorusServer {
         return { ok };
       }
       case 'POST chats/:id/answer': {
+        // a propose_project_change card: applied here first; the values typed on it go only to the values file
+        if (typeof b.request === 'string' && typeof b.option === 'string' && parseProposal(c.store.getRequest(b.request))) {
+          return this.answerProposal(b.request, b.option, { values: b.values, note: b.note });
+        }
         // a request_approval card: the option (and note) becomes the user's next message to that agent
         const ok = typeof b.request === 'string' && typeof b.option === 'string' && c.answerRequest(b.request, b.option, typeof b.note === 'string' ? b.note : undefined);
         this.pushState();
         return { ok };
+      }
+      case 'POST chats/:id/title': {
+        // rename_chat (by "model") and the Undo on its toast (by "you")
+        if (!thread) return undefined;
+        return this.renameChat(id, b.title, b.by === 'model' ? 'model' : 'you');
       }
       case 'POST chats/:id/dismiss':
         // Approvals' delete (the page warned first): the item only, the agent is not answered
