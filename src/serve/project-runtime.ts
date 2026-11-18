@@ -4,7 +4,7 @@
 // (resume, conversation kept) once the chat's turn has ended. A chat in the middle of a turn is never restarted or typed into.
 import crypto from 'node:crypto';
 import path from 'node:path';
-import { liveAddDirWay } from '@chauvoluuhuong/chorus-core';
+import { launchAddDirKeys, liveAddDirWay } from '@chauvoluuhuong/chorus-core';
 import type { ProjectSettings } from '../core/projects.ts';
 import type { AgentId } from '../core/types.ts';
 
@@ -41,6 +41,8 @@ interface Launched {
   project: string;
   version: number;
   folders: string[];
+  /** the folders this start or resume got on its command line (--add-dir), not those added live since */
+  launchDirs: string[];
   variables: string[];
   /** a hash of the values, in memory only: tells a changed value apart; never the values themselves */
   sig: string;
@@ -64,13 +66,35 @@ export class ProjectRuntime {
   /** Where the launcher runs (ChatLaunch.extras): what this start or resume of the chat gets. */
   launched(threadId: string, project: string, addDirs: string[], env: Record<string, string>) {
     const p = path.resolve(project);
-    this.launchedWith.set(threadId, { project: p, version: this.d.settings.get(p).version, folders: [...addDirs], variables: Object.keys(env), sig: sigOf(env) });
+    this.launchedWith.set(threadId, { project: p, version: this.d.settings.get(p).version, folders: [...addDirs], launchDirs: [...addDirs], variables: Object.keys(env), sig: sigOf(env) });
     this.atTurnEnd.delete(threadId);
+  }
+
+  /** when keys last went to each chat's launch screen, and which */
+  private launchAnswered = new Map<string, { keys: string; at: number }>();
+
+  /**
+   * Claude asks once per session for every folder it was launched with ("Adding a new directory … ❯ No, exit / Yes, add it"; Enter
+   * would end the chat). For a folder in this chat's own launch folders the answer is "Yes, add it", which holds for this session
+   * only and writes no settings file; any other screen or folder is left for the user. Returns the keys to write now, or undefined
+   * (the same keys at most every 1.5 s, while the CLI redraws).
+   */
+  launchScreenKeys(threadId: string, screen: string, home: string, now = Date.now()): string | undefined {
+    const l = this.launchedWith.get(threadId);
+    const c = l && this.d.chat(threadId);
+    if (!l || !c || !l.launchDirs.length) return undefined;
+    const keys = launchAddDirKeys(c.agent, screen, l.launchDirs, home);
+    if (!keys) return undefined;
+    const last = this.launchAnswered.get(threadId);
+    if (last && last.keys === keys && now - last.at < 1500) return undefined;
+    this.launchAnswered.set(threadId, { keys, at: now });
+    return keys;
   }
 
   /** The chat's process ended. */
   exited(threadId: string) {
     this.launchedWith.delete(threadId);
+    this.launchAnswered.delete(threadId);
   }
 
   /** What the running chat has: its folders (with those added live) and its variable names; undefined when it is not running. */

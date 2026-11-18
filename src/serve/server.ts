@@ -331,6 +331,16 @@ export class ChorusServer {
     } });
   }
 
+  /** Claude's "Adding a new directory" screen for a folder the chat was launched with: "Yes, add it" for this session (ProjectRuntime). */
+  private answerLaunchScreens() {
+    for (const e of this.app.entries) {
+      const host = e.host;
+      if (host?.state !== 'running' || e.agent !== 'claude') continue;
+      const keys = this.projects.launchScreenKeys(e.id, (host.screen.text() ?? []).join('\n'), os.homedir());
+      if (keys) host.write(keys);
+    }
+  }
+
   /** Stops the chat's process and resumes it (conversation kept), the way #10 continues an agy chat: it launches with the current settings. */
   private restartChat(id: string) {
     const host = this.app.entry(id)?.host;
@@ -938,6 +948,11 @@ export class ChorusServer {
         this.watch.tick();
       } catch (e) {
         this.noteError('watch', e);
+      }
+      try {
+        this.answerLaunchScreens();
+      } catch (e) {
+        this.noteError('launch folders', e);
       }
       try {
         this.subs.tick();

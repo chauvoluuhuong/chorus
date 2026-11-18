@@ -223,3 +223,19 @@ test('restartIdle: idle stale chats restart now; one mid-turn restarts when it f
   f.endTurn('t_busy');
   assert.deepEqual(f.restarted, ['t_idle', 't_busy']);
 });
+
+test('launchScreenKeys: Claude\'s launch screen for one of the chat\'s own --add-dir folders gets "Yes, add it"; others are left', () => {
+  const f = fakes({ claude: 'slash' });
+  f.settings.addFolder(f.project, f.dir);
+  f.start('t_c', 'claude');
+  f.start('t_x', 'codex');
+  const screen = (dir: string) => ` Adding a new directory:\n ${dir}\n This session hasn't worked here before. Is this a directory you created or one you trust?\n Security guide\n ❯ No, exit\n   Yes, add it\n Enter to confirm · Esc to cancel`;
+  assert.equal(f.rt.launchScreenKeys('t_c', screen(f.dir), os.homedir(), 1000), '\x1b[B\r');
+  assert.equal(f.rt.launchScreenKeys('t_c', screen(f.dir), os.homedir(), 1500), undefined, 'not again while the CLI redraws');
+  assert.equal(f.rt.launchScreenKeys('t_c', screen(f.dir), os.homedir(), 3000), '\x1b[B\r', 'again once it is still there');
+  assert.equal(f.rt.launchScreenKeys('t_c', screen('/somewhere/else'), os.homedir(), 9000), undefined, 'a folder it was not launched with');
+  assert.equal(f.rt.launchScreenKeys('t_x', screen(f.dir), os.homedir(), 9000), undefined, 'not Claude');
+  assert.equal(f.rt.launchScreenKeys('t_c', 'Do you trust the files in this folder?', os.homedir(), 9000), undefined, 'another screen');
+  f.rt.exited('t_c');
+  assert.equal(f.rt.launchScreenKeys('t_c', screen(f.dir), os.homedir(), 20000), undefined, 'a chat that exited');
+});
