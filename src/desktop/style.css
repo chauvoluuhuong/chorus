@@ -1232,15 +1232,20 @@ textarea.in.pp-note { display: block; font: 13px/1.5 var(--f-sans); resize: vert
 @keyframes mt-card { from { transform: translateY(6px) scale(0.97); opacity: 0; } to { transform: none; opacity: 1; } }
 
 /* ---------- the lasting border highlight on Task and Artifacts (task #14, scenes 4–5): border only, glows twice, stays lit ---------- */
-.btn.hl, .icon-btn.hl, .seg button.hl, .sheet .hl { border-color: var(--hl) !important; box-shadow: 0 0 0 1px var(--hl); }
+.btn.hl, .icon-btn.hl, .sheet .hl { border-color: var(--hl) !important; box-shadow: 0 0 0 1px var(--hl); }
+/* a tab inside the segmented control: its ring is drawn inside (the control clips what is outside) */
+.seg button.hl { box-shadow: inset 0 0 0 2px var(--hl); border-radius: 8px; }
 @media (prefers-reduced-motion: no-preference) {
-  .btn.hl, .icon-btn.hl, .seg button.hl, .sheet .hl { animation: hl-glow 1s ease-out 2; }
+  .btn.hl, .icon-btn.hl, .sheet .hl { animation: hl-glow 1s ease-out 2; }
+  .seg button.hl { animation: hl-glow-in 1s ease-out 2; }
   .hl.hl-done { animation: none; }
   /* the count flash stays on top while it runs */
   .hl.flash { animation: count-flash 1.1s cubic-bezier(0.3, 0.9, 0.4, 1) both; }
 }
 @keyframes hl-glow { 0% { box-shadow: 0 0 0 1px var(--hl), 0 0 0 0 var(--hl-glow); } 45% { box-shadow: 0 0 0 1px var(--hl), 0 0 0 6px var(--hl-glow); } 100% { box-shadow: 0 0 0 1px var(--hl), 0 0 0 10px transparent; } }
-.ph-art { font-size: 15px; gap: 4px; border: 1px solid transparent; }
+@keyframes hl-glow-in { 0% { box-shadow: inset 0 0 0 2px var(--hl), inset 0 0 0 2px var(--hl-glow); } 45% { box-shadow: inset 0 0 0 2px var(--hl), inset 0 0 0 7px var(--hl-glow); } 100% { box-shadow: inset 0 0 0 2px var(--hl), inset 0 0 0 10px transparent; } }
+/* a phone chat's Artifacts button beside ⋯ (scene 3): icon and count on one line */
+.ph-art { display: inline-flex; align-items: center; gap: 4px; width: auto; padding: 0 8px; white-space: nowrap; font-size: 15px; border: 1px solid transparent; border-radius: 8px; }
 .ph-art .badge { font-size: 11px; }
 
 /* ---------- the left sidebar's width: drag its right edge (desktop), like the right sidebar's ---------- */
