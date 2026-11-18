@@ -702,6 +702,8 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
   .chat-row .tk-det { min-height: 32px; display: inline-flex; align-items: center; padding: 0 9px; }
   .proj, .chat-row, .nav button, .nc-menu > button, .folders button, .news-row, .fr-more { min-height: 44px; }
   .crumbs a, .task-tag { display: inline-flex; align-items: center; min-height: 36px; }
+  .ask-more, .lead-more { display: inline-flex; align-items: center; min-height: 36px; }
+  .ask-more { margin-top: -8px; margin-bottom: -4px; }
   .side-head { padding-top: 6px; padding-bottom: 2px; }
   .foot-agent { display: inline-flex; align-items: center; min-height: 36px; }
   select, input[type='text'], input[type='search'], textarea, .note-input, .other-input, .dlg-input, .nc-box textarea { font-size: 16px; min-height: 40px; }
@@ -785,12 +787,8 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
   .chat-head { display: none; }
   /* the docked question card: never more than 40 % of the screen */
   .ask-dock { max-height: 40dvh; overflow: auto; margin: 6px 8px 8px; padding: 10px 12px; }
-  /* a sub thread's strip: one line */
-  .sub-strip { flex-wrap: nowrap; padding: 6px 12px; gap: 8px; }
-  .sub-strip .msg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sub-strip .ss-long { display: none; }
-  .sub-strip .ss-short { display: inline; }
-  .sub-strip .btn.sm { flex: none; white-space: nowrap; }
+  .ask-dock .what:has(> .clamp) { display: none; } /* it opens with the question and its buttons; details sit behind Show more */
+  /* a sub thread's strip: one line (its rules sit after the strip's own, below) */
   .banner { flex-wrap: wrap; padding: 10px 14px; }
   .banner.ask .what { flex-basis: 100%; white-space: normal; }
   .other-row .other-input { min-width: 0; }
@@ -982,6 +980,14 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
 .sub-strip.warn { background: var(--warn-soft); }
 .sub-strip .btn.sm { padding: 4px 9px; font-size: 12px; }
 .sub-strip .ss-short { display: none; }
+@media (max-width: 640px) {
+  /* a sub thread's strip on a phone: one line, icon + Watch-only (or Unlocked) + its buttons */
+  .sub-strip { flex-wrap: nowrap; padding: 6px 12px; gap: 8px; }
+  .sub-strip .msg { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sub-strip .ss-long { display: none; }
+  .sub-strip .ss-short { display: inline; }
+  .sub-strip .btn.sm { flex: none; white-space: nowrap; }
+}
 .watch-line { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; padding: 8px 14px; background: linear-gradient(transparent, rgba(0, 0, 0, 0.75) 45%); color: #d6d4cc; font-size: 12px; text-align: center; pointer-events: none; }
 .watch-line[hidden] { display: none; }
 

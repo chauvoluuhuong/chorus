@@ -2336,6 +2336,11 @@ function fitMore(root) {
   for (const b of root.querySelectorAll('.ask-more')) {
     const box = b.previousElementSibling?.firstElementChild;
     if (!box) continue;
+    // a phone's docked card hides the details until Show more
+    if (getComputedStyle(b.previousElementSibling).display === 'none') {
+      b.hidden = false;
+      continue;
+    }
     if (!box.classList.contains('clamp')) {
       b.hidden = false;
       continue;
