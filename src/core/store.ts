@@ -248,6 +248,7 @@ export class Store {
       id: r.id, from: parse(r.from_json, { who: 'chorus' as const }), to: { thread: r.to_thread }, kind: r.kind, subject: r.subject, body: r.body,
       refs: parse(r.refs, {}), ...(r.meta != null ? { meta: parse(r.meta, {}) } : {}), state: r.state, channel: opt(r.channel), tries: r.tries,
       error: opt(r.error), created_at: r.created_at, delivered_at: opt(r.delivered_at), read_at: opt(r.read_at), answered_at: opt(r.answered_at),
+      route: opt(r.route), typed_at: opt(r.typed_at), attempts: parse(r.attempts, undefined),
     });
   }
 
@@ -258,6 +259,7 @@ export class Store {
       from_thread: m => m.from?.thread ?? null, from_json: m => json(m.from), to_thread: m => m.to?.thread, kind: m => m.kind, subject: m => m.subject,
       body: m => m.body, refs: m => json(m.refs ?? {}), meta: m => json(m.meta), state: m => m.state, channel: m => m.channel ?? null, tries: m => m.tries ?? 0,
       error: m => m.error ?? null, created_at: m => m.created_at, delivered_at: m => m.delivered_at ?? null, read_at: m => m.read_at ?? null, answered_at: m => m.answered_at ?? null,
+      route: m => m.route ?? null, typed_at: m => m.typed_at ?? null, attempts: m => json(m.attempts),
     };
     // which columns a field of MailMessage writes
     const FIELD: Record<string, string[]> = { from: ['from_thread', 'from_json'], to: ['to_thread'] };
@@ -294,7 +296,11 @@ export class Store {
       load: () =>
         (db.prepare('SELECT * FROM watch WHERE ended_at IS NULL ORDER BY created_at').all() as any[]).map(r => this.watchRow(r)),
       save: (s: WatchState) => {
-        const extra = { waitOverAt: s.waitOverAt, idleAt: s.idleAt, activity: s.activity, activityAt: s.activityAt, quietSent: s.quietSent };
+        const extra = {
+          waitOverAt: s.waitOverAt, idleAt: s.idleAt, activity: s.activity, activityAt: s.activityAt, quietSent: s.quietSent,
+          // the due clock (task #14): a restart resumes it and never fires it twice
+          dueMs: s.dueMs, dueFrom: s.dueFrom, duePaused: s.duePaused, duePausedAt: s.duePausedAt, dueFired: s.dueFired,
+        };
         db.prepare(
           `INSERT INTO watch (key,thread,belongs_to,kind,owner,expect,seen,since,waits_on,deadline,data,extra,created_at,ended_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
            ON CONFLICT(key) DO UPDATE SET thread=excluded.thread, belongs_to=excluded.belongs_to, kind=excluded.kind, owner=excluded.owner, expect=excluded.expect,
@@ -313,7 +319,9 @@ export class Store {
     return defined({
       key: r.key, thread: r.thread, belongsTo: r.belongs_to, kind: r.kind, owner: r.owner, expect: r.expect, seen: opt(r.seen), since: opt(r.since),
       waitsOn: parse<string[] | undefined>(r.waits_on, undefined), deadline: opt(r.deadline), waitOverAt: x.waitOverAt, idleAt: x.idleAt,
-      activity: x.activity, activityAt: x.activityAt, quietSent: x.quietSent, data: parse(r.data, {}), created_at: r.created_at, ended_at: opt(r.ended_at),
+      activity: x.activity, activityAt: x.activityAt, quietSent: x.quietSent,
+      dueMs: x.dueMs, dueFrom: x.dueFrom, duePaused: x.duePaused, duePausedAt: x.duePausedAt, dueFired: x.dueFired,
+      data: parse(r.data, {}), created_at: r.created_at, ended_at: opt(r.ended_at),
     });
   }
 
@@ -352,6 +360,11 @@ export class Store {
     if (!rcols.includes('kind')) this.db.exec("ALTER TABLE requests ADD COLUMN kind TEXT NOT NULL DEFAULT 'approval'");
     if (!rcols.includes('other')) this.db.exec('ALTER TABLE requests ADD COLUMN other INTEGER NOT NULL DEFAULT 1');
     if (!rcols.includes('proposal')) this.db.exec('ALTER TABLE requests ADD COLUMN proposal TEXT');
+    // the mail watchdog (task #14): how a message is going, when its line was typed, and every try
+    const mcols = (this.db.prepare('PRAGMA table_info(mail)').all() as { name: string }[]).map(c => c.name);
+    if (!mcols.includes('route')) this.db.exec('ALTER TABLE mail ADD COLUMN route TEXT');
+    if (!mcols.includes('typed_at')) this.db.exec('ALTER TABLE mail ADD COLUMN typed_at TEXT');
+    if (!mcols.includes('attempts')) this.db.exec('ALTER TABLE mail ADD COLUMN attempts TEXT');
   }
 
   /**

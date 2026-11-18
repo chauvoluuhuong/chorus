@@ -1,5 +1,6 @@
 // Tools of the optional module. `chorus mcp` is its own process per chat, so it asks the running `chorus serve` what exists and passes calls
-// on. Nothing to ask, or nothing unlocked: no tools. The address and token are in <home>/serve.json (0600).
+// on. Nothing to ask, or nothing unlocked: no tools. The address and token come from the chat's launch environment (CHORUS_SERVE_URL,
+// CHORUS_MCP_TOKEN: the serve that started the chat), else from <home>/serve.json (0600), the fallback (task #14).
 import fs from 'node:fs';
 import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -12,7 +13,17 @@ interface Listed {
   inputSchema: Parameters<typeof z.fromJSONSchema>[0];
 }
 
-export function serveInfo(home: string): { url: string; mcpToken: string } | undefined {
+/** The launch environment's names for serve's address and the MCP token (src/serve/server.ts serveEnv()). */
+export const SERVE_URL_ENV = 'CHORUS_SERVE_URL';
+export const MCP_TOKEN_ENV = 'CHORUS_MCP_TOKEN';
+
+/**
+ * Where this chat's serve is: the address and token its launch gave it, else serve.json. The launch env wins, so a second
+ * `chorus serve` on the same home that rewrites serve.json can't take a running chat's serve away.
+ */
+export function serveInfo(home: string, env: NodeJS.ProcessEnv = process.env): { url: string; mcpToken: string } | undefined {
+  const url = env[SERVE_URL_ENV], mcpToken = env[MCP_TOKEN_ENV];
+  if (url && mcpToken) return { url, mcpToken };
   try {
     return JSON.parse(fs.readFileSync(path.join(home, 'serve.json'), 'utf8'));
   } catch {

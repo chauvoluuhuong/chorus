@@ -66,6 +66,18 @@ scrolling list `.tree` is a new element each time. Its `scrollTop` is read befor
 filled: a chat that starts or stops, opening a chat and folding a task leave the list where the user scrolled it. Test:
 `test/serve/sidebar-scroll.test.ts`; what broke: [failures/2026-11-16-sidebar-lost-its-scroll.md](../failures/2026-11-16-sidebar-lost-its-scroll.md).
 
+## Opening a chat scrolls the sidebar to it
+
+However a chat is opened (a task's step, Approvals' Open chat, Home, a link), its row in the sidebar comes into view (`showInSidebar`
+in `src/desktop/app.js`, `scrollIntoView({block: 'nearest'})`, so a row already in view does not move); a folded project opens for it
+(owner, 2026-11-18). Test: `test/serve/desktop-courier.test.ts`.
+
+## The left sidebar's width
+
+A handle on the left sidebar's right edge drags its width, the same way as the right sidebar's: at least 200 px, at most 520 px and
+40 % of the window (saved UI key `sideLW`, the CSS variable `--side-w` on `#app`); double-click puts it back; the terminal refits when
+the drag ends. Desktop only (owner, 2026-11-18). Test: `test/serve/desktop-courier.test.ts`.
+
 ## The right sidebar's width
 
 A handle on the sidebar's left edge drags its width: at least 280 px, at most 60% of the chat. One width for the app (saved UI key
