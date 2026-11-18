@@ -188,6 +188,8 @@ test('a chat whose look stays "working" gets its mail typed after the watchdog c
     assert.ok(m.typed_at);
     assert.equal(m.delivered_at, undefined, 'not confirmed: the fake CLI writes no transcript');
     assert.ok(m.attempts.some((a: any) => a.route === 'retry') && m.attempts.some((a: any) => a.route === 'typed' && a.result === 'typed'));
+    // the page heard only the type-in, never the retry
+    assert.deepEqual(r.got.filter(x => x.t === 'mail-typing').map(x => x.phase), ['start', 'end']);
   } finally {
     await r.done();
   }
