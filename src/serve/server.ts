@@ -80,6 +80,11 @@ export function boxLoginCommand(agent: AgentId, name = 'chorus') {
 }
 
 /** --host values that mean every address of this machine */
+/** A chat with no turn and no tool call yet (Store.activityMark). */
+const NO_ACTIVITY = '0/0/0';
+/** A resumed chat whose row says working and that recorded nothing since its CLI started this long ago is idle (look()). */
+export const STALE_TURN_MS = 15_000;
+
 /** A home folder as one string, whatever link or relative path led to it. */
 const realHome = (p: string) => {
   try {
@@ -436,9 +441,24 @@ export class ChorusServer {
     const st = this.c.store;
     const t = st.getThread(id);
     if (!t) return undefined;
-    const ended = t.state === 'ended' || this.app.entry(id)?.host?.state === 'ended';
-    return { state: ended ? 'ended' : t.state, activity: st.activityMark(id), ...(this.openCard(id) ? { waitsOn: ['card'] } : {}) };
+    const host = this.app.entry(id)?.host;
+    const ended = t.state === 'ended' || host?.state === 'ended';
+    const activity = st.activityMark(id);
+    let state = ended ? 'ended' : t.state;
+    if (!ended && host?.state === 'running') {
+      // A turn recorded before this CLI process started can't still be running: a CLI killed mid-turn (a Chorus restart) never wrote
+      // that turn's end, so its transcript says "working" for good, while the resumed CLI waits for input (task #14: four chats stuck
+      // at working for hours). With history, nothing new since the process started, and past a grace window (a resumed chat with a
+      // prompt records its turn within a second or two): idle.
+      let start = this.processMarks.get(host);
+      if (!start) this.processMarks.set(host, (start = { mark: activity, at: this.now() }));
+      if (state === 'working' && activity === start.mark && start.mark !== NO_ACTIVITY && this.now() - start.at >= STALE_TURN_MS) state = 'waiting';
+    }
+    return { state, activity, ...(this.openCard(id) ? { waitsOn: ['card'] } : {}) };
   }
+
+  /** Each chat CLI process, as serve first saw it: its chat's activity mark then (look()). */
+  private processMarks = new WeakMap<object, { mark: string; at: number }>();
 
   /** How a chat stands for the transports. */
   private chatSession(id: string): ChatSession | undefined {
