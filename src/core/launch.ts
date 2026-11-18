@@ -58,6 +58,11 @@ export interface InteractiveOpts {
   wake?: { args?: string[]; env?: Record<string, string>; files?: Record<string, string> };
   /** the project's extra working folders (src/core/projects.ts): `--add-dir` at every start and resume */
   addDirs?: string[];
+  /**
+   * The chorus MCP server's own environment: the address and token of the serve that started the chat (task #14), so a second serve
+   * that rewrites serve.json can't take it away. In Launch.env only, never on the command line (chorus-core McpServer.env).
+   */
+  mcpEnv?: Record<string, string>;
   /** the project's variables: the process environment only (Launch.env), never the command line */
   env?: Record<string, string>;
   /** the chat can get a folder added while it runs (chorus-core src/livedir.ts; Codex's default mode gets its per-session flag) */
@@ -110,7 +115,7 @@ export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
     model: o.model,
     effort: o.effort,
     skipPermissions: o.skipPermissions,
-    mcp: o.moreTools ? { ...server(o), tools: [...server(o).tools, ...o.moreTools] } : server(o),
+    mcp: { ...server(o), ...(o.moreTools ? { tools: [...server(o).tools, ...o.moreTools] } : {}), ...(o.mcpEnv ? { env: o.mcpEnv } : {}) },
     instructions: systemText(agent, { threadId: o.threadId, role: o.role, parent: o.parent, actionLabels: o.actionLabels }),
     readOnly: o.readOnly,
     // agy's rules file is one per folder, rewritten by every chat that starts there: a sub thread's "never ask" would reach a main

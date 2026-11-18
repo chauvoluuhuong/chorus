@@ -5,6 +5,8 @@ import { shortCheckPassed, showDoctorTip } from './doctor-popup.js';
 import { HEART_SVG, followHtml, shapeCardHtml } from './follow.js';
 import { askWho } from './ask-label.js';
 import { makeCounts, sideBtn as sideBtnOf } from './counts.js';
+import { artifactsMark, makeHighlights } from './highlight.js';
+import { mailTypingHtml, MAIL_TYPING_MAX_MS } from './mail-typing.js';
 import { attachPicker } from './text-picker.js';
 import { md, mdInline } from './md.js';
 import { cliFitNote, newChatHint } from './cli-fit.js';
@@ -88,6 +90,10 @@ const S = {
   leadOpen: false,
   // the right sidebar's width on a desktop, dragged by its left edge (null: as drawn); one for the whole app
   sideW: Number(localStorage.getItem('chorus.sideW')) || null,
+  // the left sidebar's width on a desktop, dragged by its right edge (null: as drawn)
+  sideLW: Number(localStorage.getItem('chorus.sideLW')) || null,
+  // the mail watchdog typing into a chat: chat → { from: {title, agent}, at } (serve's mail-typing; the open chat's window dims)
+  mailTyping: {},
   // Approvals' delete: "Don't ask again" was ticked
   noDelAsk: localStorage.getItem('chorus.noDelAsk') === 'true',
   info: null,
@@ -184,6 +190,7 @@ function onMessage(m) {
     return drawTermOver();
   }
   if (m.t === 'flash') return flash(m.text);
+  if (m.t === 'mail-typing') return mailTyping(m);
   if (m.t === 'renamed') return renamed(m);
   if (m.t === 'pro-status') return void onProStatus(m.status);
   if (m.t === 'pro-signed-in') return void onProStatus(m.status).then(() => {
@@ -421,7 +428,59 @@ function go(view, push = true) {
   renderDoctorDot();
   renderView();
   doctorWhenReady();
+  if (view.name === 'chat') showInSidebar(view.id);
+  syncMailTyping();
 }
+
+/**
+ * The open chat's row in the sidebar comes into view, whichever way it was opened (a task's step, Approvals, Home): its project is
+ * unfolded when it was folded, and the list scrolls only as far as needed.
+ */
+function showInSidebar(id) {
+  if (S.size === 'phone') return;
+  const c = S.state?.chats.find(x => x.id === id);
+  if (c && S.folded.has(c.cwd)) {
+    S.folded.delete(c.cwd);
+    remember('folded', [...S.folded]);
+    renderChrome();
+  }
+  const row = [...document.querySelectorAll('#side .tree .chat-row')].find(r => r.dataset.arg === id);
+  row?.scrollIntoView({ block: 'nearest' });
+}
+
+/* ---------- the mail watchdog typing into a chat (task #14, mockup mail-courier.html v3, scenes 1–3) ---------- */
+
+/** serve's mail-typing: start dims the whole window while that chat is open; end fades it (0.35 s). Nothing for a retry. */
+function mailTyping(m) {
+  if (typeof m.thread !== 'string') return;
+  if (m.phase === 'start') S.mailTyping[m.thread] = { from: m.from ?? {}, at: Date.now() };
+  else delete S.mailTyping[m.thread];
+  syncMailTyping();
+}
+let mailTypingTimer = null;
+/** The overlay as it should be now: only for the open chat, gone at the end or after MAIL_TYPING_MAX_MS whatever happened. */
+function syncMailTyping() {
+  const id = S.view.name === 'chat' ? S.view.id : null;
+  for (const [k, v] of Object.entries(S.mailTyping)) if (Date.now() - v.at >= MAIL_TYPING_MAX_MS) delete S.mailTyping[k];
+  const t = id && S.mailTyping[id];
+  let el = $('#mail-typing');
+  clearTimeout(mailTypingTimer);
+  if (!t) {
+    if (el && !el.classList.contains('out')) {
+      el.classList.add('out');
+      setTimeout(() => el.remove(), 350);
+    }
+    return;
+  }
+  const c = S.state?.chats.find(x => x.id === id);
+  if (!el || el.classList.contains('out')) {
+    el?.remove();
+    // the keys still go to the terminal, so serve can hold them: the overlay takes clicks, never the focus
+    document.body.insertAdjacentHTML('beforeend', mailTypingHtml({ from: t.from, to: { agent: c?.agent }, esc, letter: a => AGENT[a]?.letter ?? a[0].toUpperCase() }));
+  }
+  mailTypingTimer = setTimeout(syncMailTyping, Math.max(50, MAIL_TYPING_MAX_MS - (Date.now() - t.at)));
+}
+
 function back() {
   const v = S.history.pop();
   if (v) go(v, false);
@@ -432,6 +491,7 @@ function back() {
 function onSize() {
   const was = S.size;
   S.size = sizeNow();
+  leftWidth();
   if (was === S.size) return;
   document.documentElement.dataset.size = S.size;
   $('#app').classList.remove('side-open');
@@ -624,6 +684,11 @@ function takeUi(ui) {
   else if (S.folded.size) remember('folded', [...S.folded]);
   if (ui.side && typeof ui.side === 'object') S.side = ui.side;
   if (ui.sideW !== undefined) S.sideW = Number(ui.sideW) || null;
+  if (ui.sideLW !== undefined) S.sideLW = Number(ui.sideLW) || null;
+  leftWidth();
+  // the Task and Artifacts buttons' seen marks: the server's, and this browser's copy once if the server has none
+  if (ui.seenMarks) HL.load(ui.seenMarks);
+  else if (Object.keys(HL.marks()).length) remember('seenMarks', HL.marks());
   if (ui.noDelAsk !== undefined) S.noDelAsk = ui.noDelAsk === true;
   S.agentPref = typeof ui.agent === 'string' ? ui.agent : undefined;
   S.welcome = ui.welcome;
@@ -705,6 +770,31 @@ const listed = () => (S.state?.approvals ?? []).filter(a => !a.hidden);
 const waitingCount = () => listed().length + (window.choruspro?.needsCount?.() ?? 0);
 
 const { noteCount, countFlash, countNum, noteTaskRevs } = makeCounts();
+/** The Task and Artifacts buttons' lasting border highlight (src/desktop/highlight.js); this browser's copy of the marks first. */
+const HL = makeHighlights();
+try {
+  HL.load(JSON.parse(localStorage.getItem('chorus.seenMarks') || '{}'));
+} catch {
+  /* no copy */
+}
+/** A button's class tail: the lasting highlight (when lit) and the count flash, which stays on top while it runs. */
+const hlFlash = (id, kind, lit, flash = '') => `${lit ? HL.hlClass(id, kind, !!flash) : ''}${flash}`;
+/** Keeps the marks when they changed (the server's copy, so another device clears its highlight too). */
+const keepMarks = () => {
+  const m = HL.changed();
+  if (m) remember('seenMarks', m);
+};
+/** Is this chat's Task or Artifacts button lit now? Its panel open (a phone: the Steps/Plan tab, or the drawer) counts as seen. */
+function litNow(c, kind) {
+  const view = sideView(c.id);
+  if (kind === 'task') {
+    const rev = window.choruspro?.taskRev?.(c.id);
+    const open = S.view.name === 'chat' && S.view.id === c.id && (S.size === 'phone' ? S.chatTab !== 'chat' : view === 'task');
+    return HL.lit(c.id, 'task', typeof rev === 'number' ? rev : undefined, open);
+  }
+  const open = S.view.name === 'chat' && S.view.id === c.id && view === 'artifacts';
+  return HL.lit(c.id, 'artifacts', artifactsMark(c), open);
+}
 /** The Artifacts button flashes when the count grew or an artifact got a new version (an edit); only the count rolls. */
 const artFlash = id => countFlash(`art:${id}`) || countFlash(`artrev:${id}`);
 /** A chat with an item in Approvals: what a project's "!N" and the Needs you filter count, so they agree with the lists (a prompt
@@ -814,7 +904,9 @@ function phoneTop(chat) {
     title = chat
       ? `<span class="ph-t1">${esc(chat.title)}</span><span class="ph-sub"><span class="badge ${esc(chat.agent)}">${esc(AGENT[chat.agent]?.name ?? chat.agent)}</span><span class="dot ${esc(chat.state)}"></span><span>${esc(STATE_LABEL[chat.state] ?? chat.state)}</span>${chat.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${chat.toast ? `<span class="badge ok">${esc(chat.toast)}</span>` : ''}</span>`
       : '';
-    icons = chat ? ico('chat-menu', 'This chat: hand off, artifacts, activity, record, delete', '⋯') : '';
+    // Artifacts beside ⋯ (mockup mail-courier.html scene 3): it carries the lasting highlight on a phone
+    const art = chat && !chat.sub ? `<button class="icon-btn ph-ico ph-art${hlFlash(chat.id, 'artifacts', litNow(chat, 'artifacts'), artFlash(chat.id))}" data-act="drawer-to" data-arg="artifacts" aria-label="Artifacts${chat.artifacts ? `, ${chat.artifacts}` : ''}">▤${chat.artifacts ? ` <span class="badge plain">${countNum(`art:${chat.id}`, chat.artifacts)}</span>` : ''}</button>` : '';
+    icons = chat ? `${art}${ico('chat-menu', 'This chat: hand off, artifacts, activity, record, delete', '⋯')}` : '';
   } else if (v.name === 'memory') {
     title = v.rec ? esc(S.mem.items.find(i => i.id === v.rec)?.title ?? 'Memory') : 'Memory';
   } else if (v.name === 'projects') {
@@ -2154,7 +2246,7 @@ function drawSheet() {
     <div class="sh-meta"><div><span class="badge ${esc(c.agent)}">${esc(AGENT[c.agent]?.name ?? c.agent)}</span> ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}${c.skip ? ' <span class="badge warn">skip</span>' : ''}</div><div class="mono path">${esc(tilde(c.cwd))}</div>${meter(c.usage)}</div>
     <button data-act="share" data-arg="${esc(c.id)}"><span class="i">⧉</span>Share</button>
     <button data-act="handoff" data-arg="${esc(c.id)}"><span class="i">⇄</span>Hand off to another agent</button>
-    ${c.sub ? '' : `<button class="${artFlash(c.id).trim()}" data-act="drawer-to" data-arg="artifacts"><span class="i">▤</span>Artifacts${c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : ''}</button>
+    ${c.sub ? '' : `<button class="${hlFlash(c.id, 'artifacts', litNow(c, 'artifacts'), artFlash(c.id)).trim()}" data-act="drawer-to" data-arg="artifacts"><span class="i">▤</span>Artifacts${c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : ''}</button>
     <button data-act="drawer-to" data-arg="activity"><span class="i">≋</span>Activity</button>
     <button data-act="drawer-to" data-arg="record"><span class="i">◫</span>Record</button>`}
     <button class="danger" data-act="delete" data-arg="${esc(c.id)}"><span class="i">🗑</span>Delete this chat</button></div>`;
@@ -2175,6 +2267,10 @@ function renderChatParts() {
   }
   // a header button opens its view in the right sidebar; the lit one (or ✕) closes it
   const sideBtn = (k, label, icon, extra = '', flash = '') => sideBtnOf(view, k, label, icon, extra, flash);
+  // the lasting border highlight (task #14): its panel open counts as seen
+  const taskLit = !c.sub && task && litNow(c, 'task');
+  const artLit = !c.sub && litNow(c, 'artifacts');
+  keepMarks();
   // the labels go on a tablet (icons stay, with the meter) and the buttons go into the ⋯ sheet on a phone
   head.innerHTML = `<span class="badge ${esc(c.agent)}">${esc(AGENT[c.agent]?.name ?? c.agent)}</span>
     <div class="meta"><span class="dot ${esc(c.state)}"></span><span>${esc(STATE_LABEL[c.state] ?? c.state)}</span>
@@ -2182,14 +2278,15 @@ function renderChatParts() {
       <span class="mono faint path" title="${esc(c.cwd)}">‎${esc(tilde(c.cwd))}‎</span>${c.toast ? `<span class="badge ok">${esc(c.toast)}</span>` : ''}</div>
     <button class="btn" data-act="share" data-arg="${esc(c.id)}" title="Copy this chat's id and place, to paste into another Chorus chat" aria-label="Share">${S.size === 'desktop' ? '⧉ Share' : '⧉'}</button>
     <button class="btn" data-act="handoff" data-arg="${esc(c.id)}" title="Continue this chat with another agent" aria-label="Hand off">${S.size === 'desktop' ? '⇄ Hand off' : '⇄'}</button>
-    ${c.sub ? '' : `${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰', '', countFlash(`taskrev:${c.id}`)) : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', artFlash(c.id))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}`}
+    ${c.sub ? '' : `${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰', '', hlFlash(c.id, 'task', taskLit, countFlash(`taskrev:${c.id}`))) : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', hlFlash(c.id, 'artifacts', artLit, artFlash(c.id)))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}`}
     <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat" aria-label="Delete this chat">🗑</button>`;
   // a phone: a task chat's panel is tabs beside the chat (Chat · Steps · Plan), one shown at a time
   const tabs = S.size === 'phone' ? window.choruspro?.sideTabs?.(c.id) : null;
   if (!tabs) S.chatTab = 'chat';
   const tabsEl = $('#chat-tabs');
   tabsEl.hidden = !tabs;
-  tabsEl.innerHTML = tabs ? `<div class="seg" role="tablist">${[['chat', 'Chat'], ...tabs].map(([k, label]) => `<button class="${S.chatTab === k ? 'on' : ''}" data-act="chat-tab" data-arg="${esc(k)}" role="tab" aria-selected="${S.chatTab === k}">${esc(label)}</button>`).join('')}</div>` : '';
+  const hlTab = tabs ? (tabs.find(([k]) => k === 'steps') ?? tabs[0])?.[0] : null;
+  tabsEl.innerHTML = tabs ? `<div class="seg" role="tablist">${[['chat', 'Chat'], ...tabs].map(([k, label]) => `<button class="${S.chatTab === k ? 'on' : ''}${k === hlTab && taskLit ? HL.hlClass(c.id, 'task') : ''}" data-act="chat-tab" data-arg="${esc(k)}" role="tab" aria-selected="${S.chatTab === k}">${esc(label)}</button>`).join('')}</div>` : '';
   $('#chat-body').className = `chat-body tab-${S.chatTab}${task ? ' task-chat' : ''}${view === 'task' && task ? ' side-task' : ''}`;
   const side = $('#view [data-pro-slot="chat-side"]');
   if (side) side.dataset.tab = S.size === 'phone' && S.chatTab !== 'chat' ? S.chatTab : '';
@@ -2292,7 +2389,54 @@ document.addEventListener('dblclick', e => {
   sideWidth();
   setTimeout(refit, 30);
 });
-window.addEventListener('resize', () => sideWidth());
+window.addEventListener('resize', () => (sideWidth(), leftWidth()));
+
+/* ---------- the left sidebar's width: drag its right edge (owner, 2026-11-18); desktop only, like the right sidebar ---------- */
+
+const LEFT_MIN = 200;
+const leftMax = () => Math.min(520, Math.round(window.innerWidth * 0.4));
+/** The sidebar's width: the dragged one (within LEFT_MIN and leftMax), or the stylesheet's. */
+function leftWidth() {
+  const app = $('#app');
+  if (!app) return;
+  const w = S.size === 'desktop' && S.sideLW ? Math.round(Math.max(LEFT_MIN, Math.min(S.sideLW, leftMax()))) : null;
+  if (w) app.style.setProperty('--side-w', `${w}px`);
+  else app.style.removeProperty('--side-w');
+}
+let dragL = null;
+document.addEventListener('mousedown', e => {
+  const h = e.target.closest?.('[data-resize-left]');
+  if (!h || S.size !== 'desktop') return;
+  e.preventDefault();
+  dragL = { x: e.clientX, w: $('#side').getBoundingClientRect().width, h };
+  h.classList.add('drag');
+  document.body.classList.add('resizing');
+});
+document.addEventListener('mousemove', e => {
+  if (!dragL) return;
+  S.sideLW = Math.round(Math.max(LEFT_MIN, Math.min(leftMax(), dragL.w + (e.clientX - dragL.x))));
+  leftWidth();
+  const tip = dragL.h.querySelector('.side-resize-tip');
+  if (tip) tip.textContent = `${S.sideLW} px`;
+});
+document.addEventListener('mouseup', () => {
+  if (!dragL) return;
+  dragL.h.classList.remove('drag');
+  const tip = dragL.h.querySelector('.side-resize-tip');
+  if (tip) tip.textContent = 'Drag to resize';
+  dragL = null;
+  document.body.classList.remove('resizing');
+  remember('sideLW', S.sideLW ?? 0);
+  setTimeout(refit, 30);
+});
+document.addEventListener('dblclick', e => {
+  if (!e.target.closest?.('[data-resize-left]')) return;
+  S.sideLW = null;
+  remember('sideLW', 0);
+  leftWidth();
+  setTimeout(refit, 30);
+});
+leftWidth();
 
 /* ---------- Approvals' delete: a warning first, unless "Don't ask again" was ticked (plan 2026-11-13, item 4) ---------- */
 

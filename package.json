@@ -38,6 +38,7 @@
     "serve": "node src/cli/index.ts serve --open",
     "smoke:ask": "node test/smoke/ask.ts",
     "smoke:projects": "node test/smoke/projects.ts",
+    "smoke:courier": "node test/smoke/courier.ts",
     "release:downloads": "node scripts/release-downloads.mjs",
     "deploy:site": "npm --prefix ../chorus-admin run deploy:site",
     "release:fetch": "node scripts/release-fetch.mjs"
