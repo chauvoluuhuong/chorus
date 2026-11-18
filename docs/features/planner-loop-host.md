@@ -5,18 +5,15 @@ The `chorus` side of the plan "Planner loop, approvals, artifacts" (2026-11-13).
 `chorus serve` and the desktop page (`src/desktop/`) do for them, and the host's own new screens. Chorus draws no input for a chat:
 every chat is the agent's own CLI in its terminal.
 
-## Typing into a chat (the module's `sendToChat`)
+## Delivering to a chat
 
-`Controller.sendToChat(id, text, exists)` types one message at a time per chat: the text, then Enter 700 ms later (text and Enter
-in one chunk read as a paste in the TUIs). It answers:
+Chorus no longer types into a chat (task #10, 2026-11-18). The module's Planner loop, step reports, `ask_planner` / `answer_worker`
+and reminders are mail records in `chorus serve`'s one Mailbox, delivered by the CLI's transport and read with `read_mail`; one
+TurnWatch decides when a turn ended, when a chat is quiet and when an action missed `action_done`. A chat whose CLI is not running
+is resumed first (nothing typed); a lost session raises the Restore card. The module gets both as `ProCtx.watch` and `ProCtx.mail`;
+`sendToChat` stays in `ProCtx` only for an older bundle. How it works: [watcher-and-mail.md](watcher-and-mail.md).
 
-| | when |
-|---|---|
-| `sent` | typed. A chat whose CLI is not running is continued first with its CLI's resume (the same session id, so codex and agy keep writing to their first transcript file) and typed into once its screen has been still for 2.5 s |
-| `ended` | not typed now: a permission prompt is on its screen, or the resume did not come up. The module tries again later |
-| `gone` | no session to continue: its session file is missing (agy would open an empty chat silently) or it never had one. The module raises its Restore card |
-
-`dismissApproval(thread, request?)` and the chat event `deleted` are given to the module too (below).
+`dismissApproval(thread, request?)` and the chat events `deleted`, `typed` and `mail` are given to the module too (below).
 
 ## Question and approval cards
 
@@ -28,13 +25,14 @@ in one chunk read as a paste in the TUIs). It answers:
   room back. The terminal keeps its focus and its typing while a card is open.
 - Typing to the agent (an Enter in its terminal) while its card is open answers it by typing: the card is cancelled and leaves the
   chat and Approvals at once (`typedTo` in `src/serve/server.ts`). The idle → working rule from the previous plan stays as well.
-- The same Enter also closes Chorus's own open cards for that chat (2026-11-17): the "Start <action>?" suggestion and the chat's
-  goal question (`chatEvent` `typed` to the module). Shift+Enter is a new line, not a send: its bytes (`NEWLINE_KEYS`, `\x1b\r`)
+- The same Enter also closes Chorus's own open cards for that chat (2026-11-17): the chat's
+  goal question (`chatEvent` `typed` to the module); it also resets an action's miss count. Shift+Enter is a new line, not a send: its bytes (`NEWLINE_KEYS`, `\x1b\r`)
   never count as typing to the agent.
 - The card renders the question and its details as Markdown, a safe subset (`src/desktop/md.js`: text escaped first, only http(s)
   links), so long details stay readable; folded details keep 4.5 lines.
 - Only a main chat raises cards for the user: `request_approval` refuses sub threads and task step Workers (they use
-  `ask_main_thread` / `ask_planner`), and `suggest_action` refuses them too.
+  `ask_main_thread` / `ask_planner`), and `start_action` refuses them too. `suggest_action` and its "Start <action>?" card are
+  gone: the chat asks "Would you like me to <action>?" with a question card and calls `start_action` after the user's yes.
 
 ## Delete from Approvals
 

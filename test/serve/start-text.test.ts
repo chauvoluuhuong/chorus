@@ -25,7 +25,7 @@ function stand() {
   const mod: ProModule = {
     version: 'stand-in',
     routes: c => ((ctx = c), {}),
-    mcpTools: () => [{ name: 'suggest_action' }] as any,
+    mcpTools: () => [{ name: 'start_action' }] as any,
     ui: () => ({ js: '', css: '' }),
     onChatEvent() {},
     roleOf: (_c, t) => roles.get(t),
@@ -75,8 +75,8 @@ test('a plain chat is told every action of the bundle; without the bundle, none'
   try {
     const id = await r.chat();
     assert.match(r.texts.get(id)!, new RegExp(`This chat is Chorus thread ${id}\\.\\n\\nChorus actions: Create plan, Review changes\\. When one of them fits`));
-    // proposing an action through Chorus needs no permission prompt (step 4's e2e: Claude asked before suggest_action)
-    assert.match(r.argv.get(id)!.join(' '), /mcp__chorus__suggest_action/);
+    // starting an action through Chorus after the user's yes needs no permission prompt
+    assert.match(r.argv.get(id)!.join(' '), /mcp__chorus__start_action/);
   } finally {
     await r.done();
   }

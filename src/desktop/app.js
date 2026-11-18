@@ -1,8 +1,9 @@
 // Chorus desktop (Phase 5): a window over `chorus serve`. Everything it shows comes from the server; every button is one API
 // call. The agents run in the server's PTYs; their own screens are drawn here with xterm.js.
-/* global Terminal, FitAddon */
+/* global Terminal, FitAddon, WebglAddon */
 import { shortCheckPassed } from './doctor-popup.js';
 import { askWho } from './ask-label.js';
+import { makeCounts, sideBtn as sideBtnOf } from './counts.js';
 import { attachPicker } from './text-picker.js';
 import { md, mdInline } from './md.js';
 import { cliFitNote, newChatHint } from './cli-fit.js';
@@ -212,6 +213,8 @@ function onState(st) {
   const artWas = artOf(S.state);
   S.state = st;
   for (const c of st.chats) noteCount(`art:${c.id}`, c.artifacts ?? 0), noteCount(`artrev:${c.id}`, c.artifactsRev ?? 0);
+  // the Task button flashes like Artifacts when the chat's task changes (its revision comes from the paid module)
+  noteTaskRevs(st.chats, window.choruspro);
   // an agent turned off shows its details on the Doctor; once it works again the Doctor says so
   for (const a of st.doctor?.agents ?? []) {
     if (a.state === 'off' && !S.docOff?.has(a.agent)) ((S.docOff ??= new Set()).add(a.agent), S.docOpen.add(a.agent), (S.docBackOn = null));
@@ -253,6 +256,11 @@ const term = new Terminal({
   cursorBlink: true,
   allowProposedApi: true,
   scrollback: 5000,
+  // the wheel as in Terminal/iTerm: in WebKit (the macOS and Linux webview) a trackpad's pixel deltas move the view about
+  // pixel for pixel and a mouse notch about 3 lines at sensitivity 1; a notch (never a trackpad, which xterm tells apart)
+  // glides over 80 ms instead of jumping 3 lines at once
+  scrollSensitivity: 1,
+  smoothScrollDuration: 80,
   macOptionIsMeta: true,
   macOptionClickForcesSelection: true,
   theme: {
@@ -286,6 +294,19 @@ term.attachCustomKeyEventHandler(e => {
   }
   return false;
 });
+/* The screen draws on the GPU (addon-webgl): a wheel event redraws the rows in a fraction of what the DOM renderer spends on
+   them (measurements in .chorus/proof/feature-one-watcher/scroll-*.json). Without WebGL, or when the GPU drops the context
+   (sleep, a driver reset), it goes back to xterm's DOM renderer and stays there. */
+function useWebgl() {
+  if (!window.WebglAddon) return;
+  try {
+    const gl = new WebglAddon.WebglAddon();
+    gl.onContextLoss(() => gl.dispose());
+    term.loadAddon(gl);
+  } catch {
+    // no WebGL2 here: the DOM renderer it already has
+  }
+}
 let lastSize = '';
 function refit() {
   if (!termEl.isConnected || !termEl.clientWidth) return;
@@ -450,7 +471,9 @@ async function onProStatus(st) {
       document.head.append(Object.assign(document.createElement('link'), { id: 'pro-css', rel: 'stylesheet', href: '/api/pro/ui.css' }), js);
     });
   }
-  window.choruspro?.init?.({ go: id => go(id === 'skills' ? { name: 'skills' } : { name: 'pro', id }), skillPicker, noteCount, countFlash, countNum, newChat: folder => go({ name: 'new', folder }), refresh: () => { renderChrome(); fillChatSlots(); if (['new', 'approvals', 'home', 'more'].includes(S.view.name)) renderView(); else if (S.view.name === 'chat') renderChatParts(); }, doctor: () => go({ name: 'doctor' }), toast, confirmDelete, openChat: id => go({ name: 'chat', id }), upgrade, back: () => history.length && go(S.history.pop() ?? startView(), false) });
+  window.choruspro?.init?.({ go: id => go(id === 'skills' ? { name: 'skills' } : { name: 'pro', id }), skillPicker, noteCount, countFlash, countNum, newChat: folder => go({ name: 'new', folder }), refresh: () => { noteTaskRevs(S.state?.chats, window.choruspro); renderChrome(); fillChatSlots(); if (['new', 'approvals', 'home', 'more'].includes(S.view.name)) renderView(); else if (S.view.name === 'chat') renderChatParts(); }, doctor: () => go({ name: 'doctor' }), toast, confirmDelete, openChat: id => go({ name: 'chat', id }), upgrade, back: () => history.length && go(S.history.pop() ?? startView(), false) });
+  // the module loads after the first state: its task revisions start counting now, so nothing flashes at startup
+  noteTaskRevs(S.state?.chats, window.choruspro);
   if (S.view.name === 'pro' && !st.unlocked) return go(startView());
   // back from paying (the browser's link to /api/pro/paid, or Check again): the server's answer, never the browser's word
   if (S.view.name === 'paying' && st.plan === 'pro') return go({ name: 'pro-paid' });
@@ -655,32 +678,9 @@ function treeHtml(keep) {
 const listed = () => (S.state?.approvals ?? []).filter(a => !a.hidden);
 const waitingCount = () => listed().length + (window.choruspro?.needsCount?.() ?? 0);
 
-/* Counts that flash when they grow (Approvals, a chat's Artifacts): the whole button grows and turns yellow for about a
-   second, then goes back, and the number rolls to its new value. Only growth flashes (a drop rolls quietly); several at once
-   are one flash; a count that grew while the window was hidden is not replayed. The page redraws these buttons often, so a
-   redraw inside the second continues the animation from where it was (a negative animation-delay) instead of restarting it. */
-const COUNT_MS = 1100;
-const COUNT_BOOT_MS = 4000;
-const counts = new Map(); // key → { n: the number now, from: the number before, at: when it changed (0 = never shown moving) }
-function noteCount(key, n) {
-  const c = counts.get(key);
-  if (!c) return void counts.set(key, { n, from: n, at: 0 });
-  // nothing moves while the page is still loading its first numbers, or while the window is hidden
-  if (n !== c.n) counts.set(key, { n, from: c.n, at: document.hidden || performance.now() < COUNT_BOOT_MS ? 0 : Date.now() });
-}
-const countAge = key => { const c = counts.get(key); return c && c.at && Date.now() - c.at < COUNT_MS ? Date.now() - c.at : -1; };
-/** Goes inside a button's class="…": closes it with " flash" and the delay that keeps a redraw in step, when its count just grew. */
-function countFlash(key) {
-  const c = counts.get(key), age = countAge(key);
-  return age >= 0 && c.n > c.from ? ` flash" style="animation-delay:-${age}ms` : '';
-}
+const { noteCount, countFlash, countNum, noteTaskRevs } = makeCounts();
 /** The Artifacts button flashes when the count grew or an artifact got a new version (an edit); only the count rolls. */
 const artFlash = id => countFlash(`art:${id}`) || countFlash(`artrev:${id}`);
-/** The number itself: the old one rolls out and the new one in while the change is fresh; from nothing it just appears. */
-function countNum(key, n) {
-  const c = counts.get(key), age = countAge(key);
-  return age >= 0 && c.from > 0 && c.n === n ? `<span class="cnt-roll${c.n < c.from ? ' down' : ''}" style="animation-delay:-${age}ms"><i>${c.from}</i><i>${n}</i></span>` : String(n);
-}
 /** A chat with an item in Approvals: what a project's "!N" and the Needs you filter count, so they agree with the lists (a prompt
  *  deleted from Approvals still keeps its chat waiting on the agent's screen, but it is no longer counted). */
 const waitsOnYou = c => listed().some(a => a.id === c.id);
@@ -1974,6 +1974,7 @@ function renderChat() {
   if (!termOpened) {
     term.open(termEl);
     termOpened = true;
+    useWebgl();
   }
   renderChatParts();
   requestAnimationFrame(() => {
@@ -2023,14 +2024,14 @@ function renderChatParts() {
     if (S.drawer) void loadDrawer();
   }
   // a header button opens its view in the right sidebar; the lit one (or ✕) closes it
-  const sideBtn = (k, label, icon, extra = '', flash = '') => `<button class="btn${view === k ? ' on' : ''}${flash}" data-act="side" data-arg="${k}" aria-pressed="${view === k}" title="${label}" aria-label="${label}"><span class="ic-only">${icon}</span><span class="lbl">${label}</span>${extra}</button>`;
+  const sideBtn = (k, label, icon, extra = '', flash = '') => sideBtnOf(view, k, label, icon, extra, flash);
   // the labels go on a tablet (icons stay, with the meter) and the buttons go into the ⋯ sheet on a phone
   head.innerHTML = `<span class="badge ${esc(c.agent)}">${esc(AGENT[c.agent]?.name ?? c.agent)}</span>
     <div class="meta"><span class="dot ${esc(c.state)}"></span><span>${esc(STATE_LABEL[c.state] ?? c.state)}</span>
       ${c.model || c.effort ? `<span class="model">· ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}</span>` : ''}${c.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${meter(c.usage)}
       <span class="mono faint path" title="${esc(c.cwd)}">‎${esc(tilde(c.cwd))}‎</span>${c.toast ? `<span class="badge ok">${esc(c.toast)}</span>` : ''}</div>
     <button class="btn" data-act="handoff" data-arg="${esc(c.id)}" title="Continue this chat with another agent" aria-label="Hand off">${S.size === 'desktop' ? '⇄ Hand off' : '⇄'}</button>
-    ${c.sub ? '' : `${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰') : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', artFlash(c.id))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}`}
+    ${c.sub ? '' : `${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰', '', countFlash(`taskrev:${c.id}`)) : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', artFlash(c.id))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}`}
     <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat" aria-label="Delete this chat">🗑</button>`;
   // a phone: a task chat's panel is tabs beside the chat (Chat · Steps · Plan), one shown at a time
   const tabs = S.size === 'phone' ? window.choruspro?.sideTabs?.(c.id) : null;

@@ -188,7 +188,7 @@ export default async function (c: any) {
     return { pid, argv, system };
   };
   const startOf = (system: string) => (system.includes(MCP_HEAD) ? system.slice(0, system.indexOf(MCP_HEAD)) : system);
-  const namesTool = (system: string) => [...TOOL_NAMES, ...SUB_TOOLS, 'suggest_action', 'task_create', 'task_finish', 'action_done', 'ask_planner', 'answer_worker', 'step_result', 'goal_propose'].filter(t => startOf(system).includes(t));
+  const namesTool = (system: string) => [...TOOL_NAMES, ...SUB_TOOLS, 'start_action', 'read_mail', 'list_watches', 'task_create', 'task_finish', 'action_done', 'ask_planner', 'answer_worker', 'step_result', 'goal_propose'].filter(t => startOf(system).includes(t));
   const linesOf = (system: string) => startOf(system).replace(/^<!--.*-->\s*# Chorus\s*/s, '').trim().split('\n').filter(l => l.trim());
   /** Saves a chat's injected text and checks it against the approved lines for its kind. */
   const injected = async (who: string, id: string, cli: Cli, cwd: string, kind: 'plain' | 'planner' | 'worker' | 'sub', extra: { parent?: string; step?: string } = {}) => {
@@ -277,7 +277,7 @@ export default async function (c: any) {
     // a CLI that asks permission to edit is starting to build: it's denied (tick) and counted
     await ch.turn(600_000, { onPermission: () => perms++ });
     const t = tools(id);
-    const proposed = t.includes('suggest_action') || (t.includes('request_approval') && /Create plan/i.test(ch.text()));
+    const proposed = t.includes('start_action') || (t.includes('request_approval') && /Would you like me to|Create plan/i.test(ch.text()));
     const edited = gitStatus(dir);
     ch.close();
     note(`${who}: tools ${t.join(',') || 'none'}; proposed=${proposed}; edits=${edited ? edited.replace(/\n/g, ' ') : 'none'}; permission prompts=${perms}`);

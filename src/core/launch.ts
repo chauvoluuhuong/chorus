@@ -50,6 +50,18 @@ export interface InteractiveOpts {
   moreTools?: string[];
   /** a sub thread or a step's Worker: the CLI's own question tool off where a per-session switch exists (Codex; not agy) */
   noNativeAsk?: boolean;
+  /** what the chat's mail transport adds to this launch (chorus-core Transport.launch()): per-session flags, environment, files */
+  wake?: { args?: string[]; env?: Record<string, string>; files?: Record<string, string> };
+}
+
+/**
+ * A launch's own environment (Launch.env, e.g. agy's per-session token), for a start that only takes a command line: the CLI app's
+ * PTY start passes no environment, so `env` sets it for this one process. Nothing else changes.
+ */
+export function withEnv(l: Launch): Launch {
+  if (!l.env || !Object.keys(l.env).length) return l;
+  const { env, ...rest } = l;
+  return { ...rest, bin: '/usr/bin/env', args: [...Object.entries(env).map(([k, v]) => `${k}=${v}`), l.bin, ...l.args] };
 }
 
 /**
@@ -79,7 +91,7 @@ export function buildHeadless(agent: AgentId, o: LaunchOpts): Launch {
  * Unlike headless runs there is no auto-approve flag: the agent asks and the user (or a Chorus card) answers.
  */
 export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
-  return coreInteractive(agent, {
+  return withEnv(coreInteractive(agent, {
     prompt: o.prompt,
     cwd: o.cwd,
     resumeId: o.resumeId,
@@ -92,5 +104,6 @@ export function buildInteractive(agent: AgentId, o: InteractiveOpts): Launch {
     // agy's rules file is one per folder, rewritten by every chat that starts there: a sub thread's "never ask" would reach a main
     // agy chat in the same folder, so agy is left out (its ask_question has no per-session switch)
     noNativeAsk: agent === 'agy' ? undefined : o.noNativeAsk,
-  });
+    wake: o.wake,
+  }));
 }
