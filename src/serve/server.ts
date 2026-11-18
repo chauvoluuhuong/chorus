@@ -89,7 +89,7 @@ export function hostNames(host?: string, interfaces: ReturnType<typeof os.networ
   else if (host) add(host);
   return [...names];
 }
-const LITERAL = new Set(['POST ui', 'POST folders/pick', 'POST skills/import', 'GET skills/all', 'POST skills/sync', 'POST skills/sources', 'POST skills/sources/pick', 'POST skills/sources/remove', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/image', 'POST doctor/issue/send', 'GET projects', 'GET projects/one', 'POST projects/folders', 'DELETE projects/folders', 'POST projects/variables', 'DELETE projects/variables', 'POST projects/restart-idle']);
+const LITERAL = new Set(['POST ui', 'POST folders/pick', 'POST skills/import', 'GET skills/all', 'POST skills/sync', 'POST skills/sources', 'POST skills/sources/pick', 'POST skills/sources/remove', 'GET doctor/first', 'POST doctor/check', 'POST doctor/refresh', 'POST doctor/seen', 'POST doctor/open', 'POST doctor/run', 'POST doctor/issue', 'POST doctor/issue/image', 'POST doctor/issue/send', 'GET projects', 'GET projects/one', 'POST projects/folders', 'DELETE projects/folders', 'POST projects/variables', 'DELETE projects/variables', 'POST projects/restart-idle', 'POST projects/note']);
 
 /** The App without a terminal: input and output go nowhere, the Controller drives it as usual. */
 export function headlessIO(): AppIO {
@@ -692,15 +692,21 @@ export class ChorusServer {
       chats: { total: ids.length, running: ids.filter(id => running.has(id)).length },
       ...(counts ? { tasks: { total: counts.tasks, open: counts.open } } : {}),
       artifacts,
-      folders: rec.folders.map(f => ({ path: f.path, why: f.why, by: f.by, at: f.at })),
+      note: rec.note,
+      note_by: rec.note_by,
+      folders: rec.folders.map(f => {
+        const d = this.projectSettings.describeFolder(f.path);
+        return { path: f.path, why: f.why, by: f.by, at: f.at, created: !!f.created, exists: d.exists && d.is_dir, git: d.git };
+      }),
       variables: rec.variables.map(v => ({ name: v.name, why: v.why, by: v.by, at: v.at })),
       stale: this.projects.staleChats(folder).length,
     };
   }
 
   /**
-   * The page's own changes (by "you"). A new folder reaches running chats live where the CLI can take it; a removed folder or any
-   * variable change only marks them stale, so the page's banner offers "Restart idle ones". Open pages update through the state push.
+   * The page's own changes (by "you"), decisions 1 and 13: a new folder reaches every running chat of the project live (the CLI's own
+   * way, or a restart at its turn end); a removed folder or any variable change only marks them stale (`restart: false`), so the page's
+   * banner offers "Restart idle ones". Open pages update through the state push.
    */
   private async changeProject(folder: string, change: Parameters<ProjectRuntime['applyToRunning']>[1], apply: () => void) {
     try {
@@ -708,7 +714,7 @@ export class ChorusServer {
     } catch (e) {
       return { error: (e as Error).message };
     }
-    await this.projects.applyToRunning(folder, change, { restart: false }).catch(e => this.noteError('project change', e));
+    await this.projects.applyToRunning(folder, change, change.kind === 'add_folder' ? {} : { restart: false }).catch(e => this.noteError('project change', e));
     this.pushState();
     return this.oneProject(folder);
   }
@@ -1343,6 +1349,12 @@ export class ChorusServer {
         if (method === 'DELETE') return this.changeProject(folder, { kind: 'remove_variable', name }, () => this.projectSettings.removeVariable(folder, name));
         if (typeof b.value !== 'string') return { error: 'the value must be text' };
         return this.changeProject(folder, { kind: 'set_variable', name }, () => this.projectSettings.setVariable(folder, name, b.value, { by: 'you' }));
+      }
+      case 'POST projects/note': {
+        const folder = this.projectDir(b.folder);
+        if (!folder) return { error: 'the project folder is needed' };
+        if (typeof b.note !== 'string') return { error: 'the note must be text' };
+        return this.changeProject(folder, { kind: 'note' }, () => this.projectSettings.setNote(folder, b.note, 'you'));
       }
       case 'POST projects/restart-idle': {
         const folder = this.projectDir(b.folder);

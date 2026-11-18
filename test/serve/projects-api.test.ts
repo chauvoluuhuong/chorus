@@ -58,7 +58,17 @@ test('projects API: the list (newest first), one project, folders and variables 
     ], 'newest activity first; no tasks without Pro');
 
     const one = (await r.api('GET', `/api/projects/one?folder=${encodeURIComponent(r.a)}`)).json;
-    assert.deepEqual(one, { folder: r.a, name: path.basename(r.a), chats: { total: 2, running: 0 }, artifacts: 2, folders: [], variables: [], stale: 0 });
+    assert.deepEqual(one, { folder: r.a, name: path.basename(r.a), chats: { total: 2, running: 0 }, artifacts: 2, note: '', note_by: '', folders: [], variables: [], stale: 0 });
+    // what reaches running chats (decisions 1 and 13): a new folder live, everything else only marks them stale
+    const applied: [string, string, unknown][] = [];
+    const apply = r.srv.projects.applyToRunning.bind(r.srv.projects);
+    r.srv.projects.applyToRunning = (f, ch, o) => (applied.push([f, ch.kind, o]), apply(f, ch, o));
+
+    // the note
+    let noted = (await r.api('POST', '/api/projects/note', { folder: r.a, note: '  The shop front end.  ' })).json;
+    assert.deepEqual([noted.note, noted.note_by], ['The shop front end.', 'you']);
+    assert.match((await r.api('POST', '/api/projects/note', { folder: r.a, note: 'x'.repeat(2001) })).json.error, /too long/);
+    assert.match((await r.api('POST', '/api/projects/note', { folder: r.a })).json.error, /must be text/);
     assert.match((await r.api('GET', '/api/projects/one')).json.error, /folder is needed/);
     assert.match((await r.api('GET', `/api/projects/one?folder=${encodeURIComponent(path.join(r.b, 'nope'))}`)).json.error, /No project/);
 
@@ -68,6 +78,7 @@ test('projects API: the list (newest first), one project, folders and variables 
     assert.equal(got.folders.length, 1);
     assert.deepEqual([got.folders[0].path, got.folders[0].by], [extra, 'you']);
     assert.ok(got.folders[0].at);
+    assert.deepEqual([got.folders[0].created, got.folders[0].exists, got.folders[0].git], [false, true, null]);
     assert.match((await r.api('POST', '/api/projects/folders', { folder: r.a, dir: 'relative/x' })).json.error, /absolute/);
     assert.match((await r.api('POST', '/api/projects/folders', { folder: r.a, dir: path.join(extra, 'missing') })).json.error, /does not exist/);
     assert.match((await r.api('POST', '/api/projects/folders', { folder: r.a, dir: r.a })).json.error, /project folder itself/);
@@ -92,6 +103,9 @@ test('projects API: the list (newest first), one project, folders and variables 
       assert.doesNotMatch((await r.api(m, p, body as object | undefined)).text, new RegExp(VALUE), `${m} ${p}`);
     assert.deepEqual((await r.api('POST', '/api/projects/restart-idle', { folder: r.a })).json, { restarted: [], waiting: [] });
 
+    assert.deepEqual(applied, [[r.a, 'note', { restart: false }], [r.a, 'add_folder', {}], [r.a, 'set_variable', { restart: false }]], 'a folder add goes live; a variable only marks chats stale');
+    applied.length = 0;
+
     // removing
     got = (await r.api('DELETE', '/api/projects/variables', { folder: r.a, name: 'API_TOKEN' })).json;
     assert.deepEqual(got.variables, []);
@@ -99,6 +113,7 @@ test('projects API: the list (newest first), one project, folders and variables 
     got = (await r.api('DELETE', '/api/projects/folders', { folder: r.a, dir: extra })).json;
     assert.deepEqual(got.folders, []);
     assert.ok(fs.existsSync(extra), 'a removed working folder stays on disk');
+    assert.deepEqual(applied, [[r.a, 'remove_variable', { restart: false }], [r.a, 'remove_folder', { restart: false }]]);
     // the other project is untouched
     assert.deepEqual((await r.api('GET', `/api/projects/one?folder=${encodeURIComponent(r.b)}`)).json.folders, []);
   } finally {
