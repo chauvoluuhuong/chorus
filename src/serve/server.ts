@@ -53,6 +53,7 @@ const VENDOR: Record<string, string> = {
   'xterm.js': 'node_modules/@xterm/xterm/lib/xterm.js',
   'xterm.css': 'node_modules/@xterm/xterm/css/xterm.css',
   'addon-fit.js': 'node_modules/@xterm/addon-fit/lib/addon-fit.js',
+  'addon-webgl.js': 'node_modules/@xterm/addon-webgl/lib/addon-webgl.js',
 };
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const DEFAULT_SIZE = { cols: 120, rows: 36 };
