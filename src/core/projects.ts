@@ -37,6 +37,12 @@ export interface ProjectRecord {
   note_at: string;
   folders: FolderEntry[];
   variables: VariableEntry[];
+  /** a project made by an approved propose_new_project card: it is a project before its first chat */
+  registered?: true;
+  registered_at?: string;
+  registered_by?: string;
+  registered_by_thread?: string;
+  registered_approval?: string;
   /** goes up on every change */
   version: number;
   changed_at: string;
@@ -140,6 +146,50 @@ export class ProjectSettings {
     return Object.keys(this.readAll());
   }
 
+  /** The projects made by register() (they show before their first chat). */
+  registered(): string[] {
+    return Object.entries(this.readAll()).filter(([, r]) => r?.registered).map(([k]) => k);
+  }
+
+  /**
+   * Why `folder` can't become a NEW project, or undefined. Not `/`, the home folder, anything in Chorus's own folders (~/.chorus and
+   * the store root) or This computer; not a folder that already is a project (a record with settings, or `hasChat`). `create`: it
+   * must not exist yet and its parent must; otherwise it must be an existing folder.
+   */
+  checkNewProject(folder: string, o: { create?: boolean; hasChat?: boolean } = {}): string | undefined {
+    if (typeof folder !== 'string' || !folder || !path.isAbsolute(folder)) return `the project folder must be an absolute path: ${folder}`;
+    const d = path.resolve(folder);
+    const home = path.resolve(os.homedir());
+    if (d === '/' || d === home) return `${d} is too wide for a project: pick a folder inside it`;
+    const inside = (root: string) => d === root || d.startsWith(root + path.sep);
+    if (inside(path.join(home, '.chorus')) || inside(path.resolve(this.root)) || /\/\.chorus(\/|$)/.test(d)) return `${d} is inside Chorus's own folders: pick a folder of your own`;
+    const r = this.readAll()[d];
+    if (o.hasChat || (r && (r.registered || r.note || r.folders?.length || r.variables?.length))) return `${d} is already a project: to change it, call propose_project_change from a chat in that project`;
+    if (o.create) {
+      if (fs.existsSync(d)) return `${d} already exists: leave out create to use it as it is`;
+      if (!isDir(path.dirname(d))) return `the parent folder ${path.dirname(d)} does not exist`;
+      return undefined;
+    }
+    if (!fs.existsSync(d)) return `${d} does not exist: set create to make it`;
+    if (!isDir(d)) return `${d} is not a folder`;
+    return undefined;
+  }
+
+  /** Makes `folder` a project with no chat yet (an approved propose_new_project). With `create`, makes exactly that one folder first. */
+  register(folder: string, o: Origin & { create?: boolean; hasChat?: boolean } = {}): ProjectRecord {
+    const err = this.checkNewProject(folder, o);
+    if (err) throw new Error(err);
+    const d = path.resolve(folder);
+    if (o.create) fs.mkdirSync(d);
+    return this.change(d, r => {
+      r.registered = true;
+      r.registered_at = now();
+      r.registered_by = o.by ?? 'you';
+      if (o.by_thread) r.registered_by_thread = o.by_thread;
+      if (o.approval) r.registered_approval = o.approval;
+    });
+  }
+
   /** The project's record (an empty one, version 0, when it has none). */
   get(folder: string): ProjectRecord {
     return { ...empty(), ...this.readAll()[path.resolve(folder)] };
@@ -240,7 +290,7 @@ export class ProjectSettings {
     return out;
   }
 
-  /** Drops everything kept for the project (delete, and after its export when asked). No folder on disk is touched. */
+  /** Drops everything kept for the project, its registration too (delete). No folder on disk is touched. */
   forget(folder: string) {
     const key = path.resolve(folder);
     const all = this.readAll();

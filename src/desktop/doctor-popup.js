@@ -10,3 +10,10 @@ export function shortCheckPassed(doctor) {
   const usable = a => a.state === 'ready' || a.state === 'untested';
   return installed.some(usable) && installed.every(usable);
 }
+
+// The first-launch "Meet Doctor" popover at the sidebar's Doctor button (task #13, @workspace/mockups/doctor-tip.html, scene 1):
+// once, on a first launch only (an update never shows it), after the Welcome and after the Doctor popup when that opened.
+/** Whether the Meet Doctor popover may show now. */
+export function showDoctorTip({ first, seen, welcomePending, doctorPopupOpen }) {
+  return first === true && !seen && !welcomePending && !doctorPopupOpen;
+}

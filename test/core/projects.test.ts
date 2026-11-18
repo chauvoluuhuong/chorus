@@ -144,3 +144,31 @@ test('forget: the project\'s record and its values go; another project\'s stay; 
   assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(root, 'project-env.json'), 'utf8'))), [other]);
   assert.ok(fs.existsSync(core) && fs.existsSync(project));
 });
+
+test('register: a project with no chat; the refusals; forget removes the registration', () => {
+  const { root, parent, project, s } = rig();
+  const fresh = path.join(parent, 'fresh');
+  assert.match(s.checkNewProject('/') ?? '', /too wide/);
+  assert.match(s.checkNewProject(os.homedir()) ?? '', /too wide/);
+  assert.match(s.checkNewProject(path.join(os.homedir(), '.chorus', 'computer')) ?? '', /Chorus's own folders/);
+  assert.match(s.checkNewProject(path.join(root, 'x'), { create: true }) ?? '', /Chorus's own folders/);
+  assert.match(s.checkNewProject(project, { hasChat: true }) ?? '', /already a project/);
+  assert.match(s.checkNewProject(fresh) ?? '', /does not exist/);
+  assert.match(s.checkNewProject(path.join(fresh, 'a'), { create: true }) ?? '', /parent folder/);
+  assert.equal(s.checkNewProject(project), undefined, 'an existing folder with no settings and no chat');
+  const r = s.register(fresh, { create: true, by: 'claude 3 (claude)', by_thread: 't_1', approval: 'r_1' });
+  assert.ok(fs.statSync(fresh).isDirectory());
+  assert.equal(r.registered, true);
+  assert.equal(r.registered_by_thread, 't_1');
+  assert.ok(r.registered_at);
+  assert.deepEqual(s.registered(), [fresh]);
+  assert.ok(s.list().includes(fresh));
+  assert.match(s.checkNewProject(fresh) ?? '', /already a project: to change it, call propose_project_change/);
+  assert.throws(() => s.register(fresh), /already a project/);
+  // a folder with settings is a project too
+  s.setNote(project, 'x');
+  assert.match(s.checkNewProject(project) ?? '', /already a project/);
+  s.forget(fresh);
+  assert.deepEqual(s.registered(), []);
+  assert.ok(fs.existsSync(fresh), 'the folder stays');
+});

@@ -1,13 +1,15 @@
 // Chorus desktop (Phase 5): a window over `chorus serve`. Everything it shows comes from the server; every button is one API
 // call. The agents run in the server's PTYs; their own screens are drawn here with xterm.js.
 /* global Terminal, FitAddon, WebglAddon */
-import { shortCheckPassed } from './doctor-popup.js';
+import { shortCheckPassed, showDoctorTip } from './doctor-popup.js';
+import { HEART_SVG, followHtml, shapeCardHtml } from './follow.js';
 import { askWho } from './ask-label.js';
 import { makeCounts, sideBtn as sideBtnOf } from './counts.js';
 import { attachPicker } from './text-picker.js';
 import { md, mdInline } from './md.js';
 import { cliFitNote, newChatHint } from './cli-fit.js';
 import { nextSort, sortFolders, typeJump } from './folder-nav.js';
+import { shareLine } from './share-line.js';
 import { deleteDialogHtml, deletedText, projectPageHtml, projectsListHtml, proposalCardHtml, variableDialogHtml } from './projects-ui.js';
 
 const $ = s => document.querySelector(s);
@@ -627,6 +629,7 @@ function takeUi(ui) {
   S.welcome = ui.welcome;
   S.endedSeen = !!ui.ended;
   S.bannerDay = ui.banner;
+  S.doctorTipSeen = ui.doctorTip === true;
 }
 
 /* ---------- sidebar, top bar, notice ---------- */
@@ -638,9 +641,17 @@ function chatsByProject() {
     if (!groups.has(c.cwd)) groups.set(c.cwd, []);
     groups.get(c.cwd).push(c);
   }
+  // a project made by a propose_new_project card shows before its first chat (nothing under it)
+  for (const p of S.state?.projects ?? []) if (p.registered && !groups.has(p.folder) && !S.hidden[p.folder]) groups.set(p.folder, []);
   // a project with tasks is listed even with no chat left: taken off the sidebar, it stays off until a new chat starts there
   for (const [cwd, chats] of groups) if (S.hidden[cwd] && !chats.length) groups.delete(cwd);
   return groups;
+}
+
+/** "+N folders" after a project's name when its chats get extra working folders (the title lists them): never a row per folder. */
+function moreFolders(cwd) {
+  const f = (S.state?.projects ?? []).find(p => p.folder === cwd)?.folders ?? [];
+  return f.length ? `<span class="pmore" title="${esc(f.map(tilde).join('\n'))}">+${f.length} folder${f.length === 1 ? '' : 's'}</span>` : '';
 }
 
 /** The project tree of the sidebar, and of a phone's Chats tab. `keep`: only these chats, and only projects that have one. */
@@ -654,7 +665,7 @@ function treeHtml(keep) {
     const bang = all.filter(waitsOnYou).length;
     // the project in front: the chat you look at is in it, or the New chat form starts there. Its ＋ always shows; others on hover.
     const here = (v.name === 'chat' && chats.some(c => c.id === v.id)) || (v.name === 'new' && !v.from && (S.form?.folder ?? v.folder) === cwd);
-    tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button><button class="proj-more${v.name === 'project' && v.folder === cwd ? ' on' : ''}" data-act="project-page" data-arg="${esc(cwd)}" title="Project settings" aria-label="Settings for ${esc(base(cwd))}">⋯</button></div>`;
+    tree += `<div class="proj-row${here ? ' here' : ''}"><button class="proj" data-act="fold" data-arg="${esc(cwd)}" title="${esc(tilde(cwd))}"><span class="caret">${folded ? '▸' : '▾'}</span><span class="pname">${esc(base(cwd))}</span>${moreFolders(cwd)}${bang ? `<span class="bang">!${bang}</span>` : ''}</button><button class="proj-add" data-act="new-in" data-arg="${esc(cwd)}" title="New chat in ${esc(tilde(cwd))}" aria-label="New chat in ${esc(base(cwd))}">${PLUS}</button><button class="proj-more${v.name === 'project' && v.folder === cwd ? ' on' : ''}" data-act="project-page" data-arg="${esc(cwd)}" title="Project settings" aria-label="Settings for ${esc(base(cwd))}">⋯</button></div>`;
     if (folded) continue;
     if (!keep) tree += `<div data-pro-slot="project" data-cwd="${esc(cwd)}"></div>`;
     // a main chat and its sub threads: the main chat first, its sub threads right under it (plan 2026-11-14, Package 4A)
@@ -779,6 +790,8 @@ function renderChrome() {
   // after the slots: the paid module's project rows change the list's height
   const tree = $('#side .tree');
   if (tree && top) tree.scrollTop = top;
+  // the sidebar and tab bar were drawn anew: the Meet Doctor popover finds its button again
+  if ($('#doctor-tip')) placeDoctorTip();
 }
 
 /** A phone's top bar: ‹ Back (not on the four places of the tab bar), the screen's title, at most two icons. */
@@ -1394,11 +1407,13 @@ const drAgent = agent => drAgents()?.find(a => a.agent === agent);
 async function firstDoctor() {
   try {
     const { first } = await api('GET', '/api/doctor/first');
+    S.firstLaunch = first === true;
     const d = await loadDoctor();
     // it opens by itself only when the short check did not pass: its result decides (doctorIfNeeded), nothing opens before it
     if ((first || d.due) && !S.doctorOpened) (S.doctorDue = true), doctorIfNeeded();
     else if ($('#doctor-pop')) drawDoctor();
     else renderDoctorDot();
+    doctorTipWhenReady();
   } catch {
     /* the app works without the doctor */
   }
@@ -1410,7 +1425,7 @@ function doctorIfNeeded() {
   const passed = shortCheckPassed(S.state?.doctor);
   if (passed === null) return;
   S.doctorDue = false;
-  if (passed) return renderDoctorDot();
+  if (passed) return renderDoctorDot(), doctorTipWhenReady();
   S.doctorWaits = true;
   doctorWhenReady();
 }
@@ -1420,6 +1435,7 @@ function doctorIfNeeded() {
  *  the Doctor waits; go() and the plan's status call this again. */
 const welcomePending = () => (S.pro === undefined && !S.proFailed) || ['welcome', 'trying'].includes(S.view.name) || (community() && S.welcome === undefined && ['new', 'home'].includes(S.view.name));
 function doctorWhenReady() {
+  doctorTipWhenReady();
   if (!S.doctorWaits || welcomePending()) return;
   S.doctorWaits = false;
   S.doctorOpened = true;
@@ -1730,8 +1746,39 @@ function drAppLine() {
 }
 
 function doctorHtml() {
-  return `<div class="page"><h1 class="ph-hide">Doctor</h1><p class="lead">Your AI coding CLIs: are they installed, on a version Chorus is tested with, and logged in.</p>
-    ${drAppLine()}${drRunLine()}${drBanner()}${doctorRows()}</div>`;
+  return `<div class="page"><h1 class="ph-hide">Doctor</h1><p class="lead">Test that your agents work with Chorus, and report a bug if something is off.</p>
+    ${drAppLine()}${drRunLine()}${drBanner()}${doctorRows()}${shapeCardHtml()}</div>`;
+}
+
+/* Follow Chorus (src/desktop/follow.js): closes with ×, Maybe later, Esc (dismissDialog clicks data-x="cancel"), a click on the
+   dim area, or a channel. In the native window a channel goes to the server, which opens the system browser. */
+function openFollow() {
+  if ($('#follow')) return;
+  const back = document.activeElement;
+  const el = document.createElement('div');
+  el.className = 'scrim follow';
+  el.id = 'follow';
+  el.innerHTML = followHtml();
+  const close = () => {
+    el.remove();
+    back?.focus?.();
+  };
+  el.addEventListener('click', e => {
+    const link = e.target.closest('[data-follow]');
+    if (link) {
+      if (NATIVE) {
+        e.preventDefault();
+        void api('POST', '/api/follow/open', { to: link.dataset.follow }).then(r => r.error && toast(r.error));
+      }
+      return close();
+    }
+    if (e.target === el || e.target.closest('[data-x="cancel"]')) {
+      e.stopPropagation();
+      close();
+    }
+  });
+  $('#dialogs').append(el);
+  el.querySelector('.fx').focus();
 }
 
 /* The first-launch doctor screen (docs/mockups/desktop-first-run.html): the short check, then the choice between the app (the
@@ -1801,6 +1848,80 @@ function closeDoctorPopup() {
   clearTimeout(S.docAutoClose);
   $('#doctor-pop')?.remove();
   void api('POST', '/api/doctor/seen').catch(() => {});
+  doctorTipWhenReady();
+}
+
+/* ---------- Meet Doctor: the first-launch popover at the Doctor button (@workspace/mockups/doctor-tip.html, scene 1) ----------
+   Once, on a first launch only, after the Welcome and after the Doctor popup when that opened (showDoctorTip). The app dims, the
+   Doctor button (on a phone: the More tab) pulses in teal above the dim, and a card points at it. Got it, Esc or a click on the
+   button closes it for good (the server's UI settings, `doctorTip`); the button also opens Doctor. */
+const STETHO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v6a4 4 0 0 0 8 0V3"/><path d="M10 13v2a5 5 0 0 0 10 0v-2"/><circle cx="20" cy="11" r="2"/></svg>';
+function doctorTipWhenReady() {
+  if (S.doctorTipShown || S.doctorWaits || S.doctorDue) return;
+  if (!showDoctorTip({ first: S.firstLaunch, seen: S.doctorTipSeen, welcomePending: welcomePending(), doctorPopupOpen: !!$('#doctor-pop') })) return;
+  S.doctorTipShown = true;
+  // after the view that ended the Welcome is drawn
+  requestAnimationFrame(openDoctorTip);
+}
+/** The element the popover points at: the sidebar's Doctor button, or on a phone the bottom bar's More tab. */
+function doctorTipAnchor() {
+  if (S.size === 'phone') return document.querySelector('#tabs button[data-arg="more"]');
+  if (S.size === 'tablet' && !$('#app').classList.contains('side-open')) $('#app').classList.add('side-open');
+  return document.querySelector('.side-foot button[data-act="doctor"]');
+}
+function openDoctorTip() {
+  if ($('#doctor-tip')) return;
+  const el = document.createElement('div');
+  el.id = 'doctor-tip';
+  el.innerHTML = `<div class="dim"></div><div class="pop" role="dialog" aria-labelledby="tip-title">
+    <h3 id="tip-title">${STETHO_SVG}Meet Doctor</h3>
+    <p class="say">Come here to test that your agents work with Chorus, or to report a bug.</p>
+    <div class="shape"><span class="hi">${HEART_SVG}</span><span class="t"><b>Help shape Chorus</b>Follow us to share ideas and bug reports.</span><button class="btn" data-act="follow-open">♥ Follow</button></div>
+    <div class="foot"><button class="btn primary" data-act="tip-done">Got it</button></div></div>`;
+  document.body.append(el);
+  placeDoctorTip();
+  addEventListener('resize', placeDoctorTip);
+  const got = el.querySelector('[data-act="tip-done"]');
+  got.focus();
+  // the screen behind it may still be redrawing (a phone's Home after the Doctor popup): keep the focus on Got it
+  setTimeout(() => el.isConnected && !el.contains(document.activeElement) && !$('#follow') && got.focus(), 400);
+}
+/** Puts the card beside the anchor (right of the Doctor button, its arrow at the button) or above the More tab, inside 16px. */
+function placeDoctorTip() {
+  const el = $('#doctor-tip');
+  if (!el) return;
+  document.querySelectorAll('.tip-spot').forEach(b => b.classList.remove('tip-spot'));
+  const at = doctorTipAnchor();
+  const pop = el.querySelector('.pop');
+  if (!at) return;
+  at.classList.add('tip-spot');
+  const r = at.getBoundingClientRect();
+  const w = Math.min(330, innerWidth - 32);
+  pop.style.width = `${w}px`;
+  const h = pop.offsetHeight;
+  if (S.size === 'phone') {
+    pop.dataset.side = 'up';
+    const left = Math.max(16, Math.min(r.left + r.width / 2 - w + 30, innerWidth - 16 - w));
+    pop.style.left = `${left}px`;
+    pop.style.top = `${Math.max(16, r.top - 12 - h)}px`;
+    pop.style.setProperty('--arrow', `${r.left + r.width / 2 - left - 6}px`);
+  } else {
+    pop.dataset.side = 'left';
+    const top = Math.max(16, Math.min(r.top + r.height / 2 - h + 24, innerHeight - 16 - h));
+    pop.style.left = `${Math.min(r.right + 12, innerWidth - 16 - w)}px`;
+    pop.style.top = `${top}px`;
+    pop.style.setProperty('--arrow', `${r.top + r.height / 2 - top - 6}px`);
+  }
+}
+/** Closes the popover for good; `open` also goes to Doctor (a click on the Doctor button or the More tab). */
+function doctorTipDone(open = false) {
+  if (!$('#doctor-tip')) return;
+  $('#doctor-tip').remove();
+  removeEventListener('resize', placeDoctorTip);
+  document.querySelectorAll('.tip-spot').forEach(b => b.classList.remove('tip-spot'));
+  S.doctorTipSeen = true;
+  remember('doctorTip', true);
+  if (open) go({ name: 'doctor' });
 }
 
 /** Follows an install, login or detailed test for its output; the server checks the agents again before the job ends, so its
@@ -2031,6 +2152,7 @@ function drawSheet() {
   el.className = 'sheet-wrap';
   el.innerHTML = `<div class="sheet" role="dialog" aria-label="This chat"><div class="grab"></div>
     <div class="sh-meta"><div><span class="badge ${esc(c.agent)}">${esc(AGENT[c.agent]?.name ?? c.agent)}</span> ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}${c.skip ? ' <span class="badge warn">skip</span>' : ''}</div><div class="mono path">${esc(tilde(c.cwd))}</div>${meter(c.usage)}</div>
+    <button data-act="share" data-arg="${esc(c.id)}"><span class="i">⧉</span>Share</button>
     <button data-act="handoff" data-arg="${esc(c.id)}"><span class="i">⇄</span>Hand off to another agent</button>
     ${c.sub ? '' : `<button class="${artFlash(c.id).trim()}" data-act="drawer-to" data-arg="artifacts"><span class="i">▤</span>Artifacts${c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : ''}</button>
     <button data-act="drawer-to" data-arg="activity"><span class="i">≋</span>Activity</button>
@@ -2058,6 +2180,7 @@ function renderChatParts() {
     <div class="meta"><span class="dot ${esc(c.state)}"></span><span>${esc(STATE_LABEL[c.state] ?? c.state)}</span>
       ${c.model || c.effort ? `<span class="model">· ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}</span>` : ''}${c.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${meter(c.usage)}
       <span class="mono faint path" title="${esc(c.cwd)}">‎${esc(tilde(c.cwd))}‎</span>${c.toast ? `<span class="badge ok">${esc(c.toast)}</span>` : ''}</div>
+    <button class="btn" data-act="share" data-arg="${esc(c.id)}" title="Copy this chat's id and place, to paste into another Chorus chat" aria-label="Share">${S.size === 'desktop' ? '⧉ Share' : '⧉'}</button>
     <button class="btn" data-act="handoff" data-arg="${esc(c.id)}" title="Continue this chat with another agent" aria-label="Hand off">${S.size === 'desktop' ? '⇄ Hand off' : '⇄'}</button>
     ${c.sub ? '' : `${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰', '', countFlash(`taskrev:${c.id}`)) : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', artFlash(c.id))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}`}
     <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat" aria-label="Delete this chat">🗑</button>`;
@@ -2666,6 +2789,26 @@ document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$
 
 /* ---------- toasts ---------- */
 
+/** Copies text: the clipboard API, else a hidden textarea and execCommand (an older WebView, or no secure context). */
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = Object.assign(document.createElement('textarea'), { value: text });
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+    document.body.append(ta);
+    ta.select();
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch {}
+    ta.remove();
+    return ok;
+  }
+}
+
 function toast(text, opts = {}) {
   if (!text) return;
   const el = document.createElement('div');
@@ -2876,6 +3019,8 @@ async function answerProposal(el) {
   }
   delete S.pp[req];
   document.activeElement?.blur();
+  // "Create and open New chat there": the new project's folder is chosen; the user picks who and sends (Chorus starts nothing)
+  if (r?.open) return go({ name: 'new', folder: r.open });
   return loadDecided();
 }
 
@@ -2909,6 +3054,8 @@ document.addEventListener('click', async e => {
     drawSheet();
   }
   if (S.size === 'phone' && e.target.classList?.contains('scrim') && e.target.closest('#dialogs')) return dismissDialog(e.target, true);
+  // Meet Doctor: the pulsing button (Doctor, or More on a phone) closes it for good and opens Doctor
+  if ($('#doctor-tip') && e.target.closest('.tip-spot')) return doctorTipDone(true);
   const el = e.target.closest('[data-act]');
   if (!el) return;
   const act = el.dataset.act;
@@ -2953,6 +3100,10 @@ document.addEventListener('click', async e => {
     case 'skills':
     case 'doctor':
       return go({ name: act });
+    case 'follow-open':
+      return openFollow();
+    case 'tip-done':
+      return doctorTipDone();
     case 'chat':
       return go({ name: 'chat', id: arg });
     case 'plan-welcome':
@@ -3016,6 +3167,14 @@ document.addEventListener('click', async e => {
       delete S.docJobs[pop.dataset.agent];
       await api('POST', `/api/signin/${pop.dataset.id}/close`, { done: el.dataset.value === 'done' }).catch(() => {});
       return drawDoctor();
+    }
+    case 'share': {
+      // one line naming this chat, for another Chorus chat (owner, 2026-11-18); a WebView without the clipboard API copies by hand
+      const c = S.state?.chats.find(x => x.id === arg);
+      if (!c) return;
+      const line = shareLine(c, { computer: S.info?.computer, pro: window.choruspro });
+      if (await copyText(line)) return void toast(`Copied: ${line}`);
+      return void toast(line, { ms: 8000 });
     }
     case 'doc-copy':
       return void navigator.clipboard.writeText(arg).then(() => toast('Copied'));
@@ -3163,8 +3322,6 @@ document.addEventListener('click', async e => {
     case 'proj-var-rm':
       if (!(await confirmBox(`Remove ${arg}?`, `Its value is deleted from this Mac. Chats that run now keep it until they restart.`, 'Remove'))) return;
       return projectChange('DELETE', '/api/projects/variables', { name: arg });
-    case 'proj-restart-idle':
-      return projectChange('POST', '/api/projects/restart-idle', {}, null, r => { const n = r.restarted?.length ?? 0, w = r.waiting?.length ?? 0; toast(`Restarting ${n} idle chat${n === 1 ? '' : 's'}${w ? `; ${w} restart${w === 1 ? 's' : ''} when ${w === 1 ? 'its' : 'their'} turn ends` : ''}.`); });
     case 'proj-export':
       return exportProject(S.view.folder);
     case 'pp-show':
@@ -3498,6 +3655,10 @@ document.addEventListener(
         return dlg.querySelector('[data-act="dlg-ok"]')?.click();
       }
       return;
+    }
+    if (e.key === 'Escape' && $('#doctor-tip')) {
+      e.preventDefault();
+      return doctorTipDone();
     }
     if (e.key === 'Escape' && $('#sheet')) {
       e.preventDefault();

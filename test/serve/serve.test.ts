@@ -29,7 +29,7 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const agentCheck = (agent: AgentId, state: AgentCheck['state'], login: AgentCheck['login'] = state === 'needs-login' ? 'no' : 'yes'): AgentCheck => ({ agent, name: agent, state, login, version: '1.0.0', page: '', loginCommand: [agent, 'login'], ms: 1 });
 const fastReport = (agents: AgentCheck[] = (['claude', 'codex', 'agy'] as AgentId[]).map(a => agentCheck(a, 'ready'))): FastReport => ({ node: { version: '22', ok: true }, platform: 'test', agents, ms: 1 });
 
-async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand' | 'pickFolder' | 'sessionExists' | 'host' | 'container' | 'signIns' | 'reports'> = {}) {
+async function rig(seed?: (store: Store, project: string) => void, notifications?: NotificationInbox, updates?: UpdateCheck, doctor: Pick<ServeOpts, 'check' | 'runCommand' | 'pickFolder' | 'sessionExists' | 'host' | 'container' | 'signIns' | 'reports' | 'openLink'> = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-home-'));
   process.env.CODEX_HOME = home;
   // the skills Chorus sees (Sync skills) come from a temp home, never the real one
@@ -1198,6 +1198,20 @@ test('request_approval with other false: the state\'s ask says so (the card has 
     await v.until(() => v.state()?.approvals.some((x: any) => x.request === d.id), 'a default card');
     assert.equal(v.state().approvals.find((x: any) => x.request === d.id).other, true);
     v.ws.close();
+  } finally {
+    await r.done();
+  }
+});
+
+test('Follow Chorus from the native window: POST /api/follow/open opens only its two channels (src/desktop/follow.js)', async () => {
+  const opened: string[] = [];
+  const r = await rig(undefined, undefined, undefined, { openLink: url => { opened.push(url); } });
+  try {
+    assert.equal((await r.api('POST', '/api/follow/open', { to: 'youtube' })).json.ok, true);
+    assert.equal((await r.api('POST', '/api/follow/open', { to: 'facebook' })).json.ok, true);
+    assert.ok((await r.api('POST', '/api/follow/open', { to: 'https://evil.example/' })).json.error);
+    assert.ok((await r.api('POST', '/api/follow/open', { to: 'toString' })).json.error, 'no inherited keys');
+    assert.deepEqual(opened, ['https://www.youtube.com/@luuhuongtech?sub_confirmation=1', 'https://www.facebook.com/luuhuongtech/']);
   } finally {
     await r.done();
   }

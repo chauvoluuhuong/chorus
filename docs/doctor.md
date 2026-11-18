@@ -363,6 +363,22 @@ groups A–E and X as sections), the time of the last run and the versions it ra
 **Report issue** (when something failed) and **Show report folder**. A running test fills in live; clicking a cell shows its
 details.
 
+Follow Chorus (2026-11-18, mockup `@workspace/mockups/doctor-tip.html`): the page's lead reads "Test that your agents work with
+Chorus, and report a bug if something is off." A lasting **Help shape Chorus** card closes the page: a heart, "Follow us to share
+ideas and bug reports.", and a **♥ Follow Chorus** button that opens the follow modal (`src/desktop/follow.js`): "Thanks for trying
+Chorus!", "Follow us to share ideas and bug reports. Each one makes Chorus better.", Luu Huong Tech on YouTube (**Subscribe**) and
+Facebook (**Follow**), and **Maybe later**. The channels are plain links: a browser tab opens them in a new tab; the native window
+sends `POST /api/follow/open` `{ to: 'youtube' | 'facebook' }` and the server opens the system browser (only those two links).
+
+**Meet Doctor**, the first-launch popover (2026-11-18, the same mockup, scene 1): on a first launch only (`/api/doctor/first`; an
+existing user who updates never sees it), once the Welcome's choice is made and after the Doctor popup of §6.1 when that opened,
+the app dims and the sidebar's Doctor button pulses in teal above the dim (on a phone, with no sidebar: the More tab). A 330px card
+points at it: "Meet Doctor", "Come here to test that your agents work with Chorus, or to report a bug.", a **Help shape Chorus**
+line with **♥ Follow** (the follow modal opens above it) and **Got it**. Got it, Esc, or a click on the pulsing button closes it for
+good (the server's UI settings, key `doctorTip`); the button also opens the Doctor page. When it may show is `showDoctorTip` in
+`src/desktop/doctor-popup.js` (tested in `test/serve/doctor-tip.test.ts`); `npm run proof:first-run` checks it on desktop and at
+390px.
+
 ### 6.4 Report issue in the desktop
 
 Sent to the Chorus team's admin page, not to GitHub (2026-11-14): see §7.1 and
@@ -377,6 +393,7 @@ Sent to the Chorus team's admin page, not to GitHub (2026-11-14): see §7.1 and
 | `POST /api/doctor/stop` | stops it; finished cases keep their result |
 | `POST /api/doctor/terminal` `{ agent, action: 'install' \| 'login' }` | a PTY with the command from the install table; nothing else can be run through it |
 | `POST /api/doctor/issue` · `POST /api/doctor/issue/send` · `POST /api/doctor/issue/image` | the report's details; sends it to the admin backend (§7.1) |
+| `POST /api/follow/open` `{ to }` | opens the YouTube or Facebook page of the follow modal in the system browser (§6.3) |
 
 These sit behind the local API's existing token (`docs/phase5.md` §2).
 
@@ -499,7 +516,8 @@ In Chorus:
 |---|---|
 | `src/cli/commands.ts` | `doctorCmd`: the terminal front end (prompts, matrix) over `runDoctor` |
 | `src/serve/server.ts` | the routes of §6.5 |
-| `src/desktop/app.js`, `style.css` | the popup, the Doctor page, the report dialog |
+| `src/desktop/app.js`, `style.css` | the popup, the Doctor page, the Meet Doctor popover, the report dialog |
+| `src/desktop/doctor-popup.js` | when the popup (`shortCheckPassed`) and Meet Doctor (`showDoctorTip`) open |
 
 ## 10. How we prove doctor itself (docs/testing.md layers)
 

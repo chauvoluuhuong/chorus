@@ -15,7 +15,7 @@ export function projectsListHtml(list, h) {
   const rows = list
     .map(p => `<button class="prow" data-act="project-page" data-arg="${esc(p.folder)}"><span class="n">${esc(p.name)}</span><span class="p">${esc(tilde(p.folder))}</span><span class="c">${plural(p.chats, 'chat')}${p.tasks != null ? ` · ${plural(p.tasks, 'task')}` : ''}</span><span class="chev">›</span></button>`)
     .join('');
-  return `<div class="page proj-page">${rows ? `<div class="card proj-card">${rows}</div>` : '<p class="muted">No projects yet: a project shows here once it has a chat.</p>'}<p class="sub">Every project that has a chat, newest activity first.</p></div>`;
+  return `<div class="page proj-page">${rows ? `<div class="card proj-card">${rows}</div>` : '<p class="muted">No projects yet: a project shows here once it has a chat, or once a chat creates it.</p>'}<p class="sub">Every project, newest activity first.</p></div>`;
 }
 
 /** The stats row: chats, tasks (only when the paid module counts them), artifacts. */
@@ -55,12 +55,6 @@ function variablesHtml(p, h) {
     <p class="sub">Given to every chat started here. Values stay on this Mac, in a file only you can read, and never go into an export. Models see the names only.</p>`;
 }
 
-function staleHtml(p) {
-  if (!p.stale) return '';
-  const n = p.stale === 1 ? '1 running chat still uses' : `${p.stale} running chats still use`;
-  return `<div class="proj-banner">⟳ ${n} the old folders and variables. Idle chats restart with the new ones; a chat in the middle of a turn waits until it finishes.<button class="btn sm" data-act="proj-restart-idle">Restart idle ones</button></div>`;
-}
-
 function exportHtml(p, exporting) {
   return `<div class="act"><div><b>Export this project</b>Its ${p.tasks ? 'chats, tasks and' : 'chats and'} artifacts in one .zip in Downloads, plus the folder and variable names (never the values). Nothing is uploaded.</div><button class="btn primary" data-act="proj-export"${exporting ? ' disabled' : ''}>${exporting ? 'Exporting…' : '⤓ Export'}</button></div>`;
 }
@@ -75,17 +69,17 @@ export function projectPageHtml(p, ui, h) {
   const { esc, tilde } = h;
   if (!p) return '<div class="page proj-page"><p class="muted">Loading the project…</p></div>';
   if (p.error) return `<div class="page proj-page"><p class="err">${esc(p.error)}</p></div>`;
-  if (ui.phone && ui.part === 'folders') return `<div class="page proj-page">${foldersHtml(p, h)}${staleHtml(p)}</div>`;
-  if (ui.phone && ui.part === 'variables') return `<div class="page proj-page">${variablesHtml(p, h)}${staleHtml(p)}</div>`;
+  if (ui.phone && ui.part === 'folders') return `<div class="page proj-page">${foldersHtml(p, h)}</div>`;
+  if (ui.phone && ui.part === 'variables') return `<div class="page proj-page">${variablesHtml(p, h)}</div>`;
   const top = `<div class="ptitle">${esc(p.name)}</div><div class="ppath">${esc(tilde(p.folder))}</div>`;
   if (ui.phone) {
     const r = (act, ic, t, val, chev = true) => `<button class="mrow" data-act="${act}"><span class="ico">${ic}</span>${t}<span class="val">${val}</span>${chev ? '<span class="chev">›</span>' : ''}</button>`;
-    return `<div class="page proj-page phone">${top}${statsHtml(p)}${aboutHtml(p, ui, h)}${staleHtml(p)}
+    return `<div class="page proj-page phone">${top}${statsHtml(p)}${aboutHtml(p, ui, h)}
       <div class="card">${r('proj-part', '▤', 'Working folders', p.folders.length + 1).replace('data-act="proj-part"', 'data-act="proj-part" data-arg="folders"')}${r('proj-part', '$', 'Variables', p.variables.length).replace('data-act="proj-part"', 'data-act="proj-part" data-arg="variables"')}${r('proj-export', '⤓', ui.exporting ? 'Exporting…' : 'Export', 'to Downloads', false)}</div>
       <div class="dz">Danger zone</div>
       <div class="card"><button class="mrow danger" data-act="rm-project" data-arg="${esc(p.folder)}">Delete this project…</button></div></div>`;
   }
-  return `<div class="page proj-page">${top}${aboutHtml(p, ui, h)}${statsHtml(p)}${staleHtml(p)}
+  return `<div class="page proj-page">${top}${aboutHtml(p, ui, h)}${statsHtml(p)}
     <div class="twocol"><div>${foldersHtml(p, h)}</div><div>${variablesHtml(p, h)}</div></div>
     <div class="hm-h" style="margin-top:16px">Export</div>${exportHtml(p, ui.exporting)}
     <div class="dz">Danger zone</div>
@@ -129,7 +123,8 @@ export const deletedText = (p, removed) => `Deleted ${p.name} from Chorus: ${plu
 /** "Set up <project>?" for a description or 3+ changes, else the one change's question as drawn. */
 export function proposalTitle(p, h) {
   const { esc } = h;
-  const name = esc(p.project.replace(/\/+$/, '').split('/').pop() || p.project);
+  const name = esc(p.name ?? (p.project.replace(/\/+$/, '').split('/').pop() || p.project));
+  if (p.kind === 'new_project') return `Create project "${name}"?`;
   const c = p.changes;
   if (c.some(x => x.kind === 'set_note') || c.length >= 3) return `Set up "${name}"?`;
   if (c.length === 2) return `Make 2 changes to "${name}"?`;
@@ -145,6 +140,7 @@ export function proposalTitle(p, h) {
 
 /** What Approve reads on the card: the plain "Approve" names the one change when there is one. */
 export function optionLabel(p, option) {
+  if (p.kind === 'new_project') return option;
   const one = p.changes.length === 1 ? p.changes[0].kind : '';
   if (option === 'Approve') return { add_folder: 'Add folder', create_folder: 'Create and add', set_variable: 'Set variable', remove_folder: 'Remove folder', remove_variable: 'Remove variable', set_note: 'Save description' }[one] ?? 'Approve';
   if (option === 'Approve and restart this chat' && one === 'set_variable') return 'Set and restart this chat';
@@ -158,7 +154,8 @@ export function optionLabel(p, option) {
 export function proposalCardHtml(a, typed, h) {
   const { esc, tilde, md } = h;
   const p = a.proposal;
-  const name = p.project.replace(/\/+$/, '').split('/').pop() || p.project;
+  const name = p.name ?? (p.project.replace(/\/+$/, '').split('/').pop() || p.project);
+  const fresh = p.kind === 'new_project';
   const req = `data-arg="${esc(a.id)}" data-req="${esc(a.request)}"`;
   const vals = typed?.values ?? {};
   const q = why => (why ? `<div class="why">"${esc(why)}"</div>` : '');
@@ -167,7 +164,7 @@ export function proposalCardHtml(a, typed, h) {
     .map(c => {
       switch (c.kind) {
         case 'set_note':
-          return `<div class="pp-row"><label class="f">Description</label><textarea class="in pp-input pp-note" data-input="pp-note" data-req="${esc(a.request)}" rows="4" aria-label="Description of ${esc(name)}">${esc(typed?.note ?? c.note ?? '')}</textarea>${q(c.why)}</div>`;
+          return `<div class="pp-row"><label class="f">Description</label><textarea class="in pp-input pp-note" data-input="pp-note" data-req="${esc(a.request)}" rows="4" aria-label="Description of ${esc(name)}">${esc(typed?.note ?? c.note ?? '')}</textarea>${fresh ? '' : q(c.why)}</div>`;
         case 'add_folder':
           return `<div class="pp-row"><div class="in mono">${esc(tilde(c.path))}</div>${q(c.why)}</div>`;
         case 'create_folder':
@@ -180,7 +177,7 @@ export function proposalCardHtml(a, typed, h) {
           lock = true;
           const v = vals[c.name] ?? c.suggested_value ?? '';
           const label = p.changes.length === 1 ? 'Value: you type it, the model never sees it' : `<code>${esc(c.name)}</code>: you type the value, the model never sees it`;
-          return `<div class="pp-row">${p.changes.length === 1 ? q(c.why) : ''}<label class="f">${label}</label><div class="in pw"><input type="password" class="mono pp-input pp-val" data-input="pp-val" data-req="${esc(a.request)}" data-name="${esc(c.name)}" autocomplete="off" spellcheck="false" value="${esc(v)}" aria-label="Value of ${esc(c.name)}"><button class="eye" data-act="pp-show" type="button">Show</button></div>${p.changes.length === 1 ? '' : q(c.why)}</div>`;
+          return `<div class="pp-row">${p.changes.length === 1 && !fresh ? q(c.why) : ''}<label class="f">${label}</label><div class="in pw"><input type="password" class="mono pp-input pp-val" data-input="pp-val" data-req="${esc(a.request)}" data-name="${esc(c.name)}" autocomplete="off" spellcheck="false" value="${esc(v)}" aria-label="Value of ${esc(c.name)}"><button class="eye" data-act="pp-show" type="button">Show</button></div>${p.changes.length === 1 && !fresh ? '' : q(c.why)}</div>`;
         }
         default:
           return '';
@@ -188,8 +185,8 @@ export function proposalCardHtml(a, typed, h) {
     })
     .join('');
   const missing = p.changes.filter(c => c.kind === 'set_variable' && !(vals[c.name] ?? c.suggested_value ?? '')).map(c => c.name);
-  const single = p.changes.length === 1;
-  const hint = single && p.changes[0].kind === 'add_folder' ? `<div class="hint">Every chat in ${esc(name)} will get it, running ones too.</div>` : !single ? `<div class="hint">Every chat in ${esc(name)} gets these. Nothing changes until you choose.</div>` : '';
+  const single = p.changes.length === 1 && !fresh;
+  const hint = fresh ? `<div class="hint">Every chat started in ${esc(name)} gets these. Nothing is made until you choose.</div>` : single && p.changes[0].kind === 'add_folder' ? `<div class="hint">Every chat in ${esc(name)} will get it, running ones too.</div>` : !single ? `<div class="hint">Every chat in ${esc(name)} gets these. Nothing changes until you choose.</div>` : '';
   // Decline first, the agent's first option last and lit (the mockup's order: right-aligned, the main one at the end)
   const opts = [...a.options].reverse();
   const btns = opts
@@ -199,7 +196,9 @@ export function proposalCardHtml(a, typed, h) {
       return `<button class="btn${main ? ' primary' : ''}" data-act="pp-pick" ${req} data-value="${esc(o)}"${wait ? ' disabled' : ''}>${esc(optionLabel(p, o))}</button>`;
     })
     .join('');
-  return `<div class="ask-q">${proposalTitle(p, h)}</div>${p.reason ? `<div class="why reason">${md(p.reason)}</div>` : ''}<div class="pp-rows">${rows}</div>${hint}
+  // the new project's main folder first, with "new folder" when Chorus makes it
+  const main = fresh ? `<div class="pp-row"><label class="f">Project folder</label><div class="in mono">${esc(tilde(p.project))}${p.create ? '<span class="tag new">new folder</span>' : ''}</div></div>` : '';
+  return `<div class="ask-q">${proposalTitle(p, h)}</div>${p.reason ? `<div class="why reason">${md(p.reason)}</div>` : ''}<div class="pp-rows">${main}${rows}</div>${hint}
     ${lock ? '<div class="lock">🔒 Kept on this Mac. The chat hears only that it is set.</div>' : ''}
     ${missing.length ? `<div class="hint pp-wait">Type a value for ${missing.map(esc).join(', ')} to approve.</div>` : ''}
     <div class="btns">${btns}</div>`;
