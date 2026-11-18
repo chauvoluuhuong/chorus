@@ -55,12 +55,6 @@ function variablesHtml(p, h) {
     <p class="sub">Given to every chat started here. Values stay on this Mac, in a file only you can read, and never go into an export. Models see the names only.</p>`;
 }
 
-function staleHtml(p) {
-  if (!p.stale) return '';
-  const n = p.stale === 1 ? '1 running chat still uses' : `${p.stale} running chats still use`;
-  return `<div class="proj-banner">⟳ ${n} the old folders and variables. Idle chats restart with the new ones; a chat in the middle of a turn waits until it finishes.<button class="btn sm" data-act="proj-restart-idle">Restart idle ones</button></div>`;
-}
-
 function exportHtml(p, exporting) {
   return `<div class="act"><div><b>Export this project</b>Its ${p.tasks ? 'chats, tasks and' : 'chats and'} artifacts in one .zip in Downloads, plus the folder and variable names (never the values). Nothing is uploaded.</div><button class="btn primary" data-act="proj-export"${exporting ? ' disabled' : ''}>${exporting ? 'Exporting…' : '⤓ Export'}</button></div>`;
 }
@@ -75,17 +69,17 @@ export function projectPageHtml(p, ui, h) {
   const { esc, tilde } = h;
   if (!p) return '<div class="page proj-page"><p class="muted">Loading the project…</p></div>';
   if (p.error) return `<div class="page proj-page"><p class="err">${esc(p.error)}</p></div>`;
-  if (ui.phone && ui.part === 'folders') return `<div class="page proj-page">${foldersHtml(p, h)}${staleHtml(p)}</div>`;
-  if (ui.phone && ui.part === 'variables') return `<div class="page proj-page">${variablesHtml(p, h)}${staleHtml(p)}</div>`;
+  if (ui.phone && ui.part === 'folders') return `<div class="page proj-page">${foldersHtml(p, h)}</div>`;
+  if (ui.phone && ui.part === 'variables') return `<div class="page proj-page">${variablesHtml(p, h)}</div>`;
   const top = `<div class="ptitle">${esc(p.name)}</div><div class="ppath">${esc(tilde(p.folder))}</div>`;
   if (ui.phone) {
     const r = (act, ic, t, val, chev = true) => `<button class="mrow" data-act="${act}"><span class="ico">${ic}</span>${t}<span class="val">${val}</span>${chev ? '<span class="chev">›</span>' : ''}</button>`;
-    return `<div class="page proj-page phone">${top}${statsHtml(p)}${aboutHtml(p, ui, h)}${staleHtml(p)}
+    return `<div class="page proj-page phone">${top}${statsHtml(p)}${aboutHtml(p, ui, h)}
       <div class="card">${r('proj-part', '▤', 'Working folders', p.folders.length + 1).replace('data-act="proj-part"', 'data-act="proj-part" data-arg="folders"')}${r('proj-part', '$', 'Variables', p.variables.length).replace('data-act="proj-part"', 'data-act="proj-part" data-arg="variables"')}${r('proj-export', '⤓', ui.exporting ? 'Exporting…' : 'Export', 'to Downloads', false)}</div>
       <div class="dz">Danger zone</div>
       <div class="card"><button class="mrow danger" data-act="rm-project" data-arg="${esc(p.folder)}">Delete this project…</button></div></div>`;
   }
-  return `<div class="page proj-page">${top}${aboutHtml(p, ui, h)}${statsHtml(p)}${staleHtml(p)}
+  return `<div class="page proj-page">${top}${aboutHtml(p, ui, h)}${statsHtml(p)}
     <div class="twocol"><div>${foldersHtml(p, h)}</div><div>${variablesHtml(p, h)}</div></div>
     <div class="hm-h" style="margin-top:16px">Export</div>${exportHtml(p, ui.exporting)}
     <div class="dz">Danger zone</div>

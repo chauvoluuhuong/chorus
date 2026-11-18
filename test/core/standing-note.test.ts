@@ -129,7 +129,8 @@ test('the MCP instructions are the approved text, under 3 KB', () => {
 - Chorus watches what you started (your action, your sub threads, your mail) and acts on it; see its watch records, their status and how long, with list_watches, instead of checking in a loop.
 - Chorus actions (Create plan, Review changes, …): ask "Would you like me to <action>? <why>" with a question card; after the user's yes, start it with start_action; finish with action_done. Chorus watches each turn end and reminds you if it is missing.
 - This project's working environment (its description, extra folders and environment variables) is in get_project. When it has no description, when get_project suggests folders, or when you need a folder outside the project or a variable, set it up with ONE propose_project_change call. Never ask the user to edit a CLI config or a shell profile, and never ask for a secret in the chat.
-- Once you have a plan, or the chat's topic is clear, name this chat with rename_chat; a Planner also renames its task with task_update.`,
+- Once you have a plan, or the chat's topic is clear, name this chat with rename_chat; a Planner also renames its task with task_update.
+- A pasted 'Chorus thread <id> · …' line names another Chorus chat: read it with get_handoff_context or get_thread_turns.`,
   );
   assert.ok(Buffer.byteLength(MCP_INSTRUCTIONS) < 3072, `${Buffer.byteLength(MCP_INSTRUCTIONS)} bytes`);
 });

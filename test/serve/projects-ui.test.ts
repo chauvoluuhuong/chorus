@@ -31,7 +31,7 @@ test('the list: chat counts, and tasks only when the paid module counts them', (
   assert.match(html, /data-act="project-page" data-arg="\/Users\/you\/chorus"/);
 });
 
-test('the page: folders with who and why, names but no value, the stale banner, Export, the Danger zone', () => {
+test('the page: folders with who and why, names but no value, no stale banner, Export, the Danger zone', () => {
   const html = projectPageHtml(project(), {}, h);
   assert.match(html, /project folder/);
   assert.match(html, /added by you/);
@@ -39,14 +39,15 @@ test('the page: folders with who and why, names but no value, the stale banner, 
   assert.match(html, /class="tag new">new/);
   assert.match(html, /GITHUB_TOKEN/);
   assert.match(html, /••••••••/);
-  assert.match(html, /2 running chats still use the old folders/);
-  assert.match(html, /Restart idle ones/);
+  // stale: 2 running chats, but the page shows no banner (owner, 2026-11-18): get_project tells each chat what it is missing
+  assert.doesNotMatch(html, /still use|Restart idle ones|proj-banner/);
   assert.match(html, /No description yet\. A chat can propose one, or write it here\./);
   assert.match(html, /Danger zone/);
   assert.match(html, /data-act="rm-project"/);
   // no tasks without Pro
   assert.doesNotMatch(html, /tasks/);
-  assert.doesNotMatch(projectPageHtml(project({ stale: 0 }), {}, h), /Restart idle ones/);
+  assert.doesNotMatch(projectPageHtml(project(), { phone: true }, h), /still use|Restart idle ones/);
+  assert.doesNotMatch(projectPageHtml(project(), { phone: true, part: 'folders' }, h), /still use|Restart idle ones/);
   assert.match(projectPageHtml(project({ tasks: { total: 10, open: 2 } }), {}, h), /<b>10<\/b><span>tasks/);
 });
 
