@@ -67,3 +67,50 @@ export async function addProTools(server: McpServer, home: string, threadId: str
     });
   }
 }
+
+/**
+ * A Claude chat's channel (task #10): this process holds GET /api/pro/mcp/channel open to the running `chorus serve`, and each line
+ * that comes down it (a Chorus message for this chat) goes to Claude Code as `notifications/claude/channel`. Nothing is typed into the
+ * chat. Serve gone: tried again every few seconds; stops when the chat's connection closes.
+ */
+export function listenChannel(home: string, threadId: string, notify: (params: { content: string; meta: Record<string, string> }) => Promise<void> | void, o: { retryMs?: number } = {}): () => void {
+  const ac = new AbortController();
+  let stopped = false;
+  const loop = async () => {
+    while (!stopped) {
+      const info = serveInfo(home);
+      if (info) {
+        try {
+          const r = await fetch(`${info.url}/api/pro/mcp/channel?thread=${encodeURIComponent(threadId)}`, { headers: { authorization: `Bearer ${info.mcpToken}`, 'x-chorus': '1' }, signal: ac.signal });
+          if (r.ok && r.body) {
+            let buf = '';
+            const dec = new TextDecoder();
+            for await (const chunk of r.body as unknown as AsyncIterable<Uint8Array>) {
+              buf += dec.decode(chunk, { stream: true });
+              for (let i = buf.indexOf('\n'); i >= 0; i = buf.indexOf('\n')) {
+                const line = buf.slice(0, i).trim();
+                buf = buf.slice(i + 1);
+                if (!line) continue;
+                try {
+                  const p = JSON.parse(line) as { content?: unknown; meta?: unknown };
+                  if (typeof p.content === 'string') await notify({ content: p.content, meta: (p.meta ?? {}) as Record<string, string> });
+                } catch {
+                  /* a bad line is skipped */
+                }
+              }
+            }
+          }
+        } catch {
+          /* serve gone or the stream cut: try again */
+        }
+      }
+      if (stopped) break;
+      await new Promise(r => setTimeout(r, o.retryMs ?? 3000));
+    }
+  };
+  void loop();
+  return () => {
+    stopped = true;
+    ac.abort();
+  };
+}

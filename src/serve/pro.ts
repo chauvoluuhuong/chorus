@@ -34,13 +34,20 @@ export class ChatLaunch {
   /** set just around a new sub thread: its brief (its row has none yet) */
   nextSub: string | undefined;
   host: ProHost | undefined;
+  /** what the chat's mail transport adds to its launch (set by chorus serve: its transports' launch()) */
+  wake: ((agent: AgentId, thread: string) => { args?: string[]; env?: Record<string, string>; files?: Record<string, string> } | undefined) | undefined;
   readonly store: Store | undefined;
 
   constructor(store?: Store) {
     this.store = store;
   }
 
-  extras(o: { threadId: string; project: string; cwd: string }, agent: AgentId): { role?: ThreadRole; readOnly?: boolean; moreTools?: string[]; parent?: { id: string; title: string; brief: string }; actionLabels?: string[]; noNativeAsk?: boolean } {
+  extras(o: { threadId: string; project: string; cwd: string }, agent: AgentId): { role?: ThreadRole; readOnly?: boolean; moreTools?: string[]; parent?: { id: string; title: string; brief: string }; actionLabels?: string[]; noNativeAsk?: boolean; wake?: ReturnType<NonNullable<ChatLaunch['wake']>> } {
+    const wake = this.wake?.(agent, o.threadId);
+    return { ...this.extrasOf(o, agent), ...(wake ? { wake } : {}) };
+  }
+
+  private extrasOf(o: { threadId: string; project: string; cwd: string }, agent: AgentId): { role?: ThreadRole; readOnly?: boolean; moreTools?: string[]; parent?: { id: string; title: string; brief: string }; actionLabels?: string[]; noNativeAsk?: boolean } {
     const row = this.store?.getThread(o.threadId);
     const brief = this.nextSub ?? (isSubThread(row) ? row?.sub_brief : undefined);
     const main = brief != null && row?.parent_thread_id ? this.store?.getThread(row.parent_thread_id) : undefined;

@@ -13,7 +13,7 @@ import { knownSkills, readKnownSkill } from '../core/skillsync.ts';
 import { Store, type ThreadRow } from '../core/store.ts';
 import { ancestorPids, resolveThread } from './identity.ts';
 import type { ProModule } from '@chauvoluuhuong/chorus-core/pro-loader';
-import { addProTools, proRole, type RoleInfo } from './pro.ts';
+import { addProTools, listenChannel, proRole, type RoleInfo } from './pro.ts';
 
 export const TOOL_NAMES = ['get_handoff_context', 'get_thread_turns', 'list_threads', 'list_artifacts', 'list_skills', 'get_skill', 'request_approval', 'show_artifact', 'current_thread'] as const;
 
@@ -80,7 +80,9 @@ export function createServer(project: string, threadId?: string, home?: string, 
   const store = new Store(project, { home });
   // how to work in Chorus: Claude reads it here; Codex and agy get it in their start text (launch.ts). An AI app with no chat gets none
   const instructions = threadId ? MCP_INSTRUCTIONS : undefined;
-  const server = new McpServer({ name: 'chorus', version: '1.0.0' }, instructions ? { instructions } : undefined) as McpServer & { addProTools(): Promise<void> };
+  // a chat's server can push Chorus messages to Claude Code (its mail transport: `notifications/claude/channel`, claude-code.md §15);
+  // the CLI reads the capability only when launched with its channels flag
+  const server = new McpServer({ name: 'chorus', version: '1.0.0' }, { ...(instructions ? { instructions } : {}), ...(threadId ? { capabilities: { experimental: { 'claude/channel': {} } } } : {}) }) as McpServer & { addProTools(): Promise<void> };
 
   // the role lives in the paid bundle, which runs in `chorus serve`: asked once per call, never cached (it changes as a task moves)
   const role = (): Promise<RoleInfo | undefined> => (threadId ? (o.role ?? proRole)(store.root, threadId) : Promise.resolve(undefined));
@@ -241,6 +243,21 @@ export async function runMcp(project: string, threadId?: string, home?: string) 
   const server = createServer(project, id, home);
   await server.addProTools();
   await server.connect(new StdioServerTransport());
+  // a Claude chat gets its Chorus mail through this connection (src/serve/mail.ts); Codex and agy get theirs from their own CLI
+  const row = id ? new Store(project, { home }) : undefined;
+  const agent = id ? row?.getThread(id)?.agent : undefined;
+  const root = row?.root;
+  row?.close();
+  if (id && agent === 'claude' && root) {
+    const stop = listenChannel(root, id, params => server.server.notification({ method: 'notifications/claude/channel', params }));
+    const end = () => {
+      stop();
+      process.exit(0);
+    };
+    process.stdin.once('end', end);
+    process.stdin.once('close', end);
+    server.server.onclose = end;
+  }
 }
 
 /* ---------- current_thread, the request_approval guards ---------- */

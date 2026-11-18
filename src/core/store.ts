@@ -3,6 +3,7 @@ import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import type { MailMessage, MailState, MailStore, WatchEventRecord, WatchState, WatchStore } from '@chauvoluuhuong/chorus-core';
 import type { AgentId, Session, ToolCall, Turn, Usage } from './types.ts';
 import { maskSecrets } from './adapters/util.ts';
 
@@ -157,7 +158,48 @@ CREATE TABLE IF NOT EXISTS skill_links (dir TEXT NOT NULL, cli TEXT NOT NULL, pa
 CREATE TABLE IF NOT EXISTS reported (
   id INTEGER PRIMARY KEY AUTOINCREMENT, thread_id TEXT NOT NULL, target TEXT NOT NULL, title TEXT, ts TEXT NOT NULL
 );
+-- the mailbox (task #10, chorus-core src/mail/): every message between chats and from Chorus to a chat
+CREATE TABLE IF NOT EXISTS mail (
+  id TEXT PRIMARY KEY, from_thread TEXT, from_json TEXT NOT NULL, to_thread TEXT NOT NULL, kind TEXT NOT NULL, subject TEXT NOT NULL,
+  body TEXT NOT NULL, refs TEXT NOT NULL DEFAULT '{}', meta TEXT, state TEXT NOT NULL, channel TEXT, tries INTEGER NOT NULL DEFAULT 0,
+  error TEXT, created_at TEXT NOT NULL, delivered_at TEXT, read_at TEXT, answered_at TEXT
+);
+CREATE INDEX IF NOT EXISTS mail_to ON mail (to_thread, state);
+CREATE INDEX IF NOT EXISTS mail_state ON mail (state);
+CREATE INDEX IF NOT EXISTS mail_from ON mail (from_thread);
+-- the one watcher (task #10, chorus-core src/watch/): each watch's state, data and deadline, so a restart keeps them
+CREATE TABLE IF NOT EXISTS watch (
+  key TEXT PRIMARY KEY, thread TEXT NOT NULL, belongs_to TEXT NOT NULL, kind TEXT NOT NULL, owner TEXT NOT NULL, expect TEXT NOT NULL,
+  seen TEXT, since INTEGER, waits_on TEXT, deadline INTEGER, data TEXT NOT NULL DEFAULT '{}', extra TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL, ended_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS watch_belongs ON watch (belongs_to);
+CREATE INDEX IF NOT EXISTS watch_thread ON watch (thread);
+CREATE INDEX IF NOT EXISTS watch_ended ON watch (ended_at);
+CREATE TABLE IF NOT EXISTS watch_event (
+  id INTEGER PRIMARY KEY, key TEXT NOT NULL, thread TEXT NOT NULL, belongs_to TEXT NOT NULL, type TEXT NOT NULL, at INTEGER NOT NULL,
+  detail TEXT, action TEXT
+);
+CREATE INDEX IF NOT EXISTS watch_event_key ON watch_event (key);
+CREATE INDEX IF NOT EXISTS watch_event_belongs ON watch_event (belongs_to);
 `;
+
+/** watch_event keeps the last 30 days, at most this many rows (pruned at start). */
+export const WATCH_EVENTS_KEPT = 50_000;
+const WATCH_EVENT_DAYS = 30;
+
+const json = (v: unknown) => (v === undefined ? null : JSON.stringify(v));
+const parse = <T>(s: string | null | undefined, d: T): T => {
+  if (s == null) return d;
+  try {
+    return JSON.parse(s) as T;
+  } catch {
+    return d;
+  }
+};
+const opt = <T>(v: T | null | undefined): T | undefined => (v == null ? undefined : v);
+/** a record without its unset fields (rows read back equal what was written) */
+const defined = <T extends object>(o: T): T => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
 
 const now = () => new Date().toISOString();
 
@@ -188,6 +230,93 @@ export class Store {
     this.db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
     this.db.exec(SCHEMA);
     this.migrate();
+    this.pruneWatchEvents();
+  }
+
+  /** watch_event: the last 30 days, at most WATCH_EVENTS_KEPT rows. */
+  pruneWatchEvents(at = Date.now(), keep = WATCH_EVENTS_KEPT) {
+    this.db.prepare('DELETE FROM watch_event WHERE at < ?').run(at - WATCH_EVENT_DAYS * 86_400_000);
+    this.db.prepare('DELETE FROM watch_event WHERE id <= (SELECT id FROM watch_event ORDER BY id DESC LIMIT 1 OFFSET ?)').run(keep);
+  }
+
+  /* ---------- the mailbox's records (chorus-core MailStore) ---------- */
+
+  private mailRow(r: any): MailMessage {
+    return defined({
+      id: r.id, from: parse(r.from_json, { who: 'chorus' as const }), to: { thread: r.to_thread }, kind: r.kind, subject: r.subject, body: r.body,
+      refs: parse(r.refs, {}), ...(r.meta != null ? { meta: parse(r.meta, {}) } : {}), state: r.state, channel: opt(r.channel), tries: r.tries,
+      error: opt(r.error), created_at: r.created_at, delivered_at: opt(r.delivered_at), read_at: opt(r.read_at), answered_at: opt(r.answered_at),
+    });
+  }
+
+  /** The `mail` table as the Mailbox's store. */
+  mailStore(): MailStore {
+    const db = this.db;
+    const COLS: Record<string, (m: Partial<MailMessage>) => unknown> = {
+      from_thread: m => m.from?.thread ?? null, from_json: m => json(m.from), to_thread: m => m.to?.thread, kind: m => m.kind, subject: m => m.subject,
+      body: m => m.body, refs: m => json(m.refs ?? {}), meta: m => json(m.meta), state: m => m.state, channel: m => m.channel ?? null, tries: m => m.tries ?? 0,
+      error: m => m.error ?? null, created_at: m => m.created_at, delivered_at: m => m.delivered_at ?? null, read_at: m => m.read_at ?? null, answered_at: m => m.answered_at ?? null,
+    };
+    // which columns a field of MailMessage writes
+    const FIELD: Record<string, string[]> = { from: ['from_thread', 'from_json'], to: ['to_thread'] };
+    return {
+      insert: m => {
+        const cols = Object.keys(COLS);
+        db.prepare(`INSERT INTO mail (id,${cols.join(',')}) VALUES (?,${cols.map(() => '?').join(',')})`).run(m.id, ...(cols.map(c => COLS[c](m)) as any[]));
+      },
+      update: (id, f) => {
+        const cols = [...new Set(Object.keys(f).flatMap(k => FIELD[k] ?? (k in COLS ? [k] : [])))];
+        if (!cols.length) return;
+        db.prepare(`UPDATE mail SET ${cols.map(c => `${c} = ?`).join(', ')} WHERE id = ?`).run(...(cols.map(c => COLS[c](f)) as any[]), id);
+      },
+      get: id => {
+        const r = db.prepare('SELECT * FROM mail WHERE id = ?').get(id);
+        return r ? this.mailRow(r) : undefined;
+      },
+      list: (q: { to?: string; from?: string; state?: MailState[] }) => {
+        const where: string[] = [], args: string[] = [];
+        if (q.to !== undefined) where.push('to_thread = ?'), args.push(q.to);
+        if (q.from !== undefined) where.push('from_thread = ?'), args.push(q.from);
+        if (q.state) where.push(`state IN (${q.state.map(() => '?').join(',') || "''"})`), args.push(...q.state);
+        return (db.prepare(`SELECT * FROM mail${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY created_at, rowid`).all(...args) as any[]).map(r => this.mailRow(r));
+      },
+    };
+  }
+
+  /* ---------- the watcher's records (chorus-core WatchStore) ---------- */
+
+  /** The `watch` and `watch_event` tables as the TurnWatch's store. */
+  watchStore(): WatchStore {
+    const db = this.db;
+    return {
+      load: () =>
+        (db.prepare('SELECT * FROM watch WHERE ended_at IS NULL ORDER BY created_at').all() as any[]).map((r): WatchState => {
+          const x = parse<Partial<WatchState>>(r.extra, {});
+          return defined({
+            key: r.key, thread: r.thread, belongsTo: r.belongs_to, kind: r.kind, owner: r.owner, expect: r.expect, seen: opt(r.seen), since: opt(r.since),
+            waitsOn: parse<string[] | undefined>(r.waits_on, undefined), deadline: opt(r.deadline), waitOverAt: x.waitOverAt, idleAt: x.idleAt,
+            activity: x.activity, activityAt: x.activityAt, quietSent: x.quietSent, data: parse(r.data, {}), created_at: r.created_at, ended_at: opt(r.ended_at),
+          });
+        }),
+      save: (s: WatchState) => {
+        const extra = { waitOverAt: s.waitOverAt, idleAt: s.idleAt, activity: s.activity, activityAt: s.activityAt, quietSent: s.quietSent };
+        db.prepare(
+          `INSERT INTO watch (key,thread,belongs_to,kind,owner,expect,seen,since,waits_on,deadline,data,extra,created_at,ended_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           ON CONFLICT(key) DO UPDATE SET thread=excluded.thread, belongs_to=excluded.belongs_to, kind=excluded.kind, owner=excluded.owner, expect=excluded.expect,
+           seen=excluded.seen, since=excluded.since, waits_on=excluded.waits_on, deadline=excluded.deadline, data=excluded.data, extra=excluded.extra,
+           created_at=excluded.created_at, ended_at=excluded.ended_at`,
+        ).run(s.key, s.thread, s.belongsTo, s.kind, s.owner, s.expect, s.seen ?? null, s.since ?? null, json(s.waitsOn), s.deadline ?? null, JSON.stringify(s.data ?? {}), JSON.stringify(extra), s.created_at, s.ended_at ?? null);
+      },
+      event: (e: WatchEventRecord) => {
+        db.prepare('INSERT INTO watch_event (key,thread,belongs_to,type,at,detail,action) VALUES (?,?,?,?,?,?,?)').run(e.key, e.thread, e.belongsTo, e.type, e.at, json(e.detail), e.action ?? null);
+      },
+    };
+  }
+
+  /** The watcher's log of one watch (key) or of everything kept for one chat (belongsTo); oldest first. */
+  watchEvents(q: { key?: string; belongsTo?: string }): WatchEventRecord[] {
+    const rows = (q.key !== undefined ? this.db.prepare('SELECT * FROM watch_event WHERE key = ? ORDER BY id').all(q.key) : this.db.prepare('SELECT * FROM watch_event WHERE belongs_to = ? ORDER BY id').all(q.belongsTo ?? '')) as any[];
+    return rows.map(r => ({ key: r.key, thread: r.thread, belongsTo: r.belongs_to, type: r.type, at: r.at, detail: parse(r.detail, undefined), ...(r.action != null ? { action: r.action } : {}) }));
   }
 
   /** Databases made before the shared store lack these columns. */
@@ -378,6 +507,12 @@ export class Store {
     return rows.map(r => ({ ...r, options: JSON.parse(r.options) }));
   }
 
+  /** Asks not yet delivered to their main thread and not answered. */
+  untypedAsks(): AskRow[] {
+    return (this.db.prepare('SELECT * FROM asks WHERE typed IS NULL AND answered IS NULL ORDER BY created').all() as any[]).map(r => ({ ...r, options: JSON.parse(r.options) }));
+  }
+
+  /** Marks an ask delivered into its main thread (by the mailbox; the column keeps its old name). */
   askTyped(id: string) {
     this.db.prepare('UPDATE asks SET typed = ? WHERE id = ? AND typed IS NULL').run(now(), id);
   }
