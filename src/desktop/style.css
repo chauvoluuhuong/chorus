@@ -618,7 +618,7 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
 .ic-only { display: none; }
 
 /* the phone's own screens: Home, Chats, More (app.js draws them only on a phone) */
-.hm { padding: 6px 16px 28px; display: grid; gap: 20px; }
+.hm { padding: 6px 16px 28px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
 .hm-ask { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 0 8px 0 14px; height: 48px; color: var(--faint); font-size: 15px; box-shadow: 0 1px 2px rgba(20, 20, 19, 0.06); }
 .hm-ask .go { margin-left: auto; width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; }
 .hm-ask .go svg, .ph-ico svg, #tabs svg { display: block; }
@@ -702,6 +702,8 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
   .chat-row .tk-det { min-height: 32px; display: inline-flex; align-items: center; padding: 0 9px; }
   .proj, .chat-row, .nav button, .nc-menu > button, .folders button, .news-row, .fr-more { min-height: 44px; }
   .crumbs a, .task-tag { display: inline-flex; align-items: center; min-height: 36px; }
+  .ask-more, .lead-more { display: inline-flex; align-items: center; min-height: 36px; }
+  .ask-more { margin-top: -8px; margin-bottom: -4px; }
   .side-head { padding-top: 6px; padding-bottom: 2px; }
   .foot-agent { display: inline-flex; align-items: center; min-height: 36px; }
   select, input[type='text'], input[type='search'], textarea, .note-input, .other-input, .dlg-input, .nc-box textarea { font-size: 16px; min-height: 40px; }
@@ -735,6 +737,13 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
   #tabs button .n { position: absolute; top: 5px; left: calc(50% + 4px); min-width: 16px; background: var(--bad); color: #fff; font-size: 10px; font-weight: 700; border-radius: 8px; padding: 0 4px; line-height: 16px; text-align: center; box-shadow: 0 0 0 2px var(--side); }
   #tabs .newtab { justify-self: center; width: 46px; height: 46px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); box-shadow: 0 2px 6px rgba(20, 20, 19, 0.22); }
   html.kb #tabs { display: none; } /* the on-screen keyboard is up */
+  #app.in-chat #tabs { display: none; } /* a chat: ‹ Back leaves it, the agent's screen gets the height */
+  /* a chat's top bar: its title, and under it the agent and its state */
+  #app.in-chat #top { height: calc(54px + var(--safe-top)); }
+  .ph-title.two { display: grid; gap: 1px; align-content: center; }
+  .ph-title.two .ph-t1 { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ph-title.two .ph-sub { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 11px; font-weight: 400; color: var(--muted); overflow: hidden; white-space: nowrap; }
+  .ph-title.two .ph-sub .badge { font-size: 10.5px; padding: 0 6px; }
   #notice, #plan-banner:not([hidden]) { flex-wrap: wrap; padding: 8px 14px; }
   /* pages */
   .page, .page[style] { padding: 14px 16px 28px; max-width: none !important; }
@@ -747,6 +756,15 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
   .item .head { flex-wrap: wrap; row-gap: 4px; }
   .item .acts, .acts { flex-wrap: wrap; }
   .item .what { font-size: 12px; }
+  /* a card's details stop after 4 lines, with Show more */
+  .item .what .clamp { max-height: 6em; overflow: hidden; }
+  .item .what.md { line-height: 1.5; }
+  .item .ask-more { margin-top: 0; }
+  /* Approvals' intro: one sentence, More opens the rest */
+  .lead-fold .lead-long { display: none; }
+  .lead-fold.open .lead-long { display: inline; }
+  .lead-fold.open .lead-short { display: none; }
+  .lead-more { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-weight: 600; }
   /* New chat: the same composer; the pickers are chips and their menus open as sheets */
   .page.nc-wrap { padding: 22px 14px 24px; }
   .page .nc-h { font-size: 24px; margin-bottom: 16px; }
@@ -765,9 +783,12 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
   .nc-sub { font-size: 12.5px; }
   .nc-sel { grid-template-columns: 70px minmax(0, 1fr); padding: 8px 12px; }
   /* a chat: the agent and its state; the rest is in the ⋯ sheet. The agent screen is as today. */
-  .chat-head { padding: 8px 12px; flex-wrap: nowrap; }
-  .chat-head > .btn, .chat-head > .icon-btn, .chat-head .meter, .chat-head .path, .chat-head .model { display: none; }
-  .chat-head .meta { flex: 1; }
+  /* the agent and its state are the top bar's second line; the rest is in the ⋯ sheet */
+  .chat-head { display: none; }
+  /* the docked question card: never more than 40 % of the screen */
+  .ask-dock { max-height: 40dvh; overflow: auto; margin: 6px 8px 8px; padding: 10px 12px; }
+  .ask-dock .what:has(> .clamp) { display: none; } /* it opens with the question and its buttons; details sit behind Show more */
+  /* a sub thread's strip: one line (its rules sit after the strip's own, below) */
   .banner { flex-wrap: wrap; padding: 10px 14px; }
   .banner.ask .what { flex-basis: 100%; white-space: normal; }
   .other-row .other-input { min-width: 0; }
@@ -776,7 +797,7 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
   .chat-tabs .seg button { flex: 1; }
   .chat-body.tab-steps .chat-col, .chat-body.tab-plan .chat-col { display: none; }
   .chat-body.tab-chat [data-pro-slot="chat-side"] { display: none !important; }
-  .chat-body:not(.tab-chat) [data-pro-slot="chat-side"].on { position: static; flex: 1; width: auto; box-shadow: none; }
+  .chat-body:not(.tab-chat) [data-pro-slot="chat-side"].on { position: static; flex: 1; width: auto; min-width: 0; box-shadow: none; }
   /* the drawer (Artifacts, Activity, Record): a bottom sheet, 82 % high, with a grabber */
   .drawer { position: fixed; left: 0; right: 0; top: auto; bottom: 0; width: auto; height: 82%; border-left: 0; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; z-index: 41; box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.25); padding-bottom: var(--safe-bot); }
   .grab { display: block; width: 38px; height: 5px; border-radius: 3px; background: var(--line); margin: 8px auto 0; }
@@ -958,6 +979,15 @@ nav button.locked .lock { margin-left: auto; font-size: 11px; opacity: .8; }
 .sub-strip b { color: var(--ink); }
 .sub-strip.warn { background: var(--warn-soft); }
 .sub-strip .btn.sm { padding: 4px 9px; font-size: 12px; }
+.sub-strip .ss-short { display: none; }
+@media (max-width: 640px) {
+  /* a sub thread's strip on a phone: one line, icon + Watch-only (or Unlocked) + its buttons */
+  .sub-strip { flex-wrap: nowrap; padding: 6px 12px; gap: 8px; }
+  .sub-strip .msg { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sub-strip .ss-long { display: none; }
+  .sub-strip .ss-short { display: inline; }
+  .sub-strip .btn.sm { flex: none; white-space: nowrap; }
+}
 .watch-line { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; padding: 8px 14px; background: linear-gradient(transparent, rgba(0, 0, 0, 0.75) 45%); color: #d6d4cc; font-size: 12px; text-align: center; pointer-events: none; }
 .watch-line[hidden] { display: none; }
 
