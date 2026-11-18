@@ -52,7 +52,7 @@ function startServe(): Promise<string> {
 }
 process.on('exit', () => serve?.kill('SIGTERM'));
 
-const { cdp, js, shot, until, click, close } = await openChrome({ out: OUT, width: 1440, height: 1000, log: s => console.log(s) });
+const { cdp, js, shot, until, click, key, close } = await openChrome({ out: OUT, width: 1440, height: 1000, log: s => console.log(s) });
 if (PLANS) {
   // the page asks its server for /api/pro/plans; answer with the given words instead
   const words = fs.readFileSync(PLANS, 'utf8');
@@ -60,6 +60,41 @@ if (PLANS) {
 }
 const view = () => js<string>('chorus.S.view.name');
 const doctorOpen = () => js<boolean>('!!document.querySelector("#doctor-pop")');
+const tipOpen = () => js<boolean>('!!document.querySelector("#doctor-tip .pop")');
+const followOpen = () => js<boolean>('!!document.querySelector("#follow .fd")');
+
+/** Meet Doctor (task #13, @workspace/mockups/doctor-tip.html scene 1): the popover beside its button, ♥ Follow opens the modal
+ *  above it, Got it closes it for good. `anchor`: the Doctor button, or the More tab on a phone. */
+async function checkTip(anchor: string, name: string, size: string) {
+  if (!check(`${size}: Meet Doctor shows after the Welcome and the Doctor`, await until(tipOpen, 5000)))
+    console.log(`  state: ${await js<string>('JSON.stringify({ view: chorus.S.view, size: chorus.S.size, pop: !!document.querySelector("#doctor-pop"), first: chorus.S.firstLaunch, seen: chorus.S.doctorTipSeen, shown: chorus.S.doctorTipShown, waits: chorus.S.doctorWaits, due: chorus.S.doctorDue, welcome: chorus.S.welcome, tabs: document.querySelector("#tabs")?.innerHTML.length })')}`);
+  await sleep(600);
+  const at = await js<{ spot: boolean; top: boolean; side: string; text: string; focus: string; gap: number; inside: boolean }>(`(() => {
+    const a = document.querySelector(${JSON.stringify(anchor)}), p = document.querySelector('#doctor-tip .pop');
+    const r = a.getBoundingClientRect(), q = p.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return { spot: a.classList.contains('tip-spot'), top: a.contains(hit), side: p.dataset.side, text: p.textContent.replace(/\\s+/g, ' '),
+      focus: document.activeElement.textContent, gap: p.dataset.side === 'up' ? r.top - q.bottom : q.left - r.right,
+      inside: q.left >= 16 && q.right <= innerWidth - 16 && q.top >= 16 && q.bottom <= innerHeight - 16 };
+  })()`);
+  check(`${size}: it points at ${anchor} (${at.side}, ${Math.round(at.gap)}px away), which pulses above the dim`, at.spot && at.top && at.gap > 0 && at.gap < 20);
+  check(`${size}: it stays 16px inside the window`, at.inside);
+  check(`${size}: Meet Doctor, its line, Help shape Chorus, ♥ Follow and Got it`, /Meet Doctor/.test(at.text) && /Come here to test that your agents work with Chorus, or to report a bug\./.test(at.text) && /Help shape Chorus/.test(at.text) && /Follow us to share ideas and bug reports\./.test(at.text) && /♥ Follow/.test(at.text) && /Got it/.test(at.text));
+  check(`${size}: focus is on Got it`, at.focus === 'Got it');
+  await shot(name, 'First launch: Meet Doctor points at the Doctor button.');
+  await click('#doctor-tip .btn', /♥ Follow/);
+  check(`${size}: ♥ Follow opens the follow modal above the popover`, (await followOpen()) && (await js<boolean>('document.elementFromPoint(innerWidth / 2, innerHeight / 2)?.closest("#follow") != null')));
+  await shot(`${name}-follow`, 'From the popover: the follow modal.');
+  await key('Escape');
+  check(`${size}: Esc closes the modal first, the popover stays`, !(await followOpen()) && (await tipOpen()));
+  await click('#doctor-tip button', /Got it/);
+  check(`${size}: Got it closes it`, !(await tipOpen()) && !(await js<boolean>('!!document.querySelector(".tip-spot")')));
+  await sleep(500);
+  await cdp('Page.reload', {});
+  await until(() => js<boolean>('!!chorus.S.state && !!chorus.S.pro'), 15_000);
+  await sleep(2500);
+  check(`${size}: the server remembers it: after a reload it does not come back`, !(await tipOpen()) && (await js<boolean>('chorus.S.doctorTipSeen === true')));
+}
 
 console.log('First launch: Community');
 let url = await startServe();
@@ -82,6 +117,7 @@ await until(() => js<boolean>('!/Checking/.test(document.querySelector("#fr-titl
 await shot('doctor', 'Then the Doctor: the short check of the agents.');
 await click('#fr-foot button', /start using Chorus|Continue/);
 check('the Doctor closes into New chat', await until(async () => !(await doctorOpen()) && (await view()) === 'new', 5000));
+await checkTip('.side-foot button[data-act="doctor"]', 'tip', 'desktop');
 await shot('new-chat', 'Chorus, ready.');
 
 console.log('First launch again, clicking fast: the Doctor opens once');
@@ -98,6 +134,10 @@ console.log('First launch again, clicking fast: the Doctor opens once');
   await click('#fr-foot button', /start using Chorus|Continue/);
   await sleep(5000);
   check('a closed Doctor stays closed', !(await doctorOpen()));
+  // a click on the pulsing Doctor button closes Meet Doctor for good and opens Doctor
+  await until(tipOpen, 5000);
+  await click('.side-foot button[data-act="doctor"]');
+  check('a click on Doctor closes Meet Doctor and opens the Doctor page', !(await tipOpen()) && (await view()) === 'doctor');
   serve!.kill('SIGTERM');
   await sleep(800);
   Object.assign(env, { CHORUS_HOME: path.join(home, 'chorus'), CHORUS_DOCTOR_HOME: home });
@@ -119,7 +159,10 @@ console.log('First launch where the short check passes: no Doctor popup');
   await sleep(4000);
   const passed = states.some(x => / (ready|untested)$/.test(x)) && states.every(x => / (ready|untested|missing)$/.test(x));
   check('the short check passed: no Doctor popup, no "Checking…" first; the Doctor dot and page still show the result', passed && !(await doctorOpen()) && (await view()) === 'new');
-  await shot('passed-no-doctor', 'First launch, the short check passed: no Doctor popup; the Doctor dot shows the result.');
+  check('no Doctor popup: Meet Doctor comes right after the Welcome', await until(tipOpen, 5000));
+  await shot('passed-no-doctor', 'First launch, the short check passed: no Doctor popup, Meet Doctor points at the Doctor button.');
+  await key('Escape');
+  check('Esc acts as Got it', !(await tipOpen()));
   await js(`chorus.go({ name: 'doctor' })`);
   await sleep(800);
   await click('#view button, #view [role="button"]', /Show details/);
@@ -141,12 +184,30 @@ await until(() => js<boolean>('!!chorus.S.state && !!chorus.S.pro'), 15_000);
 await sleep(2500);
 check('no Welcome again', (await view()) !== 'welcome');
 check('no Doctor again (nothing changed)', !(await doctorOpen()));
+check('no Meet Doctor again', !(await tipOpen()));
 
 console.log('Trial ended: the screen names every locked gate');
 await js(`(() => { chorus.S.pro = { ...chorus.S.pro, plan: 'free', locked: ['portal', 'instructions', 'actions', 'processes', 'failures', 'teammate.create', 'remote'] }; chorus.go({ name: 'pro-ended' }); })()`);
 const ended = await js<string>('document.querySelector("#view").textContent');
 check('it says what stays and lists all seven', /You keep the Planner/.test(ended) && /Edit processes/.test(ended) && /Use remote access/.test(ended));
 await shot('trial-ended', 'Trial ended (a stand-in plan): what stays, and what now needs Pro.');
+
+console.log('First launch on a phone: Meet Doctor points at More');
+{
+  serve!.kill('SIGTERM');
+  await sleep(800);
+  const fresh = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-first-'));
+  Object.assign(env, { CHORUS_HOME: path.join(fresh, 'chorus'), CHORUS_DOCTOR_HOME: fresh });
+  await cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await cdp('Page.navigate', { url: await startServe() });
+  await until(async () => (await view()) === 'welcome' && (await js<boolean>('!!document.querySelector(".plan-card button")')), 15_000, 100);
+  await sleep(1000);
+  await click('.plan-card button', /Keep Community/);
+  await until(() => js<boolean>('!!document.querySelector("#fr-foot button.primary:not([disabled])")'), 15_000, 100);
+  await click('#fr-foot button', /start using Chorus|Continue/);
+  await checkTip('#tabs button[data-arg="more"]', 'tip-phone', 'phone');
+  await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+}
 
 close();
 serve?.kill('SIGTERM');

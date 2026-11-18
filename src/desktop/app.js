@@ -1,7 +1,8 @@
 // Chorus desktop (Phase 5): a window over `chorus serve`. Everything it shows comes from the server; every button is one API
 // call. The agents run in the server's PTYs; their own screens are drawn here with xterm.js.
 /* global Terminal, FitAddon, WebglAddon */
-import { shortCheckPassed } from './doctor-popup.js';
+import { shortCheckPassed, showDoctorTip } from './doctor-popup.js';
+import { HEART_SVG, followHtml, shapeCardHtml } from './follow.js';
 import { askWho } from './ask-label.js';
 import { makeCounts, sideBtn as sideBtnOf } from './counts.js';
 import { attachPicker } from './text-picker.js';
@@ -627,6 +628,7 @@ function takeUi(ui) {
   S.welcome = ui.welcome;
   S.endedSeen = !!ui.ended;
   S.bannerDay = ui.banner;
+  S.doctorTipSeen = ui.doctorTip === true;
 }
 
 /* ---------- sidebar, top bar, notice ---------- */
@@ -779,6 +781,8 @@ function renderChrome() {
   // after the slots: the paid module's project rows change the list's height
   const tree = $('#side .tree');
   if (tree && top) tree.scrollTop = top;
+  // the sidebar and tab bar were drawn anew: the Meet Doctor popover finds its button again
+  if ($('#doctor-tip')) placeDoctorTip();
 }
 
 /** A phone's top bar: ‹ Back (not on the four places of the tab bar), the screen's title, at most two icons. */
@@ -1394,11 +1398,13 @@ const drAgent = agent => drAgents()?.find(a => a.agent === agent);
 async function firstDoctor() {
   try {
     const { first } = await api('GET', '/api/doctor/first');
+    S.firstLaunch = first === true;
     const d = await loadDoctor();
     // it opens by itself only when the short check did not pass: its result decides (doctorIfNeeded), nothing opens before it
     if ((first || d.due) && !S.doctorOpened) (S.doctorDue = true), doctorIfNeeded();
     else if ($('#doctor-pop')) drawDoctor();
     else renderDoctorDot();
+    doctorTipWhenReady();
   } catch {
     /* the app works without the doctor */
   }
@@ -1410,7 +1416,7 @@ function doctorIfNeeded() {
   const passed = shortCheckPassed(S.state?.doctor);
   if (passed === null) return;
   S.doctorDue = false;
-  if (passed) return renderDoctorDot();
+  if (passed) return renderDoctorDot(), doctorTipWhenReady();
   S.doctorWaits = true;
   doctorWhenReady();
 }
@@ -1420,6 +1426,7 @@ function doctorIfNeeded() {
  *  the Doctor waits; go() and the plan's status call this again. */
 const welcomePending = () => (S.pro === undefined && !S.proFailed) || ['welcome', 'trying'].includes(S.view.name) || (community() && S.welcome === undefined && ['new', 'home'].includes(S.view.name));
 function doctorWhenReady() {
+  doctorTipWhenReady();
   if (!S.doctorWaits || welcomePending()) return;
   S.doctorWaits = false;
   S.doctorOpened = true;
@@ -1730,8 +1737,39 @@ function drAppLine() {
 }
 
 function doctorHtml() {
-  return `<div class="page"><h1 class="ph-hide">Doctor</h1><p class="lead">Your AI coding CLIs: are they installed, on a version Chorus is tested with, and logged in.</p>
-    ${drAppLine()}${drRunLine()}${drBanner()}${doctorRows()}</div>`;
+  return `<div class="page"><h1 class="ph-hide">Doctor</h1><p class="lead">Test that your agents work with Chorus, and report a bug if something is off.</p>
+    ${drAppLine()}${drRunLine()}${drBanner()}${doctorRows()}${shapeCardHtml()}</div>`;
+}
+
+/* Follow Chorus (src/desktop/follow.js): closes with ×, Maybe later, Esc (dismissDialog clicks data-x="cancel"), a click on the
+   dim area, or a channel. In the native window a channel goes to the server, which opens the system browser. */
+function openFollow() {
+  if ($('#follow')) return;
+  const back = document.activeElement;
+  const el = document.createElement('div');
+  el.className = 'scrim follow';
+  el.id = 'follow';
+  el.innerHTML = followHtml();
+  const close = () => {
+    el.remove();
+    back?.focus?.();
+  };
+  el.addEventListener('click', e => {
+    const link = e.target.closest('[data-follow]');
+    if (link) {
+      if (NATIVE) {
+        e.preventDefault();
+        void api('POST', '/api/follow/open', { to: link.dataset.follow }).then(r => r.error && toast(r.error));
+      }
+      return close();
+    }
+    if (e.target === el || e.target.closest('[data-x="cancel"]')) {
+      e.stopPropagation();
+      close();
+    }
+  });
+  $('#dialogs').append(el);
+  el.querySelector('.fx').focus();
 }
 
 /* The first-launch doctor screen (docs/mockups/desktop-first-run.html): the short check, then the choice between the app (the
@@ -1801,6 +1839,80 @@ function closeDoctorPopup() {
   clearTimeout(S.docAutoClose);
   $('#doctor-pop')?.remove();
   void api('POST', '/api/doctor/seen').catch(() => {});
+  doctorTipWhenReady();
+}
+
+/* ---------- Meet Doctor: the first-launch popover at the Doctor button (@workspace/mockups/doctor-tip.html, scene 1) ----------
+   Once, on a first launch only, after the Welcome and after the Doctor popup when that opened (showDoctorTip). The app dims, the
+   Doctor button (on a phone: the More tab) pulses in teal above the dim, and a card points at it. Got it, Esc or a click on the
+   button closes it for good (the server's UI settings, `doctorTip`); the button also opens Doctor. */
+const STETHO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v6a4 4 0 0 0 8 0V3"/><path d="M10 13v2a5 5 0 0 0 10 0v-2"/><circle cx="20" cy="11" r="2"/></svg>';
+function doctorTipWhenReady() {
+  if (S.doctorTipShown || S.doctorWaits || S.doctorDue) return;
+  if (!showDoctorTip({ first: S.firstLaunch, seen: S.doctorTipSeen, welcomePending: welcomePending(), doctorPopupOpen: !!$('#doctor-pop') })) return;
+  S.doctorTipShown = true;
+  // after the view that ended the Welcome is drawn
+  requestAnimationFrame(openDoctorTip);
+}
+/** The element the popover points at: the sidebar's Doctor button, or on a phone the bottom bar's More tab. */
+function doctorTipAnchor() {
+  if (S.size === 'phone') return document.querySelector('#tabs button[data-arg="more"]');
+  if (S.size === 'tablet' && !$('#app').classList.contains('side-open')) $('#app').classList.add('side-open');
+  return document.querySelector('.side-foot button[data-act="doctor"]');
+}
+function openDoctorTip() {
+  if ($('#doctor-tip')) return;
+  const el = document.createElement('div');
+  el.id = 'doctor-tip';
+  el.innerHTML = `<div class="dim"></div><div class="pop" role="dialog" aria-labelledby="tip-title">
+    <h3 id="tip-title">${STETHO_SVG}Meet Doctor</h3>
+    <p class="say">Come here to test that your agents work with Chorus, or to report a bug.</p>
+    <div class="shape"><span class="hi">${HEART_SVG}</span><span class="t"><b>Help shape Chorus</b>Follow us to share ideas and bug reports.</span><button class="btn" data-act="follow-open">♥ Follow</button></div>
+    <div class="foot"><button class="btn primary" data-act="tip-done">Got it</button></div></div>`;
+  document.body.append(el);
+  placeDoctorTip();
+  addEventListener('resize', placeDoctorTip);
+  const got = el.querySelector('[data-act="tip-done"]');
+  got.focus();
+  // the screen behind it may still be redrawing (a phone's Home after the Doctor popup): keep the focus on Got it
+  setTimeout(() => el.isConnected && !el.contains(document.activeElement) && !$('#follow') && got.focus(), 400);
+}
+/** Puts the card beside the anchor (right of the Doctor button, its arrow at the button) or above the More tab, inside 16px. */
+function placeDoctorTip() {
+  const el = $('#doctor-tip');
+  if (!el) return;
+  document.querySelectorAll('.tip-spot').forEach(b => b.classList.remove('tip-spot'));
+  const at = doctorTipAnchor();
+  const pop = el.querySelector('.pop');
+  if (!at) return;
+  at.classList.add('tip-spot');
+  const r = at.getBoundingClientRect();
+  const w = Math.min(330, innerWidth - 32);
+  pop.style.width = `${w}px`;
+  const h = pop.offsetHeight;
+  if (S.size === 'phone') {
+    pop.dataset.side = 'up';
+    const left = Math.max(16, Math.min(r.left + r.width / 2 - w + 30, innerWidth - 16 - w));
+    pop.style.left = `${left}px`;
+    pop.style.top = `${Math.max(16, r.top - 12 - h)}px`;
+    pop.style.setProperty('--arrow', `${r.left + r.width / 2 - left - 6}px`);
+  } else {
+    pop.dataset.side = 'left';
+    const top = Math.max(16, Math.min(r.top + r.height / 2 - h + 24, innerHeight - 16 - h));
+    pop.style.left = `${Math.min(r.right + 12, innerWidth - 16 - w)}px`;
+    pop.style.top = `${top}px`;
+    pop.style.setProperty('--arrow', `${r.top + r.height / 2 - top - 6}px`);
+  }
+}
+/** Closes the popover for good; `open` also goes to Doctor (a click on the Doctor button or the More tab). */
+function doctorTipDone(open = false) {
+  if (!$('#doctor-tip')) return;
+  $('#doctor-tip').remove();
+  removeEventListener('resize', placeDoctorTip);
+  document.querySelectorAll('.tip-spot').forEach(b => b.classList.remove('tip-spot'));
+  S.doctorTipSeen = true;
+  remember('doctorTip', true);
+  if (open) go({ name: 'doctor' });
 }
 
 /** Follows an install, login or detailed test for its output; the server checks the agents again before the job ends, so its
@@ -2909,6 +3021,8 @@ document.addEventListener('click', async e => {
     drawSheet();
   }
   if (S.size === 'phone' && e.target.classList?.contains('scrim') && e.target.closest('#dialogs')) return dismissDialog(e.target, true);
+  // Meet Doctor: the pulsing button (Doctor, or More on a phone) closes it for good and opens Doctor
+  if ($('#doctor-tip') && e.target.closest('.tip-spot')) return doctorTipDone(true);
   const el = e.target.closest('[data-act]');
   if (!el) return;
   const act = el.dataset.act;
@@ -2953,6 +3067,10 @@ document.addEventListener('click', async e => {
     case 'skills':
     case 'doctor':
       return go({ name: act });
+    case 'follow-open':
+      return openFollow();
+    case 'tip-done':
+      return doctorTipDone();
     case 'chat':
       return go({ name: 'chat', id: arg });
     case 'plan-welcome':
@@ -3498,6 +3616,10 @@ document.addEventListener(
         return dlg.querySelector('[data-act="dlg-ok"]')?.click();
       }
       return;
+    }
+    if (e.key === 'Escape' && $('#doctor-tip')) {
+      e.preventDefault();
+      return doctorTipDone();
     }
     if (e.key === 'Escape' && $('#sheet')) {
       e.preventDefault();
