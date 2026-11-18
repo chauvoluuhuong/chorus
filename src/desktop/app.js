@@ -81,6 +81,7 @@ const S = {
   // asks folded to one line (remembered per request) and asks whose details are open past 3 lines
   askFold: new Set(JSON.parse(localStorage.getItem('chorus.askFold') || '[]')),
   askMore: new Set(),
+  leadOpen: false,
   // the right sidebar's width on a desktop, dragged by its left edge (null: as drawn); one for the whole app
   sideW: Number(localStorage.getItem('chorus.sideW')) || null,
   // Approvals' delete: "Don't ask again" was ticked
@@ -778,7 +779,10 @@ function phoneTop(chat) {
     title = 'Chats';
     icons = ico('add-project', 'Add a project', '＋');
   } else if (v.name === 'chat') {
-    title = esc(chat?.title ?? '');
+    // the agent and its state are the title's second line (the chat has no header row of its own on a phone)
+    title = chat
+      ? `<span class="ph-t1">${esc(chat.title)}</span><span class="ph-sub"><span class="badge ${esc(chat.agent)}">${esc(AGENT[chat.agent]?.name ?? chat.agent)}</span><span class="dot ${esc(chat.state)}"></span><span>${esc(STATE_LABEL[chat.state] ?? chat.state)}</span>${chat.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${chat.toast ? `<span class="badge ok">${esc(chat.toast)}</span>` : ''}</span>`
+      : '';
     icons = chat ? ico('chat-menu', 'This chat: hand off, artifacts, activity, record, delete', '⋯') : '';
   } else if (v.name === 'memory') {
     title = v.rec ? esc(S.mem.items.find(i => i.id === v.rec)?.title ?? 'Memory') : 'Memory';
@@ -789,12 +793,14 @@ function phoneTop(chat) {
   } else {
     title = { approvals: 'Approvals', more: 'More', new: v.from ? 'Hand off' : 'New chat', skills: 'Sync skills', doctor: 'Doctor', unlock: 'Unlock' }[v.name] ?? '';
   }
-  return `${root ? '' : ico('back', 'Back', '‹')}<div class="ph-title">${title}</div>${icons}`;
+  return `${root ? '' : ico('back', 'Back', '‹')}<div class="ph-title${v.name === 'chat' && chat ? ' two' : ''}">${title}</div>${icons}`;
 }
 
 /** A phone's tab bar: Home · Chats · a round ＋ (New chat) · Approvals · More. */
 function renderTabs(waiting) {
   const el = $('#tabs');
+  // a chat on a phone is a screen you leave with ‹ Back: no tab bar, so the agent's screen gets its height
+  $('#app').classList.toggle('in-chat', S.size === 'phone' && S.view.name === 'chat');
   if (S.size !== 'phone') {
     if (el.innerHTML) el.innerHTML = '';
     return;
@@ -827,6 +833,8 @@ function renderView() {
   el.innerHTML = { new: newChatHtml, approvals: approvalsHtml, memory: memoryHtml, skills: skillsHtml, doctor: doctorHtml, unlock: unlockHtml, welcome: welcomeHtml, trying: tryingHtml, paying: payingHtml, 'pro-paid': paidHtml, 'pro-started': startedHtml, 'pro-ended': endedHtml, home: homeHtml, chats: chatsHtml, more: moreHtml, pro: () => `<div data-pro-slot="view" data-id="${esc(v.id ?? '')}" style="height:100%"></div>` }[v.name]?.() ?? '';
   // a state push redraws a phone's Home and Chats: where you were stays (another screen starts at its top)
   if (['home', 'chats', 'more', 'approvals'].includes(v.name) && el.dataset.v === v.name) el.scrollTop = scroll;
+  // a phone's cards: Show more only where the details are longer than their 4 lines
+  if (S.size === 'phone' && ['home', 'approvals'].includes(v.name)) fitMore(el);
   el.dataset.v = v.name;
   fillSlots();
   // a phone does not open the keyboard by itself
@@ -1202,12 +1210,14 @@ const approvalItem = a => `<div class="item"><div class="head">${askKindBadge(a)
           <div class="acts"><button class="btn good" data-act="approve" data-arg="${esc(a.id)}">✓ Approve</button><button class="btn danger" data-act="deny" data-arg="${esc(a.id)}">✕ Deny</button><span style="flex:1"></span><button class="btn" data-act="chat" data-arg="${esc(a.id)}">Open chat ›</button></div>`
           }</div>`;
 
+const APPROVALS_LEAD = "What your agents are asking for, from every chat: their permission prompts (answering types the agent's own key) and the questions they put to you through Chorus (your choice and note become your next message to that agent). You do not have to switch to the chat.";
 function approvalsHtml() {
+  const LEAD = esc(APPROVALS_LEAD);
   const st = S.state;
   const cur = st?.chats.find(c => c.id === st.current);
   const all = listed();
   const items = S.scope === 'all' || !cur ? all : all.filter(a => a.cwd === cur.cwd);
-  return `<div class="page"><h1 class="ph-hide">Approvals</h1><p class="lead">What your agents are asking for, from every chat: their permission prompts (answering types the agent's own key) and the questions they put to you through Chorus (your choice and note become your next message to that agent). You do not have to switch to the chat.</p>
+  return `<div class="page"><h1 class="ph-hide">Approvals</h1>${S.size === 'phone' ? `<p class="lead lead-fold${S.leadOpen ? ' open' : ''}"><span class="lead-short">Your agents' questions and permission prompts, from every chat.</span><span class="lead-long">${LEAD}</span> <button class="lead-more" data-act="lead-more" aria-expanded="${!!S.leadOpen}">${S.leadOpen ? 'Less' : 'More'}</button></p>` : `<p class="lead">${LEAD}</p>`}
     <div class="toolbar"><div class="seg"><button class="${S.scope === 'all' ? 'on' : ''}" data-act="scope" data-arg="all">All projects</button><button class="${S.scope === 'this' ? 'on' : ''}" data-act="scope" data-arg="this">This project</button></div><span class="grow"></span><span class="muted">${all.length + (window.choruspro?.needsCount?.() ?? 0)} waiting</span></div>
     ${proSlot('approvals', ` data-scope="${esc(S.scope)}" data-cwd="${esc(cur?.cwd ?? '')}"`)}
     ${window.choruspro ? '<div class="section-title" style="margin-top:4px">From chats</div>' : ''}
@@ -2037,8 +2047,8 @@ function renderChatParts() {
   if (c.sub) {
     const main = esc(c.sub.title ?? 'its main chat');
     banners += c.sub.unlocked
-      ? `<div class="sub-strip warn"><span class="msg">⚠ <b>Unlocked.</b> You are typing into a sub thread. The main chat is told what you typed.</span><button class="btn sm" data-act="sub-lock" data-arg="${esc(c.id)}" data-on="0">Lock again</button><button class="btn primary sm" data-act="chat" data-arg="${esc(c.sub.parent)}">Go to main chat ›</button></div>`
-      : `<div class="sub-strip"><span class="msg">👁 <b>Watch-only.</b> This is a sub thread of ${main}. Tell the main chat what you want; it decides and passes it on.</span><button class="btn primary sm" data-act="chat" data-arg="${esc(c.sub.parent)}">Go to main chat ›</button><button class="btn sm" data-act="sub-lock" data-arg="${esc(c.id)}" data-on="1">Unlock</button></div>`;
+      ? `<div class="sub-strip warn"><span class="msg"><span class="ss-short">⚠ <b>Unlocked</b></span><span class="ss-long">⚠ <b>Unlocked.</b> You are typing into a sub thread. The main chat is told what you typed.</span></span><button class="btn sm" data-act="sub-lock" data-arg="${esc(c.id)}" data-on="0">Lock again</button><button class="btn primary sm" data-act="chat" data-arg="${esc(c.sub.parent)}">Go to main chat ›</button></div>`
+      : `<div class="sub-strip"><span class="msg"><span class="ss-short">👁 <b>Watch-only</b></span><span class="ss-long">👁 <b>Watch-only.</b> This is a sub thread of ${main}. Tell the main chat what you want; it decides and passes it on.</span></span><button class="btn primary sm" data-act="chat" data-arg="${esc(c.sub.parent)}">Go to main chat ›</button><button class="btn sm" data-act="sub-lock" data-arg="${esc(c.id)}" data-on="1">Unlock</button></div>`;
   }
   const watchLine = $('#watch-line');
   if (watchLine) watchLine.hidden = !(c.sub && !c.sub.unlocked);
@@ -2457,8 +2467,8 @@ function optionButtons(a, cls = 'btn') {
 function askCard(a, dock = false) {
   const req = `data-arg="${esc(a.id)}" data-req="${esc(a.request)}"`;
   const more = S.askMore.has(a.request);
-  // docked: the details fold to 3 lines, with Show more when they are longer
-  const details = !a.details ? '' : dock ? `<div class="what md"><div class="${more ? '' : 'clamp'}">${md(a.details)}</div></div><button class="ask-more" data-act="ask-more" data-arg="${esc(a.request)}" hidden>${more ? 'Show less' : 'Show more'}</button>` : `<div class="what md">${md(a.details)}</div>`;
+  // docked: the details fold to 3 lines, with Show more when they are longer; a phone's Home and Approvals cards fold to 4
+  const details = !a.details ? '' : dock || S.size === 'phone' ? `<div class="what md"><div class="${more ? '' : 'clamp'}">${md(a.details)}</div></div><button class="ask-more" data-act="ask-more" data-arg="${esc(a.request)}" hidden>${more ? 'Show less' : 'Show more'}</button>` : `<div class="what md">${md(a.details)}</div>`;
   return `<div class="ask-q">${mdInline(a.question)}</div>${details}
     <div class="acts">${optionButtons(a)}${a.other === false ? '' : '<button class="btn" data-act="other">Other…</button>'}${a.askKind === 'question' ? `<button class="btn" data-act="skip" ${req} title="The agent decides itself">Skip</button>` : ''}</div>
     ${a.other === false ? '' : `<div class="acts other-row" hidden><input type="text" class="other-input" placeholder="Your own answer" aria-label="Your own answer"><button class="btn primary" data-act="pick-other" ${req}>Send</button></div>`}
@@ -2990,7 +3000,11 @@ document.addEventListener('click', async e => {
       return S.view.name === 'chat' && drawDock(S.state.chats.find(c => c.id === S.view.id), true);
     case 'ask-more':
       S.askMore.has(arg) ? S.askMore.delete(arg) : S.askMore.add(arg);
+      if (['home', 'approvals'].includes(S.view.name)) return renderView();
       return S.view.name === 'chat' && drawDock(S.state.chats.find(c => c.id === S.view.id), true);
+    case 'lead-more':
+      S.leadOpen = !S.leadOpen;
+      return renderView();
     case 'act-filter':
       S.actFilter = arg;
       return renderChatParts();
