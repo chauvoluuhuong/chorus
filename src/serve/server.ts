@@ -19,7 +19,7 @@ import { AGENTS, type Controller } from '../app/controller.ts';
 import type { ItemState, RichLine } from '../app/compositor.ts';
 import { effortsFor } from '../app/models.ts';
 import { listWatchesText, readMailText, SERVE_TOOL_NAMES } from '../mcp/server.ts';
-import { latestModels, Mailbox, NEWLINE_KEYS, TurnWatch, type ChatLook, type MailEvent, type Transport } from '@chauvoluuhuong/chorus-core';
+import { latestModels, liveAddDirDone, liveAddDirInput, liveAddDirKeys, codexGrantMessage, Mailbox, NEWLINE_KEYS, TurnWatch, type ChatLook, type MailEvent, type Transport } from '@chauvoluuhuong/chorus-core';
 import { computerDir } from '../app/screens.ts';
 import type { ThreadHost } from '../app/thread-host.ts';
 import { transcriptPath } from '../core/capture.ts';
@@ -39,11 +39,15 @@ import { NotificationInbox } from './notifications.ts';
 import { imageType, parseReport, ReportSender } from './reports.ts';
 import { ChatLaunch, ProHost, type ProLoader } from './pro.ts';
 import { SubThreads, TOOLS as SUB_TOOLS, TOOL_NAMES as SUB_TOOL_NAMES } from './subthreads.ts';
+import { ProjectSettings } from '../core/projects.ts';
+import { ProjectRuntime, type LiveWay } from './project-runtime.ts';
 import { answerChannelWarning, ChannelHub, makeTransports, wakeFor, type ChatSession } from './mail.ts';
 import { SignIns } from './signin.ts';
 import { inContainer } from '../cli/screen.ts';
 import type { UpdateCheck } from './updates.ts';
 import type { ChatStart } from '@chauvoluuhuong/chorus-core/pro-loader';
+
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(import.meta.dirname, '../..');
@@ -190,6 +194,8 @@ export class ChorusServer {
   readonly watch: TurnWatch;
   /** the one mailbox (chorus-core Mailbox): every message to a chat, delivered by its CLI's transport, never typed */
   readonly mail: Mailbox;
+  /** the projects' folders and variables, and what each running chat got of them (task #11) */
+  readonly projects: ProjectRuntime;
   /** the watcher's and the mailbox's clock */
   private now: () => number = Date.now;
   /** each running Claude chat's `chorus mcp` stream, for its channel pushes */
@@ -270,7 +276,97 @@ export class ChorusServer {
       quietMs: o.subQuietMs,
       changed: () => this.pushState(),
     });
+    const settings = o.chatLaunch?.projects ?? new ProjectSettings(this.c.store.root);
+    this.projects = new ProjectRuntime({
+      settings,
+      running: () => this.app.entries.filter(e => e.host?.state === 'running').map(e => e.id),
+      chat: id => {
+        const t = this.c.store.getThread(id);
+        return t ? { agent: t.agent, project: t.project ?? t.cwd, skip: !!t.skip_permissions } : undefined;
+      },
+      idle: id => this.watch.isIdle(id),
+      typing: id => this.isTyping(id),
+      restart: id => this.restartChat(id),
+      liveAdd: (id, agent, dir, way) => this.liveAddDir(id, agent, dir, way),
+      onTurnEnd: (id, fn, again) => this.onTurnEnd(id, fn, again),
+    });
+    if (o.chatLaunch) o.chatLaunch.launched = (id, project, dirs, env) => this.projects.launched(id, project, dirs, env);
     this.bridge();
+  }
+
+  /* ---------- project settings and running chats (task #11 step 6) ---------- */
+
+  /** what the user has typed into each chat's input since its last line end, and when */
+  private typed = new Map<string, { line: string; at: number }>();
+  private turnEndSeq = 0;
+
+  private noteTyped(id: string, data: string) {
+    let line = this.typed.get(id)?.line ?? '';
+    for (const ch of data.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[O\]P].?|\x1b\[20[01]~/g, '')) {
+      if (ch === '\r' || ch === '\n' || ch === '\x03') line = '';
+      else if (ch === '\x7f' || ch === '\b') line = line.slice(0, -1);
+      else if (ch >= ' ') line += ch;
+    }
+    this.typed.set(id, { line: line.slice(-2000), at: Date.now() });
+  }
+
+  /** The user has text in the chat's input, or pressed a key in it in the last 3 s. */
+  private isTyping(id: string) {
+    const t = this.typed.get(id);
+    return !!t && (t.line.length > 0 || Date.now() - t.at < 3000);
+  }
+
+  /** Calls fn once, when the chat is idle with nothing waited on (#10's watcher): at once if it is now; `again` after 5 s more of it. */
+  private onTurnEnd(id: string, fn: () => void, again?: boolean) {
+    const key = `projects:${id}:${++this.turnEndSeq}`;
+    this.watch.watch({ key, thread: id, belongsTo: id, kind: 'thread', owner: 'projects', expect: 'its turn ends, then it gets the project settings', ...(again ? { idleFor: 5000 } : {}), on: (e, w) => {
+      if (e.type === 'idle') {
+        this.watch.unwatch(w.key, 'turn ended');
+        fn();
+      } else if (e.type === 'gone') this.watch.unwatch(w.key, 'chat ended');
+    } });
+  }
+
+  /** Stops the chat's process and resumes it (conversation kept), the way #10 continues an agy chat: it launches with the current settings. */
+  private restartChat(id: string) {
+    const host = this.app.entry(id)?.host;
+    if (!host || host.state !== 'running' || this.closed) return;
+    host.once('exit', () => setTimeout(() => this.resumeChat(id), 500));
+    host.kill();
+  }
+
+  /**
+   * A new working folder reaches a running chat through its CLI's own way (chorus-core src/livedir.ts): Claude and agy get
+   * `/add-dir <dir>` typed into their empty input and their screens answered with the session-only choice; Codex (default mode) is
+   * asked through its transport to request the folder, and its grant card is answered "for this session". True once the CLI says so.
+   */
+  private async liveAddDir(id: string, agent: AgentId, dir: string, way: LiveWay, timeoutMs = way === 'grant' ? 180_000 : 30_000): Promise<boolean> {
+    const host = this.app.entry(id)?.host;
+    if (!host || host.state !== 'running' || way === 'none') return way === 'none';
+    const screen = () => (host.screen.text() ?? []).join('\n');
+    if (way === 'slash') {
+      const input = liveAddDirInput(agent, dir);
+      if (!input) return false;
+      host.write(input);
+      await sleep(400);
+      host.write('\r');
+    } else {
+      this.mail.send({ from: { who: 'chorus' }, to: { thread: id }, kind: 'note', subject: 'Working folder added', body: codexGrantMessage([dir]), refs: {} });
+    }
+    const end = Date.now() + timeoutMs;
+    let last = '', lastAt = 0;
+    while (Date.now() < end && host.state === 'running' && !this.closed) {
+      await sleep(300);
+      const sc = screen();
+      if (liveAddDirDone(agent, sc, dir)) return true;
+      const keys = liveAddDirKeys(agent, sc);
+      if (keys && (keys !== last || Date.now() - lastAt > 1500)) {
+        host.write(keys);
+        last = keys;
+        lastAt = Date.now();
+      }
+    }
+    return false;
   }
 
   private startChat(x: ChatStart): string {
@@ -516,6 +612,10 @@ export class ChorusServer {
     });
     app.on('thread-exit', (e: Entry) => {
       if (e?.id) try { this.c.store.setCliPid(e.id, null); } catch { /* gone */ }
+      if (e?.id) {
+        this.projects.exited(e.id);
+        this.typed.delete(e.id);
+      }
       this.pro.chatEvent({ type: 'exit', thread: e?.id } as { type: string });
       this.pushState();
     });
@@ -1686,7 +1786,10 @@ export class ChorusServer {
         // a sub thread is watch-only: its keys are dropped unless the user unlocked it (its CLI's prompts are answered by the card)
         if (typeof m.id === 'string' && !this.watchOnlyLets(m.id, m.data)) return;
         host?.write(m.data);
-        if (host && typeof m.id === 'string') this.typedTo(m.id, m.data);
+        if (host && typeof m.id === 'string') {
+          this.noteTyped(m.id, m.data);
+          this.typedTo(m.id, m.data);
+        }
       }
       else if (m.t === 'resize' && m.cols > 0 && m.rows > 0 && this.setsSize(cl)) {
         this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };

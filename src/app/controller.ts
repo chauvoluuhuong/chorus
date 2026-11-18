@@ -140,7 +140,7 @@ export class Controller {
     const launch = (this.o.launcher ?? buildInteractive)(o.agent, { prompt, cwd, project: cwd, home: this.store.shared ? this.store.root : undefined, threadId: row.id, model, effort, skipPermissions: o.skipPermissions });
     if (launch.sessionId) this.store.updateThread(row.id, { native_session_id: launch.sessionId });
     this.sawStart.set(row.id, o.prompt ? Date.now() : 0);
-    const host = this.app.addThread({ id: row.id, title: row.title, agent: o.agent, file: launch.bin, args: launch.args, cwd: launch.cwd }, true, o.parent?.id);
+    const host = this.app.addThread({ id: row.id, title: row.title, agent: o.agent, file: launch.bin, args: launch.args, cwd: launch.cwd, env: launch.env }, true, o.parent?.id);
     this.watchRaw(row.id, host);
     this.refreshMeta(row.id);
     this.tail(row, launch.sessionId);
@@ -159,7 +159,7 @@ export class Controller {
       if (launch.sessionId) this.store.updateThread(row.id, { native_session_id: launch.sessionId });
       this.sawStart.set(row.id, fresh ? Date.now() : 0);
     }
-    const host = this.app.attach(entry, { id: row.id, title: row.title, agent: row.agent, file: launch.bin, args: launch.args, cwd: launch.cwd });
+    const host = this.app.attach(entry, { id: row.id, title: row.title, agent: row.agent, file: launch.bin, args: launch.args, cwd: launch.cwd, env: launch.env });
     this.store.updateThread(row.id, { state: 'working' });
     this.watchRaw(row.id, host);
     this.tail(row, fresh === undefined ? row.native_session_id : launch.sessionId);
