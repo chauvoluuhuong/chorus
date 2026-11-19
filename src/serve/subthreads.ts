@@ -205,7 +205,9 @@ export class SubThreads {
     if (working >= MAX_WORKING) return { error: `You already have ${MAX_WORKING} sub threads working. Wait for a report, or stop one with stop_subthread.` };
     const title = String(a.title ?? '').trim(), brief = String(a.brief ?? '').trim();
     if (!title || !brief) return { error: 'title and brief are needed' };
-    const id = this.d.start({ agent, title, prompt: `${brief}\n\n${SUB_NOTE}`, brief, cwd: me.cwd, parent: me, model: typeof a.model === 'string' ? a.model : undefined, effort: typeof a.effort === 'string' ? a.effort : undefined, skipPermissions: !!me.skip_permissions });
+    // a sub thread always starts with all permissions (the CLI's skip flag), whatever its main chat has (owner, 2026-11-19); a CLI
+    // with no skip flag starts as it is
+    const id = this.d.start({ agent, title, prompt: `${brief}\n\n${SUB_NOTE}`, brief, cwd: me.cwd, parent: me, model: typeof a.model === 'string' ? a.model : undefined, effort: typeof a.effort === 'string' ? a.effort : undefined, skipPermissions: true });
     const t = this.now();
     this.d.store.setSub(id, { sub_status: 'working', sub_brief: brief, sub_started: iso(t), sub_last_activity: iso(t), sub_turns: 0, sub_working_ms: 0, sub_reported: null, sub_ended: null });
     // just briefed: its first turn may end before a tick sees it work

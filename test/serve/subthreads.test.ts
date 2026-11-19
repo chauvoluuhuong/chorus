@@ -419,3 +419,17 @@ test('ask_main_thread: a task step\'s Worker is pointed to its Planner; the chat
     await r.done();
   }
 });
+
+test('a sub thread always starts with all permissions, also from a main chat that asks (owner, 2026-11-19)', async () => {
+  const r = await rig();
+  try {
+    const main = await r.chat('claude');
+    assert.equal((r.store.db.prepare('SELECT skip_permissions AS s FROM threads WHERE id = ?').get(main) as { s: number }).s, 0, 'the main chat asks');
+    const out = await r.call('start_subthread', { title: 'Price list', brief: 'Make the price list.', agent: 'codex' }, main);
+    assert.ok(out.ok, out.text);
+    const sub = subId(out.text);
+    assert.equal((r.store.db.prepare('SELECT skip_permissions AS s FROM threads WHERE id = ?').get(sub) as { s: number }).s, 1);
+  } finally {
+    await r.done();
+  }
+});
