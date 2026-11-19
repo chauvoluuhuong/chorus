@@ -171,7 +171,10 @@ which the adapters do not see as a file change (TD-3); it passed in the run befo
   the cursor and the mouse rows it forwards by the same amount (`compositor.ts`, `app.ts`). The desktop does the same in the
   page: it moves xterm's drawn screen down by those rows (`anchorBottom()` in `app.js`, on every render); xterm takes mouse
   positions from that element, so clicks stay right. Simpler than re-rendering frames on the server, as first planned.
-- agy only; Claude and Codex already fill the screen. The banner scrolls away as the chat grows, as in a plain terminal.
+- In the desktop page every CLI is anchored (owner, 2026-11-19): Claude Code and Codex also draw top-down while a chat is short,
+  which left their input in the middle of a tall window. A browser tab that draws a chat at the window's size (it doesn't set
+  the size) puts that screen at the bottom of its view. The terminal app still anchors agy only. The banner scrolls away as the
+  chat grows, as in a plain terminal.
 - Tests: `test/app/compositor.test.ts` (anchored frame from `fixtures/agy/1.4.5/startup-top/startup.txt`). With the real agy
   1.4.5 in the real app (a PTY, no message sent): footer on row 42 of 44, the last row of the chat area, banner moved down to row 28
   (`fixtures/agy/1.4.5/app-anchored/screen.txt`). `npm run proof:agy` now has the same check, but that proof is out of date
