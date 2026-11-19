@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # Chorus in a Docker box, opened in your browser (macOS and Linux). Served by the website next to install.sh:
 #   curl -fsSL https://chorus-cli.web.app/docker.sh | bash                    (add -s -- --preview for preview)
-# Asks three things (stable or preview, the folder to share, the port), then starts ghcr.io/chauvoluuhuong/chorus-box. Run it again to
-# open Chorus again: the box is started if it is stopped, and nothing is asked. To start over: docker rm -f chorus
+#   curl -fsSL https://chorus-cli.web.app/docker.sh | bash -s -- --update     (the newest box and Chorus, for a box you have)
+# The first time it asks two things (stable or preview, the folders to share), picks a free port and starts
+# ghcr.io/chauvoluuhuong/chorus-box. Run it again to open Chorus again: a stopped box is started; nothing is asked or updated.
+# --update gets the newest box image (with the AI CLIs) and the newest Chorus on the box's channel, and keeps its folders, port and
+# home (Chorus's data and the sign-ins); with --preview or --stable it also switches the channel. To start over: docker rm -f chorus
 # Feature: docs/features/docker-box.md. The image: docker/box/.
-# Options (environment): CHORUS_CHANNEL=stable|preview, CHORUS_SHARE (folder, or several joined by ':'), CHORUS_PORT, CHORUS_NAME
-# (default chorus), CHORUS_VOLUME (the box's home, default chorus-home), CHORUS_NO_OPEN=1, CHORUS_BOX_IMAGE (another image), CHORUS_BOX_DOCKER_ARGS (more `docker run` arguments, for testing).
+# Options (environment): CHORUS_CHANNEL=stable|preview, CHORUS_UPDATE=1 (as --update), CHORUS_SHARE (folder, or several joined by
+# ':'), CHORUS_PORT, CHORUS_NAME (default chorus), CHORUS_VOLUME (the box's home, default chorus-home), CHORUS_NO_OPEN=1,
+# CHORUS_BOX_IMAGE (another image), CHORUS_BOX_DOCKER_ARGS (more `docker run` arguments, for testing).
 set -euo pipefail
 
 IMAGE="${CHORUS_BOX_IMAGE:-ghcr.io/chauvoluuhuong/chorus-box:latest}"
@@ -13,17 +17,35 @@ NAME="${CHORUS_NAME:-chorus}"
 VOLUME="${CHORUS_VOLUME:-chorus-home}"
 say() { printf '%s\n' "$*"; }
 fail() { printf '\n✗ %s\n' "$*" >&2; exit 1; }
+DISK_FULL="Docker's disk is full. See what uses it with: docker system df. Free space with docker builder prune and docker image prune (Docker can download or build those again), or give Docker Desktop more disk in Settings → Resources. Then run this again."
 
-CHANNEL="${CHORUS_CHANNEL:-}"
+# stable and production are one channel (the box's environment says production); '' is "not chosen"
+channel() {
+  case "$1" in
+    preview) echo preview ;;
+    stable|production) echo stable ;;
+    '') echo '' ;;
+    *) fail "CHORUS_CHANNEL is $1; it can be stable or preview." ;;
+  esac
+}
+CHANNEL="$(channel "${CHORUS_CHANNEL:-}")"
+UPDATE="${CHORUS_UPDATE:-}"
 for arg in "$@"; do
   case "$arg" in
     --preview) CHANNEL=preview ;;
-    *) fail "Unknown option $arg. The only option is --preview." ;;
+    --stable) CHANNEL=stable ;;
+    --update) UPDATE=1 ;;
+    *) fail "Unknown option $arg. The options are --update, --preview and --stable." ;;
   esac
 done
 
 command -v docker >/dev/null 2>&1 || fail "Docker is not installed. Install Docker Desktop (https://docs.docker.com/get-docker/) or Docker Engine, then run this again."
-docker info >/dev/null 2>&1 || fail "Docker is installed but not running. Start Docker Desktop (or the docker service), then run this again."
+if ! info="$(docker info 2>&1)"; then
+  case "$info" in
+    *"permission denied"*) fail "Docker is running, but this user may not use it. Add yourself to the docker group (sudo usermod -aG docker \$USER, then log out and back in), then run this again." ;;
+  esac
+  fail "Docker is installed but not running. Start Docker Desktop (or the docker service), then run this again."
+fi
 
 # questions come from the terminal even when this script is piped from curl; no terminal: the defaults
 TTY=""
@@ -44,47 +66,127 @@ open_url() {
   fi
 }
 
-# the address the box printed in this run (the log keeps earlier runs, whose token is gone); waits for it after a start
+running() { [ "$(docker inspect -f '{{.State.Running}}' "$NAME" 2>/dev/null)" = true ]; }
+# a variable the box was made with (docker run -e)
+env_of() { docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$NAME" 2>/dev/null | sed -n "s/^$1=//p" | head -1; }
+# the Chorus version installed in the box, like 2.7.0 ('' when the box is stopped or has none yet)
+box_version() { docker exec "$NAME" readlink /home/chorus/.chorus/current 2>/dev/null | sed 's#.*/##' || true; }
+
+# the newest box image; an older copy is used, with a warning, when the download fails
+get_image() {
+  say ""
+  say "Getting the newest box ($IMAGE)…"
+  if docker pull "$IMAGE"; then return 0; fi
+  if docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    say ""
+    say "⚠ Could not download the newest box; using the copy from $(docker image inspect -f '{{.Created}}' "$IMAGE" | cut -c1-10)."
+    say "  Check the internet connection and Docker's free disk space (docker system df)."
+  else
+    fail "Could not download $IMAGE. Check the internet connection and Docker's free disk space (docker system df), then run this again."
+  fi
+}
+
+# the address the box printed since <since> (the log keeps earlier runs, whose token is gone); waits while the box is starting
 address() {
-  local url="" i since
-  since="$(docker inspect -f '{{.State.StartedAt}}' "$NAME")"
-  for i in $(seq 1 240); do
-    url="$(docker logs --since "$since" "$NAME" 2>&1 | sed -n 's/^chorus serve: //p' | tail -1)"
+  local url="" i
+  for i in $(seq 1 1200); do
+    url="$(docker logs --since "$1" "$NAME" 2>&1 | sed -n 's/^chorus serve: //p' | tail -1)"
     [ -n "$url" ] && break
-    [ "$(docker inspect -f '{{.State.Running}}' "$NAME" 2>/dev/null)" = true ] || break
+    running || break
+    [ $((i % 120)) -eq 0 ] && say "  Still starting after $((i / 2)) s (docker logs $NAME shows what it is doing)…" >&2
     sleep 0.5
   done
   printf '%s' "$url"
 }
 
 show() {
-  local url port
-  url="$(address)"
-  [ -n "$url" ] || { docker logs --tail 30 "$NAME" >&2 || true; fail "The box did not start Chorus. Its log is above (docker logs $NAME)."; }
+  local url port lan since log version
+  since="$(docker inspect -f '{{.State.StartedAt}}' "$NAME")"
+  url="$(address "$since")"
+  if [ -z "$url" ]; then
+    log="$(docker logs --since "$since" "$NAME" 2>&1 | tail -30 || true)"
+    printf '%s\n' "$log" >&2
+    case "$log" in *"No space left on device"*) fail "$DISK_FULL" ;; esac
+    if running; then fail "Chorus did not start in the box within 10 minutes. Its log is above (docker logs $NAME)."; fi
+    fail "The box stopped before Chorus started. Its log is above (docker logs $NAME)."
+  fi
   # the port this computer reaches it on (the same number inside and out)
   port="$(docker port "$NAME" 2>/dev/null | sed -n 's/.*:\([0-9][0-9]*\)$/\1/p' | head -1)"
   [ -n "$port" ] && url="$(printf '%s' "$url" | sed "s#^http://127\.0\.0\.1:[0-9]*#http://127.0.0.1:$port#")"
   # this computer's network address, for another computer's browser
   lan="$( (ipconfig getifaddr en0 || ipconfig getifaddr en1 || hostname -I | awk '{print $1}') 2>/dev/null | head -1)"
+  version="$(box_version)"
   say ""
-  say "✓ Chorus is running in the box \"$NAME\". Open it in your browser:"
+  say "✓ Chorus${version:+ $version} is running in the box \"$NAME\". Open it in your browser:"
   say "  $url"
   [ -n "$lan" ] && say "  From another computer: $(printf '%s' "$url" | sed "s#127\.0\.0\.1#$lan#")"
   say ""
   say "  Sign in to Claude Code, Codex and Antigravity in Chorus: click Log in next to each one."
-  say "  Stop: docker stop $NAME   ·   Open again: run this command again   ·   Start over: docker rm -f $NAME"
+  say "  Stop: docker stop $NAME   ·   Open again: run this command again   ·   Update: add --update   ·   Start over: docker rm -f $NAME"
   open_url "$url"
 }
 
-# already made: start it if stopped, and show the address; nothing is asked again
+# makes the box from PORT, CHANNEL, FOLDERS and VOLUME
+run_box() {
+  local args shared="" f
+  args=(run -d --name "$NAME" -p "$PORT:$PORT" -v "$VOLUME:/home/chorus" -e "CHORUS_PORT=$PORT" -e "CHORUS_BOX_NAME=$NAME")
+  if [ "$CHANNEL" = preview ]; then args+=(-e CHORUS_CHANNEL=preview); else args+=(-e CHORUS_CHANNEL=production); fi
+  for f in ${FOLDERS[@]+"${FOLDERS[@]}"}; do args+=(-v "$f:$f"); shared="${shared:+$shared:}$f"; done
+  args+=(-e "CHORUS_SHARED=$shared")
+  # Linux: the box works as your user, so files the agents write stay yours (Docker Desktop on a Mac maps them already)
+  if [ "$(uname -s)" = Linux ]; then args+=(-e "HOST_UID=$(id -u)" -e "HOST_GID=$(id -g)"); fi
+  # shellcheck disable=SC2206
+  if [ -n "${CHORUS_BOX_DOCKER_ARGS:-}" ]; then args+=(${CHORUS_BOX_DOCKER_ARGS}); fi
+  docker "${args[@]}" "$IMAGE" >/dev/null || fail "Docker could not start the box (its message is above)."
+}
+
+# --update on a box that exists: the newest image (the box is made again from it, same settings) or, when it has the newest image
+# already, a restart, which installs the newest Chorus on its channel (docker/box/entrypoint.sh)
+update_box() {
+  local have="$1" before="" after old new
+  running && before="$(box_version)"
+  CHANNEL="${CHANNEL:-$have}"
+  old="$(docker inspect -f '{{.Image}}' "$NAME")"
+  get_image
+  new="$(docker image inspect -f '{{.Id}}' "$IMAGE")"
+  if [ "$new" != "$old" ] || [ "$CHANNEL" != "$have" ]; then
+    PORT="$(env_of CHORUS_PORT)"; PORT="${PORT:-4318}"
+    VOLUME="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/home/chorus"}}{{if .Name}}{{.Name}}{{else}}{{.Source}}{{end}}{{end}}{{end}}' "$NAME")"
+    IFS=':' read -r -a FOLDERS <<< "$(env_of CHORUS_SHARED)"
+    say ""
+    if [ "$new" != "$old" ]; then say "Making the box \"$NAME\" again from the newest image, on the $CHANNEL channel…"
+    else say "Making the box \"$NAME\" again on the $CHANNEL channel…"; fi
+    say "  Kept: its home ($VOLUME: Chorus's data and the sign-ins), port $PORT and shared folders. Chats running in it stop."
+    docker rm -f "$NAME" >/dev/null
+    run_box
+    # the old image, unless another box still uses it: 2 GB each, and a full disk stops the box (2026-11-19)
+    if [ "$new" != "$old" ]; then docker image rm "$old" >/dev/null 2>&1 || true; fi
+  else
+    say ""
+    say "The box has the newest image. Restarting it to install the newest Chorus ($CHANNEL); chats running in it stop…"
+    docker restart "$NAME" >/dev/null
+  fi
+  show
+  after="$(box_version)"
+  if [ -n "$before" ] && [ "$before" != "$after" ]; then say "  Updated Chorus $before → $after."
+  else say "  Chorus $after is the newest on the $CHANNEL channel."; fi
+}
+
+# a box that exists: open it (start it if stopped), or update it with --update; nothing is asked
 if docker container inspect "$NAME" >/dev/null 2>&1; then
-  if [ "$(docker inspect -f '{{.State.Running}}' "$NAME")" != true ]; then
+  HAVE="$(channel "$(env_of CHORUS_CHANNEL)")"; HAVE="${HAVE:-stable}"
+  if [ -n "$UPDATE" ]; then update_box "$HAVE"; exit 0; fi
+  if [ -n "$CHANNEL" ] && [ "$CHANNEL" != "$HAVE" ]; then
+    say "The box \"$NAME\" is on the $HAVE channel. To switch it to $CHANNEL, run this again with: --update --$CHANNEL"
+  fi
+  if ! running; then
     say "Starting the Chorus box \"$NAME\"…"
     docker start "$NAME" >/dev/null
   fi
   show
   exit 0
 fi
+[ -n "$UPDATE" ] && say "There is no box \"$NAME\" yet: making one."
 
 # yes <question>: true for yes (Enter, y, yes), false for no (n, no); asks again otherwise. No terminal: yes.
 yes() {
@@ -107,7 +209,6 @@ if [ -z "$CHANNEL" ]; then
   if yes "   Use the stable version?"; then CHANNEL=stable; else CHANNEL=preview; fi
   say ""
 fi
-case "$CHANNEL" in preview) ;; stable|production) CHANNEL=stable ;; *) fail "CHORUS_CHANNEL is $CHANNEL; it can be stable or preview." ;; esac
 say "   Chorus version: $CHANNEL"
 say ""
 
@@ -138,7 +239,6 @@ else
 fi
 [ "${#FOLDERS[@]}" -gt 0 ] || fail "No folder to share."
 say "   Shared: ${FOLDERS[*]}"
-say ""
 
 # the port: 4318, or the next free one (CHORUS_PORT picks another). Open on every address of this computer, so other computers
 # reach Chorus too; the address carries a token, required on every request, until Chorus has a login (owner's decision, 2026-11-08)
@@ -151,19 +251,8 @@ fi
 case "$PORT" in ''|*[!0-9]*) fail "The port must be a number, like 4318." ;; esac
 free "$PORT" || fail "Port $PORT is in use on this computer. Run this again and choose another."
 
+get_image
+run_box
 say ""
-say "Getting the box ($IMAGE)…"
-docker pull "$IMAGE" >/dev/null 2>&1 || docker image inspect "$IMAGE" >/dev/null 2>&1 || fail "Could not download $IMAGE. Check your internet connection."
-
-ARGS=(run -d --name "$NAME" -p "$PORT:$PORT" -v "$VOLUME:/home/chorus" -e "CHORUS_PORT=$PORT" -e "CHORUS_BOX_NAME=$NAME")
-[ "$CHANNEL" = preview ] && ARGS+=(-e CHORUS_CHANNEL=preview) || ARGS+=(-e CHORUS_CHANNEL=production)
-SHARED=""
-for f in "${FOLDERS[@]}"; do ARGS+=(-v "$f:$f"); SHARED="${SHARED:+$SHARED:}$f"; done
-ARGS+=(-e "CHORUS_SHARED=$SHARED")
-# Linux: the box works as your user, so files the agents write stay yours (Docker Desktop on a Mac maps them already)
-[ "$(uname -s)" = Linux ] && ARGS+=(-e "HOST_UID=$(id -u)" -e "HOST_GID=$(id -g)")
-# shellcheck disable=SC2206
-[ -n "${CHORUS_BOX_DOCKER_ARGS:-}" ] && ARGS+=(${CHORUS_BOX_DOCKER_ARGS})
-docker "${ARGS[@]}" "$IMAGE" >/dev/null
 say "Installing Chorus ($CHANNEL) in the box; the first start takes a minute…"
 show
