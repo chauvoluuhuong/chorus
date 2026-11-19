@@ -272,9 +272,10 @@ function onState(st) {
 
 /* ---------- the terminal: the agent's own screen ---------- */
 
+const BASE_FONT_INIT = 13;
 const term = new Terminal({
   fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--f-mono'),
-  fontSize: 13,
+  fontSize: BASE_FONT_INIT,
   lineHeight: 1.12,
   cursorBlink: true,
   allowProposedApi: true,
@@ -336,6 +337,22 @@ let lastSize = '';
    device): this screen is drawn at that size, and scrolls when it doesn't fit, so the agent's lines land where it put them
    (2026-11-19: drawn at its own width, a browser tab beside the window showed Claude's screen garbled). null: this viewer sets it. */
 let fixedSize = null;
+const BASE_FONT = BASE_FONT_INIT;
+/* Drawn at another viewer's size, the screen is the window's screen, stretched to this view (owner, 2026-11-19: "the same view
+   like desktop"): the font grows or shrinks until those rows and columns fill it. The font, not a CSS zoom, so clicks stay right. */
+function fitFont(pass = 0) {
+  const w = termEl.parentElement, scr = termEl.querySelector('.xterm-screen');
+  if (!fixedSize || !w || !scr?.clientWidth || !scr.clientHeight) return;
+  const cs = getComputedStyle(w);
+  const availW = w.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const availH = w.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  const k = Math.min(availW / scr.clientWidth, availH / scr.clientHeight);
+  const next = Math.max(7, Math.min(32, Math.floor(term.options.fontSize * k * 4) / 4));
+  if (Math.abs(next - term.options.fontSize) < 0.25) return;
+  term.options.fontSize = next;
+  // cells snap to whole pixels: measure again once the new size is drawn
+  if (pass < 3) requestAnimationFrame(() => fitFont(pass + 1));
+}
 function applySize(m) {
   if (!(m.cols > 0 && m.rows > 0)) return;
   const was = fixedSize;
@@ -351,10 +368,10 @@ function refit() {
   if (fixedSize) {
     if (term.cols !== fixedSize.cols || term.rows !== fixedSize.rows) term.resize(fixedSize.cols, fixedSize.rows);
     lastSize = `${term.cols}x${term.rows}`;
-    const w = termEl.parentElement;
-    if (w) w.scrollTop = w.scrollHeight;
+    requestAnimationFrame(() => fitFont());
     return;
   }
+  if (term.options.fontSize !== BASE_FONT) term.options.fontSize = BASE_FONT;
   try {
     fit.fit();
   } catch {
