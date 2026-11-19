@@ -1473,6 +1473,20 @@ export class ChorusServer {
     };
     if (!ok || !code) return page('Sign in again from Chorus', 'This sign-in link was already used or has expired. Open Chorus and choose Try Pro free again.');
     const st = await this.pro.signIn(code, state);
+    // Buy Pro: this tab goes straight on to the payment page (owner, 2026-11-19: it stopped at "Go back to Chorus"). The page
+    // can't open it itself in the Docker box: a tab it opens without a click is blocked. Chorus's page shows "Finish paying".
+    if (st.unlocked && then === 'upgrade') {
+      const r = await this.pro.upgrade(Number(new URL(this.url).port) || undefined).catch((e: Error) => ({ error: e.message }) as { url?: string; pro?: boolean; error?: string });
+      if (r.url && /^https:\/\//.test(r.url)) {
+        this.broadcast({ t: 'pro-signed-in', status: st, then: 'paying' });
+        res.writeHead(302, { location: r.url, 'cache-control': 'no-store' });
+        return void res.end();
+      }
+      if (r.pro) {
+        this.broadcast({ t: 'pro-signed-in', status: this.pro.status(), then: '' });
+        return page('You have Chorus Pro', 'This account has paid already. Go back to Chorus: it is ready. You can close this tab.');
+      }
+    }
     this.broadcast({ t: 'pro-signed-in', status: st, then });
     if (!st.unlocked) return page('Something went wrong', `${st.message ?? 'Chorus could not finish signing you in.'} Open Chorus and try again.`);
     page('You\'re signed in', 'Go back to Chorus: it is ready. You can close this tab.');
