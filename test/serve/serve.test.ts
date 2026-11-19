@@ -951,10 +951,15 @@ test('serve: while the window is open only it sizes the agents; a browser tab is
     tab.send({ t: 'attach', id, cols: 71, rows: 21 });
     await sleep(600);
     assert.doesNotMatch(win.text(), /SIZE 7[01]x2[01]/, 'the tab does not resize the agent while the window is open');
+    // the tab is told the agents' size and that it doesn't set it, so it draws the screen at that size (2026-11-19 garbled tab)
+    const lastScreen = [...tab.msgs].reverse().find(m => m.t === 'screen');
+    assert.deepEqual([lastScreen.cols, lastScreen.rows, lastScreen.sets], [100, 30, false]);
     win.send({ t: 'resize', id, cols: 80, rows: 24 });
     await win.until(() => /SIZE 80x24/.test(win.text()), 'the window still resizes it');
+    await tab.until(() => tab.msgs.some(m => m.t === 'size' && m.cols === 80 && m.rows === 24 && m.sets === false), 'the tab hears the new size');
+    assert.ok(win.msgs.some(m => m.t === 'size' && m.cols === 80 && m.sets === true), 'the window hears it sets the size');
     win.ws.close();
-    await sleep(200);
+    await tab.until(() => [...tab.msgs].reverse().find(m => m.t === 'size')?.sets === true, 'with the window closed the tab is told it sets the size');
     tab.send({ t: 'resize', id, cols: 60, rows: 20 });
     await tab.until(() => /SIZE 60x20/.test(tab.text()), 'with the window closed the tab sizes it again');
     tab.ws.close();

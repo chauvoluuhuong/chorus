@@ -2293,8 +2293,14 @@ export class ChorusServer {
   /* ---------- WebSocket: the agent screens ---------- */
 
   /** Whether this viewer sets the agents' screen size: never through the private link; a browser tab only while no window is open. */
-  private setsSize(cl: Client) {
+  setsSize(cl: Client) {
     return !cl.remote && (cl.native || ![...this.clients].some(c => c.native));
+  }
+
+  /** Every viewer hears the agents' screen size and whether it is the one that sets it: one that doesn't draws the screen at that
+   *  size, not its own, or the agent's lines wrap wrong (2026-11-19: a browser tab beside the window showed a garbled Claude). */
+  private announceSize() {
+    for (const c of this.clients) c.send(JSON.stringify({ t: 'size', cols: this.size.cols, rows: this.size.rows, sets: this.setsSize(c) }));
   }
 
   private connect(ws: WebSocket, remote = false, native = false) {
@@ -2304,9 +2310,12 @@ export class ChorusServer {
     const debug = (what: string) => process.env.CHORUS_DEBUG_VIEWERS && console.error(`viewer ${remote ? 'remote' : native ? 'window' : 'browser tab'}: ${what}`);
     debug('connected');
     this.lastState = '';
+    // a window that opens takes the size from the browser tabs; one that closes gives it back
+    if (native) this.announceSize();
     ws.on('close', () => {
       cl.detach();
       this.clients.delete(cl);
+      if (native) this.announceSize();
     });
     ws.on('message', raw => {
       let m: any;
@@ -2318,7 +2327,11 @@ export class ChorusServer {
       const host = typeof m.id === 'string' ? this.app.entry(m.id)?.host : undefined;
       if (m.t === 'attach' && typeof m.id === 'string') {
         // one screen size for every viewer: a phone looks at the agent at the Mac's size and never resizes it (stage 7)
-        if (m.cols > 0 && m.rows > 0 && this.setsSize(cl)) this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
+        if (m.cols > 0 && m.rows > 0 && this.setsSize(cl)) {
+          const was = `${this.size.cols}x${this.size.rows}`;
+          this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
+          if (`${this.size.cols}x${this.size.rows}` !== was) this.announceSize();
+        }
         debug(`attach ${m.cols}x${m.rows}, agents at ${this.size.cols}x${this.size.rows}`);
         if (!this.app.entry(m.id)?.host) this.select(m.id); // a parked chat resumes when you open it
         void cl.attach(m.id);
@@ -2338,6 +2351,7 @@ export class ChorusServer {
       else if (m.t === 'resize' && m.cols > 0 && m.rows > 0 && this.setsSize(cl)) {
         this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
         host?.resize(this.size.cols, this.size.rows);
+        this.announceSize();
         debug(`resize ${m.cols}x${m.rows}: agents at ${this.size.cols}x${this.size.rows}`);
       } else if (m.t === 'resize') debug(`resize ${m.cols}x${m.rows} ignored: agents stay at ${this.size.cols}x${this.size.rows}`);
       else if (m.t === 'detach') cl.detach();
@@ -2404,7 +2418,7 @@ class Client {
     };
     const data = await snapshot(host);
     if (gen !== this.gen) return;
-    this.send(JSON.stringify({ t: 'screen', id, data, live: host.state === 'running', cols: host.screen.cols, rows: host.screen.rows }));
+    this.send(JSON.stringify({ t: 'screen', id, data, live: host.state === 'running', cols: host.screen.cols, rows: host.screen.rows, sets: this.srv.setsSize(this) }));
     for (const d of queued) this.send(JSON.stringify({ t: 'out', id, data: d }));
     ready = true;
   }
