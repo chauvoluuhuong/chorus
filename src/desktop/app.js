@@ -100,6 +100,8 @@ const S = {
   form: null,
   browse: null,
   folded: new Set(JSON.parse(localStorage.getItem('chorus.folded') || '[]')),
+  // the sidebar's "··· More": Memory, Processes and Settings unfolded (mockup sidebar-compact.html v3); folded by default
+  navMore: localStorage.getItem('chorus.navMore') === 'true',
   // projects taken off the sidebar: folder -> ids of the chats it had then. Only the sidebar forgets them (chats and folder stay);
   // a chat that is new since then brings the project back.
   hidden: JSON.parse(localStorage.getItem('chorus.hidden') || '{}'),
@@ -445,7 +447,21 @@ function showInSidebar(id) {
     renderChrome();
   }
   const row = [...document.querySelectorAll('#side .tree .chat-row')].find(r => r.dataset.arg === id);
-  row?.scrollIntoView({ block: 'nearest' });
+  if (row) return row.scrollIntoView({ block: 'nearest' });
+  // a task's Planner or step chat is drawn by the module in its 'project' slot (it unfolds the steps of the open chat itself):
+  // find its row once the slot has drawn
+  requestAnimationFrame(() => document.querySelector(`#side [data-pro-chat="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'nearest' }));
+}
+
+/** "··· More" ↔ "··· Show less": the places under it fold in place (the grid row animates), without drawing the sidebar again. */
+function toggleNavMore() {
+  const fold = $('#nav-fold'), btn = document.querySelector('#side .nav-more');
+  if (!fold || !btn) return renderChrome();
+  fold.classList.toggle('open', S.navMore);
+  fold.firstElementChild.inert = !S.navMore;
+  btn.classList.toggle('open', S.navMore);
+  btn.setAttribute('aria-expanded', String(S.navMore));
+  btn.childNodes[1].textContent = S.navMore ? 'Show less' : 'More';
 }
 
 /* ---------- the mail watchdog typing into a chat (task #14, mockup mail-courier.html v3, scenes 1–3) ---------- */
@@ -532,10 +548,14 @@ function fillSlots() {
       el.innerHTML = (el.dataset.part === 'team' ? team : community() ? [['⇆', 'Remote access', 'plan-welcome']] : []).map(r => row(...r)).join('');
     } else if (el.dataset.proSlot === 'nav') {
       // Community: the Pro items show, locked; a click offers the trial. A dev build also has Unlock (a test key)
-      const lock = community() ? [['☺', 'Teammates'], ['⇢', 'Processes']].map(([ic, t]) => `<button class="locked" data-act="plan-welcome" title="Pro only"><span class="ico">${ic}</span>${t}<span class="lock" aria-label="Pro only">🔒</span></button>`).join('') : '';
-      el.innerHTML = lock + (S.pro?.dev ? `<button class="${S.view.name === 'unlock' ? 'on' : ''}" data-act="unlock"><span class="ico">⚿</span>Unlock</button>` : '');
-    }
+      el.innerHTML = lockedRow('☺', 'Teammates') + (S.pro?.dev ? `<button class="${S.view.name === 'unlock' ? 'on' : ''}" data-act="unlock"><span class="ico">⚿</span>Unlock</button>` : '');
+    } else if (el.dataset.proSlot === 'nav-more') el.innerHTML = lockedRow('⇢', 'Processes');
+    else if (el.dataset.proSlot === 'settings') el.innerHTML = lockedRow('⇆', 'Remote access');
   }
+}
+/** A Pro place in the community sidebar: shown, locked; a click offers the trial. */
+function lockedRow(ic, t) {
+  return community() ? `<button class="locked" data-act="plan-welcome" title="Pro only"><span class="ico">${ic}</span>${t}<span class="lock" aria-label="Pro only">🔒</span></button>` : '';
 }
 
 async function onProStatus(st) {
@@ -695,6 +715,7 @@ function takeUi(ui) {
   S.endedSeen = !!ui.ended;
   S.bannerDay = ui.banner;
   S.doctorTipSeen = ui.doctorTip === true;
+  if (ui.navMore !== undefined) S.navMore = ui.navMore === true;
 }
 
 /* ---------- sidebar, top bar, notice ---------- */
@@ -828,10 +849,16 @@ function renderChrome() {
     <nav class="nav">
       <button class="new${v.name === 'new' && !v.from && !v.folder ? ' on' : ''}" data-act="new"><span class="plus">${PLUS}</span>New chat<kbd style="margin-left:auto">${MOD}N</kbd></button>
       <button class="${on('approvals').trim()}${countFlash('approvals')}" data-act="approvals"><span class="ico">⚑</span>Approvals${waiting ? `<span class="count">${countNum('approvals', waiting)}</span>` : ''}</button>
-      <button class="${on('memory').trim()}" data-act="memory"><span class="ico">◫</span>Memory</button>
       <button class="${on('skills').trim()}" data-act="skills"><span class="ico">⇄</span>Sync skills</button>
-      <button class="${v.name === 'projects' || v.name === 'project' ? 'on' : ''}" data-act="projects"><span class="ico">▣</span>Projects</button>
       ${proSlot('nav')}
+      <div class="nav-fold${S.navMore ? ' open' : ''}" id="nav-fold"><div${S.navMore ? '' : ' inert'}>
+        <button class="${on('memory').trim()}" data-act="memory"><span class="ico">◫</span>Memory</button>
+        ${proSlot('nav-more')}
+        <div class="settings-head">SETTINGS</div>
+        <button class="${v.name === 'projects' || v.name === 'project' ? 'on' : ''}" data-act="projects"><span class="ico">▣</span>Projects</button>
+        ${proSlot('settings')}
+      </div></div>
+      <button class="nav-more${S.navMore ? ' open' : ''}" data-act="nav-more" aria-expanded="${!!S.navMore}" aria-controls="nav-fold"><span class="ico">···</span>${S.navMore ? 'Show less' : 'More'}<span class="chev">▾</span></button>
     </nav>
     ${proSlot('side')}
     <div class="side-head">PROJECTS<button data-act="add-project" title="Start a chat in another folder">+ add</button></div>
@@ -3440,6 +3467,10 @@ document.addEventListener('click', async e => {
       return deleteProjectAsked(arg);
     case 'projects':
       return go({ name: 'projects' });
+    case 'nav-more':
+      S.navMore = !S.navMore;
+      remember('navMore', S.navMore);
+      return toggleNavMore();
     case 'project-page':
       return go({ name: 'project', folder: arg });
     case 'proj-part':

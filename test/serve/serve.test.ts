@@ -820,6 +820,16 @@ test('a project taken off the sidebar stays off after a restart: the server keep
   }
 });
 
+test('the seen marks, the left sidebar width and More are kept by the server', async () => {
+  const r = await rig();
+  try {
+    for (const [key, value] of [['seenMarks', { 't_1|task': 3 }], ['sideLW', 320], ['navMore', true]] as const) assert.deepEqual((await r.api('POST', '/api/ui', { key, value })).json, { ok: true }, key);
+    assert.deepEqual((await r.api('GET', '/api/state')).json.ui, { seenMarks: { 't_1|task': 3 }, sideLW: 320, navMore: true });
+  } finally {
+    await r.done();
+  }
+});
+
 test('a chat whose CLI lost its session goes on in the same chat, from its record (decision 18)', async () => {
   const r = await rig(
     (store, project) => {

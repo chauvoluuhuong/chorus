@@ -1,6 +1,7 @@
 /* The lasting border highlight on a chat's Task and Artifacts buttons (task #14, mockup mail-courier.html v3, scenes 4–5). When the
    chat's task changes (its revision goes up) or its artifacts change (a new one or a new version), the button's border lights up in
-   the count flash's yellow, glows twice (1 s each), then stays lit until the user clicks the button. Nothing lights while that panel
+   the count flash's yellow, glows twice (1 s each), then stays lit until the user clicks the button. Every further change while it is lit plays the glow
+   again. Nothing lights while that panel
    is open: what it shows is seen. A per-chat "seen" mark {task, artifacts} is kept by the server (POST /api/ui) so another device
    clears it too. The page redraws the head often, so a redraw inside the glow continues it (a negative animation-delay), as counts.js
    does for the count flash. A page module with no DOM of its own, so it can be tested. */
@@ -11,6 +12,9 @@ export function makeHighlights(env = { now: () => Date.now() }) {
   let seen = {};
   /** `${chat}:${kind}` → when its highlight began (for the glow) */
   const since = new Map();
+  /** `${chat}:${kind}` → the value its current glow started at: a higher one while lit is a new change and glows again */
+  const glowAt = new Map();
+  const clear = key => (since.delete(key), glowAt.delete(key));
   let dirty = false;
 
   /** The server's marks (and the browser's copy): later ones win per chat and kind. */
@@ -33,14 +37,16 @@ export function makeHighlights(env = { now: () => Date.now() }) {
     const s = (seen[chat] ??= {});
     if (s[kind] === undefined || open || value < s[kind]) {
       if (s[kind] !== value) (s[kind] = value), (dirty = true);
-      since.delete(key);
+      clear(key);
       return false;
     }
     if (value === s[kind]) {
-      since.delete(key);
+      clear(key);
       return false;
     }
-    if (!since.has(key)) since.set(key, env.now());
+    // a first change lights it; another one while it is lit (the value grew past the glow's) plays the glow again
+    if (!since.has(key) || value > (glowAt.get(key) ?? -Infinity)) since.set(key, env.now()), glowAt.set(key, value);
+    else if (value < glowAt.get(key)) glowAt.set(key, value); // it went down (an artifact deleted): growing back is a change again
     return true;
   }
 
@@ -49,7 +55,7 @@ export function makeHighlights(env = { now: () => Date.now() }) {
     if (typeof value !== 'number') return;
     const s = (seen[chat] ??= {});
     if (s[kind] !== value) (s[kind] = value), (dirty = true);
-    since.delete(`${chat}:${kind}`);
+    clear(`${chat}:${kind}`);
   }
 
   /**
