@@ -8,13 +8,25 @@ plan 2026-11-07-browser-everywhere-and-docker (private), part B. Built 2026-11-0
 ```bash
 curl -fsSL https://chorus-cli.web.app/docker.sh | bash                    # macOS, Linux; add -s -- --preview for preview
 irm https://chorus-cli.web.app/docker.ps1 | iex                           # Windows (Docker Desktop with WSL 2)
+curl -fsSL https://chorus-cli.web.app/docker.sh | bash -s -- --update     # update a box you have (Windows: $env:CHORUS_UPDATE="1" first)
 ```
 
 The launcher asks yes/no questions, Enter meaning yes: **use the stable version?** (no: preview), **share your whole home
 folder?** (no: type folders, Tab completes; "Is that all the folders?"), and picks the port itself (4318, or the next free one; `CHORUS_PORT` sets another).
 On Windows a folder can also be picked with B (Browse). It starts the box, opens `http://127.0.0.1:<port>/?token=…` (`localhost`
 on Windows) and prints the address for another computer. Run it again to open Chorus again: a stopped box is started, nothing is
-asked. Start over: `docker rm -f chorus`.
+asked and nothing is updated (owner, 2026-11-19). Start over: `docker rm -f chorus`.
+
+**Updating** is only on request: `--update` (Windows `CHORUS_UPDATE=1`) downloads the newest image. If it differs from the box's,
+the box is made again from it with the same port, home volume, shared folders and channel (read from `docker inspect`: `CHORUS_PORT`,
+`CHORUS_SHARED`, `CHORUS_CHANNEL` and the `/home/chorus` mount), and the old image is removed unless another box uses it; otherwise the
+box is restarted, which installs the newest Chorus on its channel. It prints the Chorus version before and after. `--update --preview`
+or `--update --stable` (Windows: `CHORUS_CHANNEL`) switches the channel; without `--update` a different channel only prints how to
+switch. Chats running in the box stop either way.
+
+**When it can't start**, the launcher says why: a failed download says so and uses the older copy with its date (or stops when there is
+none); "No space left on device" in the box's log becomes how to free Docker's disk; on Linux "permission denied" from Docker becomes
+how to join the `docker` group; it waits up to 10 minutes while a first start is still installing.
 
 **Signing in the AI CLIs** happens in Chorus: in a container (`CHORUS_BOX=1` or `/.dockerenv`), the Doctor's **Log in** runs the
 CLI's own sign-in inside the box (`src/serve/signin.ts`, in a PTY), opens its sign-in page in a new tab (opened on the click, so the
@@ -51,7 +63,8 @@ docker exec -it -u chorus chorus agy
 - **`chorus-home`** keeps Chorus, its data, the channel and the CLIs' sign-ins across restarts and new images.
 - **Same path inside** for shared folders, so the paths in chats, artifacts and exports match your computer's.
 - Every start runs `install.sh` again (an update on the same channel; it downloads the package even when it is current).
-- The box needs a Chorus with `serve --host` (this branch's preview and later). The stable channel works once that is released.
+- Windows PowerShell 5.1 (what `irm | iex` runs) turns a native command's redirected stderr into error records, so `docker.ps1` runs
+  with `$ErrorActionPreference = 'Continue'` and checks `$LASTEXITCODE` (with `'Stop'` the first install ended on "No such container").
 
 Testing the box without publishing anything: `CHORUS_BOX_IMAGE=<local tag>`, `CHORUS_NAME`, `CHORUS_VOLUME`, `CHORUS_NO_OPEN=1`,
 and `CHORUS_BOX_DOCKER_ARGS="-v <dir>:/chan:ro -e CHORUS_INSTALL_URL=file:///chan/install.sh -e CHORUS_DOWNLOADS=file:///chan"`
