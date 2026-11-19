@@ -357,6 +357,9 @@ await shot('handoff-summary', 'The continuing Codex chat loaded the record throu
 /* ---------- 7. Memory, Skills, Doctor ---------- */
 
 log('7. Memory, Skills, Doctor');
+// Memory sits under the sidebar's "··· More" (mockup sidebar-compact.html v3): unfold it first
+if (!(await js<boolean>('!!document.querySelector("#nav-fold.open")'))) await click('.nav .nav-more');
+await sleep(300);
 await click('.nav button', 'Memory');
 check('Memory lists the chats of every project, continued ones under their source', await until(() => has('.mem .item', /Rate limiter/), 8000) && (await has('.mem .item', /Create calc/)) && (await has('.mem .item', /↳/)));
 await click('#mem-q');
