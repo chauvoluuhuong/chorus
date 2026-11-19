@@ -180,8 +180,10 @@ function send(m) {
 
 function onMessage(m) {
   if (m.t === 'state') return onState(m.state);
+  if (m.t === 'size') return applySize(m);
   if (m.t === 'screen' && m.id === S.attached) {
     term.reset();
+    applySize(m);
     term.write(m.data);
     S.screen = { live: m.live, exited: !m.live, waiting: false };
     return drawTermOver();
@@ -329,8 +331,29 @@ function useWebgl() {
   }
 }
 let lastSize = '';
+/* The agents' screen size, when another viewer sets it (the Chorus window, while this is a browser tab; the Mac, while this is a
+   device): this screen is drawn at that size, and scrolls when it doesn't fit, so the agent's lines land where it put them
+   (2026-11-19: drawn at its own width, a browser tab beside the window showed Claude's screen garbled). null: this viewer sets it. */
+let fixedSize = null;
+function applySize(m) {
+  if (!(m.cols > 0 && m.rows > 0)) return;
+  const was = fixedSize;
+  fixedSize = m.sets === false ? { cols: m.cols, rows: m.rows } : null;
+  // back to setting the size: the next fit sends it, even when it equals the size it last had
+  if (was && !fixedSize) lastSize = '';
+  termEl.parentElement?.classList.toggle('fixed', !!fixedSize);
+  termEl.style.height = fixedSize ? 'auto' : '100%';
+  refit();
+}
 function refit() {
   if (!termEl.isConnected || !termEl.clientWidth) return;
+  if (fixedSize) {
+    if (term.cols !== fixedSize.cols || term.rows !== fixedSize.rows) term.resize(fixedSize.cols, fixedSize.rows);
+    lastSize = `${term.cols}x${term.rows}`;
+    const w = termEl.parentElement;
+    if (w) w.scrollTop = w.scrollHeight;
+    return;
+  }
   try {
     fit.fit();
   } catch {
@@ -2238,6 +2261,7 @@ function renderChat() {
   $('#view').innerHTML = `<div class="chat"><div class="chat-head" id="chat-head"></div>${proSlot('chat-actions', ` data-chat="${esc(id)}"`)}<div class="chat-tabs" id="chat-tabs" hidden></div>
     <div class="chat-body tab-chat" id="chat-body"><div class="chat-col" id="chat-col"><div id="chat-banners"></div><div class="term-wrap" id="term-slot"><div class="term-over" id="term-over" hidden></div><div class="watch-line" id="watch-line" hidden>Keys are not sent to this chat · Go to main chat to change anything</div></div><div id="ask-dock"></div></div><div class="drawer-scrim" data-act="drawer-close"></div><aside class="drawer" id="drawer" hidden></aside><aside class="task-side" id="task-side" aria-label="Task">${RESIZE}<div class="drawer-head task-head"><span class="grow title">Task</span><button class="icon-btn" data-act="side" data-arg="task" title="Close the sidebar" aria-label="Close the sidebar">✕</button></div>${proSlot('chat-side', ` data-chat="${esc(id)}"`)}</aside></div></div>`;
   $('#term-slot').prepend(termEl);
+  $('#term-slot').classList.toggle('fixed', !!fixedSize);
   fillSlots();
   if (!termOpened) {
     term.open(termEl);
