@@ -11,6 +11,12 @@ set -euo pipefail
 if [ "$(id -u)" = 0 ]; then
   if [ -n "${HOST_GID:-}" ] && [ "$HOST_GID" != "$(id -g chorus)" ]; then groupmod -o -g "$HOST_GID" chorus; fi
   if [ -n "${HOST_UID:-}" ] && [ "$HOST_UID" != "$(id -u chorus)" ]; then usermod -o -u "$HOST_UID" chorus; fi
+  # one machine id for the life of the home volume. Chorus seals its Pro licence to the machine id, and the box has none, so it
+  # used the hostname: the container id, new each time --update makes the box again, and Pro then read "activated in another
+  # place" (2026-11-19). A box seen before this keeps the hostname it has now, so a licence it holds stays valid.
+  mkdir -p /home/chorus/.chorus-box
+  if [ ! -s /home/chorus/.chorus-box/machine-id ]; then hostname > /home/chorus/.chorus-box/machine-id; fi
+  cp /home/chorus/.chorus-box/machine-id /etc/machine-id
   # the home volume: Chorus, its data and the CLIs' sign-ins (only what is not ours yet, so a restart stays quick)
   find /home/chorus -xdev \( ! -user chorus -o ! -group chorus \) -exec chown -h chorus:chorus {} + 2>/dev/null || true
   exec setpriv --reuid=chorus --regid=chorus --init-groups env HOME=/home/chorus USER=chorus LOGNAME=chorus "$0" "$@"
