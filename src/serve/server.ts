@@ -2487,7 +2487,7 @@ function readJson(req: http.IncomingMessage, limit = 1_000_000): Promise<Record<
 }
 
 /** What the page may save on the server (`POST ui`). */
-const UI_KEYS = new Set(['browseSort', 'hidden', 'folded', 'agent', 'drawer', 'side', 'sideW', 'noDelAsk', 'welcome', 'ended', 'banner', 'doctorTip', 'navMore']);
+const UI_KEYS = new Set(['browseSort', 'hidden', 'folded', 'agent', 'drawer', 'side', 'sideW', 'noDelAsk', 'welcome', 'ended', 'banner', 'doctorTip', 'navMore', 'seenMarks', 'sideLW']);
 const asAgent = (s: unknown): AgentId | undefined => (AGENTS.includes(s as AgentId) ? (s as AgentId) : undefined);
 const expand = (p: string) => p.replace(/^~(?=\/|$)/, process.env.HOME ?? '~');
 
