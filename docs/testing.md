@@ -71,7 +71,7 @@ Rules:
 - **Planner loop, approvals, artifacts**: `test/smoke/proof-planner-loop.ts` (the same Pro-harness setup as above, fake agents): New
   chat's `/` and `@`, Artifacts by report and from a device, the sidebar's resize, question and approval cards, Approvals' delete,
   each beside its mockup scene. `test/smoke/proof-planner-real.ts` is the same harness with `--real` (real Claude Code, haiku): a
-  Planner plans, asks for the grant, "start" starts step 1 with the skip flag, the Worker asks the Planner and gets the answer; the
+  Planner plans, starts it with task_start, step 1 starts with the skip flag (no grant since 2026-11-19), the Worker asks the Planner and gets the answer; the
   chats' screens are saved as text in `.chorus/proof/<branch>/real-planner-loop/`. A page can draw a device's view on the Mac with
   `sessionStorage chorus-view=device` (only what is drawn changes).
 - **Waiting items**: `test/smoke/proof-waiting-items.ts` (the same Pro-harness setup): 🗑 on the card in a chat, on the Approve /

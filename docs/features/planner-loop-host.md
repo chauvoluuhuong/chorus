@@ -1,6 +1,7 @@
 # Planner loop, approvals and artifacts: what the host does
 
-The `chorus` side of the plan "Planner loop, approvals, artifacts" (2026-11-13). The Planner, its grant, `task_start`,
+The `chorus` side of the plan "Planner loop, approvals, artifacts" (2026-11-13). The Planner, `task_start` (every task Worker and every sub
+thread runs with all permissions since 2026-11-19: there is no grant question any more),
 `ask_planner` / `answer_worker`, the message queue and the Restore card are the optional module's (chorus-core); this page is what
 `chorus serve` and the desktop page (`src/desktop/`) do for them, and the host's own new screens. Chorus draws no input for a chat:
 every chat is the agent's own CLI in its terminal.
