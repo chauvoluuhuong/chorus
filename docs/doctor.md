@@ -206,8 +206,9 @@ these three checks "critical".
 | C11 | Skip permission prompts | Starts the TUI with the skip flag; prompt: "Create c11.txt" | `c11.txt` exists and the detector saw no prompt |
 
 When the CLI is set to approve commands by itself, no prompt appears and C7 is **skipped** with that reason, not failed.
-Seen with Antigravity 1.5.9 in its Auto mode (footer "Auto mode: edits & safe commands auto-approved"), which is the user's own
-setting: Chorus does not change it. In that mode the agent's safe commands and edits do not reach Approvals
+Antigravity's Auto mode (its default since 1.5; footer "auto · <model>" or "Auto mode: edits & safe commands auto-approved") runs
+commands without asking, so for C7 alone the Doctor starts agy with this chat's own settings that make it ask before every command
+(`permissions.ask`, chorus-core `AGY_ASK`, 2026-11-19): the test checks the real prompt, and the user's own setting is untouched. In that mode the agent's safe commands and edits do not reach Approvals
 ([`integrations/approvals.md`](integrations/approvals.md) → Gotchas).
 
 **E. Skills and artifacts**
