@@ -353,6 +353,14 @@ function fitFont(pass = 0) {
   // cells snap to whole pixels: measure again once the new size is drawn
   if (pass < 3) requestAnimationFrame(() => fitFont(pass + 1));
 }
+/* The view in use sets the size (owner, 2026-11-19): this one, while it draws another view's size, claims it as soon as you are
+   on it (its window or tab comes to the front, or you click in it), so it fits itself; the server tells the others. */
+function claimSize() {
+  if (fixedSize && ws?.readyState === WebSocket.OPEN) send({ t: 'focus' });
+}
+addEventListener('focus', claimSize);
+document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && document.hasFocus() && claimSize());
+document.addEventListener('pointerdown', claimSize, true);
 function applySize(m) {
   if (!(m.cols > 0 && m.rows > 0)) return;
   const was = fixedSize;
