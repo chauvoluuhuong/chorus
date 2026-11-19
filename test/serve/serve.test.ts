@@ -936,7 +936,7 @@ test('serve --host <name>: that name is accepted and printed', async () => {
   }
 });
 
-test('serve: while the window is open only it sizes the agents; a browser tab is a viewer (plan A.4)', async () => {
+test('serve: the view in use sizes the agents; the others draw its screen (plan A.4; owner 2026-11-19)', async () => {
   const r = await rig();
   try {
     const tab = await viewer(r.url, r.srv.token);
@@ -946,22 +946,30 @@ test('serve: while the window is open only it sizes the agents; a browser tab is
     await tab.until(() => /SIZE 90x25/.test(tab.text()), 'a tab alone sizes the agent');
     const win = await viewer(r.url, r.srv.token, undefined, '?window=native');
     win.send({ t: 'attach', id, cols: 100, rows: 30 });
-    await win.until(() => /SIZE 100x30/.test(win.text()), 'the window sizes it');
-    tab.send({ t: 'resize', id, cols: 70, rows: 20 });
-    tab.send({ t: 'attach', id, cols: 71, rows: 21 });
-    await sleep(600);
-    assert.doesNotMatch(win.text(), /SIZE 7[01]x2[01]/, 'the tab does not resize the agent while the window is open');
+    await win.until(() => /SIZE 100x30/.test(win.text()), 'the window opens the chat: it is in use and sizes it');
     // the tab is told the agents' size and that it doesn't set it, so it draws the screen at that size (2026-11-19 garbled tab)
-    const lastScreen = [...tab.msgs].reverse().find(m => m.t === 'screen');
-    assert.deepEqual([lastScreen.cols, lastScreen.rows, lastScreen.sets], [100, 30, false]);
-    win.send({ t: 'resize', id, cols: 80, rows: 24 });
-    await win.until(() => /SIZE 80x24/.test(win.text()), 'the window still resizes it');
-    await tab.until(() => tab.msgs.some(m => m.t === 'size' && m.cols === 80 && m.rows === 24 && m.sets === false), 'the tab hears the new size');
-    assert.ok(win.msgs.some(m => m.t === 'size' && m.cols === 80 && m.sets === true), 'the window hears it sets the size');
+    await tab.until(() => [...tab.msgs].reverse().find(m => m.t === 'size')?.sets === false, 'the tab hears it does not set the size');
+    tab.send({ t: 'resize', id, cols: 70, rows: 20 });
+    await sleep(600);
+    assert.doesNotMatch(win.text(), /SIZE 70x20/, 'a resize from a view not in use is ignored');
+    // the user goes to the tab: it takes the size and fits itself; the window now draws the tab's screen
+    tab.send({ t: 'focus' });
+    await tab.until(() => [...tab.msgs].reverse().find(m => m.t === 'size')?.sets === true, 'the tab in use is told it sets the size');
+    tab.send({ t: 'resize', id, cols: 140, rows: 40 });
+    await win.until(() => /SIZE 140x40/.test(win.text()), 'the tab in use sizes the agent');
+    await win.until(() => win.msgs.some(m => m.t === 'size' && m.cols === 140 && m.rows === 40 && m.sets === false), 'the window hears the new size');
+    // back to the window (focus): it takes the size back
+    win.send({ t: 'focus' });
+    await win.until(() => [...win.msgs].reverse().find(m => m.t === 'size')?.sets === true, 'the window in use sets it again');
+    win.send({ t: 'resize', id, cols: 100, rows: 30 });
+    await win.until(() => /SIZE 100x30\n?[^]*$/.test(win.text()) && [...tab.msgs].reverse().find(m => m.t === 'size')?.cols === 100, 'the window sizes it again');
+    // typing in the tab also makes it the view in use
+    tab.send({ t: 'in', id, data: 'x' });
+    await tab.until(() => [...tab.msgs].reverse().find(m => m.t === 'size')?.sets === true, 'typing takes the size');
     win.ws.close();
-    await tab.until(() => [...tab.msgs].reverse().find(m => m.t === 'size')?.sets === true, 'with the window closed the tab is told it sets the size');
+    await sleep(200);
     tab.send({ t: 'resize', id, cols: 60, rows: 20 });
-    await tab.until(() => /SIZE 60x20/.test(tab.text()), 'with the window closed the tab sizes it again');
+    await tab.until(() => /SIZE 60x20/.test(tab.text()), 'with the window closed the tab sizes it');
     tab.ws.close();
   } finally {
     await r.done();

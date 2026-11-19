@@ -2292,9 +2292,22 @@ export class ChorusServer {
 
   /* ---------- WebSocket: the agent screens ---------- */
 
-  /** Whether this viewer sets the agents' screen size: never through the private link; a browser tab only while no window is open. */
+  /** The viewer the user used last (focused, clicked, typed in or opened a chat in): it sets the agents' screen size, so the view in
+   *  use always fits, whether the Chorus window or a browser tab (owner, 2026-11-19). None yet: the window, else any tab. */
+  private sizer: Client | undefined;
+
+  /** Whether this viewer sets the agents' screen size: never through the private link. */
   setsSize(cl: Client) {
-    return !cl.remote && (cl.native || ![...this.clients].some(c => c.native));
+    if (cl.remote) return false;
+    if (this.sizer && this.clients.has(this.sizer)) return cl === this.sizer;
+    return cl.native || ![...this.clients].some(c => c.native);
+  }
+
+  /** The user is on this viewer now: it takes the size; it fits itself, and the others draw its screen. */
+  private takeSize(cl: Client) {
+    if (cl.remote || this.setsSize(cl) && this.sizer === cl) return;
+    this.sizer = cl;
+    this.announceSize();
   }
 
   /** Every viewer hears the agents' screen size and whether it is the one that sets it: one that doesn't draws the screen at that
@@ -2315,7 +2328,8 @@ export class ChorusServer {
     ws.on('close', () => {
       cl.detach();
       this.clients.delete(cl);
-      if (native) this.announceSize();
+      if (this.sizer === cl) this.sizer = undefined;
+      this.announceSize();
     });
     ws.on('message', raw => {
       let m: any;
@@ -2325,8 +2339,10 @@ export class ChorusServer {
         return;
       }
       const host = typeof m.id === 'string' ? this.app.entry(m.id)?.host : undefined;
+      if (m.t === 'focus') return this.takeSize(cl);
       if (m.t === 'attach' && typeof m.id === 'string') {
-        // one screen size for every viewer: a phone looks at the agent at the Mac's size and never resizes it (stage 7)
+        // one screen size for every viewer: the one in use sets it; a phone looks at the agent at the Mac's size and never resizes it
+        if (!cl.remote && this.sizer !== cl) this.takeSize(cl);
         if (m.cols > 0 && m.rows > 0 && this.setsSize(cl)) {
           const was = `${this.size.cols}x${this.size.rows}`;
           this.size = { cols: Math.min(500, m.cols | 0), rows: Math.min(200, m.rows | 0) };
@@ -2336,6 +2352,8 @@ export class ChorusServer {
         if (!this.app.entry(m.id)?.host) this.select(m.id); // a parked chat resumes when you open it
         void cl.attach(m.id);
       } else if (m.t === 'in' && typeof m.data === 'string') {
+        // typing here: this is the view in use
+        if (!cl.remote && this.sizer !== cl) this.takeSize(cl);
         if (process.env.CHORUS_DEBUG_INPUT) fs.appendFileSync(process.env.CHORUS_DEBUG_INPUT, JSON.stringify(m.data) + '\n');
         // a sub thread is watch-only: its keys are dropped unless the user unlocked it (its CLI's prompts are answered by the card)
         if (typeof m.id === 'string' && !this.watchOnlyLets(m.id, m.data)) return;
