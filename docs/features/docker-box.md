@@ -29,6 +29,10 @@ box is restarted, which installs the newest Chorus on its channel. It prints the
 or `--update --stable` (Windows: `CHORUS_CHANNEL`) switches the channel; without `--update` a different channel only prints how to
 switch. Chats running in the box stop either way.
 
+The box keeps one machine id in its home volume (`~/.chorus-box/machine-id`, copied to `/etc/machine-id` at each start). Chorus
+seals its Pro licence to the machine id; without it, it used the hostname, which is the container id and changed each time `--update`
+made the box again, so Pro read "activated in another place" (2026-11-19). A box seen before keeps the hostname it had as its id.
+
 **When it can't start**, the launcher says why: a failed download says so and uses the older copy with its date (or stops when there is
 none); "No space left on device" in the box's log becomes how to free Docker's disk; on Linux "permission denied" from Docker becomes
 how to join the `docker` group; it waits up to 10 minutes while a first start is still installing.
