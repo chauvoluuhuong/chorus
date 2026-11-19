@@ -301,6 +301,7 @@ for (const id of [{ final: 'c' }, { prefix: '>', final: 'c' }, { prefix: '=', fi
 for (const n of [4, 10, 11, 12]) term.parser.registerOscHandler(n, d => d.includes('?'));
 term.parser.registerDcsHandler({ intermediates: '$', final: 'q' }, quiet);
 const termEl = document.createElement('div');
+termEl.className = 'term-el';
 termEl.style.height = '100%';
 let termOpened = false;
 term.onData(d => S.attached && send({ t: 'in', id: S.attached, data: d }));
@@ -363,14 +364,15 @@ function refit() {
   if (s !== lastSize && S.attached) send({ t: 'resize', id: S.attached, cols: term.cols, rows: term.rows });
   lastSize = s;
 }
-// agy draws top-down from its cursor and keeps no rows under its footer: its screen is shown anchored to the bottom, like
-// the terminal app does it (docs/phase5.md §8.2). Moving the drawn screen moves xterm's mouse coordinates with it.
+// Every CLI's input sits on the last rows (owner, 2026-11-19): a CLI that draws top-down from its cursor (agy always; Claude Code and
+// Codex while a chat is short) leaves empty rows under its footer, so the drawn screen moves down by them, like the terminal app
+// does it for agy (docs/phase5.md §8.2). Moving the drawn screen moves xterm's mouse coordinates with it.
 function anchorBottom() {
   const el = termEl.querySelector('.xterm-screen');
   if (!el) return;
   const b = term.buffer.active;
   let off = 0;
-  if (S.state?.chats.find(c => c.id === S.attached)?.agent === 'agy' && b.viewportY === b.baseY) {
+  if (S.attached && b.viewportY === b.baseY) {
     let last = b.cursorY;
     for (let y = term.rows - 1; y > last; y--)
       if (b.getLine(b.baseY + y)?.translateToString(true).trim()) {

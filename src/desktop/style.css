@@ -337,11 +337,13 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 .banner.info span { flex: 1; }
 .chat-body { flex: 1; min-height: 0; display: flex; gap: 0; }
 .term-wrap { flex: 1; min-width: 0; background: var(--term-bg); padding: 10px 6px 6px 12px; position: relative; }
-.term-wrap .xterm { height: 100%; overflow: hidden; } /* an anchored screen (agy) moves down: its empty bottom rows leave the view */
+.term-wrap .xterm { height: 100%; overflow: hidden; } /* an anchored screen moves down: its empty bottom rows leave the view */
 .term-wrap .xterm-viewport { background: var(--term-bg) !important; }
 /* drawn at the size another viewer sets (app.js fixedSize): it scrolls when it doesn't fit */
-.term-wrap.fixed { overflow: auto; }
+.term-wrap.fixed { overflow: auto; display: flex; flex-direction: column; }
 .term-wrap.fixed .xterm { height: auto; width: max-content; }
+/* shorter than the view: the screen sits at the bottom, so the input is on the last row of the view (owner, 2026-11-19) */
+.term-wrap.fixed > .term-el { margin-top: auto; flex: none; }
 .term-over { position: absolute; inset: 0; display: grid; place-items: center; color: #b9b5aa; font-size: 13px; pointer-events: none; }
 .term-over div { background: rgba(0, 0, 0, 0.55); padding: 8px 14px; border-radius: 8px; }
 /* dropping a file: one zone per choice, the one under the pointer filled */
