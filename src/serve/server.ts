@@ -1519,8 +1519,10 @@ export class ChorusServer {
     if (req.method === 'POST' && route === 'upgrade') {
       // Upgrade (plan stage 8): the server's payment page in the user's own browser; it links back to /api/pro/paid
       const r = await this.pro.upgrade(Number(new URL(this.url).port) || undefined);
-      if (r.url) (this.o.openLink ?? openUrl)(r.url);
-      return send(res, 200, r);
+      // in a container (the Docker box) the browser is on another computer: the page opens it, as for Try Pro (2026-11-19: Upgrade
+      // in the box opened nothing)
+      if (r.url && !this.container) (this.o.openLink ?? openUrl)(r.url);
+      return send(res, 200, { ...r, ...(r.url && this.container ? { open: r.url } : {}) });
     }
     if (req.method === 'POST' && route === 'recheck') return send(res, 200, await this.pro.recheck());
     if (req.method === 'POST' && route === 'activate') return send(res, 200, await this.pro.activate(String((await readJson(req)).key ?? '')));
