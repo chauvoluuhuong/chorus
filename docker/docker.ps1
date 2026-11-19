@@ -208,20 +208,120 @@ function Add-Folder($answer) {
   $script:Folders += $full
   return $true
 }
+# a folder browser drawn in the console, as in docker.sh (owner, 2026-11-19: in the terminal, the same on every OS). Starts at $start
+# with "Share this folder" selected, so Enter right away shares it. Up/Down move, Enter or Right open (or choose), Left or Backspace
+# up, / type a path, a letter jumps to it. Returns the chosen folder.
+function Browse-Folder($start) {
+  $sep = [IO.Path]::DirectorySeparatorChar
+  $dir = $start; $sel = 0; $top = 0
+  $rows = [Math]::Max(3, [Math]::Min(12, [Console]::WindowHeight - 8))
+  $cols = [Math]::Max(30, [Console]::WindowWidth - 1)
+  $height = $rows + 2
+  # room for the drawing and one line under it (for a typed path), so drawing never scrolls the window
+  for ($i = 0; $i -le $height; $i++) { Write-Host '' }
+  $origin = [Console]::CursorTop - $height - 1
+  try { [Console]::CursorVisible = $false } catch {}
+  while ($true) {
+    $items = @('+ Share this folder', '..') + @(Get-ChildItem -LiteralPath $dir -Directory -ErrorAction SilentlyContinue |
+      Where-Object { -not ($_.Attributes -band [IO.FileAttributes]::Hidden) -and -not $_.Name.StartsWith('.') } |
+      Sort-Object Name | ForEach-Object { "$($_.Name)$sep" })
+    $n = $items.Count
+    if ($sel -ge $n) { $sel = $n - 1 }
+    if ($sel -lt $top) { $top = $sel }
+    if ($sel -ge $top + $rows) { $top = $sel - $rows + 1 }
+    [Console]::SetCursorPosition(0, $origin)
+    $line = "   Folder: $dir"; Write-Host $line.Substring(0, [Math]::Min($line.Length, $cols)).PadRight($cols)
+    for ($i = $top; $i -lt $top + $rows; $i++) {
+      if ($i -ge $n) { Write-Host (' ' * $cols) }
+      $t = $items[$i]
+      if ($i -eq $sel) {
+        Write-Host ' ' -NoNewline
+        $t = " > $t "; Write-Host $t.Substring(0, [Math]::Min($t.Length, $cols - 2)) -NoNewline -ForegroundColor Black -BackgroundColor Gray
+        Write-Host (' ' * [Math]::Max(0, $cols - 1 - [Math]::Min($t.Length, $cols - 2)))
+      } else { $t = "   $t"; Write-Host $t.Substring(0, [Math]::Min($t.Length, $cols)).PadRight($cols) }
+    }
+    $more = if ($n -gt $top + $rows) { " - $($n - $top - $rows) more" } else { '' }
+    $line = "   Up/Down move - Enter open or choose - Left back - / type a path$more"
+    Write-Host $line.Substring(0, [Math]::Min($line.Length, $cols)).PadRight($cols) -ForegroundColor DarkGray
+
+    $k = [Console]::ReadKey($true)
+    $parent = [IO.Directory]::GetParent($dir.TrimEnd($sep))
+    switch ($k.Key) {
+      'UpArrow' { if ($sel -gt 0) { $sel-- } }
+      'DownArrow' { if ($sel -lt $n - 1) { $sel++ } }
+      { "$_" -in 'LeftArrow', 'Backspace' } { if ($parent) { $dir = $parent.FullName; $sel = 0; $top = 0 } }
+      { "$_" -in 'Enter', 'RightArrow' } {
+        if ($sel -eq 0) { if ($k.Key -eq 'Enter') { $done = $true } }
+        elseif ($sel -eq 1) { if ($parent) { $dir = $parent.FullName; $sel = 0; $top = 0 } }
+        else {
+          $p = Join-Path $dir $items[$sel].TrimEnd($sep)
+          if (Test-Path -LiteralPath $p -PathType Container) { $dir = (Resolve-Path -LiteralPath $p).ProviderPath; $sel = 0; $top = 0 }
+        }
+      }
+      default {
+        $c = "$($k.KeyChar)"
+        if ($c -eq '/' -or $c -eq '~') {
+          [Console]::SetCursorPosition(0, $origin + $height)
+          try { [Console]::CursorVisible = $true } catch {}
+          $p = Read-Host '   Path'
+          try { [Console]::CursorVisible = $false } catch {}
+          [Console]::SetCursorPosition(0, $origin + $height); Write-Host (' ' * $cols)
+          if ($p) {
+            $p = $p.Trim() -replace '^~', $HOME
+            if (Test-Path -LiteralPath $p -PathType Container) { $dir = (Resolve-Path -LiteralPath $p).ProviderPath; $sel = 0; $top = 0 }
+          }
+        } elseif ($c -match '^\w$') {
+          # a letter: the next folder starting with it
+          for ($j = 1; $j -le $n; $j++) {
+            $x = ($sel + $j) % $n
+            if ($x -ge 2 -and $items[$x].StartsWith($c, [StringComparison]::OrdinalIgnoreCase)) { $sel = $x; break }
+          }
+        }
+      }
+    }
+    if ($done) { break }
+  }
+  # clear the drawing; the caller prints the choice in its place
+  [Console]::SetCursorPosition(0, $origin)
+  for ($i = 0; $i -le $height; $i++) { Write-Host (' ' * $cols) }
+  [Console]::SetCursorPosition(0, $origin)
+  try { [Console]::CursorVisible = $true } catch {}
+  return $dir
+}
+# No: true for no (Enter, n, no), false for yes (y, yes)
+function No($q) {
+  while ($true) {
+    $a = (Read-Host "$q [y/N]").Trim()
+    if ($a -match '^(|n|no)$') { return $true }
+    if ($a -match '^(y|yes)$') { return $false }
+    Write-Host '   Type y for yes or n for no (Enter is no).'
+  }
+}
+# the console can draw the browser: not redirected (a pipe, a scheduled task), and the host has a real console (not the ISE)
+function Console-Ok { try { return (-not [Console]::IsInputRedirected) -and ([Console]::WindowHeight -gt 0) } catch { return $false } }
 if ($env:CHORUS_SHARE) {
   foreach ($f in $env:CHORUS_SHARE.Split(';')) { if ($f) { Add-Folder $f | Out-Null } }
 } else {
-  $N++; Write-Host "$N. Which folder can the agents work in?"
+  $N++; Write-Host "$N. Which folders can the agents work in?"
   Write-Host '   The agents in the box see only the folders you share.'
-  if (Yes "   Share your whole home folder ($HOME)?") {
-    Add-Folder $HOME | Out-Null
-    Write-Host '   Note: the agents can read and change anything in it, keys and settings files included.'
+  if (Console-Ok) {
+    # Enter right away shares the home folder (owner, 2026-11-19)
+    do {
+      $f = Browse-Folder $HOME
+      Add-Folder $f | Out-Null
+      Write-Host "   + $f"
+    } until (No '   Share another folder too?')
   } else {
-    do { $a = Read-Host '   Folder to share: type its path, or B to pick it in a window' } until (Add-Folder $a)
-    while (-not (Yes '   Is that all the folders?')) {
-      do { $a = Read-Host '   Another folder: type its path, or B to pick it in a window' } until (Add-Folder $a)
+    if (Yes "   Share your whole home folder ($HOME)?") { Add-Folder $HOME | Out-Null }
+    else {
+      do { $a = Read-Host '   Folder to share: type its path, or B to pick it in a window' } until (Add-Folder $a)
+      while (-not (Yes '   Is that all the folders?')) {
+        do { $a = Read-Host '   Another folder: type its path, or B to pick it in a window' } until (Add-Folder $a)
+      }
     }
   }
+  $homeFull = (Resolve-Path -LiteralPath $HOME).ProviderPath.TrimEnd('\')
+  if ($Folders -contains $homeFull) { Write-Host '   Note: the agents can read and change anything in your home folder, keys and settings files included.' }
   Write-Host ""
 }
 if ($Folders.Count -eq 0) { Fail 'No folder to share.' }

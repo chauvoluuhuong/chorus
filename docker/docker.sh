@@ -214,27 +214,114 @@ say ""
 
 # 2. the folders to share: each appears inside the box at the same path
 FOLDERS=()
+HOME_REAL="$(cd "$HOME" && pwd -P)"
 add_folder() {
   local f="${1/#\~/$HOME}"
   [ -n "$f" ] && [ -d "$f" ] || { say "   \"$1\" is not a folder on this computer. Type a folder's path (Tab completes it)."; return 1; }
   f="$(cd "$f" && pwd -P)"
   FOLDERS+=("$f")
 }
+# browse: a folder browser drawn in the terminal, so it works the same on macOS, Linux (a server over SSH too) and WSL; it only needs
+# the terminal (bash 3.2 or later, ANSI codes). Starts at <dir> with "Share this folder" selected, so Enter right away shares it.
+# ↑↓ move · Enter or → open (or choose) · ← up · / type a path · a letter jumps to it. Prints the chosen folder. (owner, 2026-11-19)
+browse() {
+  local dir="$1" sel=0 top=0 drawn=0 key rest i n size rows cols line name path
+  local -a items
+  # the terminal's size; a terminal that reports none (0 0) gets 24 x 80
+  size="$(stty size < "$TTY" 2>/dev/null || true)"
+  case "$size" in [1-9]*\ [1-9]*) ;; *) size='24 80' ;; esac
+  rows=$(( ${size% *} - 8 )); [ "$rows" -gt 12 ] && rows=12; [ "$rows" -lt 3 ] && rows=3
+  cols=$(( ${size#* } - 1 )); [ "$cols" -lt 30 ] && cols=30
+  printf '\033[?25l' > "$TTY"
+  while :; do
+    # the entries: choose, up, then the folders here (hidden ones left out: type / for them)
+    items=("✓ Share this folder" "..")
+    while IFS= read -r line; do items+=("${line##*/}/"); done < <(find "$dir" -mindepth 1 -maxdepth 1 -type d ! -name '.*' 2>/dev/null | LC_ALL=C sort -f)
+    n=${#items[@]}
+    [ "$sel" -ge "$n" ] && sel=$((n - 1))
+    [ "$sel" -lt "$top" ] && top=$sel
+    [ "$sel" -ge $((top + rows)) ] && top=$((sel - rows + 1))
+    # draw over the previous drawing
+    [ "$drawn" -gt 0 ] && printf '\033[%dA' "$drawn" > "$TTY"
+    drawn=0
+    line="   Folder: $dir"; printf '\033[2K%s\n' "${line:0:$cols}" > "$TTY"; drawn=$((drawn + 1))
+    for ((i = top; i < top + rows; i++)); do
+      if [ "$i" -lt "$n" ]; then
+        line="${items[$i]}"
+        if [ "$i" -eq "$sel" ]; then printf '\033[2K \033[7m › %s \033[0m\n' "${line:0:$((cols - 6))}" > "$TTY"
+        else printf '\033[2K   %s\n' "${line:0:$((cols - 4))}" > "$TTY"; fi
+      else printf '\033[2K\n' > "$TTY"; fi
+      drawn=$((drawn + 1))
+    done
+    line="   ↑↓ move · Enter open or choose · ← back · / type a path$([ "$n" -gt $((top + rows)) ] && printf ' · %d more' $((n - top - rows)))"
+    printf '\033[2K\033[2m%s\033[0m\n' "${line:0:$cols}" > "$TTY"; drawn=$((drawn + 1))
+
+    IFS= read -rsn1 key < "$TTY" || key=q
+    # an arrow is ESC [ A (or ESC O A in keypad mode); a lone Esc times out
+    if [ "$key" = $'\033' ]; then IFS= read -rsn2 -t 1 rest < "$TTY" || rest=""; key="ESC${rest/O/[}"; fi
+    case "$key" in
+      ESC\[A|k) [ "$sel" -gt 0 ] && sel=$((sel - 1)) ;;
+      ESC\[B|j) [ "$sel" -lt $((n - 1)) ] && sel=$((sel + 1)) ;;
+      ESC\[D|$'\177'|$'\b') dir="$(cd "$dir/.." && pwd -P)"; sel=0; top=0 ;;
+      ''|ESC\[C)
+        if [ "$sel" -eq 0 ]; then
+          [ "$key" = '' ] && break
+        elif [ "$sel" -eq 1 ]; then dir="$(cd "$dir/.." && pwd -P)"; sel=0; top=0
+        else
+          name="${items[$sel]%/}"
+          if path="$(cd "$dir/$name" 2>/dev/null && pwd -P)"; then dir="$path"; sel=0; top=0; fi
+        fi ;;
+      /|'~')
+        printf '\033[?25h' > "$TTY"
+        path="$(ask "   Path: " "")"
+        path="${path/#\~/$HOME}"
+        printf '\033[?25l\033[1A\033[2K' > "$TTY"
+        if [ -n "$path" ] && path="$(cd "$path" 2>/dev/null && pwd -P)"; then dir="$path"; sel=0; top=0; fi ;;
+      q|ESC*) ;;
+      *)
+        # a letter: the next folder starting with it
+        for ((i = 1; i <= n; i++)); do
+          rest=$(( (sel + i) % n ))
+          [ "$rest" -ge 2 ] || continue
+          name="${items[$rest]}"
+          if [ "$(printf '%s' "${name:0:1}" | tr '[:upper:]' '[:lower:]')" = "$(printf '%s' "$key" | tr '[:upper:]' '[:lower:]')" ]; then sel=$rest; break; fi
+        done ;;
+    esac
+  done
+  # leave one line saying what was chosen in place of the browser
+  printf '\033[%dA' "$drawn" > "$TTY"
+  for ((i = 0; i < drawn; i++)); do printf '\033[2K\n' > "$TTY"; done
+  printf '\033[%dA\033[?25h' "$drawn" > "$TTY"
+  printf '%s' "$dir"
+}
+# no <question>: true for yes (y, yes), false for no (Enter, n, no); no terminal: no
+no() {
+  local a
+  while :; do
+    a="$(ask "$1 [y/N] " n)"
+    case "$a" in [Yy]|[Yy][Ee][Ss]) return 1 ;; [Nn]|[Nn][Oo]) return 0 ;; *) say "   Type y for yes or n for no (Enter is no)." ;; esac
+  done
+}
 if [ -n "${CHORUS_SHARE:-}" ]; then
   IFS=':' read -r -a given <<< "$CHORUS_SHARE"
   for f in "${given[@]}"; do add_folder "$f" || true; done
 else
-  say "$((N += 1)). Which folder can the agents work in?"
+  say "$((N += 1)). Which folders can the agents work in?"
   say "   The agents in the box see only the folders you share, at the same path as on this computer."
-  if yes "   Share your whole home folder ($HOME)?"; then
-    FOLDERS+=("$(cd "$HOME" && pwd -P)")
-    say "   Note: the agents can read and change anything in it, keys and settings files included."
-  else
-    until add_folder "$(ask "   Folder to share (for example ~/projects): " "")"; do :; done
-    while [ -n "$TTY" ] && ! yes "   Is that all the folders?"; do
-      until add_folder "$(ask "   Another folder to share: " "")"; do :; done
+  if [ -n "$TTY" ]; then
+    # Enter right away shares the home folder (owner, 2026-11-19)
+    while :; do
+      f="$(browse "$HOME_REAL")"
+      add_folder "$f" || true
+      say "   ✓ $f"
+      no "   Share another folder too?" && break
     done
+  else
+    FOLDERS+=("$HOME_REAL")
   fi
+  for f in "${FOLDERS[@]}"; do
+    if [ "$f" = "$HOME_REAL" ]; then say "   Note: the agents can read and change anything in your home folder, keys and settings files included."; fi
+  done
   say ""
 fi
 [ "${#FOLDERS[@]}" -gt 0 ] || fail "No folder to share."

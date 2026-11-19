@@ -11,9 +11,14 @@ irm https://chorus-cli.web.app/docker.ps1 | iex                           # Wind
 curl -fsSL https://chorus-cli.web.app/docker.sh | bash -s -- --update     # update a box you have (Windows: $env:CHORUS_UPDATE="1" first)
 ```
 
-The launcher asks yes/no questions, Enter meaning yes: **use the stable version?** (no: preview), **share your whole home
-folder?** (no: type folders, Tab completes; "Is that all the folders?"), and picks the port itself (4318, or the next free one; `CHORUS_PORT` sets another).
-On Windows a folder can also be picked with B (Browse). It starts the box, opens `http://127.0.0.1:<port>/?token=…` (`localhost`
+The launcher asks **use the stable version?** (Enter: yes; no: preview), then **which folders the agents can work in** with a folder
+browser drawn in the terminal, the same on macOS, Linux (a server over SSH too), WSL and Windows, since people use the box on other
+systems than a Mac (owner, 2026-11-19): it opens at the home folder with "Share this folder" selected, so Enter right away shares
+home; ↑↓ move, Enter or → open a folder, ← or Backspace go up, `/` types a path (Tab completes; hidden folders such as `.ssh` are only
+reached this way), a letter jumps to a folder; then "Share another folder too? [y/N]". Without a terminal it shares home;
+`CHORUS_SHARE` skips the browser. `docker.sh` draws it with bash 3.2+ and ANSI codes (`browse`), `docker.ps1` with
+`[Console]::ReadKey` (`Browse-Folder`; with no console, as in the ISE, it asks for a path, and B opens Windows' folder window).
+It picks the port itself (4318, or the next free one; `CHORUS_PORT` sets another), starts the box, opens `http://127.0.0.1:<port>/?token=…` (`localhost`
 on Windows) and prints the address for another computer. Run it again to open Chorus again: a stopped box is started, nothing is
 asked and nothing is updated (owner, 2026-11-19). Start over: `docker rm -f chorus`.
 
