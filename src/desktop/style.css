@@ -339,7 +339,7 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 .term-wrap { flex: 1; min-width: 0; background: var(--term-bg); padding: 10px 6px 6px 12px; position: relative; }
 .term-wrap .xterm { height: 100%; overflow: hidden; } /* an anchored screen moves down: its empty bottom rows leave the view */
 .term-wrap .xterm-viewport { background: var(--term-bg) !important; }
-/* drawn at the size another viewer sets (app.js fixedSize): it scrolls when it doesn't fit */
+/* drawn at the size another viewer sets (app.js fixedSize): its font fills the view (fitFont); it scrolls if it still can't */
 .term-wrap.fixed { overflow: auto; display: flex; flex-direction: column; }
 .term-wrap.fixed .xterm { height: auto; width: max-content; }
 /* shorter than the view: the screen sits at the bottom, so the input is on the last row of the view (owner, 2026-11-19) */
