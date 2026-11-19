@@ -202,6 +202,8 @@ function onMessage(m) {
     remember('welcome', 'pro');
     S.welcome = 'pro';
     if (m.then === 'upgrade') return upgrade();
+    // Buy Pro: the browser tab that signed in went on to the payment page; this one waits for it
+    if (m.then === 'paying') return go({ name: 'paying' });
     go({ name: m.status.plan === 'trial' ? 'pro-started' : 'new' });
     if (m.status.plan === 'free') toast('Signed in. This email already had a trial: Community keeps working, and Upgrade unlocks Pro.');
   });

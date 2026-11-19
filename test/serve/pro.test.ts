@@ -299,6 +299,40 @@ test('plan box: the status names the signed-in email, and Buy Pro signs in on th
   }
 });
 
+test('Buy Pro: back from signing in, the same tab goes on to the payment page; a plain Try Pro stops at "signed in" (2026-11-19)', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-'));
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-p-'));
+  const store = new Store(project, { home });
+  const trial = { ...stand, entitled: { plan: 'trial', locked: [], ends: '2026-11-25T00:00:00.000Z' } };
+  const proLoader: ProLoader = {
+    dev: false, load: async () => LOCKED, activate: async () => LOCKED, links: () => ({ tryUrl: 'https://chorus-cli.web.app/try', plansUrl: '' }),
+    signIn: async () => trial, upgrade: async () => ({ url: 'https://pay.example/pay/checkout?a=ann' }),
+  };
+  const opened: string[] = [];
+  const c = new Controller({ project, store, app: headlessApp(), opener: async () => ({ ok: true }), launcher: (_a, o) => ({ bin: process.execPath, args: [], cwd: o.cwd }) });
+  const srv = new ChorusServer({ controller: c, token: 'a'.repeat(48), check: async () => ({ node: { version: '22', ok: true }, platform: 't', agents: [], ms: 1 }), proLoader, openLink: u => opened.push(u), container: true });
+  const url = await srv.start(0);
+  const h = { authorization: `Bearer ${srv.token}`, 'x-chorus': '1', 'content-type': 'application/json' };
+  const back = async (then?: string) => {
+    const t = await (await fetch(`${url}/api/pro/try`, { method: 'POST', headers: h, body: JSON.stringify(then ? { then } : {}) })).json();
+    const q = new URL(t.open).searchParams;
+    return fetch(`${url}/api/pro/signed-in?${new URLSearchParams({ state: q.get('state')!, code: 'c1', ...(q.get('then') ? { then: q.get('then')! } : {}) })}`, { redirect: 'manual' });
+  };
+  try {
+    const buy = await back('upgrade');
+    assert.equal(buy.status, 302);
+    assert.equal(buy.headers.get('location'), 'https://pay.example/pay/checkout?a=ann');
+    const plain = await back();
+    assert.equal(plain.status, 200);
+    assert.match(await plain.text(), /You're signed in/);
+    assert.deepEqual(opened, [], 'in the box nothing is opened by the server');
+  } finally {
+    srv.close();
+    c.stop();
+    store.close();
+  }
+});
+
 /* ---------- stage 7: requests through the private link go to the module ---------- */
 
 const remoteStand: ProModule = {
