@@ -36,7 +36,7 @@ export const CHORUS_LINE =
  * agy don't show MCP instructions to the model, so launch.ts puts them after the start text there. Under 3 KB.
  */
 export const MCP_INSTRUCTIONS = `How to work in Chorus:
-- The user answers you in Chorus. When you need the user to approve, confirm or choose something before you go on, ask through Chorus as an approval card, never as a line in your reply. A Chorus task's plan is the exception: never ask the user to approve it; Chorus shows its Approve button once the plan is finished.
+- The user answers you in Chorus. When you need the user to approve, confirm or choose something before you go on, ask through Chorus as an approval card, never as a line in your reply. A Chorus task's plan is the exception: never ask the user to approve it; Chorus shows its Approve button once the plan is finished. Then tell the user in one line to open the task in Chorus to approve it, and never start the task or ask whether or how to start it: the user starts it in How to run.
 - Show every file or link meant for the user through Chorus right after you make it.
 - Work that can run on its own, or that the user wants another agent to do, goes to a sub thread. After starting one, go on with your work or end your turn; Chorus reports each time it ends a turn. Never check on it in a loop.
 - When you need to see or manage your sub threads, or know your parent chat, task or step, look them up with current_thread.
