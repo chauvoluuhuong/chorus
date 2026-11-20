@@ -94,6 +94,14 @@ test('right sidebar: a click outside it closes it, the terminal keeps the click'
     assert.equal(await shown(), false, 'still closed after a reload');
     assert.equal(await ch.js<string>(`JSON.parse(localStorage.getItem('chorus.side') ?? '{}')[${JSON.stringify(id)}]`), '', 'remembered as closed');
 
+    // g. a chat-head button pressed while the sidebar is open still gets its click (closing must not rebuild the head under the press)
+    await ch.click(btn);
+    assert.ok(await shown());
+    await ch.js('window.__ho = null; window.choruspro = Object.assign(window.choruspro ?? {}, { handOff: id => { window.__ho = id; } }), 1');
+    assert.ok(await ch.click('#chat-head [data-act="handoff"]'), 'Hand off is there');
+    assert.equal(await ch.js<string>('window.__ho'), id, 'Hand off gets its click with the sidebar open');
+    assert.equal(await ch.js<string>(`JSON.parse(localStorage.getItem('chorus.side') ?? '{}')[${JSON.stringify(id)}]`), '', 'and the sidebar is closed');
+
     // a phone: a tap on the terminal throws nothing
     await resize(390);
     assert.equal(await ch.js<string>('chorus.S.size'), 'phone');
