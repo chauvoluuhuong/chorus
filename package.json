@@ -35,6 +35,7 @@
     "smoke:artifacts": "node test/smoke/artifacts.ts",
     "proof:desktop": "node test/smoke/proof-desktop.ts --open",
     "proof:first-run": "node test/smoke/proof-first-run.ts",
+    "proof:ime": "node test/smoke/proof-ime.ts",
     "serve": "node src/cli/index.ts serve --open",
     "smoke:ask": "node test/smoke/ask.ts",
     "smoke:projects": "node test/smoke/projects.ts",

@@ -31,9 +31,12 @@ test('sidebar: a state push and a redraw keep the chat list where it was scrolle
   const out = process.env.CHORUS_PROOF_DIR ?? fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-side-shots-'));
   fs.mkdirSync(out, { recursive: true });
   const ch = await openChrome({ out, width: 1280, height: 900 });
+  // Headless Chrome on macOS may make no frames while the suite keeps the machine busy, and the page draws in
+  // requestAnimationFrame: a 1×1 screenshot asks for a frame on every poll (as test/smoke/proof-ime.ts does).
+  const frame = () => ch.cdp('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: 1, height: 1, scale: 1 } });
   try {
     await ch.cdp('Page.navigate', { url: srv.openUrl });
-    assert.ok(await ch.until(async () => (await ch.js<number>('document.querySelectorAll("#side .tree .chat-row").length')) > 0, 15000), 'the sidebar lists the chats');
+    assert.ok(await ch.until(async () => (await frame(), await ch.js<number>('document.querySelectorAll("#side .tree .chat-row").length')) > 0, 15000), 'the sidebar lists the chats');
     const size = await ch.js<{ h: number; c: number }>('(() => { const t = document.querySelector("#side .tree"); return { h: t.scrollHeight, c: t.clientHeight }; })()');
     assert.ok(size.h > size.c + 200, `the chat list overflows (${size.h} > ${size.c})`);
     const top = await ch.js<number>('(() => { const t = document.querySelector("#side .tree"); t.scrollTop = 200; return t.scrollTop; })()');
@@ -42,13 +45,15 @@ test('sidebar: a state push and a redraw keep the chat list where it was scrolle
     // a state push from the server (an agent working, a chat added): the page redraws the sidebar
     await ch.js('window.__tree = document.querySelector("#side .tree"), 1');
     srv.pushState();
-    assert.ok(await ch.until(() => ch.js<boolean>('document.querySelector("#side .tree") !== window.__tree'), 5000), 'the push redrew the sidebar');
+    assert.ok(await ch.until(async () => (await frame(), await ch.js<boolean>('document.querySelector("#side .tree") !== window.__tree')), 5000), 'the push redrew the sidebar');
     await sleep(200);
+    await frame();
     assert.equal(await ch.js<number>('document.querySelector("#side .tree").scrollTop'), 200, 'still where it was scrolled after a state push');
     await ch.shot('sidebar-scroll-after-push', 'After a state push the sidebar is still scrolled down (the list starts mid-way), not back at the top');
 
     // any other redraw (a click that re-renders the chrome, the paid module's refresh)
     await ch.js('chorus.renderChrome(), 1');
+    await frame();
     assert.equal(await ch.js<number>('document.querySelector("#side .tree").scrollTop'), 200, 'still where it was scrolled after a redraw');
   } finally {
     ch.close();
