@@ -1,0 +1,178 @@
+{
+ "probe": "fix/linux-ibus-ime step 10, Ubuntu 22.04 in Docker (Xvfb, Openbox), WebKitGTK 4.1, IBus 1.5 + ibus-bamboo 0.8.5 (Flags 5: new tone style), the Chorus desktop window, xdotool keystrokes",
+ "method": "bamboo-vni",
+ "place": "card-own-answer",
+ "typed": "Tie6ng1 + Enter while Bamboo still shows the word",
+ "target": "Tiếng",
+ "note": "events: DOM events in order, t = ms from the first (performance.now, the clock of the events' timeStamp); value of the target field kept as its last 80 characters (valueTail). IBus draws the word itself: letters show only keyup, the commit is keydown 229 + insertFromComposition + compositionend with no compositionstart. Enter mid-word: IBus commits the word, then forwards the Enter as keyCode 13 with isComposing false within a millisecond.",
+ "events": [
+  {
+   "type": "keydown",
+   "t": 0,
+   "key": "Shift",
+   "code": "ShiftLeft",
+   "keyCode": 16,
+   "shift": true,
+   "isComposing": false,
+   "target": "other-input",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 22,
+   "key": "t",
+   "code": "KeyT",
+   "keyCode": 84,
+   "shift": false,
+   "isComposing": false,
+   "target": "other-input",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 22,
+   "key": "Shift",
+   "code": "ShiftLeft",
+   "keyCode": 16,
+   "shift": true,
+   "isComposing": false,
+   "target": "other-input",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 69,
+   "key": "i",
+   "code": "KeyI",
+   "keyCode": 73,
+   "shift": false,
+   "isComposing": false,
+   "target": "other-input",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 125,
+   "key": "e",
+   "code": "KeyE",
+   "keyCode": 69,
+   "shift": false,
+   "isComposing": false,
+   "target": "other-input",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 180,
+   "key": "6",
+   "code": "Digit6",
+   "keyCode": 54,
+   "shift": false,
+   "isComposing": false,
+   "target": "other-input",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 235,
+   "key": "n",
+   "code": "KeyN",
+   "keyCode": 78,
+   "shift": false,
+   "isComposing": false,
+   "target": "other-input",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 290,
+   "key": "g",
+   "code": "KeyG",
+   "keyCode": 71,
+   "shift": false,
+   "isComposing": false,
+   "target": "other-input",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 336,
+   "key": "1",
+   "code": "Digit1",
+   "keyCode": 49,
+   "shift": false,
+   "isComposing": false,
+   "target": "other-input",
+   "valueTail": ""
+  },
+  {
+   "type": "keydown",
+   "t": 665,
+   "key": "Unidentified",
+   "code": "Unidentified",
+   "keyCode": 229,
+   "shift": false,
+   "isComposing": false,
+   "target": "other-input",
+   "valueTail": ""
+  },
+  {
+   "type": "beforeinput",
+   "t": 665,
+   "isComposing": true,
+   "data": "Tiếng",
+   "inputType": "insertFromComposition",
+   "target": "other-input"
+  },
+  {
+   "type": "input",
+   "t": 667,
+   "isComposing": true,
+   "data": "Tiếng",
+   "inputType": "insertFromComposition",
+   "target": "other-input",
+   "valueTail": "Tiếng"
+  },
+  {
+   "type": "compositionend",
+   "t": 667,
+   "isComposing": false,
+   "data": "Tiếng",
+   "target": "other-input",
+   "valueTail": "Tiếng"
+  },
+  {
+   "type": "keydown",
+   "t": 668,
+   "key": "Enter",
+   "code": "Enter",
+   "keyCode": 13,
+   "shift": false,
+   "isComposing": false,
+   "target": "other-input",
+   "valueTail": "Tiếng"
+  },
+  {
+   "type": "keypress",
+   "t": 668,
+   "key": "Enter",
+   "code": "Enter",
+   "keyCode": 13,
+   "shift": false,
+   "isComposing": false,
+   "target": "other-input",
+   "valueTail": "Tiếng"
+  },
+  {
+   "type": "keyup",
+   "t": 671,
+   "key": "Enter",
+   "code": "Enter",
+   "keyCode": 13,
+   "shift": false,
+   "isComposing": false,
+   "target": "other-input",
+   "valueTail": "Tiếng"
+  }
+ ]
+}

@@ -1,0 +1,202 @@
+{
+ "probe": "fix/linux-ibus-ime step 10, Ubuntu 22.04 in Docker (Xvfb, Openbox), WebKitGTK 4.1, IBus 1.5 + ibus-bamboo 0.8.5 (Flags 5: new tone style), the Chorus desktop window, xdotool keystrokes",
+ "method": "bamboo-telex",
+ "place": "new-chat-prompt",
+ "typed": "Tieengs + Enter while Bamboo still shows the word",
+ "target": "Tiếng",
+ "note": "events: DOM events in order, t = ms from the first (performance.now, the clock of the events' timeStamp); value of the target field kept as its last 80 characters (valueTail). IBus draws the word itself: letters show only keyup, the commit is keydown 229 + insertFromComposition + compositionend with no compositionstart. Enter mid-word: IBus commits the word, then forwards the Enter as keyCode 13 with isComposing false within a millisecond.",
+ "events": [
+  {
+   "type": "keydown",
+   "t": 0,
+   "key": "Shift",
+   "code": "ShiftLeft",
+   "keyCode": 16,
+   "shift": true,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 23,
+   "key": "t",
+   "code": "KeyT",
+   "keyCode": 84,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 23,
+   "key": "Shift",
+   "code": "ShiftLeft",
+   "keyCode": 16,
+   "shift": true,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 71,
+   "key": "i",
+   "code": "KeyI",
+   "keyCode": 73,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 131,
+   "key": "e",
+   "code": "KeyE",
+   "keyCode": 69,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 183,
+   "key": "e",
+   "code": "KeyE",
+   "keyCode": 69,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 239,
+   "key": "n",
+   "code": "KeyN",
+   "keyCode": 78,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 293,
+   "key": "g",
+   "code": "KeyG",
+   "keyCode": 71,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 340,
+   "key": "s",
+   "code": "KeyS",
+   "keyCode": 83,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keydown",
+   "t": 674,
+   "key": "Unidentified",
+   "code": "Unidentified",
+   "keyCode": 229,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "beforeinput",
+   "t": 674,
+   "isComposing": true,
+   "data": "Tiếng",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt"
+  },
+  {
+   "type": "input",
+   "t": 675,
+   "isComposing": true,
+   "data": "Tiếng",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng"
+  },
+  {
+   "type": "compositionend",
+   "t": 676,
+   "isComposing": false,
+   "data": "Tiếng",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng"
+  },
+  {
+   "type": "input",
+   "t": 676,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng"
+  },
+  {
+   "type": "keydown",
+   "t": 677,
+   "key": "Enter",
+   "code": "Enter",
+   "keyCode": 13,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng"
+  },
+  {
+   "type": "keypress",
+   "t": 677,
+   "key": "Enter",
+   "code": "Enter",
+   "keyCode": 13,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng"
+  },
+  {
+   "type": "beforeinput",
+   "t": 677,
+   "isComposing": false,
+   "data": null,
+   "inputType": "insertLineBreak",
+   "target": "nc-prompt"
+  },
+  {
+   "type": "input",
+   "t": 678,
+   "isComposing": false,
+   "data": null,
+   "inputType": "insertLineBreak",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng\n"
+  },
+  {
+   "type": "keyup",
+   "t": 680,
+   "key": "Enter",
+   "code": "Enter",
+   "keyCode": 13,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng\n"
+  }
+ ]
+}

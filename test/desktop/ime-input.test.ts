@@ -6,12 +6,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 // @ts-expect-error: a page module, plain JavaScript
-import { DEL, editBytes, graphemes, keyEffect, makeImeInput, multiCharKey } from '../../src/desktop/ime-input.js';
+import { DEL, editBytes, graphemes, keyEffect, makeImeInput, multiCharKey, plainSpaces } from '../../src/desktop/ime-input.js';
 
 const TARGET = 'Tiếng Việt có dấu: người, được, khoẻ, Đà Nẵng';
 const dir = path.join(import.meta.dirname, '..', 'fixtures', 'ime');
 
 type Ev = { type: string; key?: string; keyCode?: number; isComposing?: boolean; shift?: boolean; data?: string | null; inputType?: string; valueTail?: string };
+type Ime = ReturnType<typeof makeImeInput>;
 
 /** The CLI's input line: DEL takes off one character. */
 function apply(line: string[], bytes: string) {
@@ -21,12 +22,14 @@ function apply(line: string[], bytes: string) {
   }
 }
 
-/** Replays one fixture: the page's handlers first, then what xterm.js 6 would send for the event the page let through. */
-function replay(events: Ev[]) {
+/** Replays one fixture: the page's handlers first, then what xterm.js 6 would send for the event the page let through.
+ *  `make` stands in for the page's input state (a stub with no takeover shows what xterm alone sends). */
+function replay(events: Ev[], make: (o: { box: { value: string }; send: (d: string) => void }) => Ime = makeImeInput) {
   const line: string[] = [];
   const box = { value: '' };
   const out = (d: string) => apply(line, d);
-  const ime = makeImeInput({ box, send: out });
+  const ime = make({ box, send: out });
+  let compStart = 0; // xterm's CompositionHelper: where the composition began in its textarea (0 until a compositionstart)
   const xtermSends = (d: string) => {
     ime.data();
     out(d);
@@ -54,6 +57,14 @@ function replay(events: Ev[]) {
       ime.key(e);
     } else if (ev.type === 'beforeinput') {
       ime.beforeinput(e);
+    } else if (ev.type === 'compositionstart') {
+      compStart = box.value.length;
+      ime.composition(true);
+    } else if (ev.type === 'compositionend') {
+      if (ev.valueTail !== undefined) box.value = ev.valueTail;
+      if (ime.compositionEnd?.(e)) continue;
+      xtermSends(box.value.slice(compStart)); // CompositionHelper sends the textarea from where the composition began
+      ime.composition(false);
     } else if (ev.type === 'input') {
       if (ev.valueTail !== undefined) box.value = ev.valueTail; // the whole textarea here (under 80 characters)
       if (ime.input(e)) continue;
@@ -74,6 +85,44 @@ for (const method of ['telex', 'vni', 'okey0', 'okey30']) {
     });
   }
 }
+
+// Linux: IBus (ibus-bamboo Telex and VNI) in WebKitGTK, recorded in the Chorus window in Docker (test/smoke/linux-ime/). No
+// compositionstart: each word comes as keydown 229 + insertFromComposition + compositionend, and WebKit keeps a trailing space as
+// U+00A0. The final Enter commits "Nẵng" and IBus forwards the Enter, which the chat sends.
+for (const method of ['telex', 'vni']) {
+  test(`linux ibus-bamboo ${method} into a chat: each word once, no extra spaces`, () => {
+    const f = JSON.parse(fs.readFileSync(path.join(dir, `linux-${method}-chat.json`), 'utf8'));
+    assert.equal(f.target, TARGET);
+    assert.ok(!f.events.some((e: Ev) => e.type === 'compositionstart'), 'IBus in WebKitGTK fires no compositionstart');
+    assert.ok(f.events.some((e: Ev) => e.valueTail?.includes('\u00a0')), 'WebKit keeps a trailing space as a no-break space');
+    const sent: string[] = []; // what the page itself sent: one write per committed word, no DEL, no U+00A0
+    assert.equal(replay(f.events, o => makeImeInput({ box: o.box, send: (d: string) => (sent.push(d), o.send(d)) })), TARGET + '\r');
+    assert.deepEqual(sent, ['Tiếng ', 'Việt ', 'có ', 'dấu:', 'người,', 'được,', 'khoẻ,', 'Đà ', 'Nẵng']);
+    // xterm alone (the page sends nothing itself) resends the whole textarea at every commit: what Chorus did before
+    const xtermOnly = replay(f.events, () => ({ key: () => true, beforeinput() {}, input: () => false, data() {}, composition() {}, reset() {} }) as unknown as Ime);
+    assert.equal(xtermOnly.replace('\r', ''), f.arrived);
+    assert.notEqual(f.arrived, TARGET);
+  });
+}
+
+test('a commit with no compositionstart is sent once, compared with no-break spaces as spaces', () => {
+  const sent: string[] = [];
+  const box = { value: 'Tiếng\u00a0' };
+  const ime = makeImeInput({ box, send: (d: string) => sent.push(d) });
+  ime.key({ type: 'keydown', key: 'Unidentified', keyCode: 229 });
+  ime.beforeinput({ inputType: 'insertFromComposition', data: 'Việt ', isComposing: true });
+  box.value = 'Tiếng Việt\u00a0';
+  assert.equal(ime.input({ inputType: 'insertFromComposition', data: 'Việt ', isComposing: true }), true);
+  assert.equal(ime.compositionEnd({ data: 'Việt ' }), true); // xterm must not see it
+  assert.deepEqual(sent, ['Việt ']);
+  // a commit whose input event never came is sent from its compositionend
+  assert.equal(ime.compositionEnd({ data: 'có ' }), true);
+  assert.deepEqual(sent, ['Việt ', 'có ']);
+  // a real composition (compositionstart came) stays with xterm
+  ime.composition(true);
+  assert.equal(ime.compositionEnd({ data: 'được' }), false);
+  assert.equal(plainSpaces('a\u00a0b '), 'a b ');
+});
 
 test('editBytes: DEL per changed character, then the new letters (precomposed ê/ế count as one)', () => {
   assert.equal(editBytes('T', 'Ti'), 'i');

@@ -1,0 +1,1 @@
+{ "*": [{ "call": "request_approval", "args": { "question": "Tên của dự án là gì?", "options": ["Chorus", "Khác"], "kind": "question" } }] }
