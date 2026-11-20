@@ -360,7 +360,7 @@ const imeRec = (() => {
 })();
 term.onData(d => {
   imeRec.log({ ev: 'onData', data: d });
-  ime.data();
+  ime.data(d);
   if (S.attached) send({ t: 'in', id: S.attached, data: d });
 });
 term.onBinary(d => S.attached && send({ t: 'in', id: S.attached, data: d }));
