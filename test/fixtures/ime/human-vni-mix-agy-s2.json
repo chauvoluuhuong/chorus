@@ -1,0 +1,4153 @@
+{
+ "probe": "fix/ime-human-typing step 1, macOS 27.2, Chorus.app (WKWebView) built from origin/dev e70e898 + the typing recorder, typed by a script like a person (CGEvents, keys overlap: next keydown before the previous keyup, seed 2)",
+ "method": "vni",
+ "methodName": "Apple Vietnamese - VNI",
+ "place": "xterm (chat terminal)",
+ "agent": "agy",
+ "by": "script",
+ "typed": "Tie61ng Vie65t co1 da61u: ngu[1 s pause]7o72i, d9u7o75c, khk[Backspace]oe3, D9a2 Na84ng kkk[Backspace held: auto-repeat x3][Backspace]",
+ "target": "Tiếng Việt có dấu: người, được, khoẻ, Đà Nẵng",
+ "arrived": "Tiếng Việt ó dấu: người, được, khoẻ, Đà Nẵn",
+ "ok": false,
+ "plan": ".chorus/proof/fix-ime-human-typing/runs/vni-mix-agy-s2.plan",
+ "note": "events: DOM events on xterm's hidden textarea in order, t = ms from the first (event.timeStamp); valueTail = the last 80 characters of its value at the event (none on beforeinput); sel = its selection; repeat = auto-repeat. Recorded with the chorus.debugIme recorder (fix/ime-human-typing step 1).",
+ "events": [
+  {
+   "type": "beforeinput",
+   "t": 0,
+   "isComposing": false,
+   "data": "T",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    0,
+    0
+   ]
+  },
+  {
+   "type": "input",
+   "t": 0,
+   "isComposing": false,
+   "data": "T",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": "T",
+   "sel": [
+    1,
+    1
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": -5,
+   "key": "T",
+   "code": "KeyT",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": true,
+   "target": "xterm",
+   "valueTail": "T",
+   "sel": [
+    1,
+    1
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 156,
+   "key": "T",
+   "code": "KeyT",
+   "keyCode": 84,
+   "repeat": false,
+   "isComposing": false,
+   "shift": true,
+   "target": "xterm",
+   "valueTail": "T",
+   "sel": [
+    1,
+    1
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 202,
+   "isComposing": false,
+   "data": "Ti",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    0,
+    1
+   ]
+  },
+  {
+   "type": "input",
+   "t": 202,
+   "isComposing": false,
+   "data": "Ti",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": "Ti",
+   "sel": [
+    2,
+    2
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 196,
+   "key": "i",
+   "code": "KeyI",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Ti",
+   "sel": [
+    2,
+    2
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 277,
+   "isComposing": false,
+   "data": "Tie",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    0,
+    2
+   ]
+  },
+  {
+   "type": "input",
+   "t": 277,
+   "isComposing": false,
+   "data": "Tie",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": "Tie",
+   "sel": [
+    3,
+    3
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 273,
+   "key": "e",
+   "code": "KeyE",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tie",
+   "sel": [
+    3,
+    3
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 277,
+   "key": "i",
+   "code": "KeyI",
+   "keyCode": 73,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tie",
+   "sel": [
+    3,
+    3
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 423,
+   "key": "e",
+   "code": "KeyE",
+   "keyCode": 69,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tie",
+   "sel": [
+    3,
+    3
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 447,
+   "isComposing": false,
+   "data": "Tiê",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    0,
+    3
+   ]
+  },
+  {
+   "type": "input",
+   "t": 447,
+   "isComposing": false,
+   "data": "Tiê",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": "Tiê",
+   "sel": [
+    3,
+    3
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 441,
+   "key": "6",
+   "code": "Digit6",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiê",
+   "sel": [
+    3,
+    3
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 555,
+   "isComposing": false,
+   "data": "Tiế",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    0,
+    3
+   ]
+  },
+  {
+   "type": "input",
+   "t": 555,
+   "isComposing": false,
+   "data": "Tiế",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": "Tiế",
+   "sel": [
+    3,
+    3
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 548,
+   "key": "1",
+   "code": "Digit1",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiế",
+   "sel": [
+    3,
+    3
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 581,
+   "key": "6",
+   "code": "Digit6",
+   "keyCode": 54,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiế",
+   "sel": [
+    3,
+    3
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 682,
+   "key": "1",
+   "code": "Digit1",
+   "keyCode": 49,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiế",
+   "sel": [
+    3,
+    3
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 713,
+   "isComposing": false,
+   "data": "Tiến",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    0,
+    3
+   ]
+  },
+  {
+   "type": "input",
+   "t": 713,
+   "isComposing": false,
+   "data": "Tiến",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": "Tiến",
+   "sel": [
+    4,
+    4
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 707,
+   "key": "n",
+   "code": "KeyN",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiến",
+   "sel": [
+    4,
+    4
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 802,
+   "isComposing": false,
+   "data": "Tiếng",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    0,
+    4
+   ]
+  },
+  {
+   "type": "input",
+   "t": 803,
+   "isComposing": false,
+   "data": "Tiếng",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": "Tiếng",
+   "sel": [
+    5,
+    5
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 794,
+   "key": "g",
+   "code": "KeyG",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng",
+   "sel": [
+    5,
+    5
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 840,
+   "key": "n",
+   "code": "KeyN",
+   "keyCode": 78,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng",
+   "sel": [
+    5,
+    5
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 910,
+   "key": "g",
+   "code": "KeyG",
+   "keyCode": 71,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng",
+   "sel": [
+    5,
+    5
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 917,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng",
+   "sel": [
+    5,
+    5
+   ]
+  },
+  {
+   "type": "keypress",
+   "t": 917,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng",
+   "sel": [
+    5,
+    5
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 928,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    5,
+    5
+   ]
+  },
+  {
+   "type": "input",
+   "t": 929,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": "Tiếng ",
+   "sel": [
+    6,
+    6
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 1057,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng ",
+   "sel": [
+    6,
+    6
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 1126,
+   "isComposing": false,
+   "data": "V",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    6,
+    6
+   ]
+  },
+  {
+   "type": "input",
+   "t": 1127,
+   "isComposing": false,
+   "data": "V",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": "Tiếng V",
+   "sel": [
+    7,
+    7
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 1123,
+   "key": "V",
+   "code": "KeyV",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": true,
+   "target": "xterm",
+   "valueTail": "Tiếng V",
+   "sel": [
+    7,
+    7
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 1269,
+   "isComposing": false,
+   "data": "Vi",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    6,
+    7
+   ]
+  },
+  {
+   "type": "input",
+   "t": 1269,
+   "isComposing": false,
+   "data": "Vi",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": "Tiếng Vi",
+   "sel": [
+    8,
+    8
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 1262,
+   "key": "i",
+   "code": "KeyI",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Vi",
+   "sel": [
+    8,
+    8
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 1286,
+   "key": "V",
+   "code": "KeyV",
+   "keyCode": 86,
+   "repeat": false,
+   "isComposing": false,
+   "shift": true,
+   "target": "xterm",
+   "valueTail": "Tiếng Vi",
+   "sel": [
+    8,
+    8
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 1371,
+   "isComposing": false,
+   "data": "Vie",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    6,
+    8
+   ]
+  },
+  {
+   "type": "input",
+   "t": 1372,
+   "isComposing": false,
+   "data": "Vie",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": "Tiếng Vie",
+   "sel": [
+    9,
+    9
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 1367,
+   "key": "e",
+   "code": "KeyE",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Vie",
+   "sel": [
+    9,
+    9
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 1384,
+   "key": "i",
+   "code": "KeyI",
+   "keyCode": 73,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Vie",
+   "sel": [
+    9,
+    9
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 1443,
+   "isComposing": false,
+   "data": "Viê",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    6,
+    9
+   ]
+  },
+  {
+   "type": "input",
+   "t": 1443,
+   "isComposing": false,
+   "data": "Viê",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": "Tiếng Viê",
+   "sel": [
+    9,
+    9
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 1437,
+   "key": "6",
+   "code": "Digit6",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Viê",
+   "sel": [
+    9,
+    9
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 1448,
+   "key": "e",
+   "code": "KeyE",
+   "keyCode": 69,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Viê",
+   "sel": [
+    9,
+    9
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 1554,
+   "isComposing": false,
+   "data": "Việ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    6,
+    9
+   ]
+  },
+  {
+   "type": "input",
+   "t": 1554,
+   "isComposing": false,
+   "data": "Việ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": "Tiếng Việ",
+   "sel": [
+    9,
+    9
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 1548,
+   "key": "5",
+   "code": "Digit5",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việ",
+   "sel": [
+    9,
+    9
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 1557,
+   "key": "6",
+   "code": "Digit6",
+   "keyCode": 54,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việ",
+   "sel": [
+    9,
+    9
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 1659,
+   "key": "5",
+   "code": "Digit5",
+   "keyCode": 53,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việ",
+   "sel": [
+    9,
+    9
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 1746,
+   "isComposing": false,
+   "data": "Việt",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    6,
+    9
+   ]
+  },
+  {
+   "type": "input",
+   "t": 1747,
+   "isComposing": false,
+   "data": "Việt",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": "Tiếng Việt",
+   "sel": [
+    10,
+    10
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 1741,
+   "key": "t",
+   "code": "KeyT",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt",
+   "sel": [
+    10,
+    10
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 1865,
+   "key": "t",
+   "code": "KeyT",
+   "keyCode": 84,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt",
+   "sel": [
+    10,
+    10
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 1890,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt",
+   "sel": [
+    10,
+    10
+   ]
+  },
+  {
+   "type": "keypress",
+   "t": 1890,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt",
+   "sel": [
+    10,
+    10
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 1899,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    10,
+    10
+   ]
+  },
+  {
+   "type": "input",
+   "t": 1900,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": "Tiếng Việt ",
+   "sel": [
+    11,
+    11
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 1959,
+   "isComposing": false,
+   "data": "c",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    11,
+    11
+   ]
+  },
+  {
+   "type": "input",
+   "t": 1960,
+   "isComposing": false,
+   "data": "c",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": "Tiếng Việt c",
+   "sel": [
+    12,
+    12
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 1953,
+   "key": "c",
+   "code": "KeyC",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt c",
+   "sel": [
+    12,
+    12
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 1982,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt c",
+   "sel": [
+    12,
+    12
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 2038,
+   "isComposing": false,
+   "data": "co",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    11,
+    12
+   ]
+  },
+  {
+   "type": "input",
+   "t": 2039,
+   "isComposing": false,
+   "data": "co",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": "Tiếng Việt co",
+   "sel": [
+    13,
+    13
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 2035,
+   "key": "o",
+   "code": "KeyO",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt co",
+   "sel": [
+    13,
+    13
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 2059,
+   "key": "c",
+   "code": "KeyC",
+   "keyCode": 67,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt co",
+   "sel": [
+    13,
+    13
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 2160,
+   "key": "o",
+   "code": "KeyO",
+   "keyCode": 79,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt co",
+   "sel": [
+    13,
+    13
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 2257,
+   "isComposing": false,
+   "data": "có",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    11,
+    13
+   ]
+  },
+  {
+   "type": "input",
+   "t": 2257,
+   "isComposing": false,
+   "data": "có",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có",
+   "sel": [
+    13,
+    13
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 2249,
+   "key": "1",
+   "code": "Digit1",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có",
+   "sel": [
+    13,
+    13
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 2340,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có",
+   "sel": [
+    13,
+    13
+   ]
+  },
+  {
+   "type": "keypress",
+   "t": 2340,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có",
+   "sel": [
+    13,
+    13
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 2349,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    13,
+    13
+   ]
+  },
+  {
+   "type": "input",
+   "t": 2350,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có ",
+   "sel": [
+    14,
+    14
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 2390,
+   "key": "1",
+   "code": "Digit1",
+   "keyCode": 49,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có ",
+   "sel": [
+    14,
+    14
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 2499,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có ",
+   "sel": [
+    14,
+    14
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 2528,
+   "isComposing": false,
+   "data": "d",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    14,
+    14
+   ]
+  },
+  {
+   "type": "input",
+   "t": 2529,
+   "isComposing": false,
+   "data": "d",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có d",
+   "sel": [
+    15,
+    15
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 2525,
+   "key": "d",
+   "code": "KeyD",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có d",
+   "sel": [
+    15,
+    15
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 2666,
+   "key": "d",
+   "code": "KeyD",
+   "keyCode": 68,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có d",
+   "sel": [
+    15,
+    15
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 2728,
+   "isComposing": false,
+   "data": "da",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    14,
+    15
+   ]
+  },
+  {
+   "type": "input",
+   "t": 2728,
+   "isComposing": false,
+   "data": "da",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có da",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 2718,
+   "key": "a",
+   "code": "KeyA",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có da",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 2861,
+   "key": "a",
+   "code": "KeyA",
+   "keyCode": 65,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có da",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 2904,
+   "isComposing": false,
+   "data": "dâ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    14,
+    16
+   ]
+  },
+  {
+   "type": "input",
+   "t": 2905,
+   "isComposing": false,
+   "data": "dâ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có dâ",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 2899,
+   "key": "6",
+   "code": "Digit6",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có dâ",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 3006,
+   "key": "6",
+   "code": "Digit6",
+   "keyCode": 54,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có dâ",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 3108,
+   "isComposing": false,
+   "data": "dấ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    14,
+    16
+   ]
+  },
+  {
+   "type": "input",
+   "t": 3109,
+   "isComposing": false,
+   "data": "dấ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có dấ",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 3102,
+   "key": "1",
+   "code": "Digit1",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có dấ",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 3196,
+   "isComposing": false,
+   "data": "dấu",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    14,
+    16
+   ]
+  },
+  {
+   "type": "input",
+   "t": 3196,
+   "isComposing": false,
+   "data": "dấu",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có dấu",
+   "sel": [
+    17,
+    17
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 3190,
+   "key": "u",
+   "code": "KeyU",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "Tiếng Việt có dấu",
+   "sel": [
+    17,
+    17
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 3268,
+   "key": "1",
+   "code": "Digit1",
+   "keyCode": 49,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "",
+   "sel": [
+    0,
+    0
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 3335,
+   "key": "u",
+   "code": "KeyU",
+   "keyCode": 85,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "",
+   "sel": [
+    0,
+    0
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 3360,
+   "key": ":",
+   "code": "Semicolon",
+   "keyCode": 186,
+   "repeat": false,
+   "isComposing": false,
+   "shift": true,
+   "target": "xterm",
+   "valueTail": "",
+   "sel": [
+    0,
+    0
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 3477,
+   "key": ":",
+   "code": "Semicolon",
+   "keyCode": 186,
+   "repeat": false,
+   "isComposing": false,
+   "shift": true,
+   "target": "xterm",
+   "valueTail": "",
+   "sel": [
+    0,
+    0
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 3501,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "",
+   "sel": [
+    0,
+    0
+   ]
+  },
+  {
+   "type": "keypress",
+   "t": 3501,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "",
+   "sel": [
+    0,
+    0
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 3507,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    0,
+    0
+   ]
+  },
+  {
+   "type": "input",
+   "t": 3508,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": " ",
+   "sel": [
+    1,
+    1
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 3618,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " ",
+   "sel": [
+    1,
+    1
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 3704,
+   "isComposing": false,
+   "data": "n",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    1,
+    1
+   ]
+  },
+  {
+   "type": "input",
+   "t": 3705,
+   "isComposing": false,
+   "data": "n",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": " n",
+   "sel": [
+    2,
+    2
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 3700,
+   "key": "n",
+   "code": "KeyN",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " n",
+   "sel": [
+    2,
+    2
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 3817,
+   "key": "n",
+   "code": "KeyN",
+   "keyCode": 78,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " n",
+   "sel": [
+    2,
+    2
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 3889,
+   "isComposing": false,
+   "data": "ng",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    1,
+    2
+   ]
+  },
+  {
+   "type": "input",
+   "t": 3889,
+   "isComposing": false,
+   "data": "ng",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " ng",
+   "sel": [
+    3,
+    3
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 3883,
+   "key": "g",
+   "code": "KeyG",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " ng",
+   "sel": [
+    3,
+    3
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 3990,
+   "key": "g",
+   "code": "KeyG",
+   "keyCode": 71,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " ng",
+   "sel": [
+    3,
+    3
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 4086,
+   "isComposing": false,
+   "data": "ngu",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    1,
+    3
+   ]
+  },
+  {
+   "type": "input",
+   "t": 4086,
+   "isComposing": false,
+   "data": "ngu",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " ngu",
+   "sel": [
+    4,
+    4
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 4075,
+   "key": "u",
+   "code": "KeyU",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " ngu",
+   "sel": [
+    4,
+    4
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 4231,
+   "key": "u",
+   "code": "KeyU",
+   "keyCode": 85,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " ngu",
+   "sel": [
+    4,
+    4
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 5214,
+   "isComposing": false,
+   "data": "ngư",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    1,
+    4
+   ]
+  },
+  {
+   "type": "input",
+   "t": 5215,
+   "isComposing": false,
+   "data": "ngư",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " ngư",
+   "sel": [
+    4,
+    4
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 5208,
+   "key": "7",
+   "code": "Digit7",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " ngư",
+   "sel": [
+    4,
+    4
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 5335,
+   "key": "7",
+   "code": "Digit7",
+   "keyCode": 55,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " ngư",
+   "sel": [
+    4,
+    4
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 5416,
+   "isComposing": false,
+   "data": "ngưo",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    1,
+    4
+   ]
+  },
+  {
+   "type": "input",
+   "t": 5416,
+   "isComposing": false,
+   "data": "ngưo",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " ngưo",
+   "sel": [
+    5,
+    5
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 5408,
+   "key": "o",
+   "code": "KeyO",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " ngưo",
+   "sel": [
+    5,
+    5
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 5547,
+   "isComposing": false,
+   "data": "ngươ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    1,
+    5
+   ]
+  },
+  {
+   "type": "input",
+   "t": 5547,
+   "isComposing": false,
+   "data": "ngươ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " ngươ",
+   "sel": [
+    5,
+    5
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 5541,
+   "key": "7",
+   "code": "Digit7",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " ngươ",
+   "sel": [
+    5,
+    5
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 5550,
+   "key": "o",
+   "code": "KeyO",
+   "keyCode": 79,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " ngươ",
+   "sel": [
+    5,
+    5
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 5640,
+   "key": "7",
+   "code": "Digit7",
+   "keyCode": 55,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " ngươ",
+   "sel": [
+    5,
+    5
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 5663,
+   "isComposing": false,
+   "data": "ngườ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    1,
+    5
+   ]
+  },
+  {
+   "type": "input",
+   "t": 5663,
+   "isComposing": false,
+   "data": "ngườ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " ngườ",
+   "sel": [
+    5,
+    5
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 5658,
+   "key": "2",
+   "code": "Digit2",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " ngườ",
+   "sel": [
+    5,
+    5
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 5752,
+   "isComposing": false,
+   "data": "người",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    1,
+    5
+   ]
+  },
+  {
+   "type": "input",
+   "t": 5753,
+   "isComposing": false,
+   "data": "người",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người",
+   "sel": [
+    6,
+    6
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 5746,
+   "key": "i",
+   "code": "KeyI",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người",
+   "sel": [
+    6,
+    6
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 5800,
+   "key": "2",
+   "code": "Digit2",
+   "keyCode": 50,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người",
+   "sel": [
+    6,
+    6
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 5851,
+   "key": ",",
+   "code": "Comma",
+   "keyCode": 188,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người",
+   "sel": [
+    6,
+    6
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 5910,
+   "key": "i",
+   "code": "KeyI",
+   "keyCode": 73,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người",
+   "sel": [
+    6,
+    6
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 5965,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người",
+   "sel": [
+    6,
+    6
+   ]
+  },
+  {
+   "type": "keypress",
+   "t": 5965,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người",
+   "sel": [
+    6,
+    6
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 5976,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    6,
+    6
+   ]
+  },
+  {
+   "type": "input",
+   "t": 5976,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": " người ",
+   "sel": [
+    7,
+    7
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 6016,
+   "key": ",",
+   "code": "Comma",
+   "keyCode": 188,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người ",
+   "sel": [
+    7,
+    7
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 6125,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người ",
+   "sel": [
+    7,
+    7
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 6134,
+   "isComposing": false,
+   "data": "d",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    7,
+    7
+   ]
+  },
+  {
+   "type": "input",
+   "t": 6135,
+   "isComposing": false,
+   "data": "d",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": " người d",
+   "sel": [
+    8,
+    8
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 6129,
+   "key": "d",
+   "code": "KeyD",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người d",
+   "sel": [
+    8,
+    8
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 6249,
+   "key": "d",
+   "code": "KeyD",
+   "keyCode": 68,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người d",
+   "sel": [
+    8,
+    8
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 6273,
+   "isComposing": false,
+   "data": "đ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    7,
+    8
+   ]
+  },
+  {
+   "type": "input",
+   "t": 6273,
+   "isComposing": false,
+   "data": "đ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người đ",
+   "sel": [
+    8,
+    8
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 6268,
+   "key": "9",
+   "code": "Digit9",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người đ",
+   "sel": [
+    8,
+    8
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 6402,
+   "key": "9",
+   "code": "Digit9",
+   "keyCode": 57,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người đ",
+   "sel": [
+    8,
+    8
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 6427,
+   "isComposing": false,
+   "data": "đu",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    7,
+    8
+   ]
+  },
+  {
+   "type": "input",
+   "t": 6427,
+   "isComposing": false,
+   "data": "đu",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người đu",
+   "sel": [
+    9,
+    9
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 6419,
+   "key": "u",
+   "code": "KeyU",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người đu",
+   "sel": [
+    9,
+    9
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 6514,
+   "isComposing": false,
+   "data": "đư",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    7,
+    9
+   ]
+  },
+  {
+   "type": "input",
+   "t": 6515,
+   "isComposing": false,
+   "data": "đư",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người đư",
+   "sel": [
+    9,
+    9
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 6509,
+   "key": "7",
+   "code": "Digit7",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người đư",
+   "sel": [
+    9,
+    9
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 6520,
+   "key": "u",
+   "code": "KeyU",
+   "keyCode": 85,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người đư",
+   "sel": [
+    9,
+    9
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 6632,
+   "key": "7",
+   "code": "Digit7",
+   "keyCode": 55,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người đư",
+   "sel": [
+    9,
+    9
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 6715,
+   "isComposing": false,
+   "data": "đưo",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    7,
+    9
+   ]
+  },
+  {
+   "type": "input",
+   "t": 6715,
+   "isComposing": false,
+   "data": "đưo",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người đưo",
+   "sel": [
+    10,
+    10
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 6709,
+   "key": "o",
+   "code": "KeyO",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người đưo",
+   "sel": [
+    10,
+    10
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 6789,
+   "isComposing": false,
+   "data": "đươ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    7,
+    10
+   ]
+  },
+  {
+   "type": "input",
+   "t": 6790,
+   "isComposing": false,
+   "data": "đươ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người đươ",
+   "sel": [
+    10,
+    10
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 6784,
+   "key": "7",
+   "code": "Digit7",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người đươ",
+   "sel": [
+    10,
+    10
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 6842,
+   "key": "o",
+   "code": "KeyO",
+   "keyCode": 79,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người đươ",
+   "sel": [
+    10,
+    10
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 6935,
+   "key": "7",
+   "code": "Digit7",
+   "keyCode": 55,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người đươ",
+   "sel": [
+    10,
+    10
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 6964,
+   "isComposing": false,
+   "data": "đượ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    7,
+    10
+   ]
+  },
+  {
+   "type": "input",
+   "t": 6964,
+   "isComposing": false,
+   "data": "đượ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người đượ",
+   "sel": [
+    10,
+    10
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 6957,
+   "key": "5",
+   "code": "Digit5",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người đượ",
+   "sel": [
+    10,
+    10
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 7054,
+   "isComposing": false,
+   "data": "được",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    7,
+    10
+   ]
+  },
+  {
+   "type": "input",
+   "t": 7055,
+   "isComposing": false,
+   "data": "được",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người được",
+   "sel": [
+    11,
+    11
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 7048,
+   "key": "c",
+   "code": "KeyC",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được",
+   "sel": [
+    11,
+    11
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 7117,
+   "key": "5",
+   "code": "Digit5",
+   "keyCode": 53,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được",
+   "sel": [
+    11,
+    11
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 7124,
+   "key": ",",
+   "code": "Comma",
+   "keyCode": 188,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được",
+   "sel": [
+    11,
+    11
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 7192,
+   "key": "c",
+   "code": "KeyC",
+   "keyCode": 67,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được",
+   "sel": [
+    11,
+    11
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 7227,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được",
+   "sel": [
+    11,
+    11
+   ]
+  },
+  {
+   "type": "keypress",
+   "t": 7227,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được",
+   "sel": [
+    11,
+    11
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 7236,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    11,
+    11
+   ]
+  },
+  {
+   "type": "input",
+   "t": 7236,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": " người được ",
+   "sel": [
+    12,
+    12
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 7262,
+   "key": ",",
+   "code": "Comma",
+   "keyCode": 188,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được ",
+   "sel": [
+    12,
+    12
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 7327,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được ",
+   "sel": [
+    12,
+    12
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 7429,
+   "isComposing": false,
+   "data": "k",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    12,
+    12
+   ]
+  },
+  {
+   "type": "input",
+   "t": 7429,
+   "isComposing": false,
+   "data": "k",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": " người được k",
+   "sel": [
+    13,
+    13
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 7425,
+   "key": "k",
+   "code": "KeyK",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được k",
+   "sel": [
+    13,
+    13
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 7510,
+   "key": "k",
+   "code": "KeyK",
+   "keyCode": 75,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được k",
+   "sel": [
+    13,
+    13
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 7576,
+   "isComposing": false,
+   "data": "kh",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    12,
+    13
+   ]
+  },
+  {
+   "type": "input",
+   "t": 7576,
+   "isComposing": false,
+   "data": "kh",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người được kh",
+   "sel": [
+    14,
+    14
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 7568,
+   "key": "h",
+   "code": "KeyH",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được kh",
+   "sel": [
+    14,
+    14
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 7673,
+   "isComposing": false,
+   "data": "khk",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    12,
+    14
+   ]
+  },
+  {
+   "type": "input",
+   "t": 7673,
+   "isComposing": false,
+   "data": "khk",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người được khk",
+   "sel": [
+    15,
+    15
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 7666,
+   "key": "k",
+   "code": "KeyK",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khk",
+   "sel": [
+    15,
+    15
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 7718,
+   "key": "h",
+   "code": "KeyH",
+   "keyCode": 72,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khk",
+   "sel": [
+    15,
+    15
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 7759,
+   "key": "k",
+   "code": "KeyK",
+   "keyCode": 75,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khk",
+   "sel": [
+    15,
+    15
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 7858,
+   "key": "Backspace",
+   "code": "Backspace",
+   "keyCode": 8,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khk",
+   "sel": [
+    15,
+    15
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 7973,
+   "key": "Backspace",
+   "code": "Backspace",
+   "keyCode": 8,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được kh",
+   "sel": [
+    14,
+    14
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 8034,
+   "isComposing": false,
+   "data": "o",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    14,
+    14
+   ]
+  },
+  {
+   "type": "input",
+   "t": 8035,
+   "isComposing": false,
+   "data": "o",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": " người được kho",
+   "sel": [
+    15,
+    15
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 8027,
+   "key": "o",
+   "code": "KeyO",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được kho",
+   "sel": [
+    15,
+    15
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 8102,
+   "key": "o",
+   "code": "KeyO",
+   "keyCode": 79,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được kho",
+   "sel": [
+    15,
+    15
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 8145,
+   "isComposing": false,
+   "data": "oe",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    14,
+    15
+   ]
+  },
+  {
+   "type": "input",
+   "t": 8145,
+   "isComposing": false,
+   "data": "oe",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người được khoe",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 8142,
+   "key": "e",
+   "code": "KeyE",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoe",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 8229,
+   "key": "e",
+   "code": "KeyE",
+   "keyCode": 69,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoe",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 8311,
+   "isComposing": false,
+   "data": "oẻ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    14,
+    16
+   ]
+  },
+  {
+   "type": "input",
+   "t": 8311,
+   "isComposing": false,
+   "data": "oẻ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người được khoẻ",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 8302,
+   "key": "3",
+   "code": "Digit3",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 8385,
+   "key": "3",
+   "code": "Digit3",
+   "keyCode": 51,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 8507,
+   "key": ",",
+   "code": "Comma",
+   "keyCode": 188,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 8583,
+   "key": ",",
+   "code": "Comma",
+   "keyCode": 188,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 8675,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "keypress",
+   "t": 8675,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 8692,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    16,
+    16
+   ]
+  },
+  {
+   "type": "input",
+   "t": 8693,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": " người được khoẻ ",
+   "sel": [
+    17,
+    17
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 8750,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ ",
+   "sel": [
+    17,
+    17
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 8783,
+   "isComposing": false,
+   "data": "D",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    17,
+    17
+   ]
+  },
+  {
+   "type": "input",
+   "t": 8783,
+   "isComposing": false,
+   "data": "D",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": " người được khoẻ D",
+   "sel": [
+    18,
+    18
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 8779,
+   "key": "D",
+   "code": "KeyD",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": true,
+   "target": "xterm",
+   "valueTail": " người được khoẻ D",
+   "sel": [
+    18,
+    18
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 8868,
+   "isComposing": false,
+   "data": "Đ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    17,
+    18
+   ]
+  },
+  {
+   "type": "input",
+   "t": 8868,
+   "isComposing": false,
+   "data": "Đ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đ",
+   "sel": [
+    18,
+    18
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 8862,
+   "key": "9",
+   "code": "Digit9",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đ",
+   "sel": [
+    18,
+    18
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 8924,
+   "key": "D",
+   "code": "KeyD",
+   "keyCode": 68,
+   "repeat": false,
+   "isComposing": false,
+   "shift": true,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đ",
+   "sel": [
+    18,
+    18
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 8953,
+   "key": "9",
+   "code": "Digit9",
+   "keyCode": 57,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đ",
+   "sel": [
+    18,
+    18
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 9035,
+   "isComposing": false,
+   "data": "Đa",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    17,
+    18
+   ]
+  },
+  {
+   "type": "input",
+   "t": 9035,
+   "isComposing": false,
+   "data": "Đa",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đa",
+   "sel": [
+    19,
+    19
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 9027,
+   "key": "a",
+   "code": "KeyA",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đa",
+   "sel": [
+    19,
+    19
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 9102,
+   "isComposing": false,
+   "data": "Đà",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    17,
+    19
+   ]
+  },
+  {
+   "type": "input",
+   "t": 9102,
+   "isComposing": false,
+   "data": "Đà",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà",
+   "sel": [
+    19,
+    19
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 9095,
+   "key": "2",
+   "code": "Digit2",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà",
+   "sel": [
+    19,
+    19
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 9135,
+   "key": "a",
+   "code": "KeyA",
+   "keyCode": 65,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà",
+   "sel": [
+    19,
+    19
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 9183,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà",
+   "sel": [
+    19,
+    19
+   ]
+  },
+  {
+   "type": "keypress",
+   "t": 9183,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà",
+   "sel": [
+    19,
+    19
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 9190,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    19,
+    19
+   ]
+  },
+  {
+   "type": "input",
+   "t": 9191,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà ",
+   "sel": [
+    20,
+    20
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 9261,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà ",
+   "sel": [
+    20,
+    20
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 9266,
+   "key": "2",
+   "code": "Digit2",
+   "keyCode": 50,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà ",
+   "sel": [
+    20,
+    20
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 9303,
+   "isComposing": false,
+   "data": "N",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    20,
+    20
+   ]
+  },
+  {
+   "type": "input",
+   "t": 9304,
+   "isComposing": false,
+   "data": "N",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà N",
+   "sel": [
+    21,
+    21
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 9300,
+   "key": "N",
+   "code": "KeyN",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": true,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà N",
+   "sel": [
+    21,
+    21
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 9432,
+   "key": "N",
+   "code": "KeyN",
+   "keyCode": 78,
+   "repeat": false,
+   "isComposing": false,
+   "shift": true,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà N",
+   "sel": [
+    21,
+    21
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 9487,
+   "isComposing": false,
+   "data": "Na",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    20,
+    21
+   ]
+  },
+  {
+   "type": "input",
+   "t": 9488,
+   "isComposing": false,
+   "data": "Na",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Na",
+   "sel": [
+    22,
+    22
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 9474,
+   "key": "a",
+   "code": "KeyA",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Na",
+   "sel": [
+    22,
+    22
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 9557,
+   "key": "a",
+   "code": "KeyA",
+   "keyCode": 65,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Na",
+   "sel": [
+    22,
+    22
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 9589,
+   "isComposing": false,
+   "data": "Nă",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    20,
+    22
+   ]
+  },
+  {
+   "type": "input",
+   "t": 9589,
+   "isComposing": false,
+   "data": "Nă",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nă",
+   "sel": [
+    22,
+    22
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 9584,
+   "key": "8",
+   "code": "Digit8",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nă",
+   "sel": [
+    22,
+    22
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 9662,
+   "key": "8",
+   "code": "Digit8",
+   "keyCode": 56,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nă",
+   "sel": [
+    22,
+    22
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 9722,
+   "isComposing": false,
+   "data": "Nẵ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    20,
+    22
+   ]
+  },
+  {
+   "type": "input",
+   "t": 9722,
+   "isComposing": false,
+   "data": "Nẵ",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵ",
+   "sel": [
+    22,
+    22
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 9717,
+   "key": "4",
+   "code": "Digit4",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵ",
+   "sel": [
+    22,
+    22
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 9861,
+   "key": "4",
+   "code": "Digit4",
+   "keyCode": 52,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵ",
+   "sel": [
+    22,
+    22
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 9895,
+   "isComposing": false,
+   "data": "Nẵn",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    20,
+    22
+   ]
+  },
+  {
+   "type": "input",
+   "t": 9896,
+   "isComposing": false,
+   "data": "Nẵn",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵn",
+   "sel": [
+    23,
+    23
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 9891,
+   "key": "n",
+   "code": "KeyN",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵn",
+   "sel": [
+    23,
+    23
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 10044,
+   "key": "n",
+   "code": "KeyN",
+   "keyCode": 78,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵn",
+   "sel": [
+    23,
+    23
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 10069,
+   "isComposing": false,
+   "data": "Nẵng",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    20,
+    23
+   ]
+  },
+  {
+   "type": "input",
+   "t": 10070,
+   "isComposing": false,
+   "data": "Nẵng",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng",
+   "sel": [
+    24,
+    24
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 10059,
+   "key": "g",
+   "code": "KeyG",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng",
+   "sel": [
+    24,
+    24
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 10208,
+   "key": "g",
+   "code": "KeyG",
+   "keyCode": 71,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng",
+   "sel": [
+    24,
+    24
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 10221,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng",
+   "sel": [
+    24,
+    24
+   ]
+  },
+  {
+   "type": "keypress",
+   "t": 10221,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng",
+   "sel": [
+    24,
+    24
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 10234,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    24,
+    24
+   ]
+  },
+  {
+   "type": "input",
+   "t": 10234,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng ",
+   "sel": [
+    25,
+    25
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 10320,
+   "isComposing": false,
+   "data": "k",
+   "inputType": "insertText",
+   "target": "xterm",
+   "sel": [
+    25,
+    25
+   ]
+  },
+  {
+   "type": "input",
+   "t": 10321,
+   "isComposing": false,
+   "data": "k",
+   "inputType": "insertText",
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng k",
+   "sel": [
+    26,
+    26
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 10317,
+   "key": "k",
+   "code": "KeyK",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng k",
+   "sel": [
+    26,
+    26
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 10342,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng k",
+   "sel": [
+    26,
+    26
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 10453,
+   "key": "k",
+   "code": "KeyK",
+   "keyCode": 75,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng k",
+   "sel": [
+    26,
+    26
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 10467,
+   "isComposing": false,
+   "data": "kk",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    25,
+    26
+   ]
+  },
+  {
+   "type": "input",
+   "t": 10467,
+   "isComposing": false,
+   "data": "kk",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng kk",
+   "sel": [
+    27,
+    27
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 10459,
+   "key": "k",
+   "code": "KeyK",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng kk",
+   "sel": [
+    27,
+    27
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 10544,
+   "key": "k",
+   "code": "KeyK",
+   "keyCode": 75,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng kk",
+   "sel": [
+    27,
+    27
+   ]
+  },
+  {
+   "type": "beforeinput",
+   "t": 10597,
+   "isComposing": false,
+   "data": "kkk",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "sel": [
+    25,
+    27
+   ]
+  },
+  {
+   "type": "input",
+   "t": 10597,
+   "isComposing": false,
+   "data": "kkk",
+   "inputType": "insertReplacementText",
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng kkk",
+   "sel": [
+    28,
+    28
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 10592,
+   "key": "k",
+   "code": "KeyK",
+   "keyCode": 229,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng kkk",
+   "sel": [
+    28,
+    28
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 10675,
+   "key": "Backspace",
+   "code": "Backspace",
+   "keyCode": 8,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng kkk",
+   "sel": [
+    28,
+    28
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 10751,
+   "key": "k",
+   "code": "KeyK",
+   "keyCode": 75,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng kk",
+   "sel": [
+    27,
+    27
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 11134,
+   "key": "Backspace",
+   "code": "Backspace",
+   "keyCode": 8,
+   "repeat": true,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng kk",
+   "sel": [
+    27,
+    27
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 11176,
+   "key": "Backspace",
+   "code": "Backspace",
+   "keyCode": 8,
+   "repeat": true,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng k",
+   "sel": [
+    26,
+    26
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 11240,
+   "key": "Backspace",
+   "code": "Backspace",
+   "keyCode": 8,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng ",
+   "sel": [
+    25,
+    25
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 11385,
+   "key": "Backspace",
+   "code": "Backspace",
+   "keyCode": 8,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng ",
+   "sel": [
+    25,
+    25
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 11492,
+   "key": "Backspace",
+   "code": "Backspace",
+   "keyCode": 8,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng",
+   "sel": [
+    24,
+    24
+   ]
+  },
+  {
+   "type": "keydown",
+   "t": 11523,
+   "key": "Enter",
+   "code": "Enter",
+   "keyCode": 13,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": " người được khoẻ Đà Nẵng",
+   "sel": [
+    24,
+    24
+   ]
+  },
+  {
+   "type": "keyup",
+   "t": 11606,
+   "key": "Enter",
+   "code": "Enter",
+   "keyCode": 13,
+   "repeat": false,
+   "isComposing": false,
+   "shift": false,
+   "target": "xterm",
+   "valueTail": "",
+   "sel": [
+    0,
+    0
+   ]
+  }
+ ]
+}
