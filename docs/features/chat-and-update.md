@@ -32,8 +32,9 @@ The chat header has **Task** (a task chat of the optional module, desktop only) 
 Each opens its view in the one right sidebar, with a title row and ✕; the pressed button is lit (a teal outline, as in the mockup's task chat). The lit button or ✕ closes the
 sidebar and the chat takes the full width; one view at a time. **Task** holds the module's `chat-side` slot unchanged; the
 container draws the frame (`[data-pro-slot="chat-side"]::part(panel) { border-left: 0 }`). A task chat starts on Task, a plain
-chat closed; what was open is remembered per chat (`ui.json` key `side`). A click or a key press in the agent's screen closes
-Artifacts, Activity and Record; Task stays open; a click on the ask card does not count. The terminal refits when the sidebar
+chat closed; what was open is remembered per chat (`ui.json` key `side`). A click anywhere else in the chat page closes it (desktop and
+tablet); phone keeps its dim area. The header buttons that toggle it, the left sidebar and dialogs do not count, and the click still
+reaches the terminal. A key press in the agent's screen closes Artifacts, Activity and Record (desktop); Task stays open. The terminal refits when the sidebar
 opens or closes.
 
 **Task** flashes when its task changes (the module's `task.rev` goes up), with the same animation and rules as Artifacts: the button
