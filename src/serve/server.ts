@@ -46,6 +46,7 @@ import { APPROVE_RESTART, CREATE_OPEN, DECLINE, appliedLine, checkNewProject, ch
 import { answerChannelWarning, CHANNEL_WAIT_MS, ChannelHub, makeTransports, screenRows, typeLine, wakeFor, type ChatSession } from './mail.ts';
 import { TermLocks } from './termlock.ts';
 import { SignIns } from './signin.ts';
+import { skillSlug } from './slug.ts';
 import { inContainer } from '../cli/screen.ts';
 import type { UpdateCheck } from './updates.ts';
 import type { ChatStart } from '@chauvoluuhuong/chorus-core/pro-loader';
@@ -1938,7 +1939,7 @@ export class ChorusServer {
         return { files: matchFiles(projectFiles(folder), String(q.get('q') ?? '')) };
       }
       case 'POST skills': {
-        const slug = String(b.name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const slug = skillSlug(String(b.name ?? ''));
         if (!slug) return { error: 'name it with lowercase words and dashes' };
         const dir = path.join(sourceDir(c.project), slug);
         if (fs.existsSync(dir)) return { error: `${slug} already exists` };
