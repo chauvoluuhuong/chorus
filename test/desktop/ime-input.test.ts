@@ -31,7 +31,7 @@ function replay(events: Ev[], make: (o: { box: { value: string }; send: (d: stri
   const ime = make({ box, send: out });
   let compStart = 0; // xterm's CompositionHelper: where the composition began in its textarea (0 until a compositionstart)
   const xtermSends = (d: string) => {
-    ime.data();
+    ime.data(d);
     out(d);
   };
   let keyDownSeen = false, keyDownSent = false, keyPressHandled = false;
@@ -84,6 +84,44 @@ for (const method of ['telex', 'vni', 'okey0', 'okey30']) {
       assert.equal(replay(f.events), TARGET);
     });
   }
+}
+
+// People type with overlapping keys (the next key goes down before the last comes up), pause, fix a letter with Backspace and
+// hold keys. Apple's Vietnamese input methods (Simple Telex, Telex, VNI) send a letter's input event before its keydown, so a word's
+// first letter often arrives while Space is still down (fix/ime-human-typing). The committed fixtures are scripted human-like runs
+// (human-<method>-mix-<agent>-s<seed>: keys overlap 60–200 ms, a pause, a Backspace fix mid-word, a held Backspace); recordings of
+// a person's own typing stay out of the repo (they hold a name) and are replayed too when they are on this machine, in
+// .chorus/proof/fix-ime-human-typing/private-fixtures/. What the CLI gets must be the target sentence, or for a person's own typing
+// what was on screen just before Enter (their typos included), once.
+const privateDir = path.join(import.meta.dirname, '..', '..', '.chorus', 'proof', 'fix-ime-human-typing', 'private-fixtures');
+const humanIn = (d: string) => (fs.existsSync(d) ? fs.readdirSync(d).filter(n => n.startsWith('human-') && n.endsWith('.json')).sort().map(n => path.join(d, n)) : []);
+const human = humanIn(dir);
+/** What the helper textarea held just before Enter: the screen when every key went through the input method (no punctuation or
+ *  Backspace that xterm sends itself, as in a person's own runs). */
+function onScreen(events: Ev[]) {
+  const enter = events.findIndex(e => e.type === 'keydown' && e.key === 'Enter');
+  const last = events.slice(0, enter).reverse().find(e => e.valueTail !== undefined);
+  return plainSpaces(last?.valueTail ?? '');
+}
+type Human = { by?: string; target: string; arrived: string; boxAtEnter?: string; events: Ev[] };
+const want = (f: Human) => (f.by === 'owner' ? onScreen(f.events) : f.target);
+const load = (p: string): Human => JSON.parse(fs.readFileSync(p, 'utf8'));
+test('human typing fixtures: Simple Telex, Telex and VNI into claude, codex and agy, each lost a letter before the fix', () => {
+  assert.deepEqual(human.map(p => path.basename(p).split('-')[1]).sort(), ['stelex', 'stelex', 'stelex', 'telex', 'telex', 'telex', 'vni', 'vni', 'vni']);
+  for (const p of human) {
+    const f = load(p);
+    assert.equal(f.target, TARGET);
+    assert.notEqual(f.arrived, f.target, path.basename(p));
+    assert.ok(f.events.some(e => e.key === 'Backspace') && f.events.some(e => (e as { repeat?: boolean }).repeat), 'a Backspace fix and a held key');
+  }
+});
+for (const p of [...human, ...humanIn(privateDir)]) {
+  const name = (p.startsWith(privateDir) ? 'private ' : '') + path.basename(p).slice(6, -5);
+  test(`human typing ${name}: exactly what was meant, once`, () => {
+    const f = load(p);
+    if (f.boxAtEnter) assert.equal(want(f), plainSpaces(f.boxAtEnter));
+    assert.equal(replay(f.events), want(f) + '\r');
+  });
 }
 
 // Linux: IBus (ibus-bamboo Telex and VNI) in WebKitGTK, recorded in the Chorus window in Docker (test/smoke/linux-ime/). No

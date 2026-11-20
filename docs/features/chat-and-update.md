@@ -66,7 +66,14 @@ in one key event. Real compositions (marked text, CJK) stay with xterm. On Linux
 word with no compositionstart: the page sends that commit once itself, reading WebKit's trailing no-break space as a space
 (before, each word resent every earlier one). In Chorus's own boxes `src/desktop/box-keys.js` (`composing(e)`) keeps Enter, Tab,
 Escape, arrows and shortcuts from acting while a word is being composed, including the Enter IBus forwards right after it commits
-a word. Skill slugs drop
+a word. People type with overlapping keys (the next key goes down before the last one comes up), and Apple's Vietnamese
+methods (Simple Telex, Telex, VNI) send a letter's text before its keydown: the page skips only the one input event that
+matches the exact text xterm itself just sent for a key, and sends every other input as the before/after difference, so a word's
+first letter typed while Space is still held is no longer lost (2026-11-21, task #17). Checked by replaying recorded human typing and scripted overlapping keys; a real-key
+run on a Mac is still open. Typing recorder for input-method bugs, off
+by default: set `localStorage['chorus.debugIme'] = '1'` in the page, or start `chorus serve` with `CHORUS_DEBUG_IME=<file>`;
+every key, input and composition event and what `ime-input.js` did is appended to that file as JSON lines (recordings replay in
+`test/fixtures/ime/human-*.json`). Skill slugs drop
 accents (`src/serve/slug.ts`: "Đà Nẵng" → `da-nang`). claude, codex and agy take the bytes as sent (chorus-core
 `docs/integrations/`, "Vietnamese / IME input"). Tests: `test/desktop/ime-input.test.ts`, `test/serve/box-keys.test.ts`,
 `npm run proof:ime` ([testing.md](../testing.md)); the Linux window with real IBus keystrokes: `test/smoke/linux-ime/`.
