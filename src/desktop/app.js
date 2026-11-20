@@ -2423,6 +2423,22 @@ function setSide(id, view) {
   setTimeout(refit, 30);
 }
 
+// a click anywhere else in the chat's page (the agent's screen, the banners, the ask card, the chat head) closes the open sidebar,
+// remembered like ✕ (owner, 2026-11-20). Not on a phone (a bottom sheet with its own dim area; Task is a tab there). Left out: the
+// header buttons that already toggle it (else one click would close and reopen it), and clicks outside #view (the left sidebar,
+// dialogs, toasts), so opening another chat or a dialog from the sidebar leaves it as it was. Capture phase, so the terminal cannot
+// hide the click; the click still goes on (the terminal takes focus: renderChatParts does not rebuild #term-slot).
+document.addEventListener(
+  'pointerdown',
+  e => {
+    if (e.button !== 0 || S.view.name !== 'chat' || !S.view.id || S.size === 'phone' || !sideView(S.view.id)) return;
+    if (document.body.classList.contains('resizing') || !e.target.closest?.('#view')) return;
+    if (e.target.closest('#drawer, #task-side, [data-pro-slot="chat-side"], [data-act="side"], [data-act="drawer"], [data-act="drawer-to"], [data-act="drawer-close"], .side-resize')) return;
+    setSide(S.view.id, '');
+  },
+  true,
+);
+
 /* ---------- the right sidebar's width: drag its left edge (plan 2026-11-13, item 1); desktop only ---------- */
 
 const RESIZE = '<div class="side-resize" data-resize title="Drag to resize · double-click to put it back"><span class="side-resize-tip">Drag to resize</span></div>';
@@ -3929,18 +3945,17 @@ document.addEventListener(
   true,
 );
 
-// a click or a key press in the agent's screen closes what you peek at (Artifacts, Activity, Record); Task stays open, and the docked
-// ask card is outside the screen, so a click on it does not count
-for (const type of ['pointerdown', 'keydown'])
-  document.addEventListener(
-    type,
-    e => {
-      if (S.view.name !== 'chat' || !S.drawer || !e.target.closest?.('#term-slot')) return;
-      if (S.size !== 'desktop' || e.target.closest('.term-over')) return;
-      setSide(S.view.id, '');
-    },
-    true,
-  );
+// a key press in the agent's screen closes what you peek at (Artifacts, Activity, Record); Task stays open. A click anywhere outside
+// the sidebar closes it (see setSide)
+document.addEventListener(
+  'keydown',
+  e => {
+    if (S.view.name !== 'chat' || !S.drawer || !e.target.closest?.('#term-slot')) return;
+    if (S.size !== 'desktop' || e.target.closest('.term-over')) return;
+    setSide(S.view.id, '');
+  },
+  true,
+);
 
 // the drawer keeps up with the agent while it is open
 setInterval(() => {
