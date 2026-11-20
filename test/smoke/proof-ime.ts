@@ -6,6 +6,9 @@
 //   - a commit without a key → Input.insertText, keys (Backspace bursts, letters, several letters in one key) → Input.dispatchKeyEvent,
 //   - a real composition (IBus-style preedit) → Input.imeSetComposition, then Input.insertText to commit it,
 // with the recorded timing. The bytes the agent's PTY got must decode (a DEL takes off one character) to the sentence, exactly once.
+// People's typing (test/fixtures/ime/human-*.json, Simple Telex, Telex and VNI): keys overlap, so an input method's text for a letter
+// can come while Space is still down. Each fixture is played in its recorded event order; only the input event Chrome makes for a key
+// we typed over the protocol is not inserted again, every other one is (the page decides what to send).
 // Then a composition + Enter in New chat's message, a card's "Your own answer" and a dialog's input must send nothing before the commit.
 // Linux (test/fixtures/ime/linux-*.json, IBus + ibus-bamboo in WebKitGTK): commits come with no compositionstart, which Chrome cannot
 // make over the protocol, so those events (beforeinput/input insertFromComposition, compositionend, the Enter IBus forwards) are
@@ -110,43 +113,48 @@ for (let i = 0; i < 3; i++) if (await ch.has('button', /Skip, start using Chorus
 const isMac = await js<boolean>('/Mac/.test(navigator.platform)');
 const MOD = isMac ? 4 : 2; // Meta on a Mac, Ctrl elsewhere
 
-type Ev = { type: string; t: number; key?: string; code?: string; keyCode?: number; shift?: boolean; data?: string | null; inputType?: string; valueTail?: string };
+type Ev = { type: string; t: number; key?: string; code?: string; keyCode?: number; shift?: boolean; repeat?: boolean; data?: string | null; inputType?: string; valueTail?: string };
 const NAMED: Record<string, number> = { Backspace: 8, Tab: 9, Enter: 13, Shift: 16, Control: 17, Alt: 18, Escape: 27, Meta: 91, CapsLock: 20 };
 
 async function keyEvent(type: 'keyDown' | 'rawKeyDown' | 'keyUp', e: Ev, text?: string) {
   const key = e.key ?? '';
   const vk = e.keyCode ?? NAMED[key] ?? 0;
-  await cdp('Input.dispatchKeyEvent', { type, key, code: e.code ?? '', windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: e.shift ? 8 : 0, ...(text ? { text, unmodifiedText: text } : {}) });
+  await cdp('Input.dispatchKeyEvent', { type, key, code: e.code ?? '', windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: e.shift ? 8 : 0, autoRepeat: !!e.repeat, ...(text ? { text, unmodifiedText: text } : {}) });
 }
 
-/** Plays one recorded event list into the focused terminal, with its timing (gaps over 300 ms are cut to 300). */
+/** Plays one recorded event list into the focused terminal, in its recorded order and with its timing (gaps over 300 ms are cut
+ *  to 300; Apple's input methods stamp a letter's keydown a few ms before the input event that comes first, so time never goes back).
+ *  Keys overlap as recorded (a keydown before the last keyup, Backspace held with auto-repeat). */
 async function replay(events: Ev[]) {
   let last = events[0]?.t ?? 0;
   let tail = ''; // xterm's helper textarea as recorded, before the event
-  let keyOpen = false; // a keydown we dispatched with text is down: its keypress and input come from Chrome itself
+  // the text Chrome itself types for the last keydown we dispatched with text: its recorded input event is that text's and is not
+  // inserted again. Only that one: an input method's text for another letter may come while this key is still down (a person
+  // presses the next letter before letting go of Space), and that input event is replayed (fix/ime-human-typing)
+  let keyText: string | null = null;
   for (const e of events) {
     const gap = Math.min(300, Math.max(0, e.t - last));
-    last = e.t;
+    last = Math.max(last, e.t);
     if (gap) await sleep(gap);
     const key = e.key ?? '';
     if (e.type === 'keydown') {
       if (e.keyCode === 229 || key in NAMED || key === '' || /^(Arrow|F\d|Page|Home|End|Delete)/.test(key)) {
         await keyEvent('rawKeyDown', e, key === 'Enter' ? '\r' : undefined);
-        keyOpen = false;
       } else if (Array.from(key).length > 1) {
         // several letters in one key (an OpenKey-style tool): Chrome drops a keydown whose key is not one character, WebKit fires
         // it. So that keydown and its keypress are DOM events on the helper textarea, and the text is typed over the protocol
         await js(`(() => { const t = document.querySelector('#term-slot .xterm-helper-textarea'); for (const type of ['keydown', 'keypress']) t.dispatchEvent(new KeyboardEvent(type, { key: ${JSON.stringify(key)}, code: ${JSON.stringify(e.code ?? '')}, bubbles: true, cancelable: true })); })()`);
         await cdp('Input.insertText', { text: key });
-        keyOpen = true;
+        keyText = key;
       } else {
         await keyEvent('keyDown', e, key); // one letter: Chrome fires keydown, keypress and input
-        keyOpen = true;
+        keyText = key;
       }
     } else if (e.type === 'keyup') {
       await keyEvent('keyUp', e);
-      keyOpen = false;
-    } else if (e.type === 'input' && !keyOpen && e.data && (e.inputType === 'insertText' || e.inputType === 'insertReplacementText')) {
+    } else if (e.type === 'input' && keyText !== null && e.inputType === 'insertText' && e.data === keyText) {
+      keyText = null; // Chrome already typed it with the key
+    } else if (e.type === 'input' && e.data && (e.inputType === 'insertText' || e.inputType === 'insertReplacementText')) {
       // the input method rewrote the word: select what it replaced, then insert the new text over it
       const after = e.valueTail ?? '';
       const replaced = e.inputType === 'insertReplacementText' ? Math.max(0, tail.length - (after.length - e.data.length)) : 0;
@@ -201,9 +209,22 @@ const termText = () => js<string>(`(() => { const b = chorus.term.buffer.active;
 console.log('1. the chat terminal: every recorded chat fixture, replayed');
 const chats: Record<string, string> = {};
 for (const agent of ['claude', 'codex', 'agy']) chats[agent] = await chat(agent);
-const files = fs.readdirSync(FIX).filter(f => /-chat-(claude|codex|agy)\.json$/.test(f) && f.includes(ONLY)).sort();
-for (const file of files) {
-  const f = JSON.parse(fs.readFileSync(path.join(FIX, file), 'utf8'));
+// People's typing (fix/ime-human-typing): test/fixtures/ime/human-*.json are scripted human-like runs (keys overlap 60–200 ms, a
+// pause, a Backspace fix mid-word, a held Backspace) with Simple Telex, Telex and VNI; a person's own recordings stay out of the
+// repo (they hold a name) and are replayed too when they are on this machine. A person's own run must arrive as what was on screen
+// just before Enter (their typos included), a scripted one as the sentence.
+const PRIVATE = path.join(ROOT, '.chorus/proof/fix-ime-human-typing/private-fixtures');
+const human = (dir: string) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => /^human-.*\.json$/.test(f)).sort().map(f => path.join(dir, f)) : []);
+const files = [...fs.readdirSync(FIX).filter(f => /-chat-(claude|codex|agy)\.json$/.test(f)).sort().map(f => path.join(FIX, f)), ...human(FIX), ...human(PRIVATE)].filter(p => path.basename(p).includes(ONLY));
+function onScreen(events: Ev[]) {
+  const enter = events.findIndex(e => e.type === 'keydown' && e.key === 'Enter');
+  const last = events.slice(0, enter < 0 ? events.length : enter).reverse().find(e => e.valueTail !== undefined);
+  return (last?.valueTail ?? '').replace(/\u00a0/g, ' ');
+}
+for (const p of files) {
+  const file = (p.startsWith(PRIVATE) ? 'private ' : '') + path.basename(p);
+  const f = JSON.parse(fs.readFileSync(p, 'utf8'));
+  const want: string = f.by === 'owner' ? onScreen(f.events) : (f.target ?? TARGET);
   const id = chats[f.agent];
   await openChat(id, f.agent);
   await focusTerm();
@@ -212,7 +233,7 @@ for (const file of files) {
   await sleep(500);
   const bytes = rec.join('');
   const arrived = decode(bytes);
-  const ok = check(`${file}: ${f.method} into a ${f.agent} chat arrives as the sentence, once`, arrived === TARGET, `got ${JSON.stringify(arrived)}`);
+  const ok = check(`${file}: ${f.method} into a ${f.agent} chat arrives as ${f.by === 'owner' ? 'what was on screen' : 'the sentence'}, once`, arrived === want, `want ${JSON.stringify(want)} got ${JSON.stringify(arrived)}`);
   report.push({ fixture: file, agent: f.agent, method: f.method, arrived, ok, bytes: JSON.stringify(bytes) });
   if (file.startsWith('telex-')) await shot(`chat-${f.agent}-${f.method}`, `${file}: the ${f.agent} chat after the replay (the fake agent echoes a line only on Enter; the check reads the bytes its PTY got)`);
 }
