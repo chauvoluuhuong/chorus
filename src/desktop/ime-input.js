@@ -63,7 +63,9 @@ const OURS = new Set(['insertText', 'insertReplacementText', 'deleteContentBackw
  * - `data()` whenever xterm sends data (term.onData), `composition(on)` on compositionstart/end, `compositionEnd(e)` first on
  *   compositionend (true = the page sent it, xterm must not see it), `reset()` on a click or chat switch.
  */
-export function makeImeInput({ box, send }) {
+export function makeImeInput({ box, send, log = null }) {
+  // log (the typing recorder, chorus.debugIme): what this state decided, for the debug log only
+  const note = log ? (what, more) => log({ what, ...more, keySent, multi, down, composing, commit }) : () => {};
   let before = null; // the textarea before the edit in progress
   let keySent = false; // xterm (or the page) already sent this key's text from its keydown or keypress
   let multi = null; // several letters sent from one keydown: its keypress and input event are not sent again
@@ -77,20 +79,28 @@ export function makeImeInput({ box, send }) {
       down = false;
       return true;
     }
-    if (e.type === 'keypress') return !(multi && e.key === multi);
+    if (e.type === 'keypress') {
+      if (multi && e.key === multi) note('skip-keypress', { key: e.key });
+      return !(multi && e.key === multi);
+    }
     // keydown
     keySent = false;
     multi = null;
     down = true;
     // an input method is at work: its text comes with the input event; xterm sends nothing for this key (no double letters)
-    if (e.isComposing || e.keyCode === 229) return false;
+    if (e.isComposing || e.keyCode === 229) {
+      note('key-ime', { key: e.key });
+      return false;
+    }
     if (multiCharKey(e.key) && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      note('send-multi', { bytes: e.key });
       send(e.key);
       multi = e.key;
       keySent = true;
       return false;
     }
     const fx = keyEffect(e);
+    if (fx) note(fx, { key: e.key, value: box.value });
     if (fx === 'trim') box.value = graphemes(box.value).slice(0, -1).join('');
     else if (fx === 'clear') box.value = '';
     return true;
@@ -110,13 +120,18 @@ export function makeImeInput({ box, send }) {
       let old = was === null ? null : plainSpaces(was);
       if (old === null) old = e.data && now.endsWith(plainSpaces(e.data)) ? now.slice(0, -e.data.length) : now;
       const bytes = editBytes(old, now);
+      note('send-commit', { old, now, bytes });
       if (bytes) send(bytes);
       commit = true;
       return true;
     }
-    if (composing || e.isComposing || !OURS.has(e.inputType)) return false; // a composition: xterm's CompositionHelper sends it
+    if (composing || e.isComposing || !OURS.has(e.inputType)) {
+      note('pass-input', { inputType: e.inputType }); // a composition: xterm's CompositionHelper sends it
+      return false;
+    }
     if (keySent || (multi && e.data === multi)) {
       // xterm (or the multi-letter key) already sent this key's text from its keydown or keypress
+      note('skip-input', { inputType: e.inputType, data: e.data, was });
       multi = null;
       return true;
     }
@@ -126,6 +141,7 @@ export function makeImeInput({ box, send }) {
       old = e.inputType === 'insertText' && e.data && box.value.endsWith(e.data) ? box.value.slice(0, -e.data.length) : box.value;
     }
     const bytes = editBytes(old, box.value);
+    note('send-input', { inputType: e.inputType, was, old, now: box.value, bytes });
     if (bytes) send(bytes);
     return true;
   }
@@ -144,11 +160,13 @@ export function makeImeInput({ box, send }) {
     /** compositionend: true when the page took this commit (no compositionstart came) and xterm must not see the event. */
     compositionEnd(e) {
       if (composing) return false;
+      note('compositionend-own', { data: e.data });
       if (!commit && e.data) send(plainSpaces(e.data)); // no input event came for it
       commit = false;
       return true;
     },
     reset() {
+      note('reset', { value: box.value });
       box.value = '';
       before = null;
       keySent = false;

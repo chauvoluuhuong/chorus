@@ -256,6 +256,7 @@ function onState(st) {
   const artOf = x => { const c = S.view.name === 'chat' ? x?.chats.find(k => k.id === S.view.id) : undefined; return c ? `${c.artifacts}/${c.artifactsRev}` : undefined; };
   const artWas = artOf(S.state);
   S.state = st;
+  if (st.debugIme && !imeRec.on()) imeRec.enable(); // a server started with CHORUS_DEBUG_IME records typing
   for (const c of st.chats) noteCount(`art:${c.id}`, c.artifacts ?? 0), noteCount(`artrev:${c.id}`, c.artifactsRev ?? 0);
   // the Task button flashes like Artifacts when the chat's task changes (its revision comes from the paid module)
   noteTaskRevs(st.chats, window.choruspro);
@@ -327,7 +328,38 @@ const termEl = document.createElement('div');
 termEl.className = 'term-el';
 termEl.style.height = '100%';
 let termOpened = false;
+/* Typing recorder, off unless localStorage chorus.debugIme is '1' (a server started with CHORUS_DEBUG_IME turns it on): every key,
+   input and composition event on xterm's helper textarea, what ime-input.js decided and what xterm sent, posted to the server,
+   which appends them to the CHORUS_DEBUG_IME file (JSON lines). Used to record real typing (.chorus/proof/fix-ime-human-typing/). */
+const imeRec = (() => {
+  let buf = [], timer = null;
+  const on = () => localStorage.getItem('chorus.debugIme') === '1';
+  const flush = () => {
+    timer = null;
+    if (buf.length) send({ t: 'imelog', ev: buf.splice(0) });
+  };
+  function log(x) {
+    if (!on()) return;
+    buf.push({ at: performance.now(), wall: Date.now(), chat: S.attached, ...x });
+    timer ??= setTimeout(flush, 200);
+  }
+  const ta = () => term.textarea;
+  const sel = () => (ta() ? [ta().selectionStart, ta().selectionEnd] : null);
+  for (const type of ['keydown', 'keypress', 'keyup', 'beforeinput', 'input', 'compositionstart', 'compositionupdate', 'compositionend']) {
+    // on the document, capture phase: before the page's own input-method handlers and xterm see the event
+    document.addEventListener(type, e => {
+      if (!on() || e.target !== ta()) return;
+      const k = type.startsWith('key') ? { key: e.key, code: e.code, keyCode: e.keyCode, repeat: e.repeat, mods: (e.shiftKey ? 'S' : '') + (e.ctrlKey ? 'C' : '') + (e.altKey ? 'A' : '') + (e.metaKey ? 'M' : '') } : {};
+      const i = type.endsWith('input') ? { inputType: e.inputType, data: e.data } : type.startsWith('composition') ? { data: e.data } : {};
+      log({ ev: type, ts: e.timeStamp, isComposing: e.isComposing, ...k, ...i, value: ta().value, sel: sel() });
+      // the value once the page's handlers and xterm have run (a microtask would run before them, after this listener)
+      if (type === 'input' || type === 'keydown' || type === 'compositionend') setTimeout(() => log({ ev: type + ':after', value: ta()?.value ?? '', sel: sel() }));
+    }, true);
+  }
+  return { log, on, enable: () => localStorage.setItem('chorus.debugIme', '1') };
+})();
 term.onData(d => {
+  imeRec.log({ ev: 'onData', data: d });
   ime.data();
   if (S.attached) send({ t: 'in', id: S.attached, data: d });
 });
@@ -341,6 +373,7 @@ const ime = makeImeInput({
     set value(v) { if (term.textarea) term.textarea.value = v; },
   },
   send: d => S.attached && send({ t: 'in', id: S.attached, data: d }),
+  log: x => imeRec.log({ ev: 'ime', ...x }),
 });
 const onHelper = e => e.target === term.textarea;
 termEl.addEventListener('beforeinput', e => onHelper(e) && ime.beforeinput(e), true);

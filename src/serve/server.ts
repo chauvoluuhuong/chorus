@@ -2094,6 +2094,8 @@ export class ChorusServer {
       chats,
       // Shift+Enter in a chat's terminal: the bytes that add a new line in each CLI's input (probed, docs/integrations)
       keys: NEWLINE_KEYS,
+      // CHORUS_DEBUG_IME=<file>: the page turns its typing recorder on (localStorage chorus.debugIme) and posts every key event
+      ...(process.env.CHORUS_DEBUG_IME ? { debugIme: true } : {}),
       // when each request appeared (whole seconds), not "seconds waiting": the state must not change every push, or the
       // window would redraw the inbox under the mouse
       approvals: this.approvalsNow().map(({ waiting, ...x }) => ({ ...x, since: Math.round(Date.now() / 1000 - waiting) })),
@@ -2366,6 +2368,9 @@ export class ChorusServer {
         debug(`attach ${m.cols}x${m.rows}, agents at ${this.size.cols}x${this.size.rows}`);
         if (!this.app.entry(m.id)?.host) this.select(m.id); // a parked chat resumes when you open it
         void cl.attach(m.id);
+      } else if (m.t === 'imelog') {
+        // the page's typing recorder (chorus.debugIme): key, input and composition events and what ime-input.js did, as JSON lines
+        if (process.env.CHORUS_DEBUG_IME && Array.isArray(m.ev)) fs.appendFileSync(process.env.CHORUS_DEBUG_IME, m.ev.map((x: unknown) => JSON.stringify(x) + '\n').join(''));
       } else if (m.t === 'in' && typeof m.data === 'string') {
         // typing here: this is the view in use
         if (!cl.remote && this.sizer !== cl) this.takeSize(cl);
