@@ -11,6 +11,7 @@ import { attachPicker } from './text-picker.js';
 import { md, mdInline } from './md.js';
 import { cliFitNote, newChatHint } from './cli-fit.js';
 import { nextSort, sortFolders, typeJump } from './folder-nav.js';
+import { makeImeInput } from './ime-input.js';
 import { shareLine } from './share-line.js';
 import { deleteDialogHtml, deletedText, projectPageHtml, projectsListHtml, proposalCardHtml, variableDialogHtml } from './projects-ui.js';
 
@@ -307,15 +308,38 @@ const termEl = document.createElement('div');
 termEl.className = 'term-el';
 termEl.style.height = '100%';
 let termOpened = false;
-term.onData(d => S.attached && send({ t: 'in', id: S.attached, data: d }));
+term.onData(d => {
+  ime.data();
+  if (S.attached) send({ t: 'in', id: S.attached, data: d });
+});
 term.onBinary(d => S.attached && send({ t: 'in', id: S.attached, data: d }));
+/* Vietnamese and other input methods (src/desktop/ime-input.js): Apple Telex/VNI rewrite the word in xterm's hidden textarea with
+   `insertReplacementText`, and OpenKey-style tools send several letters in one key; xterm drops both. The page sends every input
+   event that is not a composition itself (DEL per changed letter + the new letters, once); compositions stay with xterm. */
+const ime = makeImeInput({
+  box: {
+    get value() { return term.textarea?.value ?? ''; },
+    set value(v) { if (term.textarea) term.textarea.value = v; },
+  },
+  send: d => S.attached && send({ t: 'in', id: S.attached, data: d }),
+});
+const onHelper = e => e.target === term.textarea;
+termEl.addEventListener('beforeinput', e => onHelper(e) && ime.beforeinput(e), true);
+termEl.addEventListener('input', e => {
+  if (onHelper(e) && ime.input(e)) e.stopImmediatePropagation(); // sent here: xterm must not send it again
+}, true);
+termEl.addEventListener('compositionstart', e => onHelper(e) && ime.composition(true), true);
+termEl.addEventListener('compositionend', e => onHelper(e) && setTimeout(() => ime.composition(false)), true);
+termEl.addEventListener('mousedown', () => ime.reset(), true); // a click may move the cursor: the input method starts a new word
 // Shift+Enter: a new line in the CLI's input, not a send. The bytes per CLI come with the state (NEWLINE_KEYS, probed in
-// docs/integrations); xterm's own "\r" for that key (keydown, keypress, keyup) is held back.
+// docs/integrations); xterm's own "\r" for that key (keydown, keypress, keyup) is held back. Every other key goes through the
+// input-method state first: a keydown while an input method works (isComposing, keyCode 229) is never sent by xterm.
 term.attachCustomKeyEventHandler(e => {
-  if (e.key !== 'Enter' || !e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || !S.attached) return true;
+  if (e.key !== 'Enter' || !e.shiftKey || e.ctrlKey || e.altKey || e.metaKey || !S.attached) return ime.key(e);
   const nl = S.state?.keys?.[S.state?.chats.find(c => c.id === S.attached)?.agent];
-  if (!nl) return true;
+  if (!nl) return ime.key(e);
   if (e.type === 'keydown') {
+    ime.reset();
     send({ t: 'in', id: S.attached, data: nl });
     e.preventDefault();
   }
@@ -423,6 +447,7 @@ function attachTerm(id) {
   S.attached = id;
   S.screen = { live: true, exited: false, waiting: true };
   term.reset();
+  ime.reset();
   refit();
   lastSize = `${term.cols}x${term.rows}`;
   send({ t: 'attach', id, cols: term.cols, rows: term.rows });
