@@ -12,8 +12,27 @@ import { md, mdInline } from './md.js';
 import { cliFitNote, newChatHint } from './cli-fit.js';
 import { nextSort, sortFolders, typeJump } from './folder-nav.js';
 import { makeImeInput } from './ime-input.js';
+import { composing, makeComposeGate } from './box-keys.js';
 import { shareLine } from './share-line.js';
 import { deleteDialogHtml, deletedText, projectPageHtml, projectsListHtml, proposalCardHtml, variableDialogHtml } from './projects-ui.js';
+
+/* A word an input method is building in one of the page's fields (Linux IBus, Chinese, Japanese, a macOS input method with marked
+   text): a redraw that replaced the field would end the composition and lose the half-built word, so redraws of the view wait for
+   compositionend (src/desktop/box-keys.js). The field's own input handler runs once more then, with the finished word. The chat
+   terminal's compositions are xterm's (ime-input.js). */
+const boxIme = makeComposeGate(() => renderView());
+document.addEventListener('compositionstart', e => !e.target.closest?.('.xterm') && boxIme.start(), true);
+document.addEventListener(
+  'compositionend',
+  e => {
+    if (e.target.closest?.('.xterm')) return;
+    if (e.target.closest?.('[data-input]')) e.target.dispatchEvent(new Event('input', { bubbles: true }));
+    boxIme.end();
+  },
+  true,
+);
+// a field that loses the focus mid-word (removed, or a click elsewhere) never holds the redraws back
+document.addEventListener('focusout', () => boxIme.on && boxIme.end(), true);
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -1056,6 +1075,8 @@ function renderView() {
   // the module's page keeps its own state: a push of the app's state must not rebuild it
   const slot = el.querySelector('[data-pro-slot="view"]');
   if (v.name === 'pro' && slot?.dataset.id === v.id) return;
+  // a word being composed in a field of this view: the redraw runs at compositionend (boxIme)
+  if (el.dataset.v === v.name && el.contains(document.activeElement) && boxIme.hold()) return;
   const scroll = el.scrollTop;
   // a redraw while you type (a pushed state, the module's refresh as chats run) must not move you: the focused field gets its
   // focus, caret and scroll back, and an open "/" or "@" list opens again at the caret
@@ -2565,7 +2586,7 @@ function confirmDelete({ what }) {
       if (x === 'yes' || x === 'no') done(x === 'yes');
       else if (e.target === el) done(false);
     });
-    el.addEventListener('keydown', e => e.key === 'Escape' && (e.stopPropagation(), done(false)));
+    el.addEventListener('keydown', e => !composing(e) && e.key === 'Escape' && (e.stopPropagation(), done(false)));
     $('#dialogs').append(el);
     el.querySelector('[data-x="yes"]').focus();
   });
@@ -2615,7 +2636,7 @@ function confirmSkillSync(k, agentOrAgents) {
       if (x === 'yes' || x === 'no') void done(x === 'yes');
       else if (e.target === el) void done(false);
     });
-    el.addEventListener('keydown', e => e.key === 'Escape' && (e.stopPropagation(), void done(false)));
+    el.addEventListener('keydown', e => !composing(e) && e.key === 'Escape' && (e.stopPropagation(), void done(false)));
     $('#dialogs').append(el);
     el.querySelector('[data-x="yes"]').focus();
   });
@@ -2836,6 +2857,7 @@ function localPrompt(title, lines, initial = '') {
       if (x) done(x === 'ok' ? input.value : undefined);
     });
     input.addEventListener('keydown', e => {
+      if (composing(e)) return;
       if (e.key === 'Enter') done(input.value);
       if (e.key === 'Escape') done(undefined);
     });
@@ -3034,7 +3056,7 @@ window.addEventListener('message', event => {
   void api('POST', '/api/notifications/link', { id: S.newsDetail.id, url: event.data.url }).then(r => r.error && toast(r.error));
 });
 document.addEventListener('click', event => { if (!$('#news').hidden && !event.target.closest('#news, [data-act="news-toggle"]')) closeNews(); });
-document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$('#news').hidden) { event.preventDefault(); event.stopImmediatePropagation(); closeNews(); } }, true);
+document.addEventListener('keydown', event => { if (!composing(event) && event.key === 'Escape' && !$('#news').hidden) { event.preventDefault(); event.stopImmediatePropagation(); closeNews(); } }, true);
 
 /* ---------- toasts ---------- */
 
@@ -3146,7 +3168,7 @@ function confirmBox(title, text, ok) {
       if (x) done(x === 'ok');
       else if (e.target === el) done(false);
     });
-    el.addEventListener('keydown', e => e.key === 'Escape' && (e.stopPropagation(), done(false)));
+    el.addEventListener('keydown', e => !composing(e) && e.key === 'Escape' && (e.stopPropagation(), done(false)));
     $('#dialogs').append(el);
     el.querySelector('[data-x="cancel"]').focus();
   });
@@ -3190,6 +3212,7 @@ function variableDialog(v) {
     }
   });
   el.addEventListener('keydown', e => {
+    if (composing(e)) return;
     if (e.key === 'Escape') return e.stopPropagation(), close();
     if (e.key === 'Enter' && e.target.tagName === 'INPUT') return e.preventDefault(), void submit();
   });
@@ -3224,6 +3247,7 @@ async function deleteProjectAsked(folder) {
       }
     });
     el.addEventListener('keydown', e => {
+      if (composing(e)) return;
       if (e.key === 'Escape') return e.stopPropagation(), done(false);
       if (e.key === 'Enter' && e.target === input && !del.disabled) done(true);
     });
@@ -3886,6 +3910,8 @@ document.addEventListener('input', e => {
 document.addEventListener(
   'keydown',
   e => {
+    // a word an input method is building owns Enter, Tab, Escape and the arrows (src/desktop/box-keys.js)
+    if (composing(e)) return;
     const mod = isMac ? e.metaKey : e.ctrlKey;
     const dlg = [...document.querySelectorAll('#dialogs .scrim')].pop();
     if (dlg) {
