@@ -62,11 +62,14 @@ so these settings don't apply there (2026-11-18).
 **Vietnamese and other input methods** (2026-11-20). In the chat terminal `src/desktop/ime-input.js` handles every
 non-composition input event on xterm's helper textarea and sends each edit once, as one DEL per removed letter plus the new
 text: Apple's Telex and VNI rewrite the word on every key (`insertReplacementText`), and OpenKey-style tools put several letters
-in one key event. Real compositions (IBus, marked text) stay with xterm. In Chorus's own boxes `src/desktop/box-keys.js`
-(`composing(e)`) keeps Enter, Tab, Escape, arrows and shortcuts from acting while a word is being composed. Skill slugs drop
+in one key event. Real compositions (marked text, CJK) stay with xterm. On Linux, IBus (ibus-bamboo) in WebKitGTK commits each
+word with no compositionstart: the page sends that commit once itself, reading WebKit's trailing no-break space as a space
+(before, each word resent every earlier one). In Chorus's own boxes `src/desktop/box-keys.js` (`composing(e)`) keeps Enter, Tab,
+Escape, arrows and shortcuts from acting while a word is being composed, including the Enter IBus forwards right after it commits
+a word. Skill slugs drop
 accents (`src/serve/slug.ts`: "Đà Nẵng" → `da-nang`). claude, codex and agy take the bytes as sent (chorus-core
 `docs/integrations/`, "Vietnamese / IME input"). Tests: `test/desktop/ime-input.test.ts`, `test/serve/box-keys.test.ts`,
-`npm run proof:ime` ([testing.md](../testing.md)).
+`npm run proof:ime` ([testing.md](../testing.md)); the Linux window with real IBus keystrokes: `test/smoke/linux-ime/`.
 
 ## Update Chorus
 
