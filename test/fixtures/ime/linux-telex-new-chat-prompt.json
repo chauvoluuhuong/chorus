@@ -1,0 +1,1401 @@
+{
+ "probe": "fix/linux-ibus-ime step 10, Ubuntu 22.04 in Docker (Xvfb, Openbox), WebKitGTK 4.1, IBus 1.5 + ibus-bamboo 0.8.5 (Flags 5: new tone style), the Chorus desktop window, xdotool keystrokes",
+ "method": "bamboo-telex",
+ "place": "new-chat-prompt",
+ "typed": "Tieengs Vieetj cos daaus: nguwowfi, dduwowcj, khoer, DDaf Nawxng + space",
+ "target": "Tiếng Việt có dấu: người, được, khoẻ, Đà Nẵng",
+ "arrived": "Tiếng Việt có dấu: người, được, khoẻ, Đà Nẵng",
+ "note": "events: DOM events in order, t = ms from the first (performance.now, the clock of the events' timeStamp); value of the target field kept as its last 80 characters (valueTail). IBus draws the word itself: letters show only keyup, the commit is keydown 229 + insertFromComposition + compositionend with no compositionstart.",
+ "events": [
+  {
+   "type": "keydown",
+   "t": 0,
+   "key": "Shift",
+   "code": "ShiftLeft",
+   "keyCode": 16,
+   "shift": true,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 26,
+   "key": "t",
+   "code": "KeyT",
+   "keyCode": 84,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 26,
+   "key": "Shift",
+   "code": "ShiftLeft",
+   "keyCode": 16,
+   "shift": true,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 77,
+   "key": "i",
+   "code": "KeyI",
+   "keyCode": 73,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 126,
+   "key": "e",
+   "code": "KeyE",
+   "keyCode": 69,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 178,
+   "key": "e",
+   "code": "KeyE",
+   "keyCode": 69,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 235,
+   "key": "n",
+   "code": "KeyN",
+   "keyCode": 78,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 288,
+   "key": "g",
+   "code": "KeyG",
+   "keyCode": 71,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keyup",
+   "t": 341,
+   "key": "s",
+   "code": "KeyS",
+   "keyCode": 83,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "keydown",
+   "t": 365,
+   "key": "Unidentified",
+   "code": "Unidentified",
+   "keyCode": 229,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": ""
+  },
+  {
+   "type": "beforeinput",
+   "t": 366,
+   "isComposing": true,
+   "data": "Tiếng ",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt"
+  },
+  {
+   "type": "input",
+   "t": 367,
+   "isComposing": true,
+   "data": "Tiếng ",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng "
+  },
+  {
+   "type": "compositionend",
+   "t": 368,
+   "isComposing": false,
+   "data": "Tiếng ",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng "
+  },
+  {
+   "type": "input",
+   "t": 368,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng "
+  },
+  {
+   "type": "keyup",
+   "t": 387,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng "
+  },
+  {
+   "type": "keydown",
+   "t": 411,
+   "key": "Shift",
+   "code": "ShiftLeft",
+   "keyCode": 16,
+   "shift": true,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng "
+  },
+  {
+   "type": "keyup",
+   "t": 437,
+   "key": "v",
+   "code": "KeyV",
+   "keyCode": 86,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng "
+  },
+  {
+   "type": "keyup",
+   "t": 438,
+   "key": "Shift",
+   "code": "ShiftLeft",
+   "keyCode": 16,
+   "shift": true,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng "
+  },
+  {
+   "type": "keyup",
+   "t": 484,
+   "key": "i",
+   "code": "KeyI",
+   "keyCode": 73,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng "
+  },
+  {
+   "type": "keyup",
+   "t": 539,
+   "key": "e",
+   "code": "KeyE",
+   "keyCode": 69,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng "
+  },
+  {
+   "type": "keyup",
+   "t": 595,
+   "key": "e",
+   "code": "KeyE",
+   "keyCode": 69,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng "
+  },
+  {
+   "type": "keyup",
+   "t": 654,
+   "key": "t",
+   "code": "KeyT",
+   "keyCode": 84,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng "
+  },
+  {
+   "type": "keyup",
+   "t": 713,
+   "key": "j",
+   "code": "KeyJ",
+   "keyCode": 74,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng "
+  },
+  {
+   "type": "keydown",
+   "t": 736,
+   "key": "Unidentified",
+   "code": "Unidentified",
+   "keyCode": 229,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng "
+  },
+  {
+   "type": "beforeinput",
+   "t": 736,
+   "isComposing": true,
+   "data": "Việt ",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt"
+  },
+  {
+   "type": "input",
+   "t": 737,
+   "isComposing": true,
+   "data": "Việt ",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt "
+  },
+  {
+   "type": "compositionend",
+   "t": 737,
+   "isComposing": false,
+   "data": "Việt ",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt "
+  },
+  {
+   "type": "input",
+   "t": 737,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt "
+  },
+  {
+   "type": "keyup",
+   "t": 758,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt "
+  },
+  {
+   "type": "keyup",
+   "t": 815,
+   "key": "c",
+   "code": "KeyC",
+   "keyCode": 67,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt "
+  },
+  {
+   "type": "keyup",
+   "t": 864,
+   "key": "o",
+   "code": "KeyO",
+   "keyCode": 79,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt "
+  },
+  {
+   "type": "keyup",
+   "t": 918,
+   "key": "s",
+   "code": "KeyS",
+   "keyCode": 83,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt "
+  },
+  {
+   "type": "keydown",
+   "t": 942,
+   "key": "Unidentified",
+   "code": "Unidentified",
+   "keyCode": 229,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt "
+  },
+  {
+   "type": "beforeinput",
+   "t": 943,
+   "isComposing": true,
+   "data": "có ",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt"
+  },
+  {
+   "type": "input",
+   "t": 943,
+   "isComposing": true,
+   "data": "có ",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có "
+  },
+  {
+   "type": "compositionend",
+   "t": 944,
+   "isComposing": false,
+   "data": "có ",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có "
+  },
+  {
+   "type": "input",
+   "t": 944,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có "
+  },
+  {
+   "type": "keyup",
+   "t": 965,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có "
+  },
+  {
+   "type": "keyup",
+   "t": 1011,
+   "key": "d",
+   "code": "KeyD",
+   "keyCode": 68,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có "
+  },
+  {
+   "type": "keyup",
+   "t": 1068,
+   "key": "a",
+   "code": "KeyA",
+   "keyCode": 65,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có "
+  },
+  {
+   "type": "keyup",
+   "t": 1117,
+   "key": "a",
+   "code": "KeyA",
+   "keyCode": 65,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có "
+  },
+  {
+   "type": "keyup",
+   "t": 1165,
+   "key": "u",
+   "code": "KeyU",
+   "keyCode": 85,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có "
+  },
+  {
+   "type": "keyup",
+   "t": 1212,
+   "key": "s",
+   "code": "KeyS",
+   "keyCode": 83,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có "
+  },
+  {
+   "type": "keydown",
+   "t": 1236,
+   "key": "Shift",
+   "code": "ShiftLeft",
+   "keyCode": 16,
+   "shift": true,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có "
+  },
+  {
+   "type": "keydown",
+   "t": 1236,
+   "key": "Unidentified",
+   "code": "Unidentified",
+   "keyCode": 229,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có "
+  },
+  {
+   "type": "beforeinput",
+   "t": 1236,
+   "isComposing": true,
+   "data": "dấu:",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt"
+  },
+  {
+   "type": "input",
+   "t": 1237,
+   "isComposing": true,
+   "data": "dấu:",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu:"
+  },
+  {
+   "type": "compositionend",
+   "t": 1237,
+   "isComposing": false,
+   "data": "dấu:",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu:"
+  },
+  {
+   "type": "input",
+   "t": 1237,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu:"
+  },
+  {
+   "type": "keyup",
+   "t": 1259,
+   "key": ";",
+   "code": "Semicolon",
+   "keyCode": 186,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu:"
+  },
+  {
+   "type": "keyup",
+   "t": 1259,
+   "key": "Shift",
+   "code": "ShiftLeft",
+   "keyCode": 16,
+   "shift": true,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu:"
+  },
+  {
+   "type": "keydown",
+   "t": 1282,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu:"
+  },
+  {
+   "type": "keypress",
+   "t": 1282,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu:"
+  },
+  {
+   "type": "beforeinput",
+   "t": 1282,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "nc-prompt"
+  },
+  {
+   "type": "input",
+   "t": 1282,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: "
+  },
+  {
+   "type": "keyup",
+   "t": 1304,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: "
+  },
+  {
+   "type": "keyup",
+   "t": 1362,
+   "key": "n",
+   "code": "KeyN",
+   "keyCode": 78,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: "
+  },
+  {
+   "type": "keyup",
+   "t": 1411,
+   "key": "g",
+   "code": "KeyG",
+   "keyCode": 71,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: "
+  },
+  {
+   "type": "keyup",
+   "t": 1465,
+   "key": "u",
+   "code": "KeyU",
+   "keyCode": 85,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: "
+  },
+  {
+   "type": "keyup",
+   "t": 1521,
+   "key": "w",
+   "code": "KeyW",
+   "keyCode": 87,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: "
+  },
+  {
+   "type": "keyup",
+   "t": 1577,
+   "key": "o",
+   "code": "KeyO",
+   "keyCode": 79,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: "
+  },
+  {
+   "type": "keyup",
+   "t": 1628,
+   "key": "w",
+   "code": "KeyW",
+   "keyCode": 87,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: "
+  },
+  {
+   "type": "keyup",
+   "t": 1681,
+   "key": "f",
+   "code": "KeyF",
+   "keyCode": 70,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: "
+  },
+  {
+   "type": "keyup",
+   "t": 1736,
+   "key": "i",
+   "code": "KeyI",
+   "keyCode": 73,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: "
+  },
+  {
+   "type": "keydown",
+   "t": 1763,
+   "key": "Unidentified",
+   "code": "Unidentified",
+   "keyCode": 229,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: "
+  },
+  {
+   "type": "beforeinput",
+   "t": 1763,
+   "isComposing": true,
+   "data": "người,",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt"
+  },
+  {
+   "type": "input",
+   "t": 1764,
+   "isComposing": true,
+   "data": "người,",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người,"
+  },
+  {
+   "type": "compositionend",
+   "t": 1764,
+   "isComposing": false,
+   "data": "người,",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người,"
+  },
+  {
+   "type": "input",
+   "t": 1764,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người,"
+  },
+  {
+   "type": "keyup",
+   "t": 1786,
+   "key": ",",
+   "code": "Comma",
+   "keyCode": 188,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người,"
+  },
+  {
+   "type": "keydown",
+   "t": 1813,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người,"
+  },
+  {
+   "type": "keypress",
+   "t": 1813,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người,"
+  },
+  {
+   "type": "beforeinput",
+   "t": 1814,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "nc-prompt"
+  },
+  {
+   "type": "input",
+   "t": 1814,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, "
+  },
+  {
+   "type": "keyup",
+   "t": 1838,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, "
+  },
+  {
+   "type": "keyup",
+   "t": 1884,
+   "key": "d",
+   "code": "KeyD",
+   "keyCode": 68,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, "
+  },
+  {
+   "type": "keyup",
+   "t": 1935,
+   "key": "d",
+   "code": "KeyD",
+   "keyCode": 68,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, "
+  },
+  {
+   "type": "keyup",
+   "t": 1981,
+   "key": "u",
+   "code": "KeyU",
+   "keyCode": 85,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, "
+  },
+  {
+   "type": "keyup",
+   "t": 2030,
+   "key": "w",
+   "code": "KeyW",
+   "keyCode": 87,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, "
+  },
+  {
+   "type": "keyup",
+   "t": 2080,
+   "key": "o",
+   "code": "KeyO",
+   "keyCode": 79,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, "
+  },
+  {
+   "type": "keyup",
+   "t": 2133,
+   "key": "w",
+   "code": "KeyW",
+   "keyCode": 87,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, "
+  },
+  {
+   "type": "keyup",
+   "t": 2188,
+   "key": "c",
+   "code": "KeyC",
+   "keyCode": 67,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, "
+  },
+  {
+   "type": "keyup",
+   "t": 2237,
+   "key": "j",
+   "code": "KeyJ",
+   "keyCode": 74,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, "
+  },
+  {
+   "type": "keydown",
+   "t": 2261,
+   "key": "Unidentified",
+   "code": "Unidentified",
+   "keyCode": 229,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, "
+  },
+  {
+   "type": "beforeinput",
+   "t": 2261,
+   "isComposing": true,
+   "data": "được,",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt"
+  },
+  {
+   "type": "input",
+   "t": 2262,
+   "isComposing": true,
+   "data": "được,",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được,"
+  },
+  {
+   "type": "compositionend",
+   "t": 2262,
+   "isComposing": false,
+   "data": "được,",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được,"
+  },
+  {
+   "type": "input",
+   "t": 2262,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được,"
+  },
+  {
+   "type": "keyup",
+   "t": 2285,
+   "key": ",",
+   "code": "Comma",
+   "keyCode": 188,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được,"
+  },
+  {
+   "type": "keydown",
+   "t": 2308,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được,"
+  },
+  {
+   "type": "keypress",
+   "t": 2308,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được,"
+  },
+  {
+   "type": "beforeinput",
+   "t": 2309,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "nc-prompt"
+  },
+  {
+   "type": "input",
+   "t": 2309,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, "
+  },
+  {
+   "type": "keyup",
+   "t": 2335,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, "
+  },
+  {
+   "type": "keyup",
+   "t": 2394,
+   "key": "k",
+   "code": "KeyK",
+   "keyCode": 75,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, "
+  },
+  {
+   "type": "keyup",
+   "t": 2451,
+   "key": "h",
+   "code": "KeyH",
+   "keyCode": 72,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, "
+  },
+  {
+   "type": "keyup",
+   "t": 2498,
+   "key": "o",
+   "code": "KeyO",
+   "keyCode": 79,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, "
+  },
+  {
+   "type": "keyup",
+   "t": 2544,
+   "key": "e",
+   "code": "KeyE",
+   "keyCode": 69,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, "
+  },
+  {
+   "type": "keyup",
+   "t": 2590,
+   "key": "r",
+   "code": "KeyR",
+   "keyCode": 82,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, "
+  },
+  {
+   "type": "keydown",
+   "t": 2613,
+   "key": "Unidentified",
+   "code": "Unidentified",
+   "keyCode": 229,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, "
+  },
+  {
+   "type": "beforeinput",
+   "t": 2613,
+   "isComposing": true,
+   "data": "khoẻ,",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt"
+  },
+  {
+   "type": "input",
+   "t": 2614,
+   "isComposing": true,
+   "data": "khoẻ,",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ,"
+  },
+  {
+   "type": "compositionend",
+   "t": 2614,
+   "isComposing": false,
+   "data": "khoẻ,",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ,"
+  },
+  {
+   "type": "input",
+   "t": 2614,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ,"
+  },
+  {
+   "type": "keyup",
+   "t": 2636,
+   "key": ",",
+   "code": "Comma",
+   "keyCode": 188,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ,"
+  },
+  {
+   "type": "keydown",
+   "t": 2659,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ,"
+  },
+  {
+   "type": "keypress",
+   "t": 2659,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ,"
+  },
+  {
+   "type": "beforeinput",
+   "t": 2659,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "nc-prompt"
+  },
+  {
+   "type": "input",
+   "t": 2659,
+   "isComposing": false,
+   "data": " ",
+   "inputType": "insertText",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, "
+  },
+  {
+   "type": "keyup",
+   "t": 2685,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, "
+  },
+  {
+   "type": "keydown",
+   "t": 2708,
+   "key": "Shift",
+   "code": "ShiftLeft",
+   "keyCode": 16,
+   "shift": true,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, "
+  },
+  {
+   "type": "keyup",
+   "t": 2736,
+   "key": "Shift",
+   "code": "ShiftLeft",
+   "keyCode": 16,
+   "shift": true,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, "
+  },
+  {
+   "type": "keyup",
+   "t": 2736,
+   "key": "d",
+   "code": "KeyD",
+   "keyCode": 68,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, "
+  },
+  {
+   "type": "keydown",
+   "t": 2761,
+   "key": "Shift",
+   "code": "ShiftLeft",
+   "keyCode": 16,
+   "shift": true,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, "
+  },
+  {
+   "type": "keyup",
+   "t": 2784,
+   "key": "d",
+   "code": "KeyD",
+   "keyCode": 68,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, "
+  },
+  {
+   "type": "keyup",
+   "t": 2785,
+   "key": "Shift",
+   "code": "ShiftLeft",
+   "keyCode": 16,
+   "shift": true,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, "
+  },
+  {
+   "type": "keyup",
+   "t": 2834,
+   "key": "a",
+   "code": "KeyA",
+   "keyCode": 65,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, "
+  },
+  {
+   "type": "keyup",
+   "t": 2890,
+   "key": "f",
+   "code": "KeyF",
+   "keyCode": 70,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, "
+  },
+  {
+   "type": "keydown",
+   "t": 2913,
+   "key": "Unidentified",
+   "code": "Unidentified",
+   "keyCode": 229,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, "
+  },
+  {
+   "type": "beforeinput",
+   "t": 2913,
+   "isComposing": true,
+   "data": "Đà ",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt"
+  },
+  {
+   "type": "input",
+   "t": 2914,
+   "isComposing": true,
+   "data": "Đà ",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, Đà "
+  },
+  {
+   "type": "compositionend",
+   "t": 2914,
+   "isComposing": false,
+   "data": "Đà ",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, Đà "
+  },
+  {
+   "type": "input",
+   "t": 2914,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, Đà "
+  },
+  {
+   "type": "keyup",
+   "t": 2936,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, Đà "
+  },
+  {
+   "type": "keydown",
+   "t": 2959,
+   "key": "Shift",
+   "code": "ShiftLeft",
+   "keyCode": 16,
+   "shift": true,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, Đà "
+  },
+  {
+   "type": "keyup",
+   "t": 2986,
+   "key": "n",
+   "code": "KeyN",
+   "keyCode": 78,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, Đà "
+  },
+  {
+   "type": "keyup",
+   "t": 2987,
+   "key": "Shift",
+   "code": "ShiftLeft",
+   "keyCode": 16,
+   "shift": true,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, Đà "
+  },
+  {
+   "type": "keyup",
+   "t": 3040,
+   "key": "a",
+   "code": "KeyA",
+   "keyCode": 65,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, Đà "
+  },
+  {
+   "type": "keyup",
+   "t": 3087,
+   "key": "w",
+   "code": "KeyW",
+   "keyCode": 87,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, Đà "
+  },
+  {
+   "type": "keyup",
+   "t": 3138,
+   "key": "x",
+   "code": "KeyX",
+   "keyCode": 88,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, Đà "
+  },
+  {
+   "type": "keyup",
+   "t": 3188,
+   "key": "n",
+   "code": "KeyN",
+   "keyCode": 78,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, Đà "
+  },
+  {
+   "type": "keyup",
+   "t": 3242,
+   "key": "g",
+   "code": "KeyG",
+   "keyCode": 71,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, Đà "
+  },
+  {
+   "type": "keydown",
+   "t": 3630,
+   "key": "Unidentified",
+   "code": "Unidentified",
+   "keyCode": 229,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, Đà "
+  },
+  {
+   "type": "beforeinput",
+   "t": 3630,
+   "isComposing": true,
+   "data": "Nẵng ",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt"
+  },
+  {
+   "type": "input",
+   "t": 3630,
+   "isComposing": true,
+   "data": "Nẵng ",
+   "inputType": "insertFromComposition",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, Đà Nẵng "
+  },
+  {
+   "type": "compositionend",
+   "t": 3630,
+   "isComposing": false,
+   "data": "Nẵng ",
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, Đà Nẵng "
+  },
+  {
+   "type": "input",
+   "t": 3630,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, Đà Nẵng "
+  },
+  {
+   "type": "keyup",
+   "t": 3637,
+   "key": " ",
+   "code": "Space",
+   "keyCode": 32,
+   "shift": false,
+   "isComposing": false,
+   "target": "nc-prompt",
+   "valueTail": "Tiếng Việt có dấu: người, được, khoẻ, Đà Nẵng "
+  }
+ ]
+}

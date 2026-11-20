@@ -7,6 +7,9 @@
 //   - a real composition (IBus-style preedit) → Input.imeSetComposition, then Input.insertText to commit it,
 // with the recorded timing. The bytes the agent's PTY got must decode (a DEL takes off one character) to the sentence, exactly once.
 // Then a composition + Enter in New chat's message, a card's "Your own answer" and a dialog's input must send nothing before the commit.
+// Linux (test/fixtures/ime/linux-*.json, IBus + ibus-bamboo in WebKitGTK): commits come with no compositionstart, which Chrome cannot
+// make over the protocol, so those events (beforeinput/input insertFromComposition, compositionend, the Enter IBus forwards) are
+// dispatched on the field itself with the recorded text, keys go over the protocol as above.
 //   node test/smoke/proof-ime.ts [--out <dir>] [--only <fixture-substring>]
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -214,6 +217,48 @@ for (const file of files) {
   if (file.startsWith('telex-')) await shot(`chat-${f.agent}-${f.method}`, `${file}: the ${f.agent} chat after the replay (the fake agent echoes a line only on Enter; the check reads the bytes its PTY got)`);
 }
 
+/** Linux IBus in WebKitGTK: one commit with no compositionstart, as recorded: the field holds `before`, the word is inserted
+ *  (`after` = the field afterwards, WebKit's no-break spaces kept), then compositionend; `enter` adds the Enter IBus forwards. */
+const ibusCommit = (sel: string, before: string, after: string, data: string, enter = false) =>
+  js(`(() => {
+    const t = document.querySelector(${JSON.stringify(sel)});
+    t.value = ${JSON.stringify(before)};
+    t.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertFromComposition', data: ${JSON.stringify(data)}, isComposing: true, bubbles: true, cancelable: true }));
+    t.value = ${JSON.stringify(after)};
+    t.dispatchEvent(new InputEvent('input', { inputType: 'insertFromComposition', data: ${JSON.stringify(data)}, isComposing: true, bubbles: true }));
+    t.dispatchEvent(new CompositionEvent('compositionend', { data: ${JSON.stringify(data)}, bubbles: true }));
+    ${enter ? "t.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true }));" : ''}
+    return 1;
+  })()`);
+
+const linuxFiles = fs.readdirSync(FIX).filter(f => /^linux-.*-chat\.json$/.test(f) && f.includes(ONLY)).sort();
+if (linuxFiles.length) console.log('1b. Linux IBus (ibus-bamboo in WebKitGTK): commits with no compositionstart, replayed');
+for (const file of linuxFiles) {
+  const f = JSON.parse(fs.readFileSync(path.join(FIX, file), 'utf8'));
+  for (const agent of ['claude', 'codex', 'agy']) {
+    const id = chats[agent];
+    await openChat(id, agent);
+    await focusTerm();
+    await js(`(document.querySelector('#term-slot .xterm-helper-textarea').value = '', 1)`);
+    const rec = await arm(id);
+    const TA = '#term-slot .xterm-helper-textarea';
+    let tail = '';
+    for (const e of f.events as Ev[]) {
+      if (e.type === 'keydown' && (e.keyCode === 229 || e.key === 'Enter')) await keyEvent('rawKeyDown', e, e.key === 'Enter' ? '\r' : undefined);
+      else if (e.type === 'keydown' && e.key === ' ') await keyEvent('keyDown', e, ' ');
+      else if (e.type === 'keyup') await keyEvent('keyUp', e);
+      else if (e.type === 'input' && e.inputType === 'insertFromComposition') await ibusCommit(TA, tail, e.valueTail ?? '', e.data ?? '');
+      if (e.valueTail !== undefined && e.type !== 'compositionend') tail = e.valueTail;
+    }
+    await sleep(500);
+    const bytes = rec.join('');
+    const arrived = decode(bytes);
+    const ok = check(`${file}: ${f.method} into a ${agent} chat arrives as the sentence, once, with no DEL or no-break space`, arrived === TARGET && !/[\x7f\u00a0]/.test(bytes), `got ${JSON.stringify(arrived)} bytes ${JSON.stringify(bytes)}`);
+    report.push({ fixture: file, agent, method: f.method, arrived, ok, bytes: JSON.stringify(bytes) });
+    if (agent === 'claude') await shot(`chat-linux-${f.method}`, `${file}: the claude chat after the replay`);
+  }
+}
+
 if (!ONLY) {
   console.log('2. a real composition (IBus-style preedit) into the chat terminal');
   for (const agent of ['claude', 'codex', 'agy']) {
@@ -284,6 +329,20 @@ if (!ONLY) {
   await enter();
   check('.other-input: after the commit, Enter sends "Other: Nẵng"', await until(() => store.getRequest(req.id)?.answer === 'Other: Nẵng', 10000), JSON.stringify(store.getRequest(req.id)));
 
+  // Linux IBus: Enter while Bamboo shows the word commits it, then IBus forwards the Enter (keyCode 13, isComposing false): held
+  const req2 = store.createRequest({ threadId: cardChat, question: 'Tên thư mục?', options: ['Chorus', 'Khác'], kind: 'question' });
+  await until(() => js<boolean>(`!!document.querySelector('.ask-dock [data-act=other]')`), 15000);
+  await click('.ask-dock [data-act="other"]');
+  await click('.ask-dock .other-input');
+  await ibusCommit('.ask-dock .other-input', '', 'Tiếng', 'Tiếng', true);
+  await sleep(400);
+  const linuxHeld = !store.getRequest(req2.id)?.answer;
+  await shot('card-own-answer-linux-enter', 'A card\'s "Your own answer", Linux IBus: Enter while "Tiếng" is shown commits it; the Enter IBus forwards sends nothing');
+  check('.other-input (Linux IBus): the Enter forwarded with the commit sends nothing; the word is whole', linuxHeld && (await js<string>('document.querySelector(".ask-dock .other-input")?.value ?? ""')) === 'Tiếng', JSON.stringify(store.getRequest(req2.id)));
+  await sleep(100);
+  await enter();
+  check('.other-input (Linux IBus): the next Enter sends "Other: Tiếng"', await until(() => store.getRequest(req2.id)?.answer === 'Other: Tiếng', 10000), JSON.stringify(store.getRequest(req2.id)));
+
   // a dialog's input (the server asks, e.g. a new name): Enter is OK
   const asked = (c.app as any).prompt('Đổi tên', ['Tên mới cho cuộc trò chuyện'], '') as Promise<string | undefined>;
   let answer: string | undefined | null = null;
@@ -298,6 +357,19 @@ if (!ONLY) {
   check('.dlg-input: Enter while "khoẻ" is composed does not press OK; the word is committed whole', dlgHeld && (await js<string>('document.querySelector("#dialogs .dlg-input")?.value ?? ""')) === 'khoẻ', `answer ${JSON.stringify(answer)}`);
   await enter();
   check('.dlg-input: after the commit, Enter answers "khoẻ"', await until(() => answer === 'khoẻ', 10000), `answer ${JSON.stringify(answer)}`);
+
+  // the same dialog with Linux IBus: the Enter forwarded with the commit does not press OK
+  const asked2 = (c.app as any).prompt('Đổi tên', ['Tên mới cho cuộc trò chuyện'], '') as Promise<string | undefined>;
+  let answer2: string | undefined | null = null;
+  void asked2.then(v => (answer2 = v ?? ''));
+  await until(() => js<boolean>('!!document.querySelector("#dialogs .dlg-input")'), 10000);
+  await click('#dialogs .dlg-input');
+  await ibusCommit('#dialogs .dlg-input', '', 'Nẵng', 'Nẵng', true);
+  await sleep(400);
+  check('.dlg-input (Linux IBus): the Enter forwarded with the commit does not press OK', answer2 === null && (await js<boolean>('!!document.querySelector("#dialogs .dlg-input")')), `answer ${JSON.stringify(answer2)}`);
+  await sleep(100);
+  await enter();
+  check('.dlg-input (Linux IBus): the next Enter answers "Nẵng"', await until(() => answer2 === 'Nẵng', 10000), `answer ${JSON.stringify(answer2)}`);
 }
 
 await cleanup();

@@ -348,7 +348,11 @@ termEl.addEventListener('input', e => {
   if (onHelper(e) && ime.input(e)) e.stopImmediatePropagation(); // sent here: xterm must not send it again
 }, true);
 termEl.addEventListener('compositionstart', e => onHelper(e) && ime.composition(true), true);
-termEl.addEventListener('compositionend', e => onHelper(e) && setTimeout(() => ime.composition(false)), true);
+termEl.addEventListener('compositionend', e => {
+  if (!onHelper(e)) return;
+  if (ime.compositionEnd(e)) return e.stopImmediatePropagation(); // a commit with no compositionstart (IBus in WebKitGTK): sent already
+  setTimeout(() => ime.composition(false));
+}, true);
 termEl.addEventListener('mousedown', () => ime.reset(), true); // a click may move the cursor: the input method starts a new word
 // Shift+Enter: a new line in the CLI's input, not a send. The bytes per CLI come with the state (NEWLINE_KEYS, probed in
 // docs/integrations); xterm's own "\r" for that key (keydown, keypress, keyup) is held back. Every other key goes through the

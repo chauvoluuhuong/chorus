@@ -7,7 +7,12 @@
 // So the page takes over every input event that is not part of a composition: it compares xterm's helper textarea before and after
 // the edit and sends the change as DEL per removed character plus the new text, once. Keys that xterm handles itself (letters on a
 // plain keyboard, space, punctuation, Backspace, arrows …) stay with xterm; their input event, if one follows, is not sent again.
-// Compositions (Linux IBus preedit, Chinese, Japanese) stay with xterm's own CompositionHelper.
+// Compositions (Chinese, Japanese, any input method that starts one) stay with xterm's own CompositionHelper.
+// - IBus in WebKitGTK (Linux, ibus-bamboo Telex/VNI) fires no compositionstart or compositionupdate: IBus draws the word itself and
+//   it arrives at the commit as a keydown 229, `insertFromComposition` (isComposing true) and compositionend. xterm, which saw no
+//   start, would send its whole helper textarea at every commit (each word resends all earlier ones). The page sends such a commit
+//   itself, once, and xterm does not see its compositionend. WebKit keeps a space at the end of the textarea as a no-break space
+//   (U+00A0) and turns it back into a space when text follows, so the commit is compared with no-break spaces read as spaces.
 
 export const DEL = '\x7f';
 
@@ -25,6 +30,11 @@ export function editBytes(before, after) {
   let p = 0;
   while (p < a.length && p < b.length && a[p] === b[p]) p++;
   return DEL.repeat(a.length - p) + b.slice(p).join('');
+}
+
+/** The textarea's text with WebKit's no-break spaces (a space at the end of a line) read as the spaces the user typed. */
+export function plainSpaces(s) {
+  return s.replace(/\u00a0/g, ' ');
 }
 
 /** A key whose `key` is several letters at once ("ấu" from an OpenKey-style tool), not a named key such as "Enter" or "F1". */
@@ -50,13 +60,15 @@ const OURS = new Set(['insertText', 'insertReplacementText', 'deleteContentBackw
  * The page calls the handlers in the capture phase, before xterm sees the event:
  * - `key(e)` from xterm's custom key handler (keydown, keypress, keyup): false = xterm must ignore the key.
  * - `beforeinput(e)` and `input(e)`: `input` returns true when the page sent the change and xterm must not see the event.
- * - `data()` whenever xterm sends data (term.onData), `composition(on)` on compositionstart/end, `reset()` on a click or chat switch.
+ * - `data()` whenever xterm sends data (term.onData), `composition(on)` on compositionstart/end, `compositionEnd(e)` first on
+ *   compositionend (true = the page sent it, xterm must not see it), `reset()` on a click or chat switch.
  */
 export function makeImeInput({ box, send }) {
   let before = null; // the textarea before the edit in progress
   let keySent = false; // xterm (or the page) already sent this key's text from its keydown or keypress
   let multi = null; // several letters sent from one keydown: its keypress and input event are not sent again
   let composing = false;
+  let commit = false; // a commit with no compositionstart (IBus in WebKitGTK) was sent from its input event
   let down = false; // between a keydown and its keyup: data xterm sends now is that key's
 
   function key(e) {
@@ -85,12 +97,23 @@ export function makeImeInput({ box, send }) {
   }
 
   function beforeinput(e) {
+    if (!composing && e.inputType === 'insertFromComposition') return void (before = box.value);
     before = composing || e.isComposing || !OURS.has(e.inputType) ? null : box.value;
   }
 
   function input(e) {
     const was = before;
     before = null;
+    if (!composing && e.inputType === 'insertFromComposition') {
+      // a commit with no compositionstart (IBus in WebKitGTK): the page sends it, once
+      const now = plainSpaces(box.value);
+      let old = was === null ? null : plainSpaces(was);
+      if (old === null) old = e.data && now.endsWith(plainSpaces(e.data)) ? now.slice(0, -e.data.length) : now;
+      const bytes = editBytes(old, now);
+      if (bytes) send(bytes);
+      commit = true;
+      return true;
+    }
     if (composing || e.isComposing || !OURS.has(e.inputType)) return false; // a composition: xterm's CompositionHelper sends it
     if (keySent || (multi && e.data === multi)) {
       // xterm (or the multi-letter key) already sent this key's text from its keydown or keypress
@@ -118,12 +141,20 @@ export function makeImeInput({ box, send }) {
       composing = on;
       before = null;
     },
+    /** compositionend: true when the page took this commit (no compositionstart came) and xterm must not see the event. */
+    compositionEnd(e) {
+      if (composing) return false;
+      if (!commit && e.data) send(plainSpaces(e.data)); // no input event came for it
+      commit = false;
+      return true;
+    },
     reset() {
       box.value = '';
       before = null;
       keySent = false;
       multi = null;
       down = false;
+      commit = false;
     },
   };
 }

@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 // @ts-expect-error: a page module, plain JavaScript
-import { composing, makeComposeGate } from '../../src/desktop/box-keys.js';
+import { FORWARDED_MS, composing, compositionSeen, makeComposeGate } from '../../src/desktop/box-keys.js';
 // @ts-expect-error: a page module, plain JavaScript
 import { attachPicker } from '../../src/desktop/text-picker.js';
 import { skillSlug } from '../../src/serve/slug.ts';
@@ -38,6 +38,31 @@ test('Enter after an Apple Telex word still sends: Return comes as keyCode 13, i
   // and every plain Enter / Escape in all fixtures acts
   for (const f of fs.readdirSync(fixtures))
     for (const e of load(f)) if (e.type === 'keydown' && (e.key === 'Enter' || e.key === 'Escape')) assert.equal(composing(e), false, f);
+});
+
+test('Linux IBus (ibus-bamboo): the Enter IBus forwards after committing a word is held; the next Enter acts (real fixtures)', () => {
+  const files = fs.readdirSync(fixtures).filter(f => /^linux-(telex|vni)-enter-/.test(f));
+  assert.equal(files.length, 6, 'telex and vni × New chat, card answer, dialog');
+  for (const f of files) {
+    const events = JSON.parse(fs.readFileSync(path.join(fixtures, f), 'utf8')).events as (Ev & { t: number; data?: string })[];
+    assert.ok(!events.some(e => e.type === 'compositionstart'), `${f}: no compositionstart in WebKitGTK`);
+    let held = 0;
+    for (const e of events) {
+      const ev = { ...e, timeStamp: e.t };
+      if (e.type === 'compositionstart' || e.type === 'compositionend') compositionSeen(ev);
+      if (e.type === 'keydown' && e.key === 'Enter') {
+        assert.equal(composing(ev), true, `${f}: the forwarded Enter finishes the word and must not send`);
+        held++;
+        // the person's own Enter, later: acts
+        assert.equal(composing({ ...ev, timeStamp: e.t + FORWARDED_MS + 50 }), false, `${f}: a later Enter sends`);
+      }
+    }
+    assert.equal(held, 1, f);
+  }
+  // after a real composition (compositionstart came) a quick Enter is the user's: only the commit without a start counts
+  compositionSeen({ type: 'compositionstart', timeStamp: 1000 });
+  compositionSeen({ type: 'compositionend', timeStamp: 1100 });
+  assert.equal(composing({ type: 'keydown', key: 'Enter', keyCode: 13, isComposing: false, timeStamp: 1101 }), false);
 });
 
 test('a redraw waits for the word and runs once at compositionend', () => {
