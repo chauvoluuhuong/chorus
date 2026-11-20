@@ -109,7 +109,8 @@ test('every page handler for Enter, Tab, Escape or arrows checks composing() fir
   const found: number[] = [];
   app.forEach((line, i) => {
     if (!/addEventListener\('keydown'|^\s+'keydown',$/.test(line)) return;
-    if (/\['pointerdown', 'keydown'\]/.test(app[i - 1] ?? '')) return; // closes a peek on any key in the chat screen: no Enter/Esc action
+    // closes a peek on any key in the chat screen: no Enter/Esc action
+    if (/\['pointerdown', 'keydown'\]/.test(app[i - 1] ?? '') || /closes what you peek at/.test(app.slice(i - 4, i).join('\n'))) return;
     found.push(i + 1);
     const head = app.slice(i, i + 4).join('\n');
     assert.match(head, /composing\((e|event)\)/, `app.js:${i + 1} acts on keys without checking composing()`);
