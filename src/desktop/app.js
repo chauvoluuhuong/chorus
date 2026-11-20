@@ -1842,22 +1842,37 @@ function cmpV(x, y) {
   return 0;
 }
 
-const DR_TITLES = ['The standing note reaches the model', 'A turn runs and is read: session id, reply, usage', 'A shell command and its output are read', "The CLI's own transcript is found and read", 'The per-session MCP server is reached', 'A chat resumes with its context', 'The permission prompt is recognised and approved', 'Chorus sees when a turn ends'];
+/** Core SCENARIOS in order: [title, critical, only for these agents]. The channel check is Claude Code's alone (Codex and agy get mail without a channel). */
+const DR_SCENARIOS = [
+  ['The standing note reaches the model', true],
+  ['A turn runs and is read: session id, reply, usage'],
+  ['A shell command and its output are read'],
+  ["The CLI's own transcript is found and read"],
+  ['The per-session MCP server is reached', true],
+  ['A chat resumes with its context'],
+  ['The permission prompt is recognised and approved'],
+  ['A Claude chat receives a channel message', true, ['claude']],
+  ['Chorus sees when a turn ends', true],
+];
+/** The detailed test's checks for one agent, as the Doctor lists them while it runs. */
+const drTitles = agent => DR_SCENARIOS.filter(([, , only]) => !only || only.includes(agent)).map(([t]) => t);
 /** The checks whose failure turns the agent off in Chorus (core SCENARIOS' critical flag): tagged "critical" on the Doctor. */
-const DR_CRITICAL = new Set([DR_TITLES[0], DR_TITLES[4], DR_TITLES[7]]);
+const DR_CRITICAL = new Set(DR_SCENARIOS.filter(([, c]) => c).map(([t]) => t));
 const drResult = r => [r.status === 'pass' ? 'ok' : r.status === 'fail' ? 'bad' : r.status === 'blocked' ? 'warn' : 'wait', r.title, `${(r.ms / 1000).toFixed(1)} s`, r.status === 'pass' ? '' : r.reason];
 
 function drDetailed(a) {
   const job = drJob(a.agent, 'deep');
   if (job && !job.done) {
-    const list = DR_TITLES.map((t, i) => (job.results[i] ? drResult(job.results[i]) : i === job.results.length ? ['run', t] : ['wait', t]));
+    const list = drTitles(a.agent).map((t, i) => (job.results[i] ? drResult(job.results[i]) : i === job.results.length ? ['run', t] : ['wait', t]));
     return ['running', list];
   }
   const r = job?.done ? { ...job.report, at: new Date().toISOString() } : S.doctor?.lastDeep?.[a.agent];
   if (!r?.results) return null;
-  const pass = r.results.filter(x => x.status === 'pass').length;
-  const head = `last run ${drWhen(r.at)} · ${pass} of ${r.results.length}${r.version && r.version !== a.version ? ` on ${r.version}` : ''}`;
-  return [head, r.results.map(drResult)];
+  // a report saved before the channel check became Claude's alone still has its skipped row for Codex and agy
+  const results = r.results.filter(x => !(x.id === 'channel' && a.agent !== 'claude'));
+  const pass = results.filter(x => x.status === 'pass').length;
+  const head = `last run ${drWhen(r.at)} · ${pass} of ${results.length}${r.version && r.version !== a.version ? ` on ${r.version}` : ''}`;
+  return [head, results.map(drResult)];
 }
 
 /** Each agent can be tested on its own, any time it is installed and logged in (about 2 min, a few short turns on its plan). */

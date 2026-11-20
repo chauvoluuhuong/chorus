@@ -102,6 +102,18 @@ const screen = () => js<string>(`(() => { if (!window.chorus) return ''; const b
 const state = () => js<any>('chorus.S.state');
 const view = () => js<any>('chorus.S.view');
 const focusTerm = () => click('#term-slot .xterm-screen');
+// the optional (paid) module draws its dialogs, like Hand off, in a shadow root on <body>: find and click inside it
+const inShadow = (hostSel: string, sel: string) => `document.querySelector(${JSON.stringify(hostSel)})?.shadowRoot?.querySelector(${JSON.stringify(sel)})`;
+const shadowText = (hostSel: string, sel: string) => js<string>(`${inShadow(hostSel, sel)}?.textContent ?? ''`);
+async function clickShadow(hostSel: string, sel: string): Promise<boolean> {
+  const at = await js<{ x: number; y: number } | null>(`(() => { const e = ${inShadow(hostSel, sel)}; if (!e) return null; e.scrollIntoView({ block: 'nearest' }); const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+  if (!at) return false;
+  await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y });
+  await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: at.x, y: at.y, button: 'left', clickCount: 1 });
+  await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: at.x, y: at.y, button: 'left', clickCount: 1 });
+  await sleep(300);
+  return true;
+}
 /** answers the folder-trust dialogs of Claude and Codex the way a person does once per folder */
 async function trustIfAsked() {
   const s = await screen();
@@ -133,6 +145,11 @@ check('the page loads from chorus serve and the token leaves the address bar', a
 // New chat is one message box: agent, folder, model and permissions are picker menus under it. With the
 // optional module the first picker is "who" (teammates, then any agent); without it, the agent
 const openAgentMenu = () => click('[data-act="nc-menu"][data-arg="agent"], [data-act="nc-menu"][data-arg="who"]');
+// a first launch without Pro opens on Welcome (Community or a Pro trial) before New chat: keep Community, like a person trying it out
+if (await until(() => js<boolean>('!!document.querySelector(\'[data-act="plan-community"]\')'), 8000)) {
+  await click('[data-act="plan-community"]');
+  await until(async () => (await view()).name === 'new' && !!(await js<string>('chorus.S.form?.folder ?? ""')), 10000);
+}
 await openAgentMenu();
 const agentsOk = await until(async () => (await js<number>('document.querySelectorAll("[data-act=nc-agent]").length')) === 3 && (await has('[data-act="nc-agent"]', /Claude Code\s*2\.\d+\.\d+/)) && (await has('[data-act="nc-agent"]', /Codex\s*0\.\d+/)), 30000);
 await click('[data-act="nc-agent"][data-arg="claude"]');
@@ -333,9 +350,24 @@ await until(async () => (await view()).id === claudeId, 5000);
 
 log('6. hand off the Claude chat to Codex');
 await click('[data-act="handoff"]', 'Hand off');
-check('Hand off opens the form for the chat, another agent chosen first', await until(() => has('.nc-src', /Create calc\.js/), 8000) && (await js<string>('chorus.S.form.agent')) === 'codex');
-await shot('handoff-form', 'Hand off: the same form, for the chat that continues "Create calc.js…"; the other agent comes first and the folder is the source\'s');
-await click('[data-act="nc-start"]');
+// with the optional module Hand off is its own dialog: teammates first, then "Any agent"; without it, the New chat form
+const HO = '#pro-ho';
+const proHo = await until(async () => (await js<boolean>(`!!${inShadow(HO, '.ho')}`)) || (await has('.nc-src', /Create calc\.js/)), 8000) && (await js<boolean>(`!!${inShadow(HO, '.ho')}`));
+if (proHo) {
+  // no teammate runs Codex here, so pick "Any agent" and Codex, the way a person would
+  await clickShadow(HO, '[data-do="hoto:plain"]');
+  await until(async () => !!(await shadowText(HO, '[data-do="hoset:ag:codex"]')), 3000);
+  await clickShadow(HO, '[data-do="hoset:ag:codex"]');
+  check('Hand off opens the dialog for the chat; "Any agent" with Codex is chosen', /Create calc\.js/.test(await shadowText(HO, '.ho p')) && (await until(async () => /Hand off to Codex/.test(await shadowText(HO, '[data-do="hogo"]')), 3000)), await shadowText(HO, '.ho'));
+  await shot('handoff-form', 'Hand off: the dialog for the chat that continues "Create calc.js…"; your teammates first, then "Any agent", here Codex with its model and effort');
+  await clickShadow(HO, '[data-do="hogo"]');
+} else {
+  check('Hand off opens the form for the chat, another agent chosen first', (await has('.nc-src', /Create calc\.js/)) && (await js<string>('chorus.S.form.agent')) === 'codex');
+  await shot('handoff-form', 'Hand off: the same form, for the chat that continues "Create calc.js…"; the other agent comes first and the folder is the source\'s');
+  await click('[data-act="nc-start"]');
+}
+// whatever the path, no Hand off dialog stays open over the next sections
+if (!(await until(async () => !(await js<boolean>(`!!${inShadow(HO, '.ho')}`)), 15000))) await clickShadow(HO, '[data-do="hocancel"]');
 await until(async () => { const v = await view(); return v.name === 'chat' && v.id !== claudeId && v.id !== codexId; }, 30000);
 const childId = (await view()).id as string;
 check('the new chat is listed under the chat it continues (↳) and is its child in the store', await until(() => has('.chat-row.child', /→ codex/), 10000) && store().getThread(childId)?.parent_thread_id === claudeId);
@@ -374,19 +406,21 @@ await click('[data-act="mem-record"]');
 check('"What an agent reads" shows the handoff record', await until(() => has('pre.record', /calc\.js/), 5000));
 await shot('memory-record', 'Memory: the Claude chat and what an agent reads when it continues it; Open chat, Continue with another agent and Delete are one click away');
 
-await click('.nav button', 'Skills');
-check('Skills shows the library with on/off and the skills the agents already keep', await until(() => has('.item', /cake-pricing/), 5000) && (await has('.item', /release-notes/)) && (await has('.item', /pdf-tools/)));
-await shot('skills', 'Skills: one library for the three agents, with on/off; skills found in the agents\' own folders are offered for import');
-await click('.item .switch');
-check('turning a skill off unlinks it from the agents\' folders', await until(() => !fs.existsSync(path.join(project, '.claude', 'skills', 'cake-pricing')) && js<boolean>('!document.querySelector(".item .switch").checked'), 5000));
-await click('.item .switch');
-await until(() => js<boolean>('document.querySelector(".item .switch").checked'), 5000);
-await click('[data-act="sk-import"][data-arg$="/release-notes"]');
-check('Import copies a skill into the library', await until(() => fs.existsSync(path.join(project, '.chorus', 'skills', 'release-notes', 'SKILL.md')), 5000));
+// Sync skills (plan 2026-11-14): every skill Chorus sees, with a tick per agent. The agents' home folders are the fake
+// CHORUS_SKILLS_HOME of this run, so a tick links into it, never into the real ~/.claude, ~/.codex or ~/.gemini
+await click('[data-act="skills"]');
+check('Sync skills lists the library skill and the skills the agents already keep', await until(() => has('.sk-tr', /cake-pricing/), 8000) && (await has('.sk-tr', /release-notes/)) && (await has('.sk-tr', /pdf-tools/)));
+await shot('skills', 'Sync skills: every skill Chorus can see and which agent has it; a tick shares a skill with an agent through a link in its skills folder');
+const agyLink = path.join(fakeUserHome, '.gemini', 'config', 'skills', 'release-notes');
+const tick = (on: '0' | '1') => `.sk-ck[data-act="sk-tick"][data-cli="agy"][data-on="${on}"][data-arg$="/release-notes"]`;
+await click(tick('1'));
+check('ticking Antigravity links release-notes into its skills folder', await until(async () => fs.lstatSync(agyLink, { throwIfNoEntry: false })?.isSymbolicLink() === true && (await js<boolean>(`!!document.querySelector('${tick('0')}')`)), 8000));
+await click(tick('0'));
+check('unticking it removes only that link', await until(async () => !fs.lstatSync(agyLink, { throwIfNoEntry: false }) && (await js<boolean>(`!!document.querySelector('${tick('1')}')`)), 8000) && fs.existsSync(path.join(fakeUserHome, '.claude', 'skills', 'release-notes', 'SKILL.md')));
 
 await click('.side-foot button', 'Doctor');
-check('Doctor lists the agents, versions, logins and the store', await until(() => has('pre.record', /claude/), 15000) && (await has('pre.record', /store/)));
-await shot('doctor', 'Doctor: the agents Chorus starts, their versions and logins, and where the data lives');
+check('Doctor lists the agents with their versions and logins', await until(async () => (await has('.page', /Claude Code\s*2\.\d+/)) && (await has('.page', /Codex\s*0\.\d+/)), 15000) && (await has('.page', /Logged in/)));
+await shot('doctor', 'Doctor: the agents Chorus starts, their versions and logins, with Run test and a detailed test for a version Chorus has not seen yet');
 
 await click('.chat-row', /Create calc\.js/);
 await until(async () => (await view()).id === claudeId, 5000);
