@@ -58,6 +58,15 @@ The agent's screen draws through `@xterm/addon-webgl` (the DOM renderer when Web
 for a wheel notch and `scrollSensitivity` 1; a redraw never refits the terminal. Codex and agy full-screen views scroll themselves,
 so these settings don't apply there (2026-11-18).
 
+**Vietnamese and other input methods** (2026-11-20). In the chat terminal `src/desktop/ime-input.js` handles every
+non-composition input event on xterm's helper textarea and sends each edit once, as one DEL per removed letter plus the new
+text: Apple's Telex and VNI rewrite the word on every key (`insertReplacementText`), and OpenKey-style tools put several letters
+in one key event. Real compositions (IBus, marked text) stay with xterm. In Chorus's own boxes `src/desktop/box-keys.js`
+(`composing(e)`) keeps Enter, Tab, Escape, arrows and shortcuts from acting while a word is being composed. Skill slugs drop
+accents (`src/serve/slug.ts`: "Đà Nẵng" → `da-nang`). claude, codex and agy take the bytes as sent (chorus-core
+`docs/integrations/`, "Vietnamese / IME input"). Tests: `test/desktop/ime-input.test.ts`, `test/serve/box-keys.test.ts`,
+`npm run proof:ime` ([testing.md](../testing.md)).
+
 ## Update Chorus
 
 The launch check ([notifications.md](../notifications.md), Release notices) offers a newer production version in a band under

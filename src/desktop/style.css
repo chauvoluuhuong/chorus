@@ -339,6 +339,9 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 .term-wrap { flex: 1; min-width: 0; background: var(--term-bg); padding: 10px 6px 6px 12px; position: relative; }
 .term-wrap .xterm { height: 100%; overflow: hidden; } /* an anchored screen moves down: its empty bottom rows leave the view */
 .term-wrap .xterm-viewport { background: var(--term-bg) !important; }
+/* a word an input method is composing (IBus preedit, CJK): drawn at the cursor in the terminal's colours, underlined like marked
+   text; it sits in .xterm-screen, so anchorBottom's transform moves it with the cursor */
+.term-wrap .xterm .composition-view { background: var(--term-bg); color: #e8e6df; text-decoration: underline; z-index: 5; }
 /* drawn at the size another viewer sets (app.js fixedSize): its font fills the view (fitFont); it scrolls if it still can't */
 .term-wrap.fixed { overflow: auto; display: flex; flex-direction: column; }
 .term-wrap.fixed .xterm { height: auto; width: max-content; }

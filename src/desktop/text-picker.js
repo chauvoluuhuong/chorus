@@ -11,6 +11,7 @@
 // Optional (Sync skills, plan 2026-11-14 Stage 6): a trigger's `heading` is a line over the list; an item's `marks` is HTML drawn on
 // its right (only ever built from the page's own fixed strings, never from what a skill file says) and `need` a warning line under
 // it; a trigger's `beforePick(item)` may ask first (a dialog) and resolves false to leave the field as it is.
+import { composing } from './box-keys.js';
 
 /** The longest list shown. */
 export const MAX_ITEMS = 50;
@@ -145,7 +146,7 @@ export function attachPicker(field, triggers, { onChange } = {}) {
     onChange?.(field.value);
   };
   const onKey = e => {
-    if (!tok || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!tok || e.metaKey || e.ctrlKey || e.altKey || composing(e)) return; // Enter mid-word finishes the word, not a pick
     if (e.key === 'Escape') return e.preventDefault(), e.stopPropagation(), close();
     if (!list.length) return;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
