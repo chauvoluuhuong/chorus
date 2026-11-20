@@ -620,7 +620,7 @@ async function onProStatus(st) {
       document.head.append(Object.assign(document.createElement('link'), { id: 'pro-css', rel: 'stylesheet', href: '/api/pro/ui.css' }), js);
     });
   }
-  window.choruspro?.init?.({ go: id => go(id === 'skills' ? { name: 'skills' } : { name: 'pro', id }), skillPicker, noteCount, countFlash, countNum, newChat: folder => go({ name: 'new', folder }), refresh: () => { noteTaskRevs(S.state?.chats, window.choruspro); renderChrome(); fillChatSlots(); if (['new', 'approvals', 'home', 'more'].includes(S.view.name)) renderView(); else if (S.view.name === 'chat') renderChatParts(); }, doctor: () => go({ name: 'doctor' }), toast, confirmDelete, openChat: id => go({ name: 'chat', id }), upgrade, back: () => history.length && go(S.history.pop() ?? startView(), false) });
+  window.choruspro?.init?.({ go: id => go(id === 'skills' ? { name: 'skills' } : { name: 'pro', id }), chats: () => S.state?.chats ?? [], skillPicker, noteCount, countFlash, countNum, newChat: folder => go({ name: 'new', folder }), refresh: () => { noteTaskRevs(S.state?.chats, window.choruspro); renderChrome(); fillChatSlots(); if (['new', 'approvals', 'home', 'more'].includes(S.view.name)) renderView(); else if (S.view.name === 'chat') renderChatParts(); }, doctor: () => go({ name: 'doctor' }), toast, confirmDelete, openChat: id => go({ name: 'chat', id }), upgrade, back: () => history.length && go(S.history.pop() ?? startView(), false) });
   // the module loads after the first state: its task revisions start counting now, so nothing flashes at startup
   noteTaskRevs(S.state?.chats, window.choruspro);
   if (S.view.name === 'pro' && !st.unlocked) return go(startView());
