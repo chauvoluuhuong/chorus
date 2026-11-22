@@ -686,8 +686,9 @@ function onSize() {
   if (S.size !== 'phone' && ['home', 'chats', 'more'].includes(S.view.name)) return go({ name: 'new' }, false);
   renderChrome();
   renderDoctorDot();
-  // the Chat view's default is per size (a phone opens in Chat): the chat is drawn again in the view of its new size
-  if (S.view.name === 'chat') renderChat();
+  // the Chat view's default is per size: only when the new size shows the other view is the chat drawn again (Raw → Raw as before)
+  if (S.view.name === 'chat' && chatModeFor(was) !== chatMode()) renderChat();
+  else if (S.view.name === 'chat') renderChatParts();
   else renderView();
   setTimeout(refit, 60);
 }
@@ -1106,12 +1107,8 @@ function phoneTop(chat) {
     // the agent, the title, and under it the agent's name and its state (the chat has no header row of its own on a phone)
     if (!chat) return `<button class="pv-back" data-act="back" aria-label="Back">${PI.back}</button><div class="ph-title"></div>`;
     const s = phState(chat);
-    // three icons (plan 2026-11-22 chat-view, decision 9): the Raw / Chat switch, Artifacts, ⋯
-    const raw = chatMode() === 'raw';
-    const sw = raw ? `<button class="pv-back pv-r cv-ico on" data-act="cv-mode" data-arg="chat" aria-label="Back to the Chat view">${CV_ICONS.chat}</button>` : `<button class="pv-back pv-r cv-ico" data-act="cv-mode" data-arg="raw" aria-label="Show the agent's own screen (Raw)">${CV_ICONS.raw}</button>`;
-    const arts = chat.sub ? '' : `<button class="pv-back pv-r cv-ico${S.chatTab === 'files' ? ' on' : ''}" data-act="cv-art" aria-label="Artifacts${chat.artifacts ? `, ${chat.artifacts}` : ''}">${CV_ICONS.art}${chat.artifacts ? `<span class="cv-n">${chat.artifacts}</span>` : ''}</button>`;
-    // the title, and under it the agent's badge and its state (mockup chat-view.html): no avatar, so the title keeps its room
-    return `<button class="pv-back" data-act="back" aria-label="Back">${PI.back}</button><div class="ph-title two cv-top"><span class="ph-t1">${esc(chat.title)}</span><span class="ph-sub"><span class="badge ${esc(chat.agent)}">${esc(AGENT[chat.agent]?.name ?? chat.agent)}</span><span class="dot ${esc(chat.state)}"></span><span class="pv-st ${s.cls}">${esc(s.label)}</span>${chat.skip ? ' <span class="badge warn" title="started without permission prompts">skip</span>' : ''}${chat.toast ? ` <span class="badge ok">${esc(chat.toast)}</span>` : ''}</span></div>${sw}${arts}<button class="pv-back pv-r" data-act="chat-menu" aria-label="This chat: share, hand off, actions, activity, record, delete">${PI.more}</button>`;
+    // the Raw / Chat switch (plan 2026-11-22 chat-view): the only addition to a phone's chat top bar
+    return `<button class="pv-back" data-act="back" aria-label="Back">${PI.back}</button>${avatar(chat, s.cls)}<div class="ph-title two"><span class="ph-t1">${esc(chat.title)}</span><span class="ph-sub">${esc(AGENT[chat.agent]?.name ?? chat.agent)} · <span class="pv-st ${s.cls}">${esc(s.label)}</span>${chat.skip ? ' <span class="badge warn" title="started without permission prompts">skip</span>' : ''}${chat.toast ? ` <span class="badge ok">${esc(chat.toast)}</span>` : ''}</span></div>${cvSwitch()}<button class="pv-back pv-r" data-act="chat-menu" aria-label="This chat: share, hand off, actions, activity, record, delete">${PI.more}</button>`;
   } else if (v.name === 'memory') {
     title = v.rec ? esc(S.mem.items.find(i => i.id === v.rec)?.title ?? 'Memory') : 'Memory';
   } else if (v.name === 'projects') {
@@ -2643,16 +2640,17 @@ function renderChat() {
 /* ---------- the Chat view (plan 2026-11-22 chat-view, src/desktop/chat-view.js) ---------- */
 
 /** Raw or Chat, kept per device and per size (browser storage): a phone opens in Chat, a tablet and a desktop in Raw. */
-const chatModeKey = () => `chorus.chatView.${S.size}`;
-function chatMode() {
+const chatModeKey = (size = S.size) => `chorus.chatView.${size}`;
+function chatModeFor(size) {
   try {
-    const v = localStorage.getItem(chatModeKey());
+    const v = localStorage.getItem(chatModeKey(size));
     if (v === 'raw' || v === 'chat') return v;
   } catch {
     /* no storage: the default */
   }
-  return S.size === 'phone' ? 'chat' : 'raw';
+  return size === 'phone' ? 'chat' : 'raw';
 }
+const chatMode = () => chatModeFor(S.size);
 function setChatMode(mode) {
   if (mode !== 'raw' && mode !== 'chat') return;
   try {
@@ -2661,7 +2659,6 @@ function setChatMode(mode) {
     /* kept for this page only */
   }
   if (S.view.name !== 'chat') return;
-  if (S.chatTab === 'files') S.chatTab = 'chat';
   renderChrome();
   renderChat();
 }
@@ -2669,7 +2666,7 @@ let cvInstance = null;
 /** The "/" list in the message box: the skills (checked for this chat's agent), then the agent's own commands probed with the real CLI. */
 function cvPicker(box, c) {
   const skills = skillTrigger(() => [c.agent], () => c.cwd);
-  const own = () => (S.state?.nativeCommands?.[c.agent] ?? []).map(n => ({ key: n.name, main: `/${n.name}`, sub: n.description, group: 1, groupLabel: `${AGENT[c.agent]?.name ?? c.agent}'s own`, native: true }));
+  const own = () => (chatView().nativeCommands(c.id) ?? []).map(n => ({ key: n.name, main: `/${n.name}`, sub: n.description, group: 1, groupLabel: `${AGENT[c.agent]?.name ?? c.agent}'s own`, native: true }));
   return attachPicker(box, [
     { ...skills, heading: 'Skills', items: async q => [...(await skills.items(q)), ...own()], beforePick: x => (x.native ? true : skills.beforePick(x)) },
     {
@@ -2685,6 +2682,12 @@ function cvPicker(box, c) {
       insert: x => `@${x.key}`,
     },
   ], { above: true });
+}
+/** The phone's switch icon: Raw shows the Chat icon (lit), the Chat view shows the terminal icon. */
+function cvSwitch() {
+  return chatMode() === 'raw'
+    ? `<button class="pv-back pv-r cv-ico on" data-act="cv-mode" data-arg="chat" aria-label="Show the Chat view">${CV_ICONS.chat}</button>`
+    : `<button class="pv-back pv-r cv-ico" data-act="cv-mode" data-arg="raw" aria-label="Show the agent's own screen (Raw)">${CV_ICONS.raw}</button>`;
 }
 function chatView() {
   return (cvInstance ??= makeChatView({
@@ -2764,11 +2767,8 @@ function renderChatParts() {
     <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat" aria-label="Delete this chat">🗑</button>`;
   // a phone: one segmented row, Chat · Steps · Plan (a task chat's panel, from the module) · Files (the chat's artifacts), one shown at
   // a time (mockup phone-ui-v2.html scene 5). A sub thread has neither: no row
-  // the Artifacts icon in a phone's top bar opens Files for every chat (plan 2026-11-22 chat-view, decision 9); a task chat keeps
-  // Files in its row beside Steps and Plan, a plain chat has no row
-  const modTabs = window.choruspro?.sideTabs?.(c.id) ?? [];
-  const tabs = S.size === 'phone' ? [...modTabs, ...(c.sub || !modTabs.length ? [] : [['files', 'Files']])] : [];
-  if (!tabs.some(([k]) => k === S.chatTab) && !(S.chatTab === 'files' && !c.sub && S.size === 'phone')) S.chatTab = 'chat';
+  const tabs = S.size === 'phone' ? [...(window.choruspro?.sideTabs?.(c.id) ?? []), ...(c.sub ? [] : [['files', 'Files']])] : [];
+  if (!tabs.some(([k]) => k === S.chatTab)) S.chatTab = 'chat';
   const tabsEl = $('#chat-tabs');
   tabsEl.hidden = !tabs.length;
   const hlTab = (tabs.find(([k]) => k === 'steps') ?? (task ? tabs[0] : null))?.[0];
@@ -3768,11 +3768,6 @@ document.addEventListener('click', async e => {
       return setTimeout(refit, 30);
     case 'cv-mode':
       return setChatMode(arg);
-    case 'cv-art':
-      S.chatTab = S.chatTab === 'files' ? 'chat' : 'files';
-      renderChrome();
-      renderChatParts();
-      return setTimeout(refit, 30);
     case 'menu-close':
       $('#app').classList.remove('side-open');
       return renderChrome();

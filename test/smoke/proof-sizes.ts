@@ -231,7 +231,18 @@ const SCREENS: Screen[] = [
 const COMPARE = ['new', 'approvals', 'memory', 'skills', 'doctor', 'raw-chat'];
 // a chat in Raw on a desktop (the plan's "Raw unchanged"): only the header's new Raw | Chat switch may differ. The newest chat, so
 // opening it (which resumes it) cannot change the order of the sidebar for the screens after it
-SCREENS.push({ id: 'raw-chat', label: 'A chat in Raw', sizes: [], open: async () => { await goTo({ name: 'chat', id: 't_cv' }); await sleep(2500); } });
+SCREENS.push({ id: 'raw-chat', label: 'A chat in Raw', sizes: [], open: async () => { await js(`localStorage.setItem('chorus.chatView.' + document.documentElement.dataset.size, 'raw')`); await goTo({ name: 'chat', id: 't_cv' }); await sleep(2500); }, close: () => js(`localStorage.removeItem('chorus.chatView.' + document.documentElement.dataset.size)`) });
+// Raw on a phone and a tablet too (the owner's rule of 2026-11-22: Raw is not touched; on a phone only the switch icon is new)
+const RAW_SIZES: Size[] = ['phone', 'tablet'];
+const rawShot = async (size: Size) => {
+  await setSize(chrome, size, 'light');
+  await sleep(600);
+  const s = SCREENS.find(x => x.id === 'raw-chat')!;
+  await s.open();
+  const { data } = await cdp('Page.captureScreenshot', { format: 'png' });
+  await s.close?.();
+  return Buffer.from(data, 'base64');
+};
 
 /* ---------- 1. the release, at 1280 px (before) ---------- */
 
@@ -256,6 +267,11 @@ if (BEFORE && BEFORE !== 'none') {
       fs.writeFileSync(path.join(OUT, `before-${id}.png`), before.get(id)!);
       await s.close?.();
     }
+    for (const size of RAW_SIZES) {
+      before.set(`raw-${size}`, await rawShot(size));
+      fs.writeFileSync(path.join(OUT, `before-raw-${size}.png`), before.get(`raw-${size}`)!);
+    }
+    await setSize(chrome, 'desktop', 'light');
     await stopServe();
   }
 }
@@ -282,6 +298,16 @@ for (const id of COMPARE) {
   shots.push({ file: `before-${id}.png`, caption: `Desktop 1280 · ${s.label} · before (${BEFORE})` }, { file: `after-${id}.png`, caption: `Desktop 1280 · ${s.label} · after: ${(d * 100).toFixed(2)} % of pixels differ` });
   check(`desktop 1280 · ${s.label} looks as in ${BEFORE} (${(d * 100).toFixed(2)} % of pixels differ)`, d < 0.01, `${(d * 100).toFixed(2)} %`);
 }
+
+for (const size of RAW_SIZES) {
+  const after = await rawShot(size);
+  fs.writeFileSync(path.join(OUT, `after-raw-${size}.png`), after);
+  if (!before.has(`raw-${size}`)) continue;
+  const d = await pixelDiff(chrome, before.get(`raw-${size}`)!, after);
+  shots.push({ file: `before-raw-${size}.png`, caption: `${size} · A chat in Raw · before (${BEFORE})` }, { file: `after-raw-${size}.png`, caption: `${size} · A chat in Raw · after: ${(d * 100).toFixed(2)} % of pixels differ (the switch ${size === 'phone' ? 'icon' : 'control'})` });
+  check(`${size} · A chat in Raw looks as in ${BEFORE} apart from the switch (${(d * 100).toFixed(2)} % of pixels differ)`, d < 0.01, `${(d * 100).toFixed(2)} %`);
+}
+await setSize(chrome, 'desktop', 'light');
 
 // two live chats (fake agents), one with an approval card asked through Chorus's MCP server
 for (const [agent, folder, prompt] of [['claude', shop, 'Make the order page work on a phone'], ['codex', api, 'Add paging to the orders endpoint']] as const) {
