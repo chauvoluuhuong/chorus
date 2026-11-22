@@ -23,7 +23,7 @@ const mask = (s: string) => s.replace(/[\w.%+-]+@[\w.-]+\.[a-z]{2,}/gi, '<email>
 const TASK = 'Create a file hello.txt in the current directory containing the word hi. Get my approval for your plan before you create anything.';
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-ask-home-'));
-const env = { ...process.env, CHORUS_HOME: home, CHORUS_NO_OPEN: '1', CHORUS_MODEL_CLAUDE: 'haiku' } as Record<string, string>;
+const env = { ...process.env, CHORUS_HOME: home, CHORUS_NO_OPEN: '1', CHORUS_NOTIFICATIONS: '0', CHORUS_MODEL_CLAUDE: 'haiku' } as Record<string, string>;
 for (const k of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_PID']) delete env[k];
 const version = (cli: string) => (spawnSync(cli, ['--version'], { encoding: 'utf8' }).stdout.match(/\d+\.\d+\.\d+/) ?? [''])[0];
 

@@ -32,7 +32,7 @@ const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-first-'));
 const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-first-proj-')));
 // no agent installed (all three hidden) is the short check that does not pass on any machine: the Doctor opens by itself
 const HIDE_ALL = 'claude,codex,agy';
-const env = { ...process.env, CHORUS_NO_OPEN: '1', CHORUS_HOME: path.join(home, 'chorus'), CHORUS_DOCTOR_HOME: home, CHORUS_DOCTOR_HIDE: HIDE_ALL } as Record<string, string>;
+const env = { ...process.env, CHORUS_NO_OPEN: '1', CHORUS_NOTIFICATIONS: '0', CHORUS_HOME: path.join(home, 'chorus'), CHORUS_DOCTOR_HOME: home, CHORUS_DOCTOR_HIDE: HIDE_ALL } as Record<string, string>;
 for (const k of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_PID']) delete env[k];
 
 let serve: ChildProcess | undefined;
