@@ -350,6 +350,7 @@ export class Store {
     const tcols = (this.db.prepare('PRAGMA table_info(tool_calls)').all() as { name: string }[]).map(c => c.name);
     if (!tcols.includes('note')) this.db.exec('ALTER TABLE tool_calls ADD COLUMN note TEXT');
     if (!tcols.includes('detail')) this.db.exec('ALTER TABLE tool_calls ADD COLUMN detail TEXT');
+    if (!tcols.includes('kind')) this.db.exec('ALTER TABLE tool_calls ADD COLUMN kind TEXT');
     if (!cols.includes('effort')) this.db.exec('ALTER TABLE threads ADD COLUMN effort TEXT');
     if (!cols.includes('turn_base')) this.db.exec('ALTER TABLE threads ADD COLUMN turn_base INTEGER NOT NULL DEFAULT 0');
     // sub threads (plan 2026-11-14, Stage 2): free, so on Chorus's own threads table
@@ -589,9 +590,9 @@ export class Store {
       const ti = db.prepare('INSERT OR REPLACE INTO turns (thread_id,seq,role,text,ts) VALUES (?,?,?,?,?)');
       for (const t of s.turns) ti.run(threadId, base + t.seq, t.role, t.text, t.ts ?? null);
       const ci = db.prepare(
-        'INSERT OR REPLACE INTO tool_calls (thread_id,call_id,turn_seq,tool,target,status,result,duration_ms,note,detail) VALUES (?,?,?,?,?,?,?,?,?,?)',
+        'INSERT OR REPLACE INTO tool_calls (thread_id,call_id,turn_seq,tool,target,status,result,duration_ms,note,detail,kind) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
       );
-      for (const c of s.toolCalls) ci.run(threadId, c.id, base + c.turnSeq, c.tool, maskSecrets(c.target), c.status, c.result ? maskSecrets(c.result) : null, c.durationMs ?? null, c.note ?? null, c.detail ? maskSecrets(c.detail) : null);
+      for (const c of s.toolCalls) ci.run(threadId, c.id, base + c.turnSeq, c.tool, maskSecrets(c.target), c.status, c.result ? maskSecrets(c.result) : null, c.durationMs ?? null, c.note ?? null, c.detail ? maskSecrets(c.detail) : null, c.kind ?? null);
       db.prepare(
         `INSERT OR REPLACE INTO usage (thread_id,input_tokens,output_tokens,cache_read_tokens,cost_usd,limit_utilization,limit_resets_at,limit_status,updated)
          VALUES (?,?,?,?,?,?,?,?,?)`,
@@ -607,7 +608,12 @@ export class Store {
       ...(s.cliVersion ? { cli_version: s.cliVersion } : {}),
       ...(extra.transcriptPath ? { transcript_path: extra.transcriptPath } : {}),
     });
+    // the Chat view sends what is new to the pages that show this chat (src/serve/chatview.ts): the tailer's update, no timer
+    for (const fn of this.recorded) fn(threadId);
   }
+
+  /** Told after each recordSession (the tailer's update), with the chat's id. */
+  readonly recorded = new Set<(threadId: string) => void>();
 
   getTurns(threadId: string, opts: { before?: number; limit?: number } = {}): Turn[] {
     const limit = opts.limit ?? 20;

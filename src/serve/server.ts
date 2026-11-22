@@ -20,7 +20,7 @@ import type { ItemState, RichLine } from '../app/compositor.ts';
 import { effortsFor } from '../app/models.ts';
 import { listWatchesText, PROJECT_TOOL_NAMES, readMailText, SERVE_TOOL_NAMES } from '../mcp/server.ts';
 import { MCP_TOKEN_ENV, SERVE_URL_ENV } from '../mcp/pro.ts';
-import { latestModels, liveAddDirDone, liveAddDirInput, liveAddDirKeys, codexGrantMessage, Mailbox, NEWLINE_KEYS, transcriptHas, TurnWatch, type ChatLook, type MailEvent, type Transport } from '@chauvoluuhuong/chorus-core';
+import { clearKeys, inputState, latestModels, menuShown, NATIVE_COMMANDS, liveAddDirDone, liveAddDirInput, liveAddDirKeys, codexGrantMessage, Mailbox, NEWLINE_KEYS, transcriptHas, TurnWatch, type ChatLook, type MailEvent, type Transport } from '@chauvoluuhuong/chorus-core';
 import { computerDir } from '../app/screens.ts';
 import type { ThreadHost } from '../app/thread-host.ts';
 import { transcriptPath } from '../core/capture.ts';
@@ -45,6 +45,7 @@ import { ProjectRuntime, type LiveWay } from './project-runtime.ts';
 import { APPROVE_RESTART, CREATE_OPEN, DECLINE, appliedLine, checkNewProject, checkProposal, getProject, isComputer, needsRestart, newProjectCard, parseProposal, placeName, proposalCard, type AskerResult } from './project-tools.ts';
 import { answerChannelWarning, CHANNEL_WAIT_MS, ChannelHub, makeTransports, screenRows, typeLine, wakeFor, type ChatSession } from './mail.ts';
 import { TermLocks } from './termlock.ts';
+import { callDetail, delta, heldInInput, KEYS, turnsPage, typedText, type CvDeps, type CvSent } from './chatview.ts';
 import { SignIns } from './signin.ts';
 import { skillSlug } from './slug.ts';
 import { inContainer } from '../cli/screen.ts';
@@ -172,6 +173,10 @@ export interface ServeOpts {
   container?: boolean;
   /** whether the CLI still has a chat's session (tests); its transcript on disk otherwise */
   sessionExists?: (row: ThreadRow) => boolean;
+  /** the Chat view's `say`: how long after the Enter it looks whether the CLI kept the text in its input (tests: 0) */
+  sayCheckMs?: number;
+  /** the Chat view's `say` types only when the CLI shows its input box (default on; the tests' fake agent draws none) */
+  sayNeedsInput?: boolean;
   /** sub threads' watchdog (tests: a short one); the watcher's QUIET_MS otherwise */
   subQuietMs?: number;
   /** the watcher's and the mailbox's clock (tests: a fake one) */
@@ -321,6 +326,7 @@ export class ChorusServer {
     });
     if (o.chatLaunch) o.chatLaunch.launched = (id, project, dirs, env) => this.projects.launched(id, project, dirs, env);
     this.bridge();
+    this.c.store.recorded.add(id => this.cvRecorded(id));
   }
 
   /* ---------- project settings and running chats (task #11 step 6) ---------- */
@@ -464,6 +470,110 @@ export class ChorusServer {
       if (state === 'working' && activity === start.mark && start.mark !== NO_ACTIVITY && this.now() - start.at >= STALE_TURN_MS) state = 'waiting';
     }
     return { state, activity, ...(this.openCard(id) ? { waitsOn: ['card'] } : {}) };
+  }
+
+  /* ---------- the Chat view (plan 2026-11-22, src/serve/chatview.ts) ---------- */
+
+  get cvDeps(): CvDeps {
+    return { store: this.c.store, reported: id => this.reported(id) };
+  }
+  /** the clients that show a chat in the Chat view, and what each was last sent */
+  private cvSent = new Map<Client, CvSent>();
+
+  /** A client opened a chat in the Chat view (after its GET turns): from now on it gets what is new, nothing else. */
+  cvWatch(cl: Client, id: string | undefined, seq: number) {
+    if (!id || !this.c.store.getThread(id)) return void this.cvSent.delete(cl);
+    // the rows of its last turns are sent once more (a call may have finished between its GET and this message)
+    const sent: CvSent = { id, seq: Math.max(0, seq | 0), calls: new Map(), cards: '' };
+    this.cvSent.set(cl, sent);
+    this.cvSend(cl, sent);
+  }
+
+  private cvSend(cl: Client, sent: CvSent) {
+    const d = delta(this.cvDeps, sent);
+    if (d) cl.send(JSON.stringify({ t: 'cv', id: sent.id, ...d }));
+  }
+
+  /** The tailer recorded a chat's session (Store.recorded): each client showing it gets the new turns and changed rows. */
+  private cvRecorded(threadId: string) {
+    for (const [cl, sent] of this.cvSent) if (sent.id === threadId) this.cvSend(cl, sent);
+  }
+
+  /** A chat some page shows in the Chat view, idle, whose CLI shows a menu or panel of its own (the "Open Raw" banner). */
+  private cvMenu(e: Entry): boolean {
+    const host = e.host;
+    if (!host || host.state !== 'running' || ![...this.cvSent.values()].some(x => x.id === e.id)) return false;
+    if (this.c.store.getThread(e.id)?.state === 'working') return false;
+    try {
+      return menuShown(e.agent as AgentId, screenRows(host.screen), host.screen.cols);
+    } catch {
+      return false;
+    }
+  }
+
+  /** What `say` and `key` answer for a chat the user may not type into now, else undefined. */
+  private typingRefused(id: string): string | undefined {
+    const t = this.c.store.getThread(id);
+    if (t?.sub_status && !this.isUnlocked(id)) return 'This sub thread is watch-only: tell its main chat, or Unlock it first.';
+    return undefined;
+  }
+
+  /**
+   * The Chat view's message box (phone): the user typing a message into the chat's CLI, through the same gates as keys from the
+   * page (watch-only, the mail watchdog's hold, what typing resets). Skills become the sentence each CLI understands; the text is
+   * typed by the rule probed per CLI (typedText). `held`: the CLI kept the text in its input (an unknown command in Codex).
+   */
+  private async say(id: string, raw: unknown): Promise<{ result: 'sent' | 'ended' | 'gone' | 'held'; message?: string } | { error: string }> {
+    const text = typeof raw === 'string' ? raw.trim() : '';
+    if (!text) return { error: 'Type a message first.' };
+    if (text.length > 20_000) return { error: 'That message is too long to type into the agent (20,000 characters at most).' };
+    const refused = this.typingRefused(id);
+    if (refused) return { error: refused };
+    const row = this.c.store.getThread(id)!;
+    const agent = row.agent as AgentId;
+    const typed = typedText(agent, expandSkillMentions(text, this.skillNames()));
+    const name = CLIS[agent]?.name ?? agent;
+    // the line counts as the user's: a sub thread's main chat is told, an open card is answered by typing (as keys from the page)
+    // a running CLI that shows something of its own (a start-up question, a permission dialog, a menu) takes no text: typed keys and
+    // the Enter after them would answer it (chatview-probe M and S: inputState reads the input box per CLI)
+    const running = this.app.entry(id)?.host;
+    if (this.o.sayNeedsInput !== false && running?.state === 'running' && !inputState(agent, screenRows(running.screen), running.screen.cols).ready) return { result: 'ended', message: `${CLIS[agent]?.name ?? agent} is showing something on its own screen. Open Raw to answer it.` };
+    const line = text.replace(/\s+/g, ' ') + '\r';
+    this.watchOnlyLets(id, line);
+    const r = await this.locks.run(id, () => this.c.sendToChat(id, typed, x => (this.o.sessionExists ?? sessionOnDisk)(x)));
+    if (r === 'sent') {
+      this.noteTyped(id, line);
+      this.typedTo(id, '\r');
+      this.pushState();
+      // the CLI may keep the text in its input instead of sending it (chatview-probe S: Codex and an unknown /command): say so
+      const host = this.app.entry(id)?.host;
+      await new Promise(res => setTimeout(res, this.o.sayCheckMs ?? 1500));
+      if (host && host.state === 'running' && heldInInput(agent, screenRows(host.screen), host.screen.cols, typed)) {
+        // only what Chorus typed is there: it is cleared, so the next message is not added to it (Ctrl+U per line, typein-probe A)
+        const st = inputState(agent, screenRows(host.screen), host.screen.cols);
+        const flat = (x: string) => x.replace(/\s+/g, ' ').trim();
+        if (flat(st.draft) === flat(typedText(agent, text).split(NEWLINE_KEYS[agent] ?? '\x1b\r').join(' ')) || flat(st.draft) === flat(text)) await this.locks.run(id, () => host.write(clearKeys(agent, st)));
+        return { result: 'held', message: `${name} did not take the message: its own screen says why. Open Raw to see it.` };
+      }
+      return { result: 'sent' };
+    }
+    if (r === 'gone') return { result: 'gone', message: 'This chat cannot be continued: its session is gone. Hand it off to start again from its record.' };
+    return { result: 'ended', message: `${name} is showing something on its own screen. Open Raw to answer it.` };
+  }
+
+  /** The key row's Esc and Shift+Tab: fixed bytes into the running CLI, through the same gates. A parked chat is not resumed. */
+  private async chatKey(id: string, key: unknown): Promise<{ ok: true } | { error: string }> {
+    const bytes = typeof key === 'string' && Object.hasOwn(KEYS, key) ? KEYS[key] : undefined;
+    if (!bytes) return { error: 'key must be esc or shift-tab' };
+    const refused = this.typingRefused(id);
+    if (refused) return { error: refused };
+    const host = this.app.entry(id)?.host;
+    if (!host || host.state !== 'running') return { error: 'The agent is not running in this chat.' };
+    const held = this.keyHold.get(id);
+    if (held) held.push(bytes);
+    else host.write(bytes);
+    this.noteTyped(id, bytes);
+    return { ok: true };
   }
 
   /* ---------- the mail watchdog's hooks (task #14) ---------- */
@@ -1560,7 +1670,9 @@ export class ChorusServer {
       if (f.startsWith(UI_DIR + path.sep)) file = f;
     }
     if (!file || !fs.existsSync(file) || !fs.statSync(file).isFile()) return send(res, 404, { error: 'not found' });
-    res.writeHead(200, { 'content-type': TYPES[path.extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-store' });
+    // a vendored library with its version in its name (src/desktop/vendor/mermaid-<v>.min.js) never changes: kept by the browser
+    const pinned = /^\/vendor\/[\w.-]+-\d+\.\d+\.\d+\.min\.js$/.test(p);
+    res.writeHead(200, { 'content-type': TYPES[path.extname(file)] ?? 'application/octet-stream', 'cache-control': pinned ? 'public, max-age=31536000, immutable' : 'no-store' });
     fs.createReadStream(file).pipe(res);
   }
 
@@ -1876,6 +1988,20 @@ export class ChorusServer {
         this.select(id);
         c.retryContext();
         return { ok: true };
+      // the Chat view (src/serve/chatview.ts, docs/features/chat-view.md): a page of turns with short tool call rows and the cards
+      case 'GET chats/:id/turns': {
+        if (!thread) return undefined;
+        const before = Number(q.get('before'));
+        const limit = Number(q.get('limit'));
+        return turnsPage(this.cvDeps, id, { before: before > 0 ? before : undefined, limit: limit > 0 ? limit : undefined });
+      }
+      // one call's input and output, read from the transcript only now (a tap on its row); ?full=1 for "Show all"
+      case 'GET chats/:id/calls':
+        return thread && parts[3] ? callDetail(c.store, id, parts[3], q.get('full') === '1') : undefined;
+      case 'POST chats/:id/say':
+        return thread ? this.say(id, b.text) : undefined;
+      case 'POST chats/:id/key':
+        return thread ? this.chatKey(id, b.key) : undefined;
       case 'GET chats/:id/activity':
         return thread && c.activityRows(id);
       case 'GET chats/:id/artifacts':
@@ -2083,6 +2209,9 @@ export class ChorusServer {
         updated: t?.updated ?? null,
         // a sub thread: its main chat and its status (null for any other chat)
         sub: this.subs.info(t, this.isUnlocked(e.id)),
+        // the Chat view's "Open Raw" banner: the CLI shows its own menu (probed per CLI, menuShown), looked at only for a chat a
+        // page shows in the Chat view
+        ...(this.cvMenu(e) ? { menu: true } : {}),
       };
     });
     return {
@@ -2095,6 +2224,8 @@ export class ChorusServer {
       chats,
       // Shift+Enter in a chat's terminal: the bytes that add a new line in each CLI's input (probed, docs/integrations)
       keys: NEWLINE_KEYS,
+      // the Chat view's "/" list: each CLI's own commands that run from typed text (probed, chorus-core NATIVE_COMMANDS)
+      nativeCommands: NATIVE_COMMANDS,
       // CHORUS_DEBUG_IME=<file>: the page turns its typing recorder on (localStorage chorus.debugIme) and posts every key event
       ...(process.env.CHORUS_DEBUG_IME ? { debugIme: true } : {}),
       // when each request appeared (whole seconds), not "seconds waiting": the state must not change every push, or the
@@ -2344,6 +2475,7 @@ export class ChorusServer {
     // a window that opens takes the size from the browser tabs; one that closes gives it back
     if (native) this.announceSize();
     ws.on('close', () => {
+      this.cvSent.delete(cl);
       cl.detach();
       this.clients.delete(cl);
       if (this.sizer === cl) this.sizer = undefined;
@@ -2369,6 +2501,9 @@ export class ChorusServer {
         debug(`attach ${m.cols}x${m.rows}, agents at ${this.size.cols}x${this.size.rows}`);
         if (!this.app.entry(m.id)?.host) this.select(m.id); // a parked chat resumes when you open it
         void cl.attach(m.id);
+      } else if (m.t === 'cv') {
+        // the Chat view: this client shows chat m.id (or none) and has its turns up to m.seq; it gets only what is new from now on
+        this.cvWatch(cl, typeof m.id === 'string' ? m.id : undefined, Number(m.seq) || 0);
       } else if (m.t === 'imelog') {
         // the page's typing recorder (chorus.debugIme): key, input and composition events and what ime-input.js did, as JSON lines
         if (process.env.CHORUS_DEBUG_IME && Array.isArray(m.ev)) fs.appendFileSync(process.env.CHORUS_DEBUG_IME, m.ev.map((x: unknown) => JSON.stringify(x) + '\n').join(''));

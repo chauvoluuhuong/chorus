@@ -31,13 +31,13 @@ export function findToken(text, caret, triggers) {
   return null;
 }
 
-/** The items that match the query, those that start with it first, at most MAX_ITEMS. */
+/** The items that match the query, those that start with it first, at most MAX_ITEMS. Items with a `group` stay in their group's order. */
 export function rank(items, query) {
   const q = query.toLowerCase();
   const starts = x => x.key.toLowerCase().startsWith(q) || String(x.main ?? '').toLowerCase().startsWith(q);
   return items
     .filter(x => x.key.toLowerCase().includes(q))
-    .sort((a, b) => Number(starts(b)) - Number(starts(a)))
+    .sort((a, b) => (a.group ?? 0) - (b.group ?? 0) || Number(starts(b)) - Number(starts(a)))
     .slice(0, MAX_ITEMS);
 }
 
@@ -83,7 +83,7 @@ function caretAt(field) {
  * Attaches the picker to a field. `onChange(text)` is told when a pick changed the text. Returns { close, destroy, isOpen }.
  * A source is asked again as the query changes; an answer that comes after the query moved on is dropped.
  */
-export function attachPicker(field, triggers, { onChange } = {}) {
+export function attachPicker(field, triggers, { onChange, above = false } = {}) {
   const box = document.createElement('div');
   box.className = 'tpick';
   box.setAttribute('role', 'listbox');
@@ -102,12 +102,16 @@ export function attachPicker(field, triggers, { onChange } = {}) {
     if (!tok) return close();
     box.setAttribute('aria-label', tok.trigger.label);
     box.innerHTML = (tok.trigger.heading ? `<div class="tpick-h">${esc(tok.trigger.heading)}</div>` : '') + (list.length
-      ? list.map((x, i) => itemHtml(x, i, i === sel)).join('')
+      ? list.map((x, i) => (x.groupLabel && x.group !== list[i - 1]?.group ? `<div class="tpick-h">${esc(x.groupLabel)}</div>` : '') + itemHtml(x, i, i === sel)).join('')
       : `<div class="tpick-empty">${esc(tok.trigger.empty ?? 'Nothing matches')}</div>`);
     const c = caretAt(field);
     box.hidden = false;
     box.style.left = `${Math.max(0, Math.min(c.left, field.offsetLeft + field.clientWidth - box.offsetWidth))}px`;
-    box.style.top = `${c.top + c.h + 4}px`;
+    // above the field (the Chat view's message box sits at the bottom of the screen, the keyboard under it)
+    if (above) {
+      box.style.top = 'auto';
+      box.style.bottom = `${field.parentElement.clientHeight - field.offsetTop + 6}px`;
+    } else box.style.top = `${c.top + c.h + 4}px`;
     box.querySelector('.on')?.scrollIntoView({ block: 'nearest' });
   };
   const update = async () => {
