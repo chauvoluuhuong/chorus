@@ -135,7 +135,8 @@ const SCREENS: Screen[] = [
   { id: 'new-menu', label: 'New chat, a picker open', open: async () => { await goTo({ name: 'new' }); await until(() => js<boolean>('!!document.querySelector(".nc-pk")'), 8000); await click('.nc-pk'); }, close: () => js('chorus.S.ncMenu = null') },
   { id: 'chat', label: 'A chat that asks', open: async () => { await goTo({ name: 'chat', id: chatId() }); await sleep(800); } },
   { id: 'chat-sheet', label: 'The chat’s ⋯ sheet', sizes: ['phone'], open: async () => { await goTo({ name: 'chat', id: chatId() }); await click('[data-act="chat-menu"]'); }, close: () => js('chorus.S.sheet = null; document.querySelector("#sheet")?.remove()') },
-  { id: 'drawer', label: 'Artifacts drawer', open: async () => { await goTo({ name: 'chat', id: chatId() }); if (!(await js<boolean>('chorus.S.drawer === "artifacts"'))) await js(`document.querySelector('[data-act="drawer"][data-arg="artifacts"], [data-act="drawer-to"][data-arg="artifacts"]')?.click()`); await sleep(700); }, close: () => js(`chorus.S.drawer = null`) },
+  // a phone: Artifacts is the chat's Files tab
+  { id: 'drawer', label: 'Artifacts drawer', open: async () => { await goTo({ name: 'chat', id: chatId() }); if (!(await js<boolean>('chorus.S.drawer === "artifacts"'))) await js(`document.querySelector('[data-act="chat-tab"][data-arg="files"], [data-act="drawer"][data-arg="artifacts"], [data-act="drawer-to"][data-arg="artifacts"]')?.click()`); await sleep(700); }, close: () => js(`chorus.S.drawer = null; chorus.S.chatTab = 'chat'`) },
   { id: 'approvals', label: 'Approvals', open: () => goTo({ name: 'approvals' }) },
   { id: 'memory', label: 'Memory', open: async () => { await goTo({ name: 'memory' }); await until(() => js<boolean>('chorus.S.mem.items.length > 0'), 8000); await sleep(300); } },
   { id: 'memory-record', label: 'A record in Memory', sizes: ['phone'], open: async () => { await goTo({ name: 'memory' }); await until(() => js<boolean>('chorus.S.mem.items.length > 0'), 8000); await click('.mem .rows .item'); } },
@@ -208,8 +209,14 @@ const rpc = [
   { jsonrpc: '2.0', method: 'notifications/initialized' },
   { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'request_approval', arguments: { question: 'Ship the order page today?', details: 'The page works on a phone and its tests pass. Shipping today leaves the checkout button disabled until the payment webhook is done.', options: ['Ship it today', 'Wait for checkout', 'Ship behind a flag'] } } },
 ].map(m => JSON.stringify(m)).join('\n') + '\n';
-spawnSync(process.execPath, [path.join(ROOT, 'src/cli/index.ts'), 'mcp', '--thread', chatId()], { cwd: shop, env, input: rpc, encoding: 'utf8', timeout: 20000 });
-check('the approval card reaches the page', await until(() => js<boolean>('chorus.S.state.approvals.length > 0'), 15000));
+// the MCP server stays up while the card waits for an answer (its stdin open): closed, it ends before the call is made
+const mcp = spawn(process.execPath, [path.join(ROOT, 'src/cli/index.ts'), 'mcp', '--thread', chatId()], { cwd: shop, env, stdio: ['pipe', 'pipe', 'pipe'] });
+let mcpOut = '';
+mcp.stdout!.on('data', d => (mcpOut += d));
+mcp.stderr!.on('data', d => (mcpOut += d));
+mcp.stdin!.write(rpc);
+process.on('exit', () => mcp.kill('SIGTERM'));
+check('the approval card reaches the page', await until(() => js<boolean>('chorus.S.state.approvals.length > 0'), 15000), `mcp: ${mcpOut.slice(-300)}`);
 
 /* ---------- 3. every screen at three sizes, light and dark ---------- */
 
@@ -235,6 +242,7 @@ for (const scheme of ['light', 'dark'] as Scheme[]) {
 /* ---------- report ---------- */
 
 chrome.close();
+mcp.kill('SIGTERM');
 await stopServe();
 if (beforeDir) spawnSync('git', ['worktree', 'remove', '--force', beforeDir], { cwd: ROOT });
 const file = writeReport(OUT, 'Chorus desktop page: phone, tablet and desktop', `Every screen at 390 × 844, 820 × 1180 and 1280 × 800, light and dark, with fake agents. The desktop screens are compared with ${BEFORE || 'nothing'} pixel by pixel.`, results, shots, []);
