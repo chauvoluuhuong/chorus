@@ -56,7 +56,7 @@ const VARS = { E2E_VAR: 'e2e-env-ok', E2E_TOKEN: 'e2e-token-ok' };
 const SECRET = 'e2e-secret-xyz';
 const LIVE_OK = 'e2e-live-ok';
 
-const env = { ...process.env, CHORUS_HOME: CHOME, CHORUS_NO_OPEN: '1', CHORUS_MODEL_CLAUDE: process.env.CHORUS_MODEL_CLAUDE ?? 'haiku', AGY_CLI_DISABLE_AUTO_UPDATE: '1' } as Record<string, string>;
+const env = { ...process.env, CHORUS_HOME: CHOME, CHORUS_NO_OPEN: '1', CHORUS_NOTIFICATIONS: '0', CHORUS_MODEL_CLAUDE: process.env.CHORUS_MODEL_CLAUDE ?? 'haiku', AGY_CLI_DISABLE_AUTO_UPDATE: '1' } as Record<string, string>;
 for (const k of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_PID']) delete env[k];
 
 /* ---------- chorus serve ---------- */

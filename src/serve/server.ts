@@ -1847,7 +1847,8 @@ export class ChorusServer {
       }
       case 'POST chats/:id/approve':
       case 'POST chats/:id/deny': {
-        const ok = await this.typedVia(id, () => c.answer(sub === 'approve', id));
+        // "Always allow in this chat": the prompt's own always key, when its CLI offers one (approvalItems says so)
+        const ok = await this.typedVia(id, () => c.answer(sub === 'approve', id, sub === 'approve' && b.always === true));
         this.pushState();
         return { ok };
       }

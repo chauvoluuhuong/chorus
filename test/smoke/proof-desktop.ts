@@ -71,7 +71,7 @@ const TASK =
   `Run it once with your shell tool as: node -e "console.log(require('./calc.js').add(2, 3))" . ` +
   'Then write a short markdown note about what you did, as notes.md, where Chorus keeps files for the user. Reply with one line: done.';
 
-const env = { ...process.env, CHORUS_MODEL_CLAUDE: 'haiku', CHORUS_NO_OPEN: '1', CHORUS_HOME: sharedHome, CHORUS_SKILLS_HOME: fakeUserHome } as Record<string, string>;
+const env = { ...process.env, CHORUS_MODEL_CLAUDE: 'haiku', CHORUS_NO_OPEN: '1', CHORUS_NOTIFICATIONS: '0', CHORUS_HOME: sharedHome, CHORUS_SKILLS_HOME: fakeUserHome } as Record<string, string>;
 for (const k of ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_PID']) delete env[k];
 
 /* ---------- chorus serve ---------- */

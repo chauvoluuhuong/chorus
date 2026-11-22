@@ -119,3 +119,32 @@ test('the versions the matrix tested after this build are handed to the doctor; 
   }
   assert.deepEqual(got, [{ claude: [], codex: ['0.164.0'], agy: ['1.4.8'] }]);
 });
+// One machine counts once (the admin page counts installation IDs): the ID lives in the Chorus home, which an update, a
+// reinstall and a preview build beside production all keep.
+test('installing again on one machine (an update, a preview beside production) reports the same installation', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-inbox-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const counted = new Set<string>(); // what the backend keeps: one record per installation ID
+  const request = (async (_url: string | URL | Request, opts: RequestInit) => { counted.add(JSON.parse(String(opts.body)).installationId); return Response.json(feed()); }) as typeof fetch;
+  for (const version of ['2.10.0', '2.11.0', '2.11.1-preview.1', '2.11.0']) {
+    const inbox = new NotificationInbox({ directory, version, platform: 'darwin', request, endpoint: 'https://notifications.invalid' });
+    await inbox.startup(); inbox.close();
+    assert.equal(counted.size, 1, `after installing ${version}`);
+  }
+});
+// A developer's proof run starts the real server on a new, empty Chorus home: with reporting on, every run would add an
+// installation to the admin page's count. Each script that does so turns reporting off (or runs the fake agents, which never report).
+test('no test or proof script starts the server on its own Chorus home with launch reporting on', () => {
+  const root = path.resolve(import.meta.dirname, '../..'), leaks: string[] = [];
+  const walk = (dir: string) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const file = path.join(dir, e.name);
+      if (e.isDirectory()) { if (e.name !== 'node_modules') walk(file); continue; }
+      if (!/\.(ts|mjs|js|sh)$/.test(e.name) || /\.test\.ts$/.test(e.name)) continue;
+      const text = fs.readFileSync(file, 'utf8');
+      if (/CHORUS_HOME/.test(text) && (e.name.endsWith('.sh') ? /\sserve(\s|$)/m : /['"]serve['"]/).test(text) && !/CHORUS_NOTIFICATIONS|fake-agents|CHORUS_FAKE_AGENTS/.test(text)) leaks.push(path.relative(root, file));
+    }
+  };
+  for (const dir of ['test', 'tools', 'scripts']) if (fs.existsSync(path.join(root, dir))) walk(path.join(root, dir));
+  assert.deepEqual(leaks, []);
+});
