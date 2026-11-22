@@ -52,6 +52,39 @@ const ICON = {
   bell: svg('<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>'),
   up: svg('<path d="M12 19V5M6 11l6-6 6 6" stroke-width="2.2"/>'),
 };
+/* the phone's drawn icons (mockup phone-ui-v2.html, its <symbol>s): one stroke, 24 × 24, sized by CSS */
+const ph = d => `<svg class="pv-i" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+const PI = {
+  home: ph('<path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z"/>'),
+  chats: ph('<path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-7l-4.5 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/>'),
+  plus: ph('<path d="M12 5v14M5 12h14"/>'),
+  approvals: ph('<path d="M12 3.5 19 6v5.5c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6z"/><path d="m9 12 2.2 2.2L15.2 10"/>'),
+  more: ph('<circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/>'),
+  bell: ph('<path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2H5z"/><path d="M10 21h4"/>'),
+  chev: ph('<path d="m9 5 7 7-7 7"/>'),
+  back: ph('<path d="m15 5-7 7 7 7"/>'),
+  search: ph('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>'),
+  folder: ph('<path d="M3.5 7a1 1 0 0 1 1-1H10l2 2.5h7.5a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z"/>'),
+  check: ph('<path d="m5 12.5 4.5 4.5L19 7.5"/>'),
+  book: ph('<path d="M5 4.5h11a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/>'),
+  sync: ph('<path d="M4 9h14l-3.5-3.5M20 15H6l3.5 3.5"/>'),
+  team: ph('<circle cx="9" cy="9" r="3.2"/><path d="M3 19c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><circle cx="17" cy="8" r="2.4"/><path d="M17.5 13.5c2 .4 3.2 1.9 3.6 4"/>'),
+  flow: ph('<rect x="3.5" y="4.5" width="7" height="5" rx="1.2"/><rect x="13.5" y="14.5" width="7" height="5" rx="1.2"/><path d="M7 9.5V17h6.5"/>'),
+  link: ph('<rect x="7" y="3.5" width="10" height="17" rx="2.2"/><path d="M11 17.5h2"/>'),
+  pulse: ph('<path d="M3 12h4l2.5-6 4 12 2.5-6h5"/>'),
+  down: ph('<path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19.5h14"/>'),
+  x: ph('<path d="M6 6l12 12M18 6 6 18"/>'),
+  up: ph('<path d="M12 19V5M6 11l6-6 6 6"/>'),
+  fold: ph('<path d="m6 9 6 6 6-6"/>'),
+  unfold: ph('<path d="m6 15 6-6 6 6"/>'),
+  key: ph('<circle cx="8" cy="15" r="4"/><path d="m11 12 8.5-8.5M16 7l2.5 2.5"/>'),
+  trash: ph('<path d="M5 7h14M10 7V5h4v2M7 7l1 12.5h8L17 7"/>'),
+  share: ph('<path d="M12 15V4M8 8l4-4 4 4"/><path d="M6 12v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7"/>'),
+  lock: ph('<rect x="5.5" y="10.5" width="13" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>'),
+};
+/** A More row's icon: drawn, white, in a colour tile (the mockup's colours, the same in light and dark). */
+const TILE = { memory: ['book', '#b7791f'], skills: ['sync', '#0f766e'], projects: ['folder', '#8a6d3b'], teammates: ['team', '#7a4fc0'], processes: ['flow', '#3f6fd1'], remote: ['link', '#2f7d3a'], doctor: ['pulse', '#c6613f'], notifications: ['bell', '#b13b32'], export: ['down', '#6f6c64'], update: ['up', '#0f766e'], unlock: ['key', '#6f6c64'] };
+const tile = id => `<span class="pv-tile" style="background:${TILE[id]?.[1] ?? '#6f6c64'}">${PI[TILE[id]?.[0] ?? 'chev']}</span>`;
 
 /* ---------- three sizes (docs/features/responsive.md): phone ≤ 640 · tablet 641–1024 · desktop ≥ 1025 ----------
    Written on <html data-size>: the contract with the optional module, which picks its phone renderings from it. */
@@ -676,15 +709,16 @@ function fillSlots() {
     if (window.choruspro) window.choruspro.render(el.dataset.proSlot, el, { ...el.dataset, view: S.view.id, id: S.view.id, open: S.view.name === 'chat' ? S.view.id : '', project: S.form?.folder ?? S.state?.project, cwd: el.dataset.cwd ?? S.state?.chats.find(c => c.id === el.dataset.chat)?.cwd, chatRow: S.state?.chats.find(c => c.id === el.dataset.chat), chats: S.state?.chats });
     else if (el.dataset.proSlot === 'nav' && el.dataset.part) {
       // a phone's More: the same locked items as rows (Team), Remote access locked too (This Mac)
-      const row = (ic, t, act) => `<button class="mrow locked" data-act="${act}"><span class="ico">${ic}</span>${t}<span class="val"${act === 'unlock' ? '' : ' aria-label="Pro only"'}>${act === 'unlock' ? '' : '🔒'}</span><span class="chev">›</span></button>`;
-      const team = (community() ? [['☺', 'Teammates', 'plan-welcome'], ['⇢', 'Processes', 'plan-welcome']] : []).concat(S.pro?.dev ? [['⚿', 'Unlock', 'unlock']] : []);
-      el.innerHTML = (el.dataset.part === 'team' ? team : community() ? [['⇆', 'Remote access', 'plan-welcome']] : []).map(r => row(...r)).join('');
+      const row = (id, t, act) => `<button class="mrow pv-row pv-mrow locked" data-act="${act}">${tile(id)}<span class="tx"><b>${t}</b></span><span class="end"${act === 'unlock' ? '' : ' aria-label="Pro only"'}>${act === 'unlock' ? '' : `${PI.lock}Pro`}${PI.chev}</span></button>`;
+      const team = (community() ? [['teammates', 'Teammates', 'plan-welcome'], ['processes', 'Processes', 'plan-welcome']] : []).concat(S.pro?.dev ? [['unlock', 'Unlock', 'unlock']] : []);
+      el.innerHTML = (el.dataset.part === 'team' ? team : community() ? [['remote', 'Remote access', 'plan-welcome']] : []).map(r => row(...r)).join('');
     } else if (el.dataset.proSlot === 'nav') {
       // Community: the Pro items show, locked; a click offers the trial. A dev build also has Unlock (a test key)
       el.innerHTML = lockedRow('☺', 'Teammates') + (S.pro?.dev ? `<button class="${S.view.name === 'unlock' ? 'on' : ''}" data-act="unlock"><span class="ico">⚿</span>Unlock</button>` : '');
     } else if (el.dataset.proSlot === 'nav-more') el.innerHTML = lockedRow('⇢', 'Processes');
     else if (el.dataset.proSlot === 'settings') el.innerHTML = lockedRow('⇆', 'Remote access');
   }
+  if (S.size === 'phone' && S.view.name === 'more') tileMoreRows(document);
 }
 /** A Pro place in the community sidebar: shown, locked; a click offers the trial. */
 function lockedRow(ic, t) {
@@ -946,7 +980,7 @@ function litNow(c, kind) {
     const open = S.view.name === 'chat' && S.view.id === c.id && (S.size === 'phone' ? S.chatTab !== 'chat' : view === 'task');
     return HL.lit(c.id, 'task', typeof rev === 'number' ? rev : undefined, open);
   }
-  const open = S.view.name === 'chat' && S.view.id === c.id && view === 'artifacts';
+  const open = S.view.name === 'chat' && S.view.id === c.id && (view === 'artifacts' || (S.size === 'phone' && S.chatTab === 'files'));
   return HL.lit(c.id, 'artifacts', artifactsMark(c), open);
 }
 /** The Artifacts button flashes when the count grew or an artifact got a new version (an edit); only the count rolls. */
@@ -1001,7 +1035,7 @@ function renderChrome() {
 
   const chat = v.name === 'chat' ? st?.chats.find(c => c.id === v.id) : undefined;
   if (S.size === 'phone') {
-    $('#top').className = PHONE_ROOTS.includes(v.name) ? 'root' : '';
+    $('#top').className = PHONE_ROOTS.includes(v.name) ? 'root' : v.name === 'new' ? 'nc' : '';
     $('#top').innerHTML = phoneTop(chat);
   } else {
     // a tablet: icon buttons (whole words on a desktop, written as they always were)
@@ -1044,29 +1078,31 @@ function renderChrome() {
   if ($('#doctor-tip')) placeDoctorTip();
 }
 
-/** A phone's top bar: ‹ Back (not on the four places of the tab bar), the screen's title, at most two icons. */
+/** A phone's top bar (mockup phone-ui-v2.html): a big title on the four places of the tab bar; ‹ Back and the screen's title on the
+ *  others; Cancel · New chat · Start on New chat; back, the agent, the title and ⋯ on a chat. */
 function phoneTop(chat) {
   const v = S.view, st = S.state;
   const root = PHONE_ROOTS.includes(v.name);
   const unread = st?.notifications?.unread ?? 0;
   const ico = (act, label, inner, arg = '') => `<button class="icon-btn ph-ico" data-act="${act}"${arg ? ` data-arg="${esc(arg)}"` : ''} aria-label="${esc(label)}">${inner}</button>`;
+  const rnd = (act, label, inner) => `<button class="pv-rnd" data-act="${act}" aria-label="${esc(label)}">${inner}</button>`;
   let title = '';
   let icons = '';
   if (v.name === 'home') {
     title = '<span class="logo"><i></i><i></i><i></i></span>Chorus';
-    if (st?.update) icons += ico('update-toggle', `Chorus ${st.update.version} is available`, `${ICON.up}<span class="n acc">1</span>`);
-    icons += ico('news-toggle', `Notifications${unread ? `, ${unread} unread` : ''}`, `${ICON.bell}${unread ? `<span class="n">${Math.min(unread, 99)}</span>` : ''}`);
+    if (st?.update) icons += rnd('update-toggle', `Chorus ${st.update.version} is available`, `${PI.up}<span class="pip acc"></span>`);
+    icons += rnd('news-toggle', `Notifications${unread ? `, ${unread} unread` : ''}`, `${PI.bell}${unread ? '<span class="pip"></span>' : ''}`);
   } else if (v.name === 'chats') {
     title = 'Chats';
-    icons = ico('add-project', 'Add a project', '＋');
+  } else if (v.name === 'new') {
+    // one job, no tab bar: Start sits top right, where the keyboard never covers it
+    const busy = !!S.form?.busy || !S.form;
+    return `<button class="pv-navl" data-act="back">Cancel</button><div class="ph-title pv-mid">${v.from ? 'Hand off' : 'New chat'}</div><button class="pv-pill" data-act="nc-start"${busy ? ' disabled' : ''}>${v.from ? 'Hand off' : 'Start'}</button>`;
   } else if (v.name === 'chat') {
-    // the agent and its state are the title's second line (the chat has no header row of its own on a phone)
-    title = chat
-      ? `<span class="ph-t1">${esc(chat.title)}</span><span class="ph-sub"><span class="badge ${esc(chat.agent)}">${esc(AGENT[chat.agent]?.name ?? chat.agent)}</span><span class="dot ${esc(chat.state)}"></span><span>${esc(STATE_LABEL[chat.state] ?? chat.state)}</span>${chat.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${chat.toast ? `<span class="badge ok">${esc(chat.toast)}</span>` : ''}</span>`
-      : '';
-    // Artifacts beside ⋯ (mockup mail-courier.html scene 3): it carries the lasting highlight on a phone
-    const art = chat && !chat.sub ? `<button class="icon-btn ph-ico ph-art${hlFlash(chat.id, 'artifacts', litNow(chat, 'artifacts'), artFlash(chat.id))}" data-act="drawer-to" data-arg="artifacts" aria-label="Artifacts${chat.artifacts ? `, ${chat.artifacts}` : ''}">▤${chat.artifacts ? ` <span class="badge plain">${countNum(`art:${chat.id}`, chat.artifacts)}</span>` : ''}</button>` : '';
-    icons = chat ? `${art}${ico('chat-menu', 'This chat: hand off, artifacts, activity, record, delete', '⋯')}` : '';
+    // the agent, the title, and under it the agent's name and its state (the chat has no header row of its own on a phone)
+    if (!chat) return `<button class="pv-back" data-act="back" aria-label="Back">${PI.back}</button><div class="ph-title"></div>`;
+    const s = phState(chat);
+    return `<button class="pv-back" data-act="back" aria-label="Back">${PI.back}</button>${avatar(chat, s.cls)}<div class="ph-title two"><span class="ph-t1">${esc(chat.title)}</span><span class="ph-sub">${esc(AGENT[chat.agent]?.name ?? chat.agent)} · <span class="pv-st ${s.cls}">${esc(s.label)}</span>${chat.skip ? ' <span class="badge warn" title="started without permission prompts">skip</span>' : ''}${chat.toast ? ` <span class="badge ok">${esc(chat.toast)}</span>` : ''}</span></div><button class="pv-back pv-r" data-act="chat-menu" aria-label="This chat: share, hand off, actions, activity, record, delete">${PI.more}</button>`;
   } else if (v.name === 'memory') {
     title = v.rec ? esc(S.mem.items.find(i => i.id === v.rec)?.title ?? 'Memory') : 'Memory';
   } else if (v.name === 'projects') {
@@ -1080,7 +1116,88 @@ function phoneTop(chat) {
   } else {
     title = { approvals: 'Approvals', more: 'More', new: v.from ? 'Hand off' : 'New chat', skills: 'Sync skills', doctor: 'Doctor', unlock: 'Unlock' }[v.name] ?? '';
   }
-  return `${root ? '' : ico('back', 'Back', '‹')}<div class="ph-title${v.name === 'chat' && chat ? ' two' : ''}">${title}</div>${icons}`;
+  return `${root ? '' : `<button class="pv-back" data-act="back" aria-label="Back">${PI.back}</button>`}<div class="ph-title">${title}</div>${icons}`;
+}
+
+/* ---------- a phone's shared parts (mockup phone-ui-v2.html): the agent's avatar, its state in words, rows, the request card ---------- */
+
+/** A chat's state as a phone says it: needs you (red), working (teal), your turn (amber), resting (grey). */
+function phState(c) {
+  if (waitsOnYou(c) || c.state === 'approval') return { cls: 'need', label: 'needs you' };
+  if (c.state === 'busy') return { cls: 'busy', label: 'working' };
+  if (c.state === 'starting') return { cls: 'busy', label: 'starting' };
+  if (c.state === 'idle') return { cls: 'turn', label: 'your turn' };
+  return { cls: '', label: c.state === 'ended' ? 'ended' : 'resting' };
+}
+/** The Planner's chats are purple with a P; others the agent's colour and letter. */
+function avatarOf(c) {
+  let planner = false;
+  try {
+    planner = /planner/i.test(window.choruspro?.chatTeammate?.(c.id)?.name ?? '') || window.choruspro?.chatPath?.(c.id)?.part === 'Planner';
+  } catch {
+    /* the module failed: the agent's own mark */
+  }
+  return planner ? { cls: 'p', letter: 'P' } : { cls: { claude: 'c', codex: 'x', agy: 'a' }[c.agent] ?? 'ic', letter: AGENT[c.agent]?.letter ?? '?' };
+}
+/** The avatar: who it is by colour and letter, what it is doing by the dot on its corner (no dot: `dot` null). */
+const avatar = (c, dot = phState(c).cls, small = false) => {
+  const a = avatarOf(c);
+  return `<span class="pv-av ${a.cls}${small ? ' sm' : ''}" aria-hidden="true">${esc(a.letter)}${dot === null ? '' : `<s class="${dot}"></s>`}</span>`;
+};
+/** When a chat last changed: now, 12m, 3h, Tue, 4 Nov. */
+function ago(when) {
+  const t = typeof when === 'number' ? (when < 1e12 ? when * 1000 : when) : Date.parse(when ?? '');
+  if (!t) return '';
+  const s = (Date.now() - t) / 1000;
+  if (s < 60) return 'now';
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  const d = new Date(t);
+  return s < 6 * 86400 ? d.toLocaleDateString('en-GB', { weekday: 'short' }) : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+/** One chat as a row: the avatar, its title, the project or agent and the state, the time. `sub`: under its owner, with a connector. */
+function chatRowPv(c, { sub = false, where = 'project' } = {}) {
+  const s = phState(c);
+  const second = where === 'project' ? `${esc(base(c.cwd))} · <span class="pv-st ${s.cls}">${esc(s.label)}</span>` : `<span class="pv-st ${s.cls}">${esc(s.label)}</span> · ${c.sub ? (c.sub.unlocked ? 'typing' : 'watch-only') : esc(AGENT[c.agent]?.name ?? c.agent)}`;
+  const on = S.view.name === 'chat' && S.view.id === c.id ? ' on' : '';
+  return `<button class="pv-row${sub ? ' sub' : ''}${on}" data-act="chat" data-arg="${esc(c.id)}" title="${esc(c.title)}">${avatar(c, s.cls, sub)}<span class="tx"><b>${esc(c.title)}</b><span>${second}</span></span>${sub ? '' : `<span class="end">${esc(ago(c.updated))}</span>`}</button>`;
+}
+/** What a permission prompt asks, in words: "wants to run a command:" and the command. */
+function promptWords(a) {
+  const [kind, ...rest] = String(a.what ?? '').split(' · ');
+  const verb = /^bash|shell|command|exec/i.test(kind) ? 'run a command' : /edit|write|patch|create|file/i.test(kind) ? 'change a file' : /mcp|tool/i.test(kind) ? 'use a tool' : '';
+  return verb && rest.length ? { q: `wants to ${verb}:`, code: rest.join(' · ') } : { q: 'asks for permission:', code: a.what ?? '' };
+}
+/** The answers of a request: two equal buttons (the safe one left), or a stack when there are more; Other…, Skip and a note. */
+function reqAnswers(a) {
+  if (a.kind !== 'ask') return `<div class="pv-two"><button class="pv-btn" data-act="deny" data-arg="${esc(a.id)}">Deny</button><button class="pv-btn go" data-act="approve" data-arg="${esc(a.id)}">Allow</button></div>${a.always ? `<button class="pv-always" data-act="approve-always" data-arg="${esc(a.id)}">Always allow in this chat</button>` : ''}`;
+  if (a.proposal) return `<div class="pv-pp">${askCard(a)}</div>`;
+  const req = `data-arg="${esc(a.id)}" data-req="${esc(a.request)}"`;
+  const opt = (o, i) => `<button class="pv-btn${i === 0 ? ' go' : ''}" data-act="pick" ${req} data-value="${esc(o)}">${esc(o)}</button>`;
+  // two answers side by side, the suggested one on the right; more stack, the suggested one first
+  const opts = a.options.length === 2 ? `<div class="pv-two">${opt(a.options[1], 1)}${opt(a.options[0], 0)}</div>` : `<div class="pv-stack">${a.options.map(opt).join('')}</div>`;
+  const extra = [a.other === false ? '' : '<button data-act="other">Other answer or a note…</button>', a.askKind === 'question' ? `<button data-act="skip" ${req} title="The agent decides itself">Skip</button>` : ''].filter(Boolean).join('');
+  return `${opts}${extra ? `<div class="pv-links">${extra}</div>` : ''}<div class="acts other-row" hidden>${a.other === false ? '' : `<input type="text" class="other-input" placeholder="Your own answer" aria-label="Your own answer"><button class="btn primary" data-act="pick-other" ${req}>Send</button>`}<input type="text" class="note-input" placeholder="Add a note (optional)" aria-label="Note for the agent"></div>`;
+}
+/** A request as a card: who asks, from where and since when, the question, its answers. Home, Approvals, and docked in a chat. */
+function reqCard(a, { place = 'home' } = {}) {
+  const c = S.state?.chats.find(x => x.id === a.id) ?? { id: a.id, agent: a.agent, title: a.title, cwd: a.cwd };
+  const who = askWho(c, window.choruspro, AGENT).name;
+  const path = (() => {
+    try {
+      return window.choruspro?.chatPath?.(a.id);
+    } catch {
+      return null;
+    }
+  })();
+  const where = `${esc(base(a.cwd))}${path ? ` · ${esc(path.part)}` : ''}`;
+  const since = waitFor(a.since);
+  const sub = place === 'home' ? `${where} · <span class="pv-st need">needs you</span> · ${since}` : `${where} · ${since} ago`;
+  const words = a.kind === 'ask' ? null : promptWords(a);
+  const more = S.askMore.has(a.request);
+  const details = a.kind === 'ask' && a.details && !a.proposal ? `<div class="what md pv-det"><div class="${more ? '' : 'clamp'}">${md(a.details)}</div></div><button class="ask-more" data-act="ask-more" data-arg="${esc(a.request)}" hidden>${more ? 'Show less' : 'Show more'}</button>` : '';
+  const q = a.proposal ? '' : `<div class="pv-q">${a.kind === 'ask' ? mdInline(a.question) : `${esc(who)} ${esc(words.q)}`}</div>${words ? `<code class="pv-code">${esc(words.code)}</code>` : ''}`;
+  return `<div class="pv-req" data-req="${esc(a.request ?? '')}"><div class="top"><button class="pv-who" data-act="chat" data-arg="${esc(a.id)}">${avatar(c, 'need')}<span class="tx"><b>${esc(a.title)}</b><span>${sub}</span></span></button>${place === 'approvals' ? `<button class="pv-del" data-act="appr-del" data-arg="${esc(a.id)}" data-req="${esc(a.request ?? '')}" title="Delete from Approvals" aria-label="Delete from Approvals">${PI.trash}</button>` : ''}</div>${q}${details}${reqAnswers(a)}</div>`;
 }
 
 /** A phone's tab bar: Home · Chats · a round ＋ (New chat) · Approvals · More. */
@@ -1088,6 +1205,8 @@ function renderTabs(waiting) {
   const el = $('#tabs');
   // a chat on a phone is a screen you leave with ‹ Back: no tab bar, so the agent's screen gets its height
   $('#app').classList.toggle('in-chat', S.size === 'phone' && S.view.name === 'chat');
+  // New chat has one job: no tab bar either (Cancel leaves it)
+  $('#app').classList.toggle('no-tabs', S.size === 'phone' && S.view.name === 'new');
   if (S.size !== 'phone') {
     if (el.innerHTML) el.innerHTML = '';
     return;
@@ -1099,8 +1218,8 @@ function renderTabs(waiting) {
     approvals: v.name === 'approvals',
     more: ['more', 'memory', 'skills', 'doctor', 'unlock'].includes(v.name) || /^(teammates|processes|remote)/.test(pro),
   };
-  const t = (id, label, n = 0) => `<button class="${here[id] ? 'on' : ''}" data-act="tab" data-arg="${id}"${here[id] ? ' aria-current="page"' : ''}>${ICON[id]}${label}${n ? `<span class="n">${Math.min(n, 99)}</span>` : ''}</button>`;
-  el.innerHTML = `${t('home', 'Home')}${t('chats', 'Chats')}<button class="newtab" data-act="new" aria-label="New chat">${ICON.plus}</button>${t('approvals', 'Approvals', waiting)}${t('more', 'More')}`;
+  const t = (id, label, n = 0) => `<button class="${here[id] ? 'on' : ''}" data-act="tab" data-arg="${id}"${here[id] ? ' aria-current="page"' : ''}>${PI[id]}${label}${n ? `<span class="n">${Math.min(n, 99)}</span>` : ''}</button>`;
+  el.innerHTML = `${t('home', 'Home')}${t('chats', 'Chats')}<button class="newtab" data-act="new" aria-label="New chat">${PI.plus}</button>${t('approvals', 'Approvals', waiting)}${t('more', 'More')}`;
 }
 
 /* ---------- views ---------- */
@@ -1164,34 +1283,33 @@ function renderView() {
 
 /* ---------- a phone's Home, Chats and More: the sidebar's parts, each a place of the tab bar ---------- */
 
-const chatSub = c => `${esc(base(c.cwd))} · ${esc(STATE_LABEL[c.state] ?? c.state)}`;
-/** Home answers "what needs me, what is running" first: a one-tap composer, three counts, the requests with their answers, the
- *  chats active now, the projects. */
+/** Home answers "what needs me, what is running" first (mockup phone-ui-v2.html scene 1): the first request with its answers (not
+ *  there at all when nothing waits), one counts strip, the chats active now, the projects as rows. ＋ in the tab bar starts a chat. */
 function homeHtml() {
   const st = S.state;
   const chats = st?.chats ?? [];
   const asks = listed();
   const need = waitingCount();
+  const pro = window.choruspro?.needsCount?.() ?? 0;
   const working = chats.filter(c => c.state === 'busy' || c.state === 'starting').length;
   const turn = chats.filter(c => c.state === 'idle').length;
-  const stat = (cls, v, k, filter) => `<button class="hm-stat${cls}" data-act="${filter ? 'cl-filter' : 'approvals'}" data-arg="${filter}"><span class="v">${v}</span><span class="k">${k}</span></button>`;
+  const resting = chats.filter(c => c.state === 'parked' || c.state === 'ended').length;
+  const stat = (v, k, dot, filter) => `<button data-act="cl-filter" data-arg="${filter}"><span class="v">${v}</span><span class="k"><i class="pv-dot ${dot}"></i>${k}</span></button>`;
   const ORDER = { approval: 0, busy: 1, starting: 1, idle: 2 };
-  const active = chats.filter(c => c.state in ORDER).sort((a, b) => ORDER[a.state] - ORDER[b.state]).slice(0, 6);
-  const row = c => `<button class="hm-row" data-act="chat" data-arg="${esc(c.id)}"><span class="dot ${esc(c.state)}"></span><span class="tx"><b>${esc(c.title)}</b><span>${chatSub(c)}</span></span><span class="badge mini ${esc(c.agent)}">${esc(AGENT[c.agent]?.letter ?? '?')}</span><span class="chev">›</span></button>`;
+  const active = chats.filter(c => c.state in ORDER || waitsOnYou(c)).sort((a, b) => (waitsOnYou(a) ? -1 : ORDER[a.state] ?? 3) - (waitsOnYou(b) ? -1 : ORDER[b.state] ?? 3)).slice(0, 6);
   const projects = [...chatsByProject()].map(([cwd, cs]) => {
     const bang = cs.filter(waitsOnYou).length;
-    return `<button class="card hm-proj" data-act="proj-open" data-arg="${esc(cwd)}"><b><span>${esc(base(cwd))}</span>${bang ? `<i>!${bang}</i>` : ''}</b><span class="sub">${cs.length} chat${cs.length === 1 ? '' : 's'}</span><span class="dots">${cs.slice(0, 8).map(c => `<span class="dot ${esc(c.state)}"></span>`).join('')}</span></button>`;
+    return `<button class="pv-row" data-act="proj-open" data-arg="${esc(cwd)}"><span class="pv-av ic">${PI.folder}</span><span class="tx"><b>${esc(base(cwd))}</b><span>${cs.length} chat${cs.length === 1 ? '' : 's'}${bang ? ` · ${bang} need${bang === 1 ? 's' : ''} you` : ''}</span></span><span class="end">${PI.chev}</span></button>`;
   }).join('');
-  return `<div class="hm">
-    <button class="hm-ask" data-act="new">What are we working on?<span class="go">${ICON.up}</span></button>
-    <div class="hm-stats">${stat(need ? ' need' : '', need, 'need you', '')}${stat('', working, '<span class="dot busy"></span>working', 'working')}${stat('', turn, '<span class="dot idle"></span>your turn', 'turn')}</div>
-    <div><div class="hm-h">Needs you${need ? `<button data-act="approvals">See all ${need}</button>` : ''}</div>
-      ${asks.length ? `<div class="card list hm-need">${asks.slice(0, 3).map(approvalItem).join('')}</div>` : ''}${proSlot('home')}
-      ${need ? '' : '<div class="card empty">Nothing is waiting for you.</div>'}</div>
-    <div><div class="hm-h">Active now<button data-act="tab" data-arg="chats">All chats</button></div>
-      ${active.length ? `<div class="card">${active.map(row).join('')}</div>` : '<div class="card empty">No agent is working right now.</div>'}</div>
-    <div><div class="hm-h">Projects<button data-act="add-project">＋ Add</button></div>
-      ${projects ? `<div class="hm-projs">${projects}</div>` : '<div class="card empty">No projects yet: start a chat in a folder.</div>'}</div>
+  // the first request that waits: a chat's (its card here), else Chorus's own (the module draws it in its slot)
+  const first = asks.length ? `<div class="pv-req-wrap">${reqCard(asks[0])}${need > 1 ? `<button class="pv-more1" data-act="approvals">See all ${need} waiting</button>` : ''}</div>` : pro ? `<div class="pv-req-wrap pv-pro-need">${proSlot('home')}${need > 1 ? `<button class="pv-more1" data-act="approvals">See all ${need} waiting</button>` : ''}</div>` : '';
+  return `<div class="pv pv-home">
+    ${first}
+    <div class="pv-tally">${stat(working, 'working', 'busy', 'working')}${stat(turn, 'your turn', 'turn', 'turn')}${stat(resting, 'resting', '', 'resting')}</div>
+    <div class="pv-h">Active now<button data-act="tab" data-arg="chats">All chats</button></div>
+    ${active.length ? `<div class="pv-card">${active.map(c => chatRowPv(c)).join('')}</div>` : '<div class="pv-card pv-empty">No agent is working right now.</div>'}
+    <div class="pv-h">Projects<button data-act="add-project">Add</button></div>
+    ${projects ? `<div class="pv-card">${projects}</div>` : '<div class="pv-card pv-empty">No projects yet: start a chat in a folder.</div>'}
   </div>`;
 }
 
@@ -1202,7 +1320,8 @@ const CHAT_FILTERS = [
   ['turn', 'Your turn', c => c.state === 'idle'],
   ['resting', 'Resting', c => c.state === 'parked' || c.state === 'ended'],
 ];
-/** Chats: the sidebar's project tree (tasks and hand-offs included), with search and filters. */
+/** Chats (mockup phone-ui-v2.html scene 2): search, filters with their counts, one card per project. A sub thread or a hand-off sits
+ *  under its owner chat with a small connector; the module's tasks keep their own rows at the top of their project's card. */
 function chatsHtml() {
   const f = S.cl;
   const q = f.q.trim().toLowerCase();
@@ -1210,31 +1329,90 @@ function chatsHtml() {
   const chats = (S.state?.chats ?? []).filter(match);
   const pick = (CHAT_FILTERS.find(x => x[0] === f.filter) ?? CHAT_FILTERS[0])[2];
   const filtered = f.filter !== 'all' || !!q || !!f.proj;
-  const tree = filtered ? treeHtml(c => match(c) && pick(c)) : treeHtml();
-  return `<div class="cl"><div class="find"><input id="cl-q" type="search" data-input="cl-q" placeholder="Search chats" aria-label="Search chats" value="${esc(f.q)}"></div>
-    ${f.proj ? `<div class="cl-proj">In <b>${esc(base(f.proj))}</b><button class="btn" data-act="cl-proj" data-arg="">✕ All projects</button></div>` : ''}
-    <div class="filt" role="tablist">${CHAT_FILTERS.map(([id, label, test]) => `<button class="${f.filter === id ? 'on' : ''}" data-act="cl-filter" data-arg="${id}" role="tab" aria-selected="${f.filter === id}">${label} · ${chats.filter(test).length}</button>`).join('')}</div>
-    <div class="tree">${tree || `<div class="empty">${filtered ? 'No chat matches.' : 'No chats yet.'}</div>`}</div></div>`;
+  let cards = '';
+  for (const [cwd, all] of chatsByProject()) {
+    const shown = all.filter(c => match(c) && (!filtered || pick(c)));
+    if (filtered && !shown.length) continue;
+    // a main chat first, then what hangs off it (its sub threads, the chats that continue it), each with a connector
+    const under = id => shown.filter(k => (k.sub && k.sub.parent === id) || (!k.sub && k.parentId === id));
+    const rows = [];
+    const placed = new Set();
+    const put = (c, sub) => {
+      if (placed.has(c.id)) return;
+      placed.add(c.id);
+      if (!filtered && window.choruspro?.hidesChat?.(c.id)) return; // shown under its task
+      rows.push(chatRowPv(c, { sub, where: 'agent' }));
+      for (const k of under(c.id)) put(k, true);
+    };
+    for (const c of shown) if (!shown.some(p => p.id === (c.sub?.parent ?? c.parentId))) put(c, false);
+    for (const c of shown) put(c, false);
+    const slot = filtered ? '' : `<div data-pro-slot="project" data-cwd="${esc(cwd)}"></div>`;
+    cards += `<div class="pv-h"><button class="pv-pname" data-act="project-page" data-arg="${esc(cwd)}" title="Settings for ${esc(base(cwd))}">${esc(base(cwd))}</button><span class="n">${all.length}</span>${moreFolders(cwd)}<button data-act="new-in" data-arg="${esc(cwd)}" aria-label="New chat in ${esc(base(cwd))}">New chat</button></div>
+      <div class="pv-card">${slot}${rows.join('')}${!rows.length && !slot ? '<div class="pv-empty">No chats here yet.</div>' : ''}</div>`;
+  }
+  return `<div class="pv pv-chats"><label class="pv-find">${PI.search}<input id="cl-q" type="search" data-input="cl-q" placeholder="Search chats" aria-label="Search chats" value="${esc(f.q)}"></label>
+    <div class="pv-chips" role="tablist">${CHAT_FILTERS.map(([id, label, test]) => `<button class="${f.filter === id ? 'on' : ''}" data-act="cl-filter" data-arg="${id}" role="tab" aria-selected="${f.filter === id}">${label} <em>${chats.filter(test).length}</em></button>`).join('')}</div>
+    ${f.proj ? `<div class="pv-inproj">In <b>${esc(base(f.proj))}</b><button data-act="cl-proj" data-arg="">All projects</button></div>` : ''}
+    ${cards || `<div class="pv-card pv-empty">${filtered ? 'No chat matches.' : 'No chats yet.'}</div>`}</div>`;
 }
 
-/** More: everything that is not a chat, grouped, each row with its state. */
+/** A row of More: its colour tile, its name, its state on the right. */
+const moreRow = (act, id, t, val = '', cls = '') => `<button class="pv-row pv-mrow${cls}" data-act="${act}">${tile(id)}<span class="tx"><b>${t}</b></span><span class="end">${val}${PI.chev}</span></button>`;
+/** What Doctor says in a word: All good, or how many agents need something. */
+function doctorWord() {
+  const all = drAgents();
+  if (!all?.length) return '';
+  const bad = all.filter(a => ['missing', 'needs-login', 'off'].includes(a.state)).length;
+  return bad ? `<span class="pv-st turn">${bad} to fix</span>` : 'All good';
+}
+/** More (mockup phone-ui-v2.html scene 7): grouped rows, each with a drawn icon in a colour tile and its state on the right; the
+ *  plan at the bottom. */
 function moreHtml() {
   const st = S.state;
-  const r = (act, ic, t, val = '') => `<button class="mrow" data-act="${act}"><span class="ico">${ic}</span>${t}<span class="val">${val}</span><span class="chev">›</span></button>`;
-  const marks = Object.keys(AGENT).map(a => { const i = drAgent(a) ?? { agent: a }; return `<span class="badge mini ${a}">${AGENT[a].letter}</span>${agentMark(i, agentStatus(i, false))}`; }).join(' ');
   const unread = st?.notifications?.unread ?? 0;
   const on = S.skillsAll?.skills.length;
+  const mem = !S.mem.q && S.mem.items.length ? `${S.mem.items.length} record${S.mem.items.length === 1 ? '' : 's'}` : '';
   const c = S.doctor?.chorus;
   // a paid bundle older than this page draws its sidebar items whole: they go in Team, as they come
   const parts = !window.choruspro || !!window.choruspro.sideTabs;
-  return `<div class="more">
-    <div><div class="hm-h">Library</div><div class="card">${r('memory', '◫', 'Memory')}${r('skills', '⇄', 'Sync skills', on != null ? `${on}` : '')}</div></div>
-    <div><div class="hm-h">Workspace</div><div class="card">${r('projects', '▣', 'Projects', `${S.projList?.length ?? new Set((st?.chats ?? []).map(c => c.cwd)).size}`)}</div></div>
-    <div><div class="hm-h">Team</div><div class="card">${parts ? proSlot('nav', ' data-part="team"') : proSlot('nav', ' class="nav old-nav"')}</div></div>
-    <div><div class="hm-h">This Mac</div><div class="card">${parts ? proSlot('nav', ' data-part="mac"') : ''}${r('doctor', '✚', 'Doctor', marks)}${r('news-toggle', '♢', 'Notifications', unread ? `${unread} new` : '')}${r('export', '⤓', S.exporting ? 'Exporting…' : 'Export all chats', 'to Downloads')}${st?.update ? r('update-toggle', '↑', `Update to ${esc(st.update.version)}`) : ''}</div></div>
-    ${planBox() ? `<div><div class="hm-h">Plan</div>${planBox()}</div>` : ''}
-    ${c ? `<div class="ver">${esc(c.app.replace(/^chorus/, 'Chorus'))} · core ${esc(c.core)}</div>` : ''}
+  const projects = S.projList?.length ?? new Set((st?.chats ?? []).map(c => c.cwd)).size;
+  return `<div class="pv pv-more">
+    <div class="pv-h first">Library</div><div class="pv-card">${moreRow('memory', 'memory', 'Memory', mem)}${moreRow('skills', 'skills', 'Sync skills', on != null ? `${on}` : '')}${moreRow('projects', 'projects', 'Projects', `${projects}`)}</div>
+    <div class="pv-grp"><div class="pv-h">Team</div><div class="pv-card">${parts ? proSlot('nav', ' data-part="team"') : proSlot('nav', ' class="nav old-nav"')}</div></div>
+    <div class="pv-h">This Mac</div><div class="pv-card">${parts ? proSlot('nav', ' data-part="mac"') : ''}${moreRow('doctor', 'doctor', 'Doctor', doctorWord())}${moreRow('news-toggle', 'notifications', 'Notifications', unread ? `${unread} new` : '')}${moreRow('export', 'export', S.exporting ? 'Exporting…' : 'Export all chats')}${st?.update ? moreRow('update-toggle', 'update', `Update to ${esc(st.update.version)}`) : ''}</div>
+    ${planCard(c)}
   </div>`;
+}
+/** More's plan card: the plan and the version, with the plan's buttons (Try, Buy, Upgrade) when there is something to do. */
+function planCard(c) {
+  const p = S.pro;
+  const ver = c?.app?.match(/\d+\.\d+\.\d+\S*/)?.[0];
+  const v = ver ? `version ${esc(ver)}` : '';
+  let name = 'Chorus', sub = '', btns = '';
+  if (p && community()) [name, sub, btns] = ['Community', 'Free', '<button class="pv-btn" data-act="plan-welcome">Try Pro free</button><button class="pv-btn go" data-act="plan-buy">Buy Pro</button>'];
+  else if (p?.plan === 'trial') [name, sub, btns] = ['Pro trial', `${daysLeft(p.ends)} day${daysLeft(p.ends) === 1 ? '' : 's'} left`, '<button class="pv-btn go" data-act="plan-upgrade">Upgrade</button>'];
+  else if (p?.plan === 'free') [name, sub, btns] = ['No Pro', 'Your trial ended', '<button class="pv-btn go" data-act="plan-upgrade">Upgrade</button>'];
+  else if (p?.plan === 'pro') [name, sub] = ['Chorus Pro', 'For life'];
+  const line = [sub, v].filter(Boolean).join(' · ');
+  if (!p && !v) return '';
+  return `<div class="pv-plan"><div class="pv-plan-top"><span class="logo"><i></i><i></i><i></i></span><div class="tx"><b>${esc(name)}</b><span>${line}</span>${p?.email ? `<span class="who">${esc(p.email)}</span>` : ''}</div></div>${btns ? `<div class="pv-two">${btns}</div>` : ''}</div>`;
+}
+/** The module draws More's Team and This Mac rows in its own words: they get the page's tiles and chevron. */
+function tileMoreRows(root) {
+  for (const b of root.querySelectorAll('.pv-more [data-pro-slot="nav"] .mrow')) {
+    if (b.classList.contains('pv-row')) continue;
+    const id = b.dataset.proGo ?? (b.dataset.act === 'unlock' ? 'unlock' : /team/i.test(b.textContent) ? 'teammates' : /process/i.test(b.textContent) ? 'processes' : 'remote');
+    const ico = b.querySelector('.ico');
+    if (ico) ico.outerHTML = tile(id);
+    const val = b.querySelector('.val');
+    const chev = b.querySelector('.chev');
+    if (chev) chev.remove();
+    // the label is the text between the icon and the value
+    const label = [...b.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim();
+    for (const n of [...b.childNodes]) if (n.nodeType === 3) n.remove();
+    if (val) val.insertAdjacentHTML('beforebegin', `<span class="tx"><b>${esc(label)}</b></span>`), val.classList.add('end'), val.insertAdjacentHTML('beforeend', PI.chev);
+    b.classList.add('pv-row', 'pv-mrow');
+  }
 }
 
 /* New chat: agent, model, effort, folder, skip permissions, and (here only) a first message */
@@ -1280,14 +1458,19 @@ function renderAgentsOnly() {
 function newChatHtml() {
   const f = S.form;
   const src = S.info?.from;
-  if (!f) return '<div class="page nc-wrap"><h1 class="nc-h">What are we working on?</h1><p class="nc-hint">Loading the agents…</p></div>';
+  if (!f) return S.size === 'phone' ? '<div class="pv pv-new"><p class="pv-note">Loading the agents…</p></div>' : '<div class="page nc-wrap"><h1 class="nc-h">What are we working on?</h1><p class="nc-hint">Loading the agents…</p></div>';
   const a = S.info.agents.find(x => x.id === f.agent);
   const efforts = a.efforts[f.model] ?? ['default'];
   if (!efforts.includes(f.effort)) f.effort = efforts[0];
   const recent = [...new Set([...(S.info.recent ?? []), S.info.computer])].filter(Boolean);
   const m = S.ncMenu;
-  const menu = (id, body) => (m === id ? `<div class="nc-menu" role="menu"><div class="grab"></div>${body}</div>` : '');
-  const pk = (id, label, cls = '', dis = false, body = '') => `<span class="nc-pk-wrap"><button class="nc-pk ${cls}" data-act="nc-menu" data-arg="${id}" aria-expanded="${m === id}"${dis ? ' disabled' : ''}>${label}</button>${menu(id, body)}</span>`;
+  const phone = S.size === 'phone';
+  // a phone: each picker is a labelled row; its menu a bottom sheet with the picker's name on top (mockup phone-ui-v2.html scene 3, 4)
+  const KEY = { who: 'Teammate', act: 'Work as', agent: 'Agent', folder: 'Project', model: 'Model', perm: 'Permissions' };
+  const menu = (id, body) => (m === id ? `<div class="nc-menu" role="menu"><div class="grab"></div>${phone ? `<h3>${KEY[id] ?? ''}</h3>` : ''}${body}</div>` : '');
+  const pk = phone
+    ? (id, label, cls = '', dis = false, body = '') => `<span class="nc-pk-wrap"><button class="nc-pk pv-set ${cls}" data-act="nc-menu" data-arg="${id}" aria-expanded="${m === id}"${dis ? ' disabled' : ''}><span class="k">${KEY[id] ?? ''}</span><span class="v">${label}</span>${dis ? '' : PI.chev}</button>${menu(id, body)}</span>`
+    : (id, label, cls = '', dis = false, body = '') => `<span class="nc-pk-wrap"><button class="nc-pk ${cls}" data-act="nc-menu" data-arg="${id}" aria-expanded="${m === id}"${dis ? ' disabled' : ''}>${label}</button>${menu(id, body)}</span>`;
   const agentLabel = `<span class="badge mini ${f.agent}">${AGENT[f.agent].letter}</span>${AGENT[f.agent].name}`;
   // the optional module adds who and what; without it the first picker is the agent
   const T = src ? undefined : window.choruspro?.newChat?.({ pk, agentRows: agentRows(), agentLabel });
@@ -1304,8 +1487,23 @@ function newChatHtml() {
     .map(([v, t, d]) => `<button class="${T?.skip === v ? 'on' : ''}" data-act="pro-nc" data-arg="skip:${v ? 1 : 0}"><span class="nc-mi${v ? ' bad' : ''}">${v ? '⚠' : '✓'} ${t}</span><span class="nc-sub">${esc(d)}</span></button>`)
     .join('');
   const engine = T?.info
-    ? `<span class="nc-info">${esc(T.info)}</span>${typeof T.skip === 'boolean' ? pk('perm', T.skip ? '⚠ Skip permissions' : 'Ask before acting', T.skip ? 'nc-danger' : 'nc-dim', false, tPerms) : ''}`
+    ? `${phone ? `<div class="pv-set static"><span class="k">Model</span><span class="v">${esc(T.info)}</span></div>` : `<span class="nc-info">${esc(T.info)}</span>`}${typeof T.skip === 'boolean' ? pk('perm', T.skip ? '⚠ Skip permissions' : 'Ask before acting', T.skip ? 'nc-danger' : 'nc-dim', false, tPerms) : ''}`
     : `${pk('model', modelLabel, 'nc-dim', false, models)}${pk('perm', f.skip ? '⚠ Skip permissions' : 'Ask before acting', f.skip ? 'nc-danger' : 'nc-dim', false, perms)}`;
+  if (phone) {
+    // the plain line says when: after Start (mockup scene 3)
+    const hint = !src && T?.hint ? T.hint : esc(newChatHint({ agent: f.agent, handoff: !!src, teammate: !!T?.info, touch: MQ_TOUCH.matches, mod: MOD }).replace(/^you talk to the agent in its own screen$/, 'After Start you talk to the agent in its own screen.'));
+    return `<div class="pv pv-new">
+    ${src ? `<p class="nc-src">Continues <b>${esc(src.title)}</b> <span class="badge ${esc(src.agent)}">${esc(AGENT[src.agent]?.name ?? src.agent)}</span>. The new agent loads its record through the Chorus MCP server and waits for your OK.</p>` : ''}
+    <div class="pv-write"><textarea id="nc-prompt" data-input="nc-prompt" aria-label="Message" placeholder="${src ? 'Anything to add for the next agent? (optional)' : 'Describe the work…'}">${esc(f.prompt)}</textarea></div>
+    <div class="pv-h">Who and where</div>
+    <div class="pv-card pv-sets">${T?.picks ?? pk('agent', agentLabel, 'nc-strong', false, agentRows())}${pk('folder', esc(folderName), '', !!src, folders)}</div>
+    <div class="pv-h">How it runs</div>
+    <div class="pv-card pv-sets">${engine}</div>
+    ${f.skip && !T?.info ? `<div class="nc-warn pv-warn">⚠ Starts ${esc(AGENT[f.agent].name)} with <code>${esc(a.skipFlag)}</code>: it won't stop to ask before editing files or running commands, and nothing from this chat reaches Approvals.</div>` : ''}
+    ${f.error ? `<div class="nc-warn pv-warn">${esc(f.error)}</div>` : ''}
+    <p class="pv-note">${hint}</p>
+  </div>`;
+  }
   return `<div class="page nc-wrap">
     <h1 class="nc-h">${src ? 'Continue with another agent' : 'What are we working on?'}</h1>
     ${src ? `<p class="nc-src">Continues <b>${esc(src.title)}</b> <span class="badge ${esc(src.agent)}">${esc(AGENT[src.agent]?.name ?? src.agent)}</span>. The new agent loads its record through the Chorus MCP server and waits for your OK.</p>` : ''}
@@ -1512,6 +1710,7 @@ function approvalsHtml() {
   const cur = st?.chats.find(c => c.id === st.current);
   const all = listed();
   const items = S.scope === 'all' || !cur ? all : all.filter(a => a.cwd === cur.cwd);
+  if (S.size === 'phone') return approvalsPhone(cur, all, items);
   return `<div class="page"><h1 class="ph-hide">Approvals</h1>${S.size === 'phone' ? `<p class="lead lead-fold${S.leadOpen ? ' open' : ''}"><span class="lead-short">Your agents' questions and permission prompts, from every chat.</span><span class="lead-long">${LEAD}</span> <button class="lead-more" data-act="lead-more" aria-expanded="${!!S.leadOpen}">${S.leadOpen ? 'Less' : 'More'}</button></p>` : `<p class="lead">${LEAD}</p>`}
     <div class="toolbar"><div class="seg"><button class="${S.scope === 'all' ? 'on' : ''}" data-act="scope" data-arg="all">All projects</button><button class="${S.scope === 'this' ? 'on' : ''}" data-act="scope" data-arg="this">This project</button></div><span class="grow"></span><span class="muted">${all.length + (window.choruspro?.needsCount?.() ?? 0)} waiting</span></div>
     ${proSlot('approvals', ` data-scope="${esc(S.scope)}" data-cwd="${esc(cur?.cwd ?? '')}"`)}
@@ -1521,9 +1720,25 @@ function approvalsHtml() {
     <div class="card list">${S.decided.length ? S.decided.map(d => `<div class="item"><div class="head"><span class="badge ${d.decision === 'approved' ? 'ok' : 'bad'}">${esc(d.decision)}</span><span class="badge ${esc(d.agent)}">${esc(AGENT[d.agent]?.letter ?? '')}</span><span class="mono" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.what)}</span><span class="faint">${esc(d.time)}</span></div></div>`).join('') : '<div class="empty">No answers yet today.</div>'}</div></div>`;
 }
 
-async function answer(id, approve) {
+/** Approvals on a phone (mockup phone-ui-v2.html scene 6): the same request card as on Home, the scope as a segmented control, and
+ *  today's answers as a short list with Allowed / Denied tags. */
+function approvalsPhone(cur, all, items) {
+  const waiting = all.length + (window.choruspro?.needsCount?.() ?? 0);
+  const tag = d => (d.decision === 'approved' ? '<span class="pv-tag ok">Allowed</span>' : d.decision === 'denied' ? '<span class="pv-tag no">Denied</span>' : `<span class="pv-tag">${esc(d.decision)}</span>`);
+  const decided = S.decided.map(d => `<div class="pv-row static"><span class="pv-av ${{ claude: 'c', codex: 'x', agy: 'a' }[d.agent] ?? 'ic'}">${esc(AGENT[d.agent]?.letter ?? '?')}</span><span class="tx"><b class="mono">${esc(d.what)}</b><span>${esc(AGENT[d.agent]?.name ?? d.agent)} · ${esc(d.time)}</span></span>${tag(d)}</div>`).join('');
+  return `<div class="pv pv-appr">
+    <div class="pv-seg" role="tablist"><button class="${S.scope === 'all' ? 'on' : ''}" data-act="scope" data-arg="all" role="tab" aria-selected="${S.scope === 'all'}">All projects</button><button class="${S.scope === 'this' ? 'on' : ''}" data-act="scope" data-arg="this" role="tab" aria-selected="${S.scope === 'this'}">${esc(cur ? base(cur.cwd) : 'This project')}</button></div>
+    <div class="pv-h first">Waiting for you${waiting ? `<span class="n">${waiting}</span>` : ''}</div>
+    <div class="pv-reqs">${proSlot('approvals', ` data-scope="${esc(S.scope)}" data-cwd="${esc(cur?.cwd ?? '')}"`)}${items.map(a => reqCard(a, { place: 'approvals' })).join('')}</div>
+    ${items.length || window.choruspro?.needsCount?.() ? '' : '<div class="pv-card pv-empty">Nothing is waiting for you.</div>'}
+    <div class="pv-h">Decided today</div>
+    <div class="pv-card">${decided || '<div class="pv-empty">No answers yet today.</div>'}</div>
+  </div>`;
+}
+
+async function answer(id, approve, always = false) {
   try {
-    await api('POST', `/api/chats/${id}/${approve ? 'approve' : 'deny'}`);
+    await api('POST', `/api/chats/${id}/${approve ? 'approve' : 'deny'}`, always ? { always: true } : undefined);
   } catch (e) {
     toast(e.message);
   }
@@ -2420,15 +2635,16 @@ function drawSheet() {
   const el = document.createElement('div');
   el.id = 'sheet';
   el.className = 'sheet-wrap';
-  el.innerHTML = `<div class="sheet" role="dialog" aria-label="This chat"><div class="grab"></div>
+  // what the header holds on wider screens, as rows; the module's actions for this chat (its ACTIONS strip over the chat on wider
+  // screens) in their own card; Delete apart, at the bottom
+  const row = (act, icon, label, cls = '') => `<button class="${cls}" data-act="${act}" data-arg="${esc(act.startsWith('drawer') ? label.toLowerCase() : c.id)}"><span class="i">${PI[icon]}</span>${label}</button>`;
+  el.innerHTML = `<div class="sheet" role="dialog" aria-label="This chat"><div class="grab"></div><h3>${esc(c.title)}</h3>
     <div class="sh-meta"><div><span class="badge ${esc(c.agent)}">${esc(AGENT[c.agent]?.name ?? c.agent)}</span> ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}${c.skip ? ' <span class="badge warn">skip</span>' : ''}</div><div class="mono path">${esc(tilde(c.cwd))}</div>${meter(c.usage)}</div>
-    <button data-act="share" data-arg="${esc(c.id)}"><span class="i">⧉</span>Share</button>
-    <button data-act="handoff" data-arg="${esc(c.id)}"><span class="i">⇄</span>Hand off to another agent</button>
-    ${c.sub ? '' : `<button class="${hlFlash(c.id, 'artifacts', litNow(c, 'artifacts'), artFlash(c.id)).trim()}" data-act="drawer-to" data-arg="artifacts"><span class="i">▤</span>Artifacts${c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : ''}</button>
-    <button data-act="drawer-to" data-arg="activity"><span class="i">≋</span>Activity</button>
-    <button data-act="drawer-to" data-arg="record"><span class="i">◫</span>Record</button>`}
-    <button class="danger" data-act="delete" data-arg="${esc(c.id)}"><span class="i">🗑</span>Delete this chat</button></div>`;
+    ${proSlot('chat-actions', ` data-chat="${esc(c.id)}"`)}
+    <div class="sh-card">${row('share', 'share', 'Share')}${row('handoff', 'sync', 'Hand off to another agent')}${c.sub ? '' : `${row('drawer-to', 'pulse', 'Activity')}${row('drawer-to', 'book', 'Record')}`}</div>
+    <div class="sh-card">${row('delete', 'trash', 'Delete this chat', 'danger')}</div></div>`;
   document.body.append(el);
+  fillSlots();
 }
 
 function renderChatParts() {
@@ -2437,7 +2653,8 @@ function renderChatParts() {
   if (!c || !head) return;
   const d = S.detail[c.id];
   const task = !!window.choruspro?.sideTabs?.(c.id);
-  const view = sideView(c.id);
+  // a phone's Files tab: the artifacts in place of the agent's screen (Activity and Record stay a sheet from ⋯)
+  const view = S.size === 'phone' && S.chatTab === 'files' && !c.sub ? 'artifacts' : sideView(c.id) === 'artifacts' && S.size === 'phone' ? '' : sideView(c.id);
   if (S.drawer !== (PEEK.includes(view) ? view : null)) {
     S.drawer = PEEK.includes(view) ? view : null;
     S.drawerData = null;
@@ -2458,16 +2675,19 @@ function renderChatParts() {
     <button class="btn" data-act="handoff" data-arg="${esc(c.id)}" title="Continue this chat with another agent" aria-label="Hand off">${S.size === 'desktop' ? '⇄ Hand off' : '⇄'}</button>
     ${c.sub ? '' : `${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰', '', hlFlash(c.id, 'task', taskLit, countFlash(`taskrev:${c.id}`))) : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', hlFlash(c.id, 'artifacts', artLit, artFlash(c.id)))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}`}
     <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat" aria-label="Delete this chat">🗑</button>`;
-  // a phone: a task chat's panel is tabs beside the chat (Chat · Steps · Plan), one shown at a time
-  const tabs = S.size === 'phone' ? window.choruspro?.sideTabs?.(c.id) : null;
-  if (!tabs) S.chatTab = 'chat';
+  // a phone: one segmented row, Chat · Steps · Plan (a task chat's panel, from the module) · Files (the chat's artifacts), one shown at
+  // a time (mockup phone-ui-v2.html scene 5). A sub thread has neither: no row
+  const tabs = S.size === 'phone' ? [...(window.choruspro?.sideTabs?.(c.id) ?? []), ...(c.sub ? [] : [['files', 'Files']])] : [];
+  if (!tabs.some(([k]) => k === S.chatTab)) S.chatTab = 'chat';
   const tabsEl = $('#chat-tabs');
-  tabsEl.hidden = !tabs;
-  const hlTab = tabs ? (tabs.find(([k]) => k === 'steps') ?? tabs[0])?.[0] : null;
-  tabsEl.innerHTML = tabs ? `<div class="seg" role="tablist">${[['chat', 'Chat'], ...tabs].map(([k, label]) => `<button class="${S.chatTab === k ? 'on' : ''}${k === hlTab && taskLit ? HL.hlClass(c.id, 'task') : ''}" data-act="chat-tab" data-arg="${esc(k)}" role="tab" aria-selected="${S.chatTab === k}">${esc(label)}</button>`).join('')}</div>` : '';
+  tabsEl.hidden = !tabs.length;
+  const hlTab = (tabs.find(([k]) => k === 'steps') ?? (task ? tabs[0] : null))?.[0];
+  const lit = k => (k === hlTab && taskLit ? HL.hlClass(c.id, 'task') : k === 'files' ? hlFlash(c.id, 'artifacts', artLit, artFlash(c.id)) : '');
+  const count = k => (k === 'files' && c.artifacts ? ` <em>${countNum(`art:${c.id}`, c.artifacts)}</em>` : '');
+  tabsEl.innerHTML = tabs.length ? `<div class="seg" role="tablist">${[['chat', 'Chat'], ...tabs].map(([k, label]) => `<button class="${S.chatTab === k ? 'on' : ''}${lit(k)}" data-act="chat-tab" data-arg="${esc(k)}" role="tab" aria-selected="${S.chatTab === k}">${esc(label)}${count(k)}</button>`).join('')}</div>` : '';
   $('#chat-body').className = `chat-body tab-${S.chatTab}${task ? ' task-chat' : ''}${view === 'task' && task ? ' side-task' : ''}`;
   const side = $('#view [data-pro-slot="chat-side"]');
-  if (side) side.dataset.tab = S.size === 'phone' && S.chatTab !== 'chat' ? S.chatTab : '';
+  if (side) side.dataset.tab = S.size === 'phone' && (S.chatTab === 'steps' || S.chatTab === 'plan') ? S.chatTab : '';
   fillSlots();
   let banners = '';
   // a sub thread is watch-only: the strip over its screen says whose it is; Unlock lets keys through (the main chat is told)
@@ -2483,7 +2703,7 @@ function renderChatParts() {
   if (c.sub?.unlocked) S.unlockedChat = c.id;
   // a CLI's permission prompt: the thin Approve/Deny line over the chat column
   // deleted (🗑, here or in Approvals): hidden in the chat too until the prompt on the agent's screen changes
-  for (const ask of S.state.approvals.filter(a => a.id === c.id && a.kind !== 'ask' && !a.hidden)) banners += `<div class="banner ask"><b>${esc(AGENT[c.agent]?.name ?? c.agent)} asks</b><span class="what" title="${esc(ask.what)}">${esc(ask.what)}</span><button class="btn good" data-act="approve" data-arg="${esc(c.id)}">✓ Approve</button><button class="btn danger" data-act="deny" data-arg="${esc(c.id)}">✕ Deny</button>${delBtn(c.id, '')}</div>`;
+  for (const ask of S.size === 'phone' ? [] : S.state.approvals.filter(a => a.id === c.id && a.kind !== 'ask' && !a.hidden)) banners += `<div class="banner ask"><b>${esc(AGENT[c.agent]?.name ?? c.agent)} asks</b><span class="what" title="${esc(ask.what)}">${esc(ask.what)}</span><button class="btn good" data-act="approve" data-arg="${esc(c.id)}">✓ Approve</button><button class="btn danger" data-act="deny" data-arg="${esc(c.id)}">✕ Deny</button>${delBtn(c.id, '')}</div>`;
   if (d?.fromRecord) banners += `<div class="banner info"><span>${esc(d.fromRecord)} no longer had this chat's session, so Chorus continues it from its own record.</span></div>`;
   if (c.parentId && d && !d.contextLoaded && c.state === 'idle' && d.turns.some(t => t.role === 'assistant')) banners += `<div class="banner info"><span>⚠ This chat has not loaded the record of the chat it continues.</span><button class="btn" data-act="retry" data-arg="${esc(c.id)}">Ask again</button></div>`;
   const bannerEl = $('#chat-banners');
@@ -2797,6 +3017,22 @@ function drawDock(c, force = false) {
   const w = askWho(c, window.choruspro, AGENT), who = esc(w.name);
   const mark = w.teammate ? `<span class="badge mini ${esc(w.agent)}">${esc(AGENT[w.agent]?.letter ?? '?')}</span>` : '';
   const fold = a && S.askFold.has(a.request);
+  // a phone: the permission prompt or the newest question as the same card as Home's, docked at the bottom (scene 5)
+  const prompt = S.size === 'phone' ? S.state.approvals.find(x => x.id === c.id && x.kind !== 'ask' && !x.hidden) : null;
+  const pa = prompt ?? a;
+  if (S.size === 'phone') {
+    const words = pa && pa.kind !== 'ask' ? promptWords(pa) : null;
+    const foldNow = pa && S.askFold.has(pa.request ?? `p:${pa.id}`);
+    const more = pa && S.askMore.has(pa.request);
+    const details = pa?.kind === 'ask' && pa.details && !pa.proposal ? `<div class="what md pv-det"><div class="${more ? '' : 'clamp'}">${md(pa.details)}</div></div><button class="ask-more" data-act="ask-more" data-arg="${esc(pa.request)}" hidden>${more ? 'Show less' : 'Show more'}</button>` : '';
+    const head = `<div class="pv-dock-q"><b>${pa?.kind === 'ask' ? (pa.proposal ? `${who} asks you` : mdInline(pa.question)) : `${who} ${esc(words?.q.replace(/:$/, '') ?? '')}`}</b><button class="pv-del" data-act="ask-fold" data-arg="${esc(pa?.request ?? `p:${pa?.id}`)}" aria-expanded="${!foldNow}" aria-label="${foldNow ? 'Open the card' : 'Fold the card'}">${foldNow ? PI.unfold : PI.fold}</button><button class="pv-del" data-act="appr-del" data-arg="${esc(c.id)}" data-req="${esc(pa?.request ?? '')}" title="Delete from Approvals" aria-label="Delete from Approvals">${PI.trash}</button></div>`;
+    const html = !pa ? '' : `<div class="ask-dock pv-dock${foldNow ? ' min' : ''}" role="region" aria-label="${who} asks you">${head}${foldNow ? '' : `${words ? `<code class="pv-code">${esc(words.code)}</code>` : ''}${details}${reqAnswers(pa)}`}</div>`;
+    if (el.dataset.html === html || (!force && el.contains(document.activeElement) && pa)) return;
+    el.innerHTML = html;
+    el.dataset.html = html;
+    fitMore(el);
+    return;
+  }
   const html = !a ? '' : `<div class="ask-dock${fold ? ' min' : ''}" role="region" aria-label="${who} asks you"><div class="ask-who">${mark}<b>${who} asks you</b>${fold ? `<span class="ask-line">${esc(a.question)}</span>` : '<span class="grow"></span>'}<button class="btn ask-fold" data-act="ask-fold" data-arg="${esc(a.request)}" title="${fold ? 'Open the card' : 'Fold to one line'}" aria-expanded="${!fold}">${fold ? '▴ Open' : '▾ Fold'}</button>${delBtn(c.id, a.request)}</div>${fold ? '' : `<div class="ask-body">${askCard(a, true)}</div>`}</div>`;
   // typing a note or your own answer: the card waits (a click on Fold or Show more redraws it at once)
   if (el.dataset.html === html || (!force && el.contains(document.activeElement) && a)) return;
@@ -3398,7 +3634,7 @@ document.addEventListener('click', async e => {
     S.sheet = null;
     return drawSheet();
   }
-  if (e.target.closest('#sheet [data-act]')) {
+  if (e.target.closest('#sheet [data-act], #sheet [data-pro-run], #sheet [data-pro-open], #sheet [data-pro-own]')) {
     S.sheet = null;
     drawSheet();
   }
@@ -3701,20 +3937,22 @@ document.addEventListener('click', async e => {
     case 'approve':
     case 'deny':
       return answer(arg, act === 'approve');
+    case 'approve-always':
+      return answer(arg, true, true);
     case 'pick': {
-      const note = el.closest('.item, .banner, .toast, .ask-dock')?.querySelector('.note-input')?.value ?? '';
+      const note = el.closest('.item, .banner, .toast, .ask-dock, .pv-req')?.querySelector('.note-input')?.value ?? '';
       await api('POST', `/api/chats/${arg}/answer`, { request: el.dataset.req, option: el.dataset.value, note });
       document.activeElement?.blur(); // the card redraws (and goes) only when nothing in it has the focus
       return loadDecided();
     }
     case 'other': {
-      const row = el.closest('.item, .banner, .ask-dock')?.querySelector('.other-row');
+      const row = el.closest('.item, .banner, .ask-dock, .pv-req')?.querySelector('.other-row');
       if (!row) return;
       row.hidden = false;
-      return row.querySelector('.other-input').focus();
+      return (row.querySelector('.other-input') ?? row.querySelector('.note-input'))?.focus();
     }
     case 'pick-other': {
-      const card = el.closest('.item, .banner, .ask-dock');
+      const card = el.closest('.item, .banner, .ask-dock, .pv-req');
       const own = card?.querySelector('.other-input');
       if (!own?.value.trim()) return own?.focus();
       const note = card.querySelector('.note-input')?.value ?? '';
@@ -3734,6 +3972,16 @@ document.addEventListener('click', async e => {
       // sheet and the drawer's own tabs); drawer-close: the dim area around it
       const id = S.view.id;
       if (S.view.name !== 'chat' || !id) return;
+      // a phone: Artifacts is the Files tab; Activity and Record come up as a sheet over the chat
+      if (S.size === 'phone' && (act === 'drawer-to' || act === 'drawer')) {
+        if (arg === 'artifacts') {
+          S.chatTab = 'files';
+          if (sideView(id)) return setSide(id, '');
+          renderChatParts();
+          return setTimeout(refit, 30);
+        }
+        if (S.chatTab === 'files') S.chatTab = 'chat';
+      }
       return setSide(id, act === 'drawer-close' ? '' : act === 'drawer-to' || sideView(id) !== arg ? arg : '');
     }
     case 'skip': {

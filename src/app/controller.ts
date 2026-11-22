@@ -487,7 +487,8 @@ export class Controller {
   }
 
   /** Answers the request of one chat (default: the one you are looking at, else the one that asked first). */
-  answer(approve: boolean, forId?: string): boolean {
+  /** `always`: the prompt's "always allow" answer when its CLI offers one (else a plain approve). */
+  answer(approve: boolean, forId?: string, always = false): boolean {
     const act = this.app.current;
     const waiting = (tid: string) => this.pending.has(tid) || !!this.requestOf(tid);
     const id = forId ?? (act && waiting(act.id) ? act.id : [...this.pending.keys(), ...[...this.requests.values()].map(r => r.thread_id)][0]);
@@ -500,7 +501,7 @@ export class Controller {
       this.app.setFlash('nothing is waiting for approval');
       return false;
     }
-    host.write(approve ? p.keys.approve : p.keys.deny);
+    host.write(approve ? (always && p.keys.always) || p.keys.approve : p.keys.deny);
     this.pending.delete(id!);
     this.pendingSince.delete(id!);
     this.store.logApproval(id!, p.what, approve ? 'approved' : 'denied');
@@ -751,7 +752,7 @@ export class Controller {
     const cwd = this.app.current?.cwd ?? this.project;
     const prompts = [...this.pending.entries()].map(([id, p]) => {
       const e = this.app.entry(id);
-      return e && { kind: 'permission' as const, id, cwd: e.cwd, title: e.title, agent: e.agent, waiting: (Date.now() - (this.pendingSince.get(id) ?? Date.now())) / 1000, what: p.what, risk: riskOf(p.what, e.cwd) };
+      return e && { kind: 'permission' as const, id, cwd: e.cwd, title: e.title, agent: e.agent, waiting: (Date.now() - (this.pendingSince.get(id) ?? Date.now())) / 1000, what: p.what, risk: riskOf(p.what, e.cwd), always: !!p.keys.always };
     });
     // request_approval cards: the question is "what"; the options and the summary go to the windows that can show them
     const cards = [...this.requests.values()].map(r => {
