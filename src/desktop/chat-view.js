@@ -154,6 +154,7 @@ export function makeChatView(h) {
     const d = dataOf(id);
     const r = await h.api('GET', `/api/chats/${encodeURIComponent(id)}/turns${before ? `?before=${before}` : ''}`);
     merge(d, r, { older: !!before });
+    if (r.nativeCommands) d.nativeCommands = r.nativeCommands;
     if (!before) d.more = r.more;
     d.loaded = true;
     return r;
@@ -641,6 +642,8 @@ export function makeChatView(h) {
       return true;
     },
     shows: id => cur?.id === id,
+    /** The agent's own commands for the "/" list: they come with the chat's first page (GET turns). */
+    nativeCommands: id => data.get(id)?.nativeCommands ?? [],
     /** The chat this view shows now, if any. */
     shown: () => cur?.id,
     /** Forget a chat's data (it was deleted). */

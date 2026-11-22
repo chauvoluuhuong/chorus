@@ -1,6 +1,6 @@
 # The Chat view
 
-A second way to look at a chat, beside the agent's own screen (Raw): the conversation drawn from the turns Chorus already captures
+A second way to look at a chat, beside the agent's own screen (Raw), which is not changed (owner, 2026-11-22: "the new one is just one more selection"; Raw at three sizes is compared with the last release in the proof run): the conversation drawn from the turns Chorus already captures
 from the CLI's transcript. Your messages, the agent's replies as Markdown (headings, lists, tables, code, mermaid diagrams), its
 tool calls folded into one line per run, and cards for what Chorus's own tools did: sub threads, chats it started, artifacts it
 reported, mail it read. The CLI keeps running in its PTY exactly as before: **one session, two views**. Nothing here starts a CLI in
@@ -9,7 +9,7 @@ another mode.
 | | Phone | Tablet, desktop |
 |---|---|---|
 | Opens in | Chat | Raw (as before) |
-| The switch | the first of the three icons in the top bar (Raw / Chat), then Artifacts, then ⋯ | Raw · Chat in the chat's header |
+| The switch | one icon in the top bar, before ⋯ (the only change to a phone's Raw) | Raw · Chat in the chat's header (the only change to Raw there) |
 | Typing | a message box at the bottom, `/` and `@` lists above it, and a key row: `/` `@` Esc ⇧Tab | none: "Reading view. To type, switch to Raw." |
 | Kept | per device and size, in browser storage (`chorus.chatView.<size>`) | the same |
 
@@ -66,7 +66,7 @@ cards close). Then:
 stop a turn without closing the CLI in all three.
 
 The `/` list is the same skills list as New chat (checked for this chat's agent, the sync dialog for one it lacks), then the agent's
-own commands that run from typed text without a menu (`nativeCommands` in the state, chorus-core `NATIVE_COMMANDS`: Claude Code
+own commands that run from typed text without a menu (`nativeCommands` in the first page's answer, chorus-core `NATIVE_COMMANDS`: Claude Code
 `/compact` `/context`, Codex `/compact` `/status`, Antigravity `/compact`). Any other `/word` is typed as it is and the CLI decides.
 `@` lists the files of the chat's folder. Both open above the box (`attachPicker(…, { above: true })`).
 
@@ -84,10 +84,11 @@ The "Open Raw" banner shows when a page shows the chat in the Chat view, the cha
 ## Code
 - `src/serve/chatview.ts`: the page, the push (`delta`), the detail, `typedText`, `heldInInput`, the keys; wired in `server.ts`
   (routes `GET chats/:id/turns`, `GET chats/:id/calls/:callId`, `POST chats/:id/say`, `POST chats/:id/key`, the `cv` websocket
-  message, `state.nativeCommands`, `chats[].menu`).
+  message, `nativeCommands` with the first page, `chats[].menu` only for a chat a page shows in the Chat view).
 - `src/core/store.ts`: `tool_calls.kind` and `Store.recorded`.
 - `src/desktop/chat-view.js` (the view), `md.js` `mdFull` (replies), `text-picker.js` (`above`, groups), `app.js` (`chatMode`,
-  `setChatMode`, `cvPicker`, `chatView`), `style.css` block "the Chat view".
+  `setChatMode`, `cvSwitch`, `cvPicker`, `chatView`; the only edits to Raw's code are the switch and the branch in `renderChat` /
+  `onSize` that picks the view), `style.css` block "the Chat view".
 - chorus-core: `ToolCall.kind` and `toolKind`, `Adapter.toolCallDetail`, `NATIVE_COMMANDS`, `menuShown`; probe
   `tools/probe/chatview-probe.mjs`, fixtures `fixtures/chatview-probe/2026-11-22/`.
 
