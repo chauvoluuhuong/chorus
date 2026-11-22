@@ -1993,7 +1993,8 @@ export class ChorusServer {
         if (!thread) return undefined;
         const before = Number(q.get('before'));
         const limit = Number(q.get('limit'));
-        return turnsPage(this.cvDeps, id, { before: before > 0 ? before : undefined, limit: limit > 0 ? limit : undefined });
+        // with the first page, the agent's own commands for the "/" list (probed, chorus-core NATIVE_COMMANDS)
+        return { ...turnsPage(this.cvDeps, id, { before: before > 0 ? before : undefined, limit: limit > 0 ? limit : undefined }), ...(before > 0 ? {} : { nativeCommands: NATIVE_COMMANDS[thread.agent as AgentId] ?? [] }) };
       }
       // one call's input and output, read from the transcript only now (a tap on its row); ?full=1 for "Show all"
       case 'GET chats/:id/calls':
@@ -2224,8 +2225,6 @@ export class ChorusServer {
       chats,
       // Shift+Enter in a chat's terminal: the bytes that add a new line in each CLI's input (probed, docs/integrations)
       keys: NEWLINE_KEYS,
-      // the Chat view's "/" list: each CLI's own commands that run from typed text (probed, chorus-core NATIVE_COMMANDS)
-      nativeCommands: NATIVE_COMMANDS,
       // CHORUS_DEBUG_IME=<file>: the page turns its typing recorder on (localStorage chorus.debugIme) and posts every key event
       ...(process.env.CHORUS_DEBUG_IME ? { debugIme: true } : {}),
       // when each request appeared (whole seconds), not "seconds waiting": the state must not change every push, or the
