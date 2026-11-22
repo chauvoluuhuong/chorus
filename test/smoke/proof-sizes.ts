@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Store } from '../../src/core/store.ts';
+import { adapters } from '@chauvoluuhuong/chorus-core';
 import { openChrome, sleep } from './chrome.ts';
 import { openReport, writeReport } from './report.ts';
 import { pixelDiff, problems, setSize, SIZES, summary, type Scheme, type Size } from './sizes.ts';
@@ -56,7 +57,67 @@ fs.writeFileSync(path.join(shop, '.chorus/skills/cake-pricing/SKILL.md'), '---\n
   seed('t_cart', 'Cart total rounds the wrong way for discounts', 'claude', shop, ['The cart total is off by a cent with a 15% discount', 'Rounding happens once, at the end; tests added.'], ['src/cart/total.ts', 'test/cart.test.ts']);
   seed('t_limit', 'Rate limiter for the public API', 'codex', api, ['Add a per-key rate limit to the public API', 'Limiter in place; 40 tests pass.'], ['src/limit.ts']);
   seed('t_hero', 'Landing page hero copy', 'agy', site, ['Write three versions of the hero line', 'Three versions in hero.md.'], ['hero.md']);
+  seedChatView(s);
   s.close();
+}
+
+/**
+ * The Chat view's chat (plan 2026-11-22 chat-view, mockup scenes 1–6): a real Claude Code transcript shape with every kind of call (a
+ * failed command, a read, a search, an edit, Chorus's read_mail, a command that passed), a reply with a table and a mermaid diagram,
+ * sub threads (one reported, one working, one asking), a chat it started, reported artifacts and mail it read. Parsed with the real
+ * adapter, so the rows, their kinds and words, and each call's detail come from where they come from in the app.
+ */
+function seedChatView(s: Store) {
+  const at = (sec: number) => new Date(Date.UTC(2026, 10, 22, 7, 2, 0) + sec * 1000).toISOString();
+  let n = 0;
+  const L: object[] = [];
+  const user = (text: string, sec: number) => L.push({ type: 'user', uuid: `u${++n}`, sessionId: 't_cv-session', cwd: shop, message: { role: 'user', content: text }, timestamp: at(sec) });
+  const say = (text: string, sec: number, stop = 'tool_use') => L.push({ type: 'assistant', uuid: `a${++n}`, message: { id: `m${n}`, role: 'assistant', model: 'claude-haiku', stop_reason: stop, content: [{ type: 'text', text }] }, timestamp: at(sec) });
+  const call = (id: string, name: string, input: object, out: string, sec: number, error = false) => {
+    L.push({ type: 'assistant', uuid: `a${++n}`, message: { id: `m${n}`, role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id, name, input }] }, timestamp: at(sec) });
+    L.push({ type: 'user', uuid: `r${n}`, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: out, is_error: error }] }, timestamp: at(sec + 1) });
+  };
+  const appLines = Array.from({ length: 120 }, (_, i) => `${String(610 + i).padStart(6)}→${['function renderChrome() {', "  const tree = document.querySelector('.tree');", '  const top = tree?.scrollTop ?? 0;', '  side.innerHTML = drawSide();'][i] ?? `  // line ${610 + i}`}`).join('\n');
+  user('the serve tests fail on dev, find out why and fix it', 0);
+  say("I'll run the serve tests first.", 2);
+  call('toolu_run1', 'Bash', { command: 'npm run test:serve' }, 'Exit code 1\n✗ sidebar-scroll.test.ts (2 failed)\n  keeps the scroll after a state push\n    expected 480, got 0\n✓ serve.test.ts (41)\n' + Array.from({ length: 38 }, (_, i) => `  ✓ case ${i + 1}`).join('\n'), 3, true);
+  call('toolu_read', 'Read', { file_path: 'src/desktop/app.js', offset: 610, limit: 120 }, appLines, 52);
+  call('toolu_grep', 'Grep', { pattern: 'scrollTop', path: 'src/desktop' }, "app.js:612:    const top = tree?.scrollTop ?? 0;\napp.js:618:    tree.scrollTop = top;\napp.js:1440:   el.scrollTop = el.scrollHeight;\nfollow.js:22:  return el.scrollTop + el.clientHeight;", 61);
+  call('toolu_edit', 'Edit', { file_path: 'src/desktop/app.js', old_string: '  tree.scrollTop = top;\n  fillSlots();\n  done();', new_string: "  fillSlots();\n  // after the module's slots: they change the list's height\n  const now = document.querySelector('.tree');\n  if (now) now.scrollTop = top;\n" + Array.from({ length: 8 }, (_, i) => `  step${i}();`).join('\n') }, 'The file src/desktop/app.js has been updated.', 85);
+  call('toolu_mail', 'mcp__chorus__read_mail', {}, 'From Chorus · note\n"Ship the projects page" changed src/desktop/app.js\n10 minutes ago.', 110);
+  say("Found it. `renderChrome()` redraws the sidebar before the module's slots are filled, so the list loses its scroll position.\n\nI moved the restore to after the slots. Running the tests again.", 115);
+  call('toolu_sub', 'mcp__chorus__start_subthread', { title: 'Check docs/features/projects.md against the code', agent: 'codex' }, 'Started sub thread t_cvsub1', 118);
+  call('toolu_run2', 'Bash', { command: 'npm run test:serve' }, '✓ sidebar-scroll.test.ts (2)\n✓ serve.test.ts (41)\n\n43 passed', 122);
+  say('**Fixed.** All 43 serve tests pass.\n\n- Cause: the sidebar\'s scroll was restored before the module filled its slots.\n- Change: `src/desktop/app.js`, 12 lines.\n\nNothing is committed.', 175, 'end_turn');
+  L.push({ type: 'system', subtype: 'turn_duration', timestamp: at(176) });
+  user('explain how the two views get their data, with a diagram', 300);
+  say('#### Two views, one session\n\nThe CLI runs once. Each view reads a different thing:\n\n| View | Reads |\n|---|---|\n| Raw | the terminal\'s bytes |\n| Chat | the captured turns |\n\n```mermaid\ngraph LR\n  CLI[CLI in a PTY] --> T[transcript] --> U[turns]\n  CLI --> R[Raw view]\n  U --> C[Chat view]\n```\n\n```\nchorus serve --port 4780\n```\n\nRun that to try it.', 305);
+  call('toolu_art', 'mcp__chorus__show_artifact', { path: 'site/hero.html' }, 'Shown.', 330);
+  say('Version 2 of the hero is up, and the copy options are in the second file.', 340, 'end_turn');
+  L.push({ type: 'system', subtype: 'turn_duration', timestamp: at(341) });
+  const file = path.join(home, 't_cv.jsonl');
+  fs.writeFileSync(file, L.map(x => JSON.stringify(x)).join('\n') + '\n');
+  s.createThread({ id: 't_cv', title: 'Fix the failing serve tests', agent: 'claude', cwd: shop, project: shop, native_session_id: 't_cv-session', state: 'waiting' });
+  s.recordSession('t_cv', adapters.claude.parseTranscript(fs.readFileSync(file, 'utf8')), { transcriptPath: file });
+  // its sub threads: one reported, one working, one with a question (they started together, after the first reply)
+  const sub = (id: string, title: string, agent: 'claude' | 'codex' | 'agy', status: string, sec: number) => {
+    s.createThread({ id, title, agent, cwd: shop, project: shop, parent_thread_id: 't_cv', native_session_id: `${id}-session`, state: 'waiting' });
+    s.setSub(id, { sub_status: status as never, sub_brief: title, sub_started: at(sec) });
+  };
+  sub('t_cvsub1', 'Check docs/features/projects.md against the code', 'codex', 'stopped', 118);
+  sub('t_cvsub2', 'Run the size proofs', 'claude', 'working', 118.5);
+  s.db.prepare("INSERT INTO mail (id,from_thread,from_json,to_thread,kind,subject,body,refs,state,created_at,read_at) VALUES ('m_cv1',NULL,'{\"who\":\"chorus\"}','t_cv','report',?,?,?,'read',?,?)").run('Sub thread "Check the docs" ended a turn', 'The doc matches, except "Export" still says zip; the code writes a folder. Two lines to change, listed in my report.', JSON.stringify({ about: 't_cvsub1' }), at(160), at(170));
+  s.db.prepare("INSERT INTO asks (id,thread_id,parent_id,kind,question,created) VALUES ('q_cv1','t_cvsub2','t_cv','question',?,?)").run('The tablet proof differs by 1.4 %. Accept, or should I look for the cause?', at(171));
+  // a chat it started (start_thread): its own row in Chats, never a report here
+  s.createThread({ id: 't_cvnew', title: 'Designer · Empty state for the projects page', agent: 'agy', cwd: shop, project: shop, parent_thread_id: 't_cv', native_session_id: 't_cvnew-session', state: 'waiting' });
+  s.db.prepare('UPDATE threads SET created = ? WHERE id = ?').run(at(176.5), 't_cvnew');
+  s.recordSession('t_cvnew', { agent: 'agy', turns: [{ seq: 1, role: 'user', text: 'Design an empty state for the projects page: no projects yet, one clear action. Match ui-mockup-v3.', ts: at(200) }, { seq: 2, role: 'assistant', text: "I'll look at the page and the mockup first.", ts: at(205) }], toolCalls: [{ id: 'nv1', turnSeq: 2, tool: 'view_file', kind: 'read', target: 'mockups/ui-mockup-v3.html', status: 'ok', note: '880 lines' }, { id: 'nv2', turnSeq: 2, tool: 'view_file', kind: 'read', target: 'src/desktop/projects-ui.js', status: 'running' }], usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0 } });
+  // artifacts it reported (show_artifact): an HTML page and a Markdown file, inside the project
+  fs.mkdirSync(path.join(shop, 'site'), { recursive: true });
+  fs.writeFileSync(path.join(shop, 'site', 'hero.html'), '<!doctype html><meta charset="utf-8"><style>body{font:15px/1.5 -apple-system,system-ui,sans-serif;margin:0;padding:28px;color:#1b1b1b}h1{font:600 34px/1.15 Georgia,serif;margin:0 0 8px}a{display:inline-block;background:#0f766e;color:#fff;border-radius:8px;padding:9px 16px;text-decoration:none;margin-top:14px}div{height:150px;margin-top:22px;border-radius:12px;background:linear-gradient(90deg,#e2f3f1,#f7e8e1)}</style><h1>Every agent, one place</h1>Run Claude Code, Codex and Antigravity side by side, from your Mac or your phone.<br><a href="#">Try Chorus</a><div></div>');
+  fs.writeFileSync(path.join(shop, 'site', 'hero-copy.md'), '# Hero copy\n\n## Option 1\nEvery agent, one place.\n\n## Option 2\nOne window for all your coding agents.\n\n## Option 3\nYour agents, side by side.\n');
+  s.db.prepare('INSERT INTO reported (thread_id,target,title,ts) VALUES (?,?,?,?)').run('t_cv', path.join(shop, 'site', 'hero.html'), 'Landing hero, version 2', at(331));
+  s.db.prepare('INSERT INTO reported (thread_id,target,title,ts) VALUES (?,?,?,?)').run('t_cv', path.join(shop, 'site', 'hero-copy.md'), 'Copy options for the hero', at(332));
 }
 const env: Record<string, string> = { ...(process.env as Record<string, string>), CHORUS_HOME: home, CHORUS_SKILLS_HOME: userHome, CHORUS_NO_OPEN: '1', CHORUS_NOTIFICATIONS: '0', CHORUS_UPDATES: '0', CHORUS_FAKE_AGENTS: '1', CHORUS_PROJECT: shop,
   // no licence server: no Community join and no released paid bundle here (chorus-core's harness runs the Pro screens, unlocked)
@@ -126,6 +187,15 @@ interface Screen {
   close?: () => Promise<unknown>;
 }
 const chatId = () => live[0] ?? 't_cart';
+/** The Chat view at this size: a phone opens in it, a tablet and a desktop are switched to it (kept per size, in browser storage). */
+const cvOn = async (id = 't_cv') => {
+  await js(`localStorage.setItem('chorus.chatView.' + chorus.S.size, 'chat')`);
+  await goTo({ name: 'chat', id });
+  await until(() => js<boolean>('!!document.querySelector(".cv-stream .cv-u, .cv-stream .cv-a")'), 8000);
+  await sleep(700);
+};
+const cvOff = () => js(`localStorage.removeItem('chorus.chatView.' + chorus.S.size); document.querySelector('.cv-sheet-wrap')?.remove(); document.querySelector('.cv-full')?.remove()`);
+const cvScroll = (sel: string) => js(`document.querySelector(${JSON.stringify(sel)})?.scrollIntoView({ block: 'center' })`);
 const SCREENS: Screen[] = [
   { id: 'home', label: 'Home', sizes: ['phone'], open: () => goTo({ name: 'home' }) },
   { id: 'chats', label: 'Chats', sizes: ['phone'], open: () => goTo({ name: 'chats' }) },
@@ -137,6 +207,18 @@ const SCREENS: Screen[] = [
   { id: 'chat-sheet', label: 'The chat’s ⋯ sheet', sizes: ['phone'], open: async () => { await goTo({ name: 'chat', id: chatId() }); await click('[data-act="chat-menu"]'); }, close: () => js('chorus.S.sheet = null; document.querySelector("#sheet")?.remove()') },
   // a phone: Artifacts is the chat's Files tab
   { id: 'drawer', label: 'Artifacts drawer', open: async () => { await goTo({ name: 'chat', id: chatId() }); if (!(await js<boolean>('chorus.S.drawer === "artifacts"'))) await js(`document.querySelector('[data-act="chat-tab"][data-arg="files"], [data-act="drawer"][data-arg="artifacts"], [data-act="drawer-to"][data-arg="artifacts"]')?.click()`); await sleep(700); }, close: () => js(`chorus.S.drawer = null; chorus.S.chatTab = 'chat'`) },
+  // the Chat view (plan 2026-11-22 chat-view, mockup @workspace/mockups/chat-view.html): one screen per scene
+  { id: 'cv', label: 'Chat view (scenes 1, 7)', open: () => cvOn(), close: cvOff },
+  { id: 'cv-tools', label: 'Chat view · tool calls open (scene 2)', open: async () => { await cvOn(); await js(`document.querySelector('.cv-tools[aria-expanded="false"]')?.click()`); await sleep(300); await cvScroll('.cv-tl'); }, close: cvOff },
+  { id: 'cv-call', label: 'Chat view · one call\'s detail, fetched on the tap (scene 2)', open: async () => { await cvOn(); await js(`document.querySelector('.cv-t[data-call="toolu_run1"]') || document.querySelector('.cv-tools[aria-expanded="false"]')?.click()`); await sleep(300); await js(`document.querySelector('.cv-t[data-call="toolu_run1"]')?.click()`); await until(() => js<boolean>('!!document.querySelector(".cv-sheet pre")'), 8000); }, close: cvOff },
+  { id: 'cv-cards', label: 'Chat view · sub threads, their report and question (scene 3)', open: async () => { await cvOn(); await cvScroll('.cv-card.sub, .cv-card .mini'); }, close: cvOff },
+  { id: 'cv-new', label: 'Chat view · the new chat card, and "Started by" inside it (scene 4)', open: async () => { await cvOn(); await cvScroll('.cv-card.new'); }, close: cvOff },
+  { id: 'cv-started', label: 'Chat view · inside the chat it started (scene 4)', sizes: ['phone'], open: () => cvOn('t_cvnew'), close: cvOff },
+  { id: 'cv-md', label: 'Chat view · Markdown, mermaid and artifact cards (scene 5)', open: async () => { await cvOn(); await until(() => js<boolean>('!!document.querySelector(".cv-dia.ok svg, .cv-dia.bad")'), 15000); await cvScroll('.cv-dia'); await sleep(600); }, close: cvOff },
+  { id: 'cv-full', label: 'Chat view · an artifact full screen (scene 5)', sizes: ['phone'], open: async () => { await cvOn(); await js(`[...document.querySelectorAll('.cv-card.art [data-cv="art"]')][0]?.click()`); await sleep(1200); }, close: cvOff },
+  { id: 'cv-slash', label: 'Chat view · "/" in the message box (scene 6)', sizes: ['phone'], open: async () => { await cvOn(); await js(`(() => { const b = document.querySelector('.cv-in'); b.focus(); b.value = '/'; b.setSelectionRange(1, 1); b.dispatchEvent(new Event('input', { bubbles: true })); })()`); await until(() => js<boolean>('!!document.querySelector(".cv-box .tpick:not([hidden])")'), 8000); await sleep(300); }, close: async () => { await js(`(() => { const b = document.querySelector('.cv-in'); if (b) { b.value = ''; b.blur(); } })()`); await cvOff(); } },
+  { id: 'cv-at', label: 'Chat view · "@" in the message box (scene 6)', sizes: ['phone'], open: async () => { await cvOn(); await js(`(() => { const b = document.querySelector('.cv-in'); b.focus(); b.value = 'add a case to @s'; b.setSelectionRange(16, 16); b.dispatchEvent(new Event('input', { bubbles: true })); })()`); await until(() => js<boolean>('!!document.querySelector(".cv-box .tpick:not([hidden])")'), 8000); await sleep(300); }, close: async () => { await js(`(() => { const b = document.querySelector('.cv-in'); if (b) { b.value = ''; b.blur(); } })()`); await cvOff(); } },
+  { id: 'cv-raw', label: 'Raw, the agent\'s own screen, from the switch (scene 1)', sizes: ['phone'], open: async () => { await cvOn(); await js(`document.querySelector('[data-act="cv-mode"][data-arg="raw"]')?.click()`); await sleep(1200); }, close: cvOff },
   { id: 'approvals', label: 'Approvals', open: () => goTo({ name: 'approvals' }) },
   { id: 'memory', label: 'Memory', open: async () => { await goTo({ name: 'memory' }); await until(() => js<boolean>('chorus.S.mem.items.length > 0'), 8000); await sleep(300); } },
   { id: 'memory-record', label: 'A record in Memory', sizes: ['phone'], open: async () => { await goTo({ name: 'memory' }); await until(() => js<boolean>('chorus.S.mem.items.length > 0'), 8000); await click('.mem .rows .item'); } },
@@ -146,7 +228,10 @@ const SCREENS: Screen[] = [
   { id: 'dialog', label: 'A dialog (delete a chat?)', open: async () => { await goTo({ name: 'chat', id: chatId() }); await js(`fetch('/api/chats/${chatId()}', { method: 'DELETE', headers: { 'x-chorus': '1' } })`); await until(() => js<boolean>('!!document.querySelector("[data-dialog]")'), 8000); }, close: async () => { await js(`(() => { const d = document.querySelector('[data-dialog]'); if (!d) return; return fetch('/api/dialogs/' + d.dataset.dialog, { method: 'POST', headers: { 'x-chorus': '1', 'content-type': 'application/json' }, body: JSON.stringify({ value: null }) }).then(() => d.remove()); })()`); await sleep(300); } },
 ];
 // what the release must still look like at 1280 px (Home, Chats and More don't exist there)
-const COMPARE = ['new', 'approvals', 'memory', 'skills', 'doctor'];
+const COMPARE = ['new', 'approvals', 'memory', 'skills', 'doctor', 'raw-chat'];
+// a chat in Raw on a desktop (the plan's "Raw unchanged"): only the header's new Raw | Chat switch may differ. The newest chat, so
+// opening it (which resumes it) cannot change the order of the sidebar for the screens after it
+SCREENS.push({ id: 'raw-chat', label: 'A chat in Raw', sizes: [], open: async () => { await goTo({ name: 'chat', id: 't_cv' }); await sleep(2500); } });
 
 /* ---------- 1. the release, at 1280 px (before) ---------- */
 

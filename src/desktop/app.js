@@ -9,6 +9,7 @@ import { artifactsMark, makeHighlights } from './highlight.js';
 import { mailTypingHtml, MAIL_TYPING_MAX_MS } from './mail-typing.js';
 import { attachPicker } from './text-picker.js';
 import { md, mdInline } from './md.js';
+import { CV_ICONS, makeChatView } from './chat-view.js';
 import { cliFitNote, newChatHint } from './cli-fit.js';
 import { nextSort, sortFolders, typeJump } from './folder-nav.js';
 import { makeImeInput } from './ime-input.js';
@@ -246,6 +247,7 @@ function onMessage(m) {
     S.screen.exited = true;
     return drawTermOver();
   }
+  if (m.t === 'cv') return void chatView().onMessage(m);
   if (m.t === 'flash') return flash(m.text);
   if (m.t === 'mail-typing') return mailTyping(m);
   if (m.t === 'renamed') return renamed(m);
@@ -581,6 +583,7 @@ function go(view, push = true) {
   // the address keeps the screen, so a reload comes back to it
   history.replaceState(null, '', `#/${view.name}${view.id ? `/${view.id}` : view.from ? `/from/${view.from}` : view.folder ? `/in/${encodeURIComponent(view.folder)}` : ''}`);
   if (view.name !== 'chat') detachTerm();
+  if (view.name !== 'chat' || view.id !== chatView().shown()) chatView().unmount();
   if (view.name === 'chat') void api('POST', `/api/chats/${view.id}/select`).catch(() => {});
   if (view.name === 'new') void openNew(view.from, view.folder);
   if (view.name === 'memory') void loadMemory();
@@ -683,7 +686,8 @@ function onSize() {
   if (S.size !== 'phone' && ['home', 'chats', 'more'].includes(S.view.name)) return go({ name: 'new' }, false);
   renderChrome();
   renderDoctorDot();
-  if (S.view.name === 'chat') renderChatParts();
+  // the Chat view's default is per size (a phone opens in Chat): the chat is drawn again in the view of its new size
+  if (S.view.name === 'chat') renderChat();
   else renderView();
   setTimeout(refit, 60);
 }
@@ -1102,7 +1106,12 @@ function phoneTop(chat) {
     // the agent, the title, and under it the agent's name and its state (the chat has no header row of its own on a phone)
     if (!chat) return `<button class="pv-back" data-act="back" aria-label="Back">${PI.back}</button><div class="ph-title"></div>`;
     const s = phState(chat);
-    return `<button class="pv-back" data-act="back" aria-label="Back">${PI.back}</button>${avatar(chat, s.cls)}<div class="ph-title two"><span class="ph-t1">${esc(chat.title)}</span><span class="ph-sub">${esc(AGENT[chat.agent]?.name ?? chat.agent)} · <span class="pv-st ${s.cls}">${esc(s.label)}</span>${chat.skip ? ' <span class="badge warn" title="started without permission prompts">skip</span>' : ''}${chat.toast ? ` <span class="badge ok">${esc(chat.toast)}</span>` : ''}</span></div><button class="pv-back pv-r" data-act="chat-menu" aria-label="This chat: share, hand off, actions, activity, record, delete">${PI.more}</button>`;
+    // three icons (plan 2026-11-22 chat-view, decision 9): the Raw / Chat switch, Artifacts, ⋯
+    const raw = chatMode() === 'raw';
+    const sw = raw ? `<button class="pv-back pv-r cv-ico on" data-act="cv-mode" data-arg="chat" aria-label="Back to the Chat view">${CV_ICONS.chat}</button>` : `<button class="pv-back pv-r cv-ico" data-act="cv-mode" data-arg="raw" aria-label="Show the agent's own screen (Raw)">${CV_ICONS.raw}</button>`;
+    const arts = chat.sub ? '' : `<button class="pv-back pv-r cv-ico${S.chatTab === 'files' ? ' on' : ''}" data-act="cv-art" aria-label="Artifacts${chat.artifacts ? `, ${chat.artifacts}` : ''}">${CV_ICONS.art}${chat.artifacts ? `<span class="cv-n">${chat.artifacts}</span>` : ''}</button>`;
+    // the title, and under it the agent's badge and its state (mockup chat-view.html): no avatar, so the title keeps its room
+    return `<button class="pv-back" data-act="back" aria-label="Back">${PI.back}</button><div class="ph-title two cv-top"><span class="ph-t1">${esc(chat.title)}</span><span class="ph-sub"><span class="badge ${esc(chat.agent)}">${esc(AGENT[chat.agent]?.name ?? chat.agent)}</span><span class="dot ${esc(chat.state)}"></span><span class="pv-st ${s.cls}">${esc(s.label)}</span>${chat.skip ? ' <span class="badge warn" title="started without permission prompts">skip</span>' : ''}${chat.toast ? ` <span class="badge ok">${esc(chat.toast)}</span>` : ''}</span></div>${sw}${arts}<button class="pv-back pv-r" data-act="chat-menu" aria-label="This chat: share, hand off, actions, activity, record, delete">${PI.more}</button>`;
   } else if (v.name === 'memory') {
     title = v.rec ? esc(S.mem.items.find(i => i.id === v.rec)?.title ?? 'Memory') : 'Memory';
   } else if (v.name === 'projects') {
@@ -2601,7 +2610,7 @@ function renderChat() {
   // the chat column holds the banners, the agent's screen and the docked ask card; the right sidebar beside it is one container that
   // the header's buttons open: Artifacts, Activity, Record (the drawer) or Task (the optional module's chat-side panel)
   $('#view').innerHTML = `<div class="chat"><div class="chat-head" id="chat-head"></div>${proSlot('chat-actions', ` data-chat="${esc(id)}"`)}<div class="chat-tabs" id="chat-tabs" hidden></div>
-    <div class="chat-body tab-chat" id="chat-body"><div class="chat-col" id="chat-col"><div id="chat-banners"></div><div class="term-wrap" id="term-slot"><div class="term-over" id="term-over" hidden></div><div class="watch-line" id="watch-line" hidden>Keys are not sent to this chat · Go to main chat to change anything</div></div><div id="ask-dock"></div></div><div class="drawer-scrim" data-act="drawer-close"></div><aside class="drawer" id="drawer" hidden></aside><aside class="task-side" id="task-side" aria-label="Task">${RESIZE}<div class="drawer-head task-head"><span class="grow title">Task</span><button class="icon-btn" data-act="side" data-arg="task" title="Close the sidebar" aria-label="Close the sidebar">✕</button></div>${proSlot('chat-side', ` data-chat="${esc(id)}"`)}</aside></div></div>`;
+    <div class="chat-body tab-chat" id="chat-body"><div class="chat-col" id="chat-col"><div id="chat-banners"></div><div class="term-wrap" id="term-slot"><div class="term-over" id="term-over" hidden></div><div class="watch-line" id="watch-line" hidden>Keys are not sent to this chat · Go to main chat to change anything</div></div><div class="cv" id="cv-slot" hidden></div><div id="ask-dock"></div></div><div class="drawer-scrim" data-act="drawer-close"></div><aside class="drawer" id="drawer" hidden></aside><aside class="task-side" id="task-side" aria-label="Task">${RESIZE}<div class="drawer-head task-head"><span class="grow title">Task</span><button class="icon-btn" data-act="side" data-arg="task" title="Close the sidebar" aria-label="Close the sidebar">✕</button></div>${proSlot('chat-side', ` data-chat="${esc(id)}"`)}</aside></div></div>`;
   $('#term-slot').prepend(termEl);
   $('#term-slot').classList.toggle('fixed', !!fixedSize);
   fillSlots();
@@ -2610,15 +2619,92 @@ function renderChat() {
     termOpened = true;
     useWebgl();
   }
+  // Raw (the agent's own screen) or Chat (the turns, src/desktop/chat-view.js): the Chat view never attaches to the terminal, so a
+  // parked chat is not resumed by opening it, and no screen bytes come to a phone that only reads (plan 2026-11-22 chat-view)
+  const mode = chatMode();
+  $('#term-slot').hidden = mode === 'chat';
+  $('#cv-slot').hidden = mode !== 'chat';
+  if (mode === 'chat') {
+    detachTerm();
+    void chatView().mount($('#cv-slot'), id);
+  } else chatView().unmount();
   renderChatParts();
-  requestAnimationFrame(() => {
-    refit();
-    attachTerm(id);
-    drawTermOver();
-    term.focus();
-  });
+  if (mode === 'raw')
+    requestAnimationFrame(() => {
+      refit();
+      attachTerm(id);
+      drawTermOver();
+      term.focus();
+    });
   void loadDetail(id);
   if (S.drawer) void loadDrawer();
+}
+
+/* ---------- the Chat view (plan 2026-11-22 chat-view, src/desktop/chat-view.js) ---------- */
+
+/** Raw or Chat, kept per device and per size (browser storage): a phone opens in Chat, a tablet and a desktop in Raw. */
+const chatModeKey = () => `chorus.chatView.${S.size}`;
+function chatMode() {
+  try {
+    const v = localStorage.getItem(chatModeKey());
+    if (v === 'raw' || v === 'chat') return v;
+  } catch {
+    /* no storage: the default */
+  }
+  return S.size === 'phone' ? 'chat' : 'raw';
+}
+function setChatMode(mode) {
+  if (mode !== 'raw' && mode !== 'chat') return;
+  try {
+    localStorage.setItem(chatModeKey(), mode);
+  } catch {
+    /* kept for this page only */
+  }
+  if (S.view.name !== 'chat') return;
+  if (S.chatTab === 'files') S.chatTab = 'chat';
+  renderChrome();
+  renderChat();
+}
+let cvInstance = null;
+/** The "/" list in the message box: the skills (checked for this chat's agent), then the agent's own commands probed with the real CLI. */
+function cvPicker(box, c) {
+  const skills = skillTrigger(() => [c.agent], () => c.cwd);
+  const own = () => (S.state?.nativeCommands?.[c.agent] ?? []).map(n => ({ key: n.name, main: `/${n.name}`, sub: n.description, group: 1, groupLabel: `${AGENT[c.agent]?.name ?? c.agent}'s own`, native: true }));
+  return attachPicker(box, [
+    { ...skills, heading: 'Skills', items: async q => [...(await skills.items(q)), ...own()], beforePick: x => (x.native ? true : skills.beforePick(x)) },
+    {
+      chars: ['@', '＠'],
+      label: 'Files',
+      heading: 'Files',
+      empty: 'No file matches',
+      query: /[\w.\/-]*/,
+      items: async q => {
+        const r = await api('GET', `/api/files?folder=${encodeURIComponent(c.cwd)}&q=${encodeURIComponent(q)}`);
+        return (r.files ?? []).map(f => { const i = f.lastIndexOf('/'); return { key: f, main: f.slice(i + 1), sub: i < 0 ? 'project root' : `${f.slice(0, i)}/`, file: true }; });
+      },
+      insert: x => `@${x.key}`,
+    },
+  ], { above: true });
+}
+function chatView() {
+  return (cvInstance ??= makeChatView({
+    api,
+    send,
+    chats: () => S.state?.chats ?? [],
+    size: () => S.size,
+    agentName: a => AGENT[a]?.name ?? a ?? 'the agent',
+    stateWord: st => (st === 'idle' ? 'your turn' : STATE_LABEL[st] ?? st),
+    tilde,
+    onMac: ON_MAC,
+    mermaidUrl: '/vendor/mermaid-12.2.0.min.js',
+    openChat: id => go({ name: 'chat', id }),
+    toRaw: () => setChatMode('raw'),
+    openReport: (id, rid) => void api('POST', `/api/chats/${encodeURIComponent(id)}/open-report`, { id: rid }).then(r => r.error && toast(r.error), e => toast(e.message)),
+    picker: cvPicker,
+    // Esc stops a turn without closing the CLI in all three (chatview-probe E, 2026-11-22)
+    canStop: a => !!AGENT[a],
+    menuShown: c => !!c?.menu,
+  }));
 }
 
 function meter(pct) {
@@ -2671,14 +2757,18 @@ function renderChatParts() {
     <div class="meta"><span class="dot ${esc(c.state)}"></span><span>${esc(STATE_LABEL[c.state] ?? c.state)}</span>
       ${c.model || c.effort ? `<span class="model">· ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}</span>` : ''}${c.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${meter(c.usage)}
       <span class="mono faint path" title="${esc(c.cwd)}">‎${esc(tilde(c.cwd))}‎</span>${c.toast ? `<span class="badge ok">${esc(c.toast)}</span>` : ''}</div>
+    ${S.size === 'phone' ? '' : `<div class="seg cv-seg" role="group" aria-label="View"><button class="${chatMode() === 'raw' ? 'on' : ''}" data-act="cv-mode" data-arg="raw" title="The agent's own screen">Raw</button><button class="${chatMode() === 'chat' ? 'on' : ''}" data-act="cv-mode" data-arg="chat" title="The conversation, drawn from its turns">Chat</button></div>`}
     <button class="btn" data-act="share" data-arg="${esc(c.id)}" title="Copy this chat's id and place, to paste into another Chorus chat" aria-label="Share">${S.size === 'desktop' ? '⧉ Share' : '⧉'}</button>
     <button class="btn" data-act="handoff" data-arg="${esc(c.id)}" title="Continue this chat with another agent" aria-label="Hand off">${S.size === 'desktop' ? '⇄ Hand off' : '⇄'}</button>
     ${c.sub ? '' : `${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰', '', hlFlash(c.id, 'task', taskLit, countFlash(`taskrev:${c.id}`))) : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', hlFlash(c.id, 'artifacts', artLit, artFlash(c.id)))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}`}
     <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat" aria-label="Delete this chat">🗑</button>`;
   // a phone: one segmented row, Chat · Steps · Plan (a task chat's panel, from the module) · Files (the chat's artifacts), one shown at
   // a time (mockup phone-ui-v2.html scene 5). A sub thread has neither: no row
-  const tabs = S.size === 'phone' ? [...(window.choruspro?.sideTabs?.(c.id) ?? []), ...(c.sub ? [] : [['files', 'Files']])] : [];
-  if (!tabs.some(([k]) => k === S.chatTab)) S.chatTab = 'chat';
+  // the Artifacts icon in a phone's top bar opens Files for every chat (plan 2026-11-22 chat-view, decision 9); a task chat keeps
+  // Files in its row beside Steps and Plan, a plain chat has no row
+  const modTabs = window.choruspro?.sideTabs?.(c.id) ?? [];
+  const tabs = S.size === 'phone' ? [...modTabs, ...(c.sub || !modTabs.length ? [] : [['files', 'Files']])] : [];
+  if (!tabs.some(([k]) => k === S.chatTab) && !(S.chatTab === 'files' && !c.sub && S.size === 'phone')) S.chatTab = 'chat';
   const tabsEl = $('#chat-tabs');
   tabsEl.hidden = !tabs.length;
   const hlTab = (tabs.find(([k]) => k === 'steps') ?? (task ? tabs[0] : null))?.[0];
@@ -2712,6 +2802,7 @@ function renderChatParts() {
     bannerEl.dataset.html = banners;
   }
   drawDock(c);
+  if (chatMode() === 'chat') chatView().refresh();
   const dr = $('#drawer');
   dr.hidden = !S.drawer;
   if (S.drawer) dr.innerHTML = RESIZE + drawerHtml(c);
@@ -3673,6 +3764,13 @@ document.addEventListener('click', async e => {
       return drawSheet();
     case 'chat-tab':
       S.chatTab = arg;
+      renderChatParts();
+      return setTimeout(refit, 30);
+    case 'cv-mode':
+      return setChatMode(arg);
+    case 'cv-art':
+      S.chatTab = S.chatTab === 'files' ? 'chat' : 'files';
+      renderChrome();
       renderChatParts();
       return setTimeout(refit, 30);
     case 'menu-close':
