@@ -1587,3 +1587,5 @@ html:not([data-size="phone"]) .cv-sheet { border-radius: 14px; max-height: 80vh;
 .ph-title.two.cv-top .ph-sub { display: flex; align-items: center; gap: 5px; font-size: 12.5px; }
 .ph-title.two.cv-top .ph-sub .dot { width: 7px; height: 7px; }
 .cv-tools { align-items: flex-start; } .cv-tools .chev { line-height: 19px; }
+/* a phone in the Chat view: a toast sits above the message box, never over it */
+html[data-size="phone"] body:has(#cv-slot:not([hidden])) #toasts { bottom: calc(150px + var(--safe-bot, 0px)); }

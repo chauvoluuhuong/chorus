@@ -18,7 +18,7 @@ const ROOT = path.resolve(import.meta.dirname, '../..');
 const FAKE = path.join(ROOT, 'tools/fake-agent/fake-tui.mjs');
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-async function rig() {
+async function rig(o: { sayNeedsInput?: boolean } = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-cv-home-'));
   process.env.CODEX_HOME = home;
   process.env.CHORUS_SKILLS_HOME = home;
@@ -29,7 +29,7 @@ async function rig() {
   const store = new Store(project);
   const c = new Controller({ project, store, stillMs: 300, app: headlessApp(), tailPollMs: 100, opener: async () => ({ ok: true }), launcher: (agent, o) => ({ bin: process.execPath, args: [FAKE, agent], cwd: o.cwd }) });
   c.restore();
-  const srv = new ChorusServer({ controller: c, token: 'a'.repeat(48), check: async () => ({ node: { version: '22', ok: true }, platform: 't', agents: [], ms: 1 }), sayCheckMs: 300 });
+  const srv = new ChorusServer({ controller: c, token: 'a'.repeat(48), check: async () => ({ node: { version: '22', ok: true }, platform: 't', agents: [], ms: 1 }), sayCheckMs: 300, sayNeedsInput: o.sayNeedsInput ?? false });
   const url = await srv.start(0);
   const api = async (method: string, p: string, body?: object, headers: Record<string, string> = {}) => {
     const res = await fetch(url + p, { method, headers: { authorization: `Bearer ${srv.token}`, 'x-chorus': '1', 'content-type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined });
@@ -217,6 +217,22 @@ test('say: a skill, the agent\'s own command and an @path reach the CLI as typed
     r.store.setSub(sub.id, { sub_status: 'working', sub_brief: 'x' });
     assert.match((await r.api('POST', `/api/chats/${sub.id}/say`, { text: 'hi' })).json.error, /watch-only/);
     assert.match((await r.api('POST', `/api/chats/${sub.id}/key`, { key: 'esc' })).json.error, /watch-only/);
+  } finally {
+    await r.done();
+  }
+});
+
+test('say types nothing into a CLI that shows no input box (a start-up question, a dialog): it answers "ended"', async () => {
+  const r = await rig({ sayNeedsInput: true });
+  try {
+    const id = (await r.api('POST', '/api/chats', { agent: 'claude', folder: r.project })).json.id as string;
+    const screen = () => r.c.app.entry(id)!.host!.screen.text().join('\n');
+    for (let i = 0; i < 60 && !/READY claude/.test(screen()); i++) await sleep(50);
+    const a = (await r.api('POST', `/api/chats/${id}/say`, { text: 'hello there' })).json;
+    assert.equal(a.result, 'ended');
+    assert.match(a.message, /showing something on its own screen/);
+    await sleep(900);
+    assert.doesNotMatch(screen(), /got: "hello there"/, 'nothing typed');
   } finally {
     await r.done();
   }

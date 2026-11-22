@@ -77,6 +77,9 @@ export function rowWord(c) {
   return c.kind === 'command' || c.kind === 'mcp' ? '<span class="r ok">✓</span>' : '<span class="r"></span>';
 }
 
+/** A user's message as they typed it: a skill Chorus spelled out for the CLI (expandSkillMentions) shows as `/name` again. */
+export const asTyped = text => String(text ?? '').replace(/Use the Chorus skill "([\w.-]+)" \(load it with the chorus get_skill tool\)\./g, '/$1');
+
 const ago = (iso, now = Date.now()) => {
   const t = Date.parse(iso ?? '');
   if (!t) return '';
@@ -247,7 +250,7 @@ export function makeChatView(h) {
           html += `<div class="cv-day">${esc(label)}</div>`;
           day = dk;
         }
-        html += t.role === 'user' ? `<div class="cv-u">${esc(t.text)}</div>` : `<div class="cv-a">${mdFull(t.text)}</div>`;
+        html += t.role === 'user' ? `<div class="cv-u">${esc(asTyped(t.text))}</div>` : `<div class="cv-a">${mdFull(t.text)}</div>`;
       } else if (it.type === 'run') html += runHtml(it, it === lastRun && i > lastTurnAt - 1, working);
       else if (it.type === 'subs') html += subsHtml(it.cards);
       else if (it.type === 'startedBy') {
@@ -310,7 +313,11 @@ export function makeChatView(h) {
       nbox.value = text;
       grow(nbox);
       picker = h.picker(nbox, c);
-      if (focus) nbox.focus();
+      // the chat's state changed while you type: the box is the same text, and an open "/" or "@" list opens again at the caret
+      if (focus) {
+        nbox.focus();
+        picker.refresh();
+      }
     }
   }
 

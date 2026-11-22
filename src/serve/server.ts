@@ -20,7 +20,7 @@ import type { ItemState, RichLine } from '../app/compositor.ts';
 import { effortsFor } from '../app/models.ts';
 import { listWatchesText, PROJECT_TOOL_NAMES, readMailText, SERVE_TOOL_NAMES } from '../mcp/server.ts';
 import { MCP_TOKEN_ENV, SERVE_URL_ENV } from '../mcp/pro.ts';
-import { latestModels, menuShown, NATIVE_COMMANDS, liveAddDirDone, liveAddDirInput, liveAddDirKeys, codexGrantMessage, Mailbox, NEWLINE_KEYS, transcriptHas, TurnWatch, type ChatLook, type MailEvent, type Transport } from '@chauvoluuhuong/chorus-core';
+import { clearKeys, inputState, latestModels, menuShown, NATIVE_COMMANDS, liveAddDirDone, liveAddDirInput, liveAddDirKeys, codexGrantMessage, Mailbox, NEWLINE_KEYS, transcriptHas, TurnWatch, type ChatLook, type MailEvent, type Transport } from '@chauvoluuhuong/chorus-core';
 import { computerDir } from '../app/screens.ts';
 import type { ThreadHost } from '../app/thread-host.ts';
 import { transcriptPath } from '../core/capture.ts';
@@ -175,6 +175,8 @@ export interface ServeOpts {
   sessionExists?: (row: ThreadRow) => boolean;
   /** the Chat view's `say`: how long after the Enter it looks whether the CLI kept the text in its input (tests: 0) */
   sayCheckMs?: number;
+  /** the Chat view's `say` types only when the CLI shows its input box (default on; the tests' fake agent draws none) */
+  sayNeedsInput?: boolean;
   /** sub threads' watchdog (tests: a short one); the watcher's QUIET_MS otherwise */
   subQuietMs?: number;
   /** the watcher's and the mailbox's clock (tests: a fake one) */
@@ -532,6 +534,10 @@ export class ChorusServer {
     const typed = typedText(agent, expandSkillMentions(text, this.skillNames()));
     const name = CLIS[agent]?.name ?? agent;
     // the line counts as the user's: a sub thread's main chat is told, an open card is answered by typing (as keys from the page)
+    // a running CLI that shows something of its own (a start-up question, a permission dialog, a menu) takes no text: typed keys and
+    // the Enter after them would answer it (chatview-probe M and S: inputState reads the input box per CLI)
+    const running = this.app.entry(id)?.host;
+    if (this.o.sayNeedsInput !== false && running?.state === 'running' && !inputState(agent, screenRows(running.screen), running.screen.cols).ready) return { result: 'ended', message: `${CLIS[agent]?.name ?? agent} is showing something on its own screen. Open Raw to answer it.` };
     const line = text.replace(/\s+/g, ' ') + '\r';
     this.watchOnlyLets(id, line);
     const r = await this.locks.run(id, () => this.c.sendToChat(id, typed, x => (this.o.sessionExists ?? sessionOnDisk)(x)));
@@ -542,7 +548,13 @@ export class ChorusServer {
       // the CLI may keep the text in its input instead of sending it (chatview-probe S: Codex and an unknown /command): say so
       const host = this.app.entry(id)?.host;
       await new Promise(res => setTimeout(res, this.o.sayCheckMs ?? 1500));
-      if (host && host.state === 'running' && heldInInput(agent, screenRows(host.screen), host.screen.cols, typed)) return { result: 'held', message: `${name} kept the message in its own input and did not send it. Open Raw to see why.` };
+      if (host && host.state === 'running' && heldInInput(agent, screenRows(host.screen), host.screen.cols, typed)) {
+        // only what Chorus typed is there: it is cleared, so the next message is not added to it (Ctrl+U per line, typein-probe A)
+        const st = inputState(agent, screenRows(host.screen), host.screen.cols);
+        const flat = (x: string) => x.replace(/\s+/g, ' ').trim();
+        if (flat(st.draft) === flat(typedText(agent, text).split(NEWLINE_KEYS[agent] ?? '\x1b\r').join(' ')) || flat(st.draft) === flat(text)) await this.locks.run(id, () => host.write(clearKeys(agent, st)));
+        return { result: 'held', message: `${name} did not take the message: its own screen says why. Open Raw to see it.` };
+      }
       return { result: 'sent' };
     }
     if (r === 'gone') return { result: 'gone', message: 'This chat cannot be continued: its session is gone. Hand it off to start again from its record.' };
