@@ -284,7 +284,7 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 /* ---------- a chat: header, banners, the agent's own screen, drawer ---------- */
 .chat { display: flex; flex-direction: column; height: 100%; }
 .chat-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.chat-head .meta { display: flex; gap: 6px; align-items: center; flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.chat-head .meta { display: flex; gap: 6px; align-items: center; flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; }
 .chat-head .meta .path { min-width: 40px; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
 .meter { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .meter .bar { width: 64px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
@@ -434,7 +434,8 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
 .tpick > button:hover, .tpick > button.on { background: var(--hover); }
 .tpick > button .mono { color: var(--accent); font-weight: 600; font-family: var(--f-mono); }
 .tpick > button.file .mono { color: var(--ink); }
-.tpick > button { min-width: 0; }
+/* a row keeps its own height: in a list taller than its box the rows must scroll, not shrink into each other */
+.tpick > button { min-width: 0; flex: none; }
 /* as in the mockup: the name and a file's folder on one line, a description on two at most; longer ones end with an ellipsis */
 .tpick > button .mono, .tpick > button.file small { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tpick > button:not(.file) small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
