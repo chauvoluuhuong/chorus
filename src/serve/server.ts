@@ -45,7 +45,7 @@ import { ProjectRuntime, type LiveWay } from './project-runtime.ts';
 import { APPROVE_RESTART, CREATE_OPEN, DECLINE, appliedLine, checkNewProject, checkProposal, getProject, isComputer, needsRestart, newProjectCard, parseProposal, placeName, proposalCard, type AskerResult } from './project-tools.ts';
 import { answerChannelWarning, CHANNEL_WAIT_MS, ChannelHub, makeTransports, screenRows, typeLine, wakeFor, type ChatSession } from './mail.ts';
 import { TermLocks } from './termlock.ts';
-import { callDetail, delta, heldInInput, KEYS, turnsPage, typedText, type CvDeps, type CvSent } from './chatview.ts';
+import { callDetail, delta, heldInInput, KEYS, turnsPage, turnText, typedText, type CvDeps, type CvSent } from './chatview.ts';
 import { SignIns } from './signin.ts';
 import { skillSlug } from './slug.ts';
 import { inContainer } from '../cli/screen.ts';
@@ -499,7 +499,7 @@ export class ChorusServer {
     for (const [cl, sent] of this.cvSent) if (sent.id === threadId) this.cvSend(cl, sent);
   }
 
-  /** A chat some page shows in the Chat view, idle, whose CLI shows a menu or panel of its own (the "Open Raw" banner). */
+  /** A chat some page shows in the Chat view, idle, whose CLI shows a menu or panel of its own (the "Open Terminal" banner). */
   private cvMenu(e: Entry): boolean {
     const host = e.host;
     if (!host || host.state !== 'running' || ![...this.cvSent.values()].some(x => x.id === e.id)) return false;
@@ -537,7 +537,7 @@ export class ChorusServer {
     // a running CLI that shows something of its own (a start-up question, a permission dialog, a menu) takes no text: typed keys and
     // the Enter after them would answer it (chatview-probe M and S: inputState reads the input box per CLI)
     const running = this.app.entry(id)?.host;
-    if (this.o.sayNeedsInput !== false && running?.state === 'running' && !inputState(agent, screenRows(running.screen), running.screen.cols).ready) return { result: 'ended', message: `${CLIS[agent]?.name ?? agent} is showing something on its own screen. Open Raw to answer it.` };
+    if (this.o.sayNeedsInput !== false && running?.state === 'running' && !inputState(agent, screenRows(running.screen), running.screen.cols).ready) return { result: 'ended', message: `${CLIS[agent]?.name ?? agent} is showing something on its own screen. Open Terminal to answer it.` };
     const line = text.replace(/\s+/g, ' ') + '\r';
     this.watchOnlyLets(id, line);
     const r = await this.locks.run(id, () => this.c.sendToChat(id, typed, x => (this.o.sessionExists ?? sessionOnDisk)(x)));
@@ -553,12 +553,12 @@ export class ChorusServer {
         const st = inputState(agent, screenRows(host.screen), host.screen.cols);
         const flat = (x: string) => x.replace(/\s+/g, ' ').trim();
         if (flat(st.draft) === flat(typedText(agent, text).split(NEWLINE_KEYS[agent] ?? '\x1b\r').join(' ')) || flat(st.draft) === flat(text)) await this.locks.run(id, () => host.write(clearKeys(agent, st)));
-        return { result: 'held', message: `${name} did not take the message: its own screen says why. Open Raw to see it.` };
+        return { result: 'held', message: `${name} did not take the message: its own screen says why. Open Terminal to see it.` };
       }
       return { result: 'sent' };
     }
     if (r === 'gone') return { result: 'gone', message: 'This chat cannot be continued: its session is gone. Hand it off to start again from its record.' };
-    return { result: 'ended', message: `${name} is showing something on its own screen. Open Raw to answer it.` };
+    return { result: 'ended', message: `${name} is showing something on its own screen. Open Terminal to answer it.` };
   }
 
   /** The key row's Esc and Shift+Tab: fixed bytes into the running CLI, through the same gates. A parked chat is not resumed. */
@@ -1991,6 +1991,8 @@ export class ChorusServer {
       // the Chat view (src/serve/chatview.ts, docs/features/chat-view.md): a page of turns with short tool call rows and the cards
       case 'GET chats/:id/turns': {
         if (!thread) return undefined;
+        // one quiet line's whole text (a background job's notice, a shortened conversation's summary), read when it is opened
+        if (parts[3]) return turnText(c.store, id, Number(parts[3]));
         const before = Number(q.get('before'));
         const limit = Number(q.get('limit'));
         // with the first page, the agent's own commands for the "/" list (probed, chorus-core NATIVE_COMMANDS)
@@ -2210,7 +2212,7 @@ export class ChorusServer {
         updated: t?.updated ?? null,
         // a sub thread: its main chat and its status (null for any other chat)
         sub: this.subs.info(t, this.isUnlocked(e.id)),
-        // the Chat view's "Open Raw" banner: the CLI shows its own menu (probed per CLI, menuShown), looked at only for a chat a
+        // the Chat view's "Open Terminal" banner: the CLI shows its own menu (probed per CLI, menuShown), looked at only for a chat a
         // page shows in the Chat view
         ...(this.cvMenu(e) ? { menu: true } : {}),
       };
