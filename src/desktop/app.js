@@ -3041,7 +3041,15 @@ function skillTrigger(agentsNow, folderNow = () => undefined) {
     query: /[\w.-]*/,
     items: async () => {
       const agents = agentsNow().filter(a => AGENT[a]);
-      return (await skillsOn(folderNow())).map(k => {
+      // one row per skill name: the same skill in two sources (the user's folder and a project's) is typed the same way, so it
+      // shows once, on a CLI when any copy is there (owner, 2026-11-23: every skill showed twice in a chat's "/" list)
+      const byName = new Map();
+      for (const k of await skillsOn(folderNow())) {
+        const o = byName.get(k.name);
+        if (!o) byName.set(k.name, { ...k, state: { ...k.state } });
+        else for (const a of SK_CLIS) if (!o.state[a] && k.state?.[a]) o.state[a] = k.state[a];
+      }
+      return [...byName.values()].map(k => {
         const lack = agents.filter(a => !k.state?.[a]);
         return { key: k.name, main: `/${k.name}`, sub: k.description, marks: skillMarks(k), need: lack.length ? `Not on ${lack.map(a => AGENT[a].name).join(' and ')} yet · sync when you pick it` : '', skill: k };
       });
