@@ -1453,13 +1453,17 @@ textarea.in.pp-note { display: block; font: 13px/1.5 var(--f-sans); resize: vert
 
 /* ---------- the Chat view (plan 2026-11-22 chat-view, mockup @workspace/mockups/chat-view.html, src/desktop/chat-view.js) ----------
    The conversation drawn from the turns, in place of the agent's screen: rendered replies, folded tool calls, cards, and on a phone
-   the message box. Desktop and tablet: a 700 px column with "Reading view" under it (scene 7). */
+   the message box. Desktop and tablet (mockup @workspace/mockups/chat-view-desktop.html, 2026-11-23): everything on one 760 px
+   column, the message box on the same column under it. */
 .term-wrap[hidden], .cv[hidden] { display: none !important; }
 .cv { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg); position: relative; }
-.cv-stream { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 14px 18px; display: flex; flex-direction: column; gap: 12px; }
-html:not([data-size="phone"]) .cv-stream { padding: 22px 16px; align-items: center; }
-html:not([data-size="phone"]) .cv-stream > * { width: 100%; max-width: 700px; }
-html:not([data-size="phone"]) .cv-stream > .cv-u { width: auto; max-width: min(520px, 86%); align-self: center; margin-left: auto; margin-right: max(0px, calc((100% - 700px) / 2)); }
+.cv-stream { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 14px 18px; }
+.cv-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+html:not([data-size="phone"]) .cv-stream { padding: 22px 24px 26px; }
+html:not([data-size="phone"]) .cv-col, .cv-fcol { width: 100%; max-width: 760px; margin: 0 auto; }
+html:not([data-size="phone"]) .cv-col { gap: 14px; }
+html:not([data-size="phone"]) .cv-u { max-width: 78%; font-size: 15px; padding: 9px 14px; }
+html:not([data-size="phone"]) .cv-a { font-size: 15px; line-height: 1.6; }
 .cv-u { align-self: flex-end; max-width: 86%; background: var(--sel); border-radius: 16px 16px 4px 16px; padding: 8px 12px; font-size: 14.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .cv-u.pending { opacity: 0.6; }
 .cv-a { font-size: 14.5px; line-height: 1.5; color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
@@ -1476,7 +1480,12 @@ html:not([data-size="phone"]) .cv-stream > .cv-u { width: auto; max-width: min(5
 .cv-a table { border-collapse: collapse; font-size: 13px; width: 100%; }
 .cv-a th, .cv-a td { border-bottom: 1px solid var(--line); padding: 5px 6px; text-align: left; vertical-align: top; }
 .cv-a th { color: var(--muted); font-weight: 600; font-size: 12px; }
-.cv-day { align-self: center !important; width: auto !important; font-size: 11px; color: var(--faint); }
+.cv-day { display: flex; align-items: center; gap: 10px; font-size: 11.5px; color: var(--faint); }
+.cv-day::before, .cv-day::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+.cv-who { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); margin-bottom: -6px; }
+.cv-who b { color: var(--ink-2); font-weight: 600; }
+.cv-who .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
+.cv-who .dot.claude { background: var(--claude); } .cv-who .dot.codex { background: var(--codex); } .cv-who .dot.agy { background: var(--agy); }
 .cv-empty, .cv-more { align-self: center !important; width: auto !important; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; padding: 8px 0; }
 .cv .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: cv-sp 0.8s linear infinite; flex: none; display: inline-block; }
 @keyframes cv-sp { to { transform: rotate(360deg); } }
@@ -1514,8 +1523,22 @@ html:not([data-size="phone"]) .cv-stream > .cv-u { width: auto; max-width: min(5
 .cv-card .hd + .mini { border-top: 0; padding-top: 0; }
 .cv-card .mini .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cv-card .mini .s { font-size: 12px; color: var(--muted); white-space: nowrap; }
-.cv-sys { align-self: stretch; font-size: 12.5px; color: var(--muted); display: flex; gap: 6px; align-items: baseline; border: 0; background: transparent; padding: 0; text-align: left; }
+/* the quiet lines: what is in the conversation but is not a message (mail read, a background job, Chorus's own text, a card's
+   answer). One shape: a small mark, bold words, detail, and at the right the word for what a click does. */
+.cv-sys { font-size: 12.5px; color: var(--muted); display: flex; gap: 8px; align-items: center; min-height: 26px; min-width: 0; border: 0; background: transparent; padding: 0; text-align: left; width: 100%; }
 .cv-sys b { color: var(--ink-2); font-weight: 600; }
+.cv-sys .ic { flex: none; width: 20px; height: 20px; border-radius: 6px; background: var(--hover); display: grid; place-items: center; font-size: 11px; color: var(--ink-2); }
+.cv-sys .t { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv-sys .x { margin-left: auto; flex: none; color: var(--faint); font-size: 11.5px; }
+button.cv-sys:hover .x { color: var(--accent); }
+.cv-sys.right { width: auto; align-self: flex-end; max-width: 100%; }
+.cv-sys.right .t { background: var(--accent-soft); color: var(--ink-2); border-radius: 999px; padding: 3px 11px; }
+.cv-open { margin: -6px 0 0 9px; border-left: 2px solid var(--line); padding: 2px 0 2px 12px; min-width: 0; }
+.cv-open pre { margin: 0; background: var(--term-bg); color: #e8e6df; border-radius: 8px; padding: 8px 10px; font: 11.5px/1.5 var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; }
+.cv-open .note { font-size: 12px; color: var(--muted); padding-top: 4px; }
+.cv-cut { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); text-align: center; }
+.cv-cut::before, .cv-cut::after { content: ""; flex: 1; border-top: 1px dashed var(--line); }
+.cv-cut button { border: 0; background: none; color: var(--accent); font-weight: 600; padding: 0; font-size: 12px; }
 .cv-sys.warn { align-items: center; background: var(--warn-soft); color: var(--ink); border-radius: 10px; padding: 8px 10px; }
 .cv-sys.warn .btn { margin-left: auto; flex: none; }
 .cv-card.art .pv { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; height: 150px; position: relative; }
@@ -1530,7 +1553,23 @@ html:not([data-size="phone"]) .cv-stream > .cv-u { width: auto; max-width: min(5
 .cv-dia .ft button { margin-left: auto; color: var(--accent); font-weight: 600; border: 0; background: transparent; padding: 4px 0; font-size: 11.5px; }
 /* the bottom: working line, the message box, the key row (scenes 1, 6); desktop: the reading note (scene 7) */
 .cv-footwrap { flex: none; }
-.cv-note { border-top: 1px solid var(--line); padding: 9px 16px; font-size: 12.5px; color: var(--muted); }
+/* wider than a phone: the box on the conversation's column, the keys and Send inside it (chat-view-desktop.html scene 3) */
+.cv-foot.wide { border-top: 0; padding: 0 24px 14px; }
+.cv-foot.wide .cv-fcol { display: flex; flex-direction: column; gap: 6px; }
+.cv-foot.wide .cv-work { padding: 0 4px; }
+.cv-foot.wide .cv-box { flex-direction: column; align-items: stretch; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05); }
+.cv-foot.wide .cv-box:focus-within { border-color: var(--accent); }
+.cv-foot.wide .cv-box.off { opacity: 0.55; }
+.cv-foot.wide .cv-in { min-height: 24px; max-height: 200px; border: 0; border-radius: 0; padding: 0; background: transparent; font-size: 15px; line-height: 1.45; }
+.cv-foot.wide .cv-in:focus { outline: 0; box-shadow: none; }
+.cv-bar { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cv-kb { border: 1px solid var(--line); background: transparent; border-radius: 7px; min-width: 28px; height: 26px; padding: 0 8px; font: 12px var(--f-mono); color: var(--ink-2); flex: none; }
+.cv-kb:hover:not(:disabled) { background: var(--hover); }
+.cv-hint { font-size: 11.5px; color: var(--faint); margin-left: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.cv-foot.wide .cv-stop { margin-left: 0; min-height: 0; padding: 4px 12px; font-size: 13px; flex: none; }
+.cv-foot.wide .cv-send { width: auto; height: auto; border-radius: 8px; font-weight: 600; font-size: 13px; padding: 5px 14px; }
+.cv-foot.wide .cv-send:disabled { background: var(--hover); color: var(--faint); }
+.cv-foot.wide .cv-watch { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 0 12px; }
 .cv-foot { border-top: 1px solid var(--line); background: var(--bg); padding: 8px 10px calc(10px + var(--safe-bot, 0px)); position: relative; }
 .cv-work { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); padding: 0 4px 8px; }
 .cv-stop { margin-left: auto; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 5px 12px; font-size: 12.5px; min-height: 32px; color: var(--ink); }
@@ -1549,6 +1588,8 @@ html:not([data-size="phone"]) .cv-stream > .cv-u { width: auto; max-width: min(5
 .cv-box .tpick > button { min-height: 44px; justify-content: center; }
 /* the switch in the header (desktop, tablet) and the phone's top bar icons */
 .chat-head .cv-seg { flex: none; }
+.chat-head .cv-seg button { display: inline-flex; align-items: center; gap: 5px; }
+.chat-head .cv-seg svg { width: 13px; height: 13px; flex: none; }
 .cv-ico svg { width: 20px; height: 20px; display: block; }
 .cv-ico.on { background: var(--sel); color: var(--ink); }
 .cv-ico { position: relative; }
@@ -1580,7 +1621,9 @@ html:not([data-size="phone"]) .cv-sheet { border-radius: 14px; max-height: 80vh;
 .cv-dia-full { padding: 16px; overflow: auto; touch-action: pinch-zoom pan-x pan-y; }
 .cv-dia-full svg { max-width: none; min-width: 100%; height: auto; }
 @media (hover: none), (pointer: coarse) {
-  .cv-tools, .cv-keys button, .cv-dia .ft button, .cv-sys.go-row, .cv-stop { min-height: 36px; }
+  .cv-tools, .cv-keys button, .cv-dia .ft button, button.cv-sys, .cv-cut button, .cv-kb, .cv-foot.wide .cv-stop, .cv-foot.wide .cv-send, .cv-stop { min-height: 36px; }
+  .cv-kb { min-width: 40px; }
+  .cv-foot.wide .cv-in { font-size: 16px; min-height: 36px; padding-top: 6px; }
   .cv-keys button { min-width: 44px; }
 }
 .cv-tools { align-items: flex-start; } .cv-tools .chev { line-height: 19px; }

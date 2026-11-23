@@ -1,10 +1,10 @@
 // The Chat view (plan 2026-11-22 chat-view, mockup @workspace/mockups/chat-view.html, docs/features/chat-view.md): a chat drawn from
-// the turns Chorus captures from its CLI's transcript, beside the raw terminal. One session, two views: the CLI keeps running in its
+// the turns Chorus captures from its CLI's transcript, beside the agent's own terminal (the Terminal view). One session, two views: the CLI keeps running in its
 // PTY; this view never attaches to it. It loads a page of turns with one short row per tool call (GET chats/:id/turns), then gets only
 // what is new over the websocket (`cv`), and fetches a call's full input and output only when the user taps its row.
 //
 // app.js owns the page; this module owns what is inside the view's element: the conversation, the folded tool calls, the cards, the
-// detail sheet, the full-screen viewer, and on a phone the message box with its key row. It talks to the page through `h` (below).
+// detail sheet, the full-screen viewer, and the message box (a phone: with its key row; wider: Enter sends, the keys sit in the box). It talks to the page through `h` (below).
 import { mdFull } from './md.js';
 import { composing } from './box-keys.js';
 
@@ -209,14 +209,19 @@ export function makeChatView(h) {
       const st = chatOf(c.id)?.state ?? c.state;
       return `<div class="cv-card new"><div class="hd">＋ NEW CHAT<span class="sp"></span><span class="badge ${esc(c.agent)}">${esc(h.agentName(c.agent))}</span></div><div class="ti">${esc(c.title)}</div><div class="note">${c.teammate ? `${esc(c.teammate)} · ` : ''}runs on its own and does not report back here</div><div class="st"><span class="dot ${dot(st)}"></span>${esc(h.stateWord(st))}<button class="go" data-cv="open" data-arg="${esc(c.id)}">Open chat ›</button></div></div>`;
     }
-    if (c.type === 'mail') return `<div class="cv-sys"><span>✉</span><span><b>Mail from ${esc(c.from)}</b> was read by the agent</span></div>`;
+    if (c.type === 'mail') {
+      // a sub thread's report opens the sub thread; other mail opens the chat it came from
+      const to = c.sub?.id ?? (c.fromId && chatOf(c.fromId) ? c.fromId : null);
+      const words = c.sub ? `<b>Report from sub thread</b> · ${esc(c.sub.title)}` : `<b>Mail from ${esc(c.from)}</b>${c.subject ? ` · ${esc(c.subject)}` : ''}`;
+      return to ? `<button class="cv-sys" data-cv="open" data-arg="${esc(to)}"><span class="ic">✉</span><span class="t">${words}</span><span class="x">Open</span></button>` : `<div class="cv-sys"><span class="ic">✉</span><span class="t">${words}</span></div>`;
+    }
     if (c.type === 'artifact') {
       const canOpen = !c.link && (c.open || h.onMac);
       const kind = { html: 'HTML', markdown: 'MARKDOWN', mermaid: 'MERMAID', image: 'IMAGE', pdf: 'PDF', text: 'TEXT', link: 'LINK' }[c.kind] ?? 'FILE';
       const pv = c.kind === 'html' && canOpen ? `<div class="pv" data-cv-pv="${c.id}"></div>` : '';
       const sum = (c.kind === 'markdown' || c.kind === 'mermaid') && canOpen ? `<span class="sum" data-cv-sum="${c.id}">${esc(base(c.target))}</span>` : c.link ? 'a link' : canOpen ? (c.kind === 'html' ? 'updates while the agent edits it' : esc(base(c.target))) : 'Open on the Mac';
       const go = canOpen || c.link ? `<button class="go" data-cv="art" data-arg="${c.id}">Open ›</button>` : '';
-      return `<div class="cv-card art"><div class="hd">ARTIFACT<span class="sp"></span>${kind}</div><div class="ti">${esc(c.title)}</div>${pv}<div class="fn">${esc(c.link ? c.target : c.rel ?? h.tilde(c.target))}</div><div class="st">${sum}${go}</div></div>`;
+      return `<div class="cv-card art"><div class="hd">${c.link ? 'LINK' : 'FILE'}<span class="sp"></span>${c.link ? '' : kind}</div><div class="ti">${esc(c.title)}</div>${pv}<div class="fn">${esc(c.link ? c.target : c.rel ?? h.tilde(c.target))}</div><div class="st">${sum}${go}</div></div>`;
     }
     return '';
   }
@@ -241,43 +246,122 @@ export function makeChatView(h) {
     if (!d.loaded) return '<div class="cv-empty"><span class="spin"></span>Loading the conversation…</div>';
     if (!list.length && !pending) html += `<div class="cv-empty">${c?.state === 'busy' || c?.state === 'starting' ? 'The agent is starting.' : 'Nothing said yet.'}</div>`;
     let day = '';
-    list.forEach((it, i) => {
+    let spoke = '';
+    const who = h.speaker(c);
+    const dayOf = t => {
+      const dd = t.ts ? new Date(t.ts) : null;
+      return dd && !isNaN(dd) ? dd : null;
+    };
+    const dayLabel = dd => {
+      const days = Math.round((new Date(new Date().toDateString()) - new Date(dd.toDateString())) / 86400000);
+      return days === 0 ? 'Today' : days === 1 ? 'Yesterday' : dd.toLocaleDateString(undefined, { day: 'numeric', month: 'short', ...(dd.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) });
+    };
+    const turnHtml = t => {
+      let out = '';
+      const dd = dayOf(t);
+      if (dd && dd.toDateString() !== day) {
+        out += `<div class="cv-day"><span>${esc(dayLabel(dd))}</span></div>`;
+        day = dd.toDateString();
+      }
+      if (t.note) {
+        if (t.note.kind === 'answer' || t.note.kind === 'stopped') spoke = 'user';
+        return out + noteHtml(t, c);
+      }
+      if (t.role === 'user') {
+        spoke = 'user';
+        return out + `<div class="cv-u">${esc(asTyped(t.text))}</div>`;
+      }
+      // who is speaking, above the first reply after the user spoke (and at the top of what is loaded)
+      if (spoke !== 'agent') out += `<div class="cv-who"><span class="dot ${esc(who.agent)}"></span><b>${esc(who.name)}</b>${dd ? `<span>${esc(dd.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }))}</span>` : ''}</div>`;
+      spoke = 'agent';
+      return out + `<div class="cv-a">${mdFull(t.text)}</div>`;
+    };
+    const isJob = x => x?.type === 'turn' && x.turn.note?.kind === 'job';
+    for (let i = 0; i < list.length; i++) {
+      const it = list[i];
       if (it.type === 'turn') {
-        const t = it.turn;
-        const dd = t.ts ? new Date(t.ts) : null;
-        const label = dd && !isNaN(dd) ? `${dd.toDateString() === new Date().toDateString() ? 'Today' : dd.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} ${dd.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` : '';
-        const dk = dd && !isNaN(dd) ? dd.toDateString() : '';
-        if (t.role === 'user' && dk && dk !== day) {
-          html += `<div class="cv-day">${esc(label)}</div>`;
-          day = dk;
-        }
-        html += t.role === 'user' ? `<div class="cv-u">${esc(asTyped(t.text))}</div>` : `<div class="cv-a">${mdFull(t.text)}</div>`;
+        // three or more background jobs reporting one after another, with nothing between them: one line
+        let n = i;
+        while (isJob(list[n])) n++;
+        if (n - i >= 3) {
+          const key = `${cur.id}:j${it.turn.seq}`;
+          const isOpen = open.has(key);
+          html += `<button class="cv-sys" data-cv="fold" data-key="${esc(key)}" aria-expanded="${isOpen}"><span class="ic">⏱</span><span class="t"><b>${n - i} background jobs reported</b></span><span class="x">${isOpen ? 'Hide' : 'Show'}</span></button>`;
+          if (isOpen) for (let k = i; k < n; k++) html += turnHtml(list[k].turn);
+          i = n - 1;
+        } else html += turnHtml(it.turn);
       } else if (it.type === 'run') html += runHtml(it, it === lastRun && i > lastTurnAt - 1, working);
       else if (it.type === 'subs') html += subsHtml(it.cards);
       else if (it.type === 'startedBy') {
         const s = it.card;
-        html += `<button class="cv-sys go-row" data-cv="open" data-arg="${esc(s.id)}"><span>↗</span><span>Started by <b>${esc(s.title)}</b> · ${s.skip ? 'Skip permissions' : 'Ask before acting'}</span></button>`;
+        html += `<button class="cv-sys go-row" data-cv="open" data-arg="${esc(s.id)}"><span class="ic">↗</span><span class="t">Started by <b>${esc(s.title)}</b> · ${s.skip ? 'Skip permissions' : 'Ask before acting'}</span><span class="x">Open</span></button>`;
       } else html += cardHtml(it.card);
-    });
+    }
     if (pending) html += `<div class="cv-u pending">${esc(pending.text)}</div>`;
-    if (notice) html += `<div class="cv-sys warn"><span>⌨</span><span>${esc(notice.text)}</span>${notice.raw ? '<button class="btn sm" data-cv="raw">Open Raw</button>' : ''}</div>`;
+    if (notice) html += `<div class="cv-sys warn"><span>⌨</span><span>${esc(notice.text)}</span>${notice.raw ? '<button class="btn sm" data-cv="raw">Open Terminal</button>' : ''}</div>`;
     return html;
+  }
+
+  /** A "user" turn that is not a message the user typed (src/serve/chatview.ts noteOf): one quiet line, opened by a click. */
+  function noteHtml(t, c) {
+    const n = t.note;
+    if (n.kind === 'answer') return `<div class="cv-sys right"><span class="t">✓ You answered the card: <b>${esc(n.sub ?? '')}</b></span></div>`;
+    if (n.kind === 'stopped') return `<div class="cv-sys right"><span class="t">You stopped ${esc(h.agentName(c?.agent))}</span></div>`;
+    const key = `${cur.id}:n${t.seq}`;
+    const isOpen = open.has(key);
+    const d = dataOf(cur.id);
+    const full = d.full?.get(t.seq);
+    const body = isOpen ? `<div class="cv-open"><pre>${esc(full?.text ?? t.text)}${t.long && !full ? '…' : ''}</pre>${full?.capped ? '<div class="note">Cut here: it is longer than Chorus shows.</div>' : ''}</div>` : '';
+    if (n.kind === 'compact') return `<div class="cv-cut"><span>${esc(h.agentName(c?.agent))} shortened the conversation here · <button data-cv="note" data-seq="${t.seq}" aria-expanded="${isOpen}">${isOpen ? 'Hide its summary' : 'Read its summary'}</button></span></div>${body}`;
+    const [ic, head] = n.kind === 'job' ? ['⏱', n.head ?? 'Background job reported'] : n.kind === 'brief' ? ['≡', "Chorus's instructions for this chat"] : ['◈', 'Chorus'];
+    return `<button class="cv-sys" data-cv="note" data-seq="${t.seq}" aria-expanded="${isOpen}"><span class="ic">${ic}</span><span class="t"><b>${esc(head)}</b>${n.sub ? ` · ${esc(n.sub)}` : ''}</span><span class="x">${isOpen ? 'Hide' : 'Show'}</span></button>${body}`;
+  }
+
+  /** Opens or closes a quiet line; a long one's whole text is read then, once. */
+  async function toggleNote(seq) {
+    const id = cur.id;
+    const key = `${id}:n${seq}`;
+    if (open.has(key)) {
+      open.delete(key);
+      return draw({ keep: 'none' });
+    }
+    open.add(key);
+    draw({ keep: 'none' });
+    const d = dataOf(id);
+    const t = d.turns.get(seq);
+    if (!t?.long || d.full?.has(seq)) return;
+    try {
+      const r = await h.api('GET', `/api/chats/${encodeURIComponent(id)}/turns/${seq}`);
+      if (r?.text != null) (d.full ??= new Map()).set(seq, r);
+    } catch {
+      /* the first part stays */
+    }
+    if (cur?.id === id) draw({ keep: 'none' });
   }
 
   function footHtml(c) {
     const phone = h.size() === 'phone';
-    if (!phone) return `<div class="cv-note">Reading view. To type, switch to Raw.</div>`;
     const working = c?.state === 'busy' || c?.state === 'starting';
     const watch = c?.sub && !c.sub.unlocked;
-    const work = working ? `<div class="cv-work"><span class="spin"></span><span data-cv-clock>${esc(workText(c))}</span>${h.canStop(c?.agent) ? '<button class="cv-stop" data-cv="stop">Stop</button>' : ''}</div>` : '';
-    if (watch) return `<div class="cv-foot">${work}<div class="cv-watch"><span>👁 <b>Watch only.</b> Tell its main chat what you want.</span><button class="btn sm" data-act="sub-lock" data-arg="${esc(c.id)}" data-on="1">Unlock</button></div></div>`;
+    const stop = working && h.canStop(c?.agent) ? '<button class="cv-stop" data-cv="stop">Stop</button>' : '';
+    const work = working ? `<div class="cv-work"><span class="spin"></span><span data-cv-clock>${esc(workText(c))}</span>${phone || watch ? stop : ''}</div>` : '';
+    const wide = phone ? '' : ' wide';
+    if (watch) return `<div class="cv-foot${wide}"><div class="cv-fcol">${work}<div class="cv-watch"><span>👁 <b>Watch only.</b> Tell its main chat what you want.</span><button class="btn sm" data-act="sub-lock" data-arg="${esc(c.id)}" data-on="1">Unlock</button></div></div></div>`;
     const name = h.agentName(c?.agent);
+    // a tablet and a desktop (owner, 2026-11-23: "in that chat view the user still able to chat like what you did on mobile"): the
+    // same box on the conversation's column; Enter sends, Shift+Enter is a new line, and "/", "@", ⇧Tab and Stop sit inside it.
+    // While the CLI shows a menu of its own the box waits: the answer is given in the Terminal view (the banner above).
+    if (!phone) {
+      const menu = h.menuShown(c);
+      const off = menu ? ' disabled' : '';
+      return `<div class="cv-foot wide"><div class="cv-fcol">${work}<div class="cv-box${menu ? ' off' : ''}"><textarea class="cv-in" data-input rows="1" placeholder="${menu ? 'Answer in Terminal first' : `Message ${esc(name)}`}" aria-label="Message ${esc(name)}"${off}></textarea><div class="cv-bar"><button class="cv-kb" data-cv="ins" data-arg="/" title="Skills and commands"${off}>/</button><button class="cv-kb" data-cv="ins" data-arg="@" title="Files of the chat's folder"${off}>@</button><button class="cv-kb" data-cv="key" data-arg="shift-tab" title="Changes ${esc(name)}'s mode, like Shift+Tab in the terminal">⇧Tab</button><span class="cv-hint">Enter to send · Shift+Enter for a new line</span>${stop}<button class="cv-send" data-cv="send"${off}>Send</button></div></div></div></div>`;
+    }
     return `<div class="cv-foot">${work}<div class="cv-box"><textarea class="cv-in" data-input rows="1" placeholder="Message ${esc(name)}" aria-label="Message ${esc(name)}" enterkeyhint="send"></textarea><button class="cv-send" data-cv="send" aria-label="Send">↑</button></div><div class="cv-keys"><button data-cv="ins" data-arg="/">/</button><button data-cv="ins" data-arg="@">@</button><button data-cv="key" data-arg="esc">Esc</button><button data-cv="key" data-arg="shift-tab">⇧Tab</button></div></div>`;
   }
 
   function workText(c) {
     const d = c ? dataOf(c.id) : null;
-    const lastUser = d ? [...d.turns.values()].filter(t => t.role === 'user').sort((a, b) => b.seq - a.seq)[0] : null;
+    const lastUser = d ? [...d.turns.values()].filter(t => t.role === 'user' && (!t.note || t.note.kind === 'answer')).sort((a, b) => b.seq - a.seq)[0] : null;
     const t = Date.parse(lastUser?.ts ?? '');
     return t ? `Working · ${clock(Math.max(0, Math.round((Date.now() - t) / 1000)))}` : 'Working';
   }
@@ -288,7 +372,7 @@ export function makeChatView(h) {
     const s = cur.el.querySelector('.cv-stream');
     const atBottom = s.scrollHeight - s.scrollTop - s.clientHeight < 40;
     const fromBottom = s.scrollHeight - s.scrollTop;
-    s.innerHTML = streamHtml();
+    s.innerHTML = `<div class="cv-col">${streamHtml()}</div>`;
     if (keep === 'bottom' || (keep === 'auto' && atBottom)) s.scrollTop = s.scrollHeight;
     else if (keep === 'older') s.scrollTop = s.scrollHeight - fromBottom;
     drawDiagrams(s);
@@ -299,7 +383,7 @@ export function makeChatView(h) {
     if (!cur?.el?.isConnected) return;
     const c = chatOf(cur.id);
     const f = cur.el.querySelector('.cv-footwrap');
-    const key = JSON.stringify([h.size(), c?.state, c?.sub?.unlocked ?? null, !!c?.sub, h.canStop(c?.agent)]);
+    const key = JSON.stringify([h.size(), c?.state, c?.sub?.unlocked ?? null, !!c?.sub, h.canStop(c?.agent), h.size() !== 'phone' && h.menuShown(c)]);
     if (f.dataset.k === key) return;
     // the box keeps what is typed in it across redraws
     const box = f.querySelector('.cv-in');
@@ -324,7 +408,7 @@ export function makeChatView(h) {
 
   const grow = el => {
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, h.size() === 'phone' ? 140 : 200)}px`;
   };
 
   /* ---------- mermaid: the library is Chorus's own file, loaded once a reply has a diagram ---------- */
@@ -473,7 +557,7 @@ export function makeChatView(h) {
     viewer(a.title, `${a.rel ?? h.tilde(a.target)} · sandboxed`, `<iframe src="${esc(url)}" sandbox="" title="${esc(a.title)}"></iframe>`, true);
   }
 
-  /* ---------- sending (phone) ---------- */
+  /* ---------- sending ---------- */
 
   async function sendBox() {
     const box = cur?.el.querySelector('.cv-in');
@@ -537,6 +621,7 @@ export function makeChatView(h) {
       open.has(k) ? open.delete(k) : open.add(k);
       draw({ keep: 'none' });
     } else if (what === 'call') void showCall(b.dataset.call);
+    else if (what === 'note') void toggleNote(Number(b.dataset.seq));
     else if (what === 'open') h.openChat(b.dataset.arg);
     else if (what === 'art') void openArtifact(b.dataset.arg);
     else if (what === 'raw') h.toRaw();
@@ -584,6 +669,9 @@ export function makeChatView(h) {
         void sendBox();
       });
       drawFoot();
+      // wider than a phone the box takes the keys at once, as the terminal does in the Terminal view (a phone's keyboard would
+      // cover the conversation, so there it waits for a tap)
+      if (h.size() !== 'phone') el.querySelector('.cv-in:not([disabled])')?.focus({ preventScroll: true });
       const d = dataOf(id);
       draw({ keep: 'bottom' });
       if (!d.loaded) {
@@ -603,7 +691,7 @@ export function makeChatView(h) {
         if (n) n.textContent = workText(chatOf(cur.id));
       }, 1000);
     },
-    /** The view is gone (Raw, another chat, another screen): the server stops sending. */
+    /** The view is gone (the Terminal view, another chat, another screen): the server stops sending. */
     unmount() {
       if (!cur) return;
       h.send({ t: 'cv' });
@@ -628,7 +716,7 @@ export function makeChatView(h) {
       const banner = cur.el.querySelector('.cv-banner');
       const menu = h.menuShown(c);
       banner.hidden = !menu;
-      if (menu && !banner.innerHTML) banner.innerHTML = `<span>${esc(h.agentName(c?.agent))} is showing a menu on its own screen.</span><button class="btn sm" data-cv="raw">Open Raw</button>`;
+      if (menu && !banner.innerHTML) banner.innerHTML = `<span>${esc(h.agentName(c?.agent))} is showing a menu on its own screen.</span><button class="btn sm" data-cv="raw">Open Terminal</button>`;
       if (!menu) banner.innerHTML = '';
     },
     /** A websocket message: `cv` is what is new for the chat this view shows. */
@@ -637,7 +725,7 @@ export function makeChatView(h) {
       const d = dataOf(m.id);
       if (!d.loaded) return true;
       merge(d, m);
-      if (pending && (m.turns ?? []).some(t => t.role === 'user')) pending = null;
+      if (pending && (m.turns ?? []).some(t => t.role === 'user' && !t.note)) pending = null;
       if (cur?.id === m.id) draw();
       return true;
     },

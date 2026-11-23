@@ -10,22 +10,22 @@ tablet through the private link. At 1025 px and wider with a mouse the page look
 | Home | the first waiting request as a card with Deny / Allow (none when nothing waits), one counts strip (working · your turn · resting), Active now rows, projects as rows | sidebar | sidebar |
 | Chats | search, filter chips with counts, one card per project; sub threads and hand-offs under their owner with a connector | sidebar | sidebar |
 | New chat | the text, then Teammate, Work as, Project / Model, Permissions as labelled rows in two cards; no tab bar | composer with picker chips | as before |
-| A chat | back, the agent's avatar, title, agent · state, the Raw / Chat switch, ⋯; one segmented row Chat · (Steps · Plan) · Files; opens in the Chat view ([`chat-view.md`](chat-view.md)) with its message box, or the agent's screen edge to edge in Raw (unchanged); a request docks as a card at the bottom; Share, Hand off, the module's actions, Activity, Record, Delete in the ⋯ sheet | icon buttons, Raw · Chat in the header, the drawer over the agent screen; opens in Raw | Raw · Chat in the header; opens in Raw |
+| A chat | back, the agent's avatar, title, agent · state, the Terminal / Chat switch, ⋯; one segmented row Chat · (Steps · Plan) · Files; opens in the Chat view ([`chat-view.md`](chat-view.md)) with its message box, or the agent's screen edge to edge in Raw (unchanged); a request docks as a card at the bottom; Share, Hand off, the module's actions, Activity, Record, Delete in the ⋯ sheet | icon buttons, Raw · Chat in the header, the drawer over the agent screen; opens in Raw | Raw · Chat in the header; opens in Raw |
 | Approvals | the same request card, All projects / this project as a segmented control, Decided today with Allowed / Denied tags | as before | as before |
 | More | grouped rows (Library, Team, This Mac) with drawn icons in colour tiles and each row's state on the right; the plan card at the bottom | sidebar | sidebar |
 | Dialogs, picker menus | bottom sheets (a picker: its name on top, a line of help per choice, a tick on the chosen one); a tap on the dim area cancels | as before | as before |
 | Notifications | full screen | popover | popover |
 | Memory | the list, then a record as its own step | two columns | two columns |
-| Task chat (module) | Chat · Steps · Plan · Files tabs; Chat is the Chat view or Raw by the same switch | the panel over the chat | beside the chat |
+| Task chat (module) | Chat · Steps · Plan · Files tabs; Chat is the Chat view or the Terminal view by the same switch | the panel over the chat | beside the chat |
 | Portal (module) | Tasks, Needs you, Goals, Failures as tabs; tasks as a list grouped by state, Done folded | the board scrolls and snaps to a column | as before |
 | Processes (module) | the chain as a vertical list | the canvas, pinch and buttons to zoom | as before |
 
 On touch at any size (`@media (hover: none), (pointer: coarse)`) every button and field is at least 36 px tall (Sync skills' Edit and
 its tick-boxes included), list, sheet and tab-bar rows 44 px, text fields use 16 px text (iOS does not zoom in on focus), and what
 shows on hover (a project's ＋ and ×) shows always. The agent's own screen is not changed by this. On a phone a chat opens in the
-Chat view, which has its own message box (owner, 2026-11-22: the one exception to "a chat never gets a Chorus composer"); Raw, and
-the Chat view on a tablet or a desktop, have none: you type in the agent's own screen. A chat's top bar on a phone has the switch
-beside ⋯, the one addition to Raw there.
+Chat view, which has its own message box (owner, 2026-11-22: the one exception to "a chat never gets a Chorus composer"; since
+2026-11-23 on a tablet and a desktop too); the Terminal view has none: you type in the agent's own screen. A chat's top bar on a phone has the switch
+beside ⋯, the one addition to the Terminal view there.
 
 The phone's look is the mockup `@workspace/mockups/phone-ui-v2.html` (approved 2026-11-22; it replaces the phone frames of
 `ui-mockup-v3.html`'s Responsive scenarios). Its tokens are the app's own plus `--plan`, `--plan-soft` (the Planner's purple) and
@@ -53,7 +53,7 @@ The phone's look is the mockup `@workspace/mockups/phone-ui-v2.html` (approved 2
   - `home` slot: Chorus's own requests, as Home's card when no chat request waits.
   - `chat-actions` slot: over the chat on wider screens; on a phone it is drawn in the ⋯ sheet instead.
   - `sideTabs(chatId)` → `[['steps', 'Steps'], ['plan', 'Plan']]` or null; the `chat-side` slot gets `data-tab` for the part shown.
-    Its Chat tab is the page's own chat column, so it shows the Chat view or Raw by the page's switch with nothing from the module.
+    Its Chat tab is the page's own chat column, so it shows the Chat view or the Terminal view by the page's switch with nothing from the module.
 
 ## Test
 `npm run proof:desktop -- --sizes` (`test/smoke/proof-sizes.ts`, checks in `test/smoke/sizes.ts`): fake agents, seeded chats in three

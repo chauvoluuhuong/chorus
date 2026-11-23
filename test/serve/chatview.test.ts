@@ -12,7 +12,7 @@ import { Controller } from '../../src/app/controller.ts';
 import { Store } from '../../src/core/store.ts';
 import { sourceDir } from '../../src/core/skills.ts';
 import { ChorusServer, headlessApp } from '../../src/serve/server.ts';
-import { typedText, heldInInput, DETAIL_MAX } from '../../src/serve/chatview.ts';
+import { typedText, heldInInput, DETAIL_MAX, noteOf, NOTE_MAX } from '../../src/serve/chatview.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const FAKE = path.join(ROOT, 'tools/fake-agent/fake-tui.mjs');
@@ -280,10 +280,53 @@ test('cards: a sub thread with its report and question, a chat it started, a rep
     assert.deepEqual(by('chat').map((c: any) => [c.title, c.teammate, c.agent]), [['Designer · Empty state', 'Designer', 'agy']]);
     assert.deepEqual(by('artifact').map((c: any) => [c.title, c.kind, c.open, c.seq]), [['Landing hero', 'html', true, 4]]);
     assert.equal(by('mail').length, 1);
+    // a sub thread's report names the sub thread it is about: its line opens it
+    assert.deepEqual(by('mail')[0].sub, { id: sub.id, title: 'Check the docs' });
     const inNew = (await r.api('GET', `/api/chats/${other.id}/turns`)).json.cards;
     assert.deepEqual(inNew.filter((c: any) => c.type === 'startedBy').map((c: any) => c.title), ['Ship the projects page']);
     // a sub thread has no "Started by" line: its main chat is its own strip
     assert.equal((await r.api('GET', `/api/chats/${sub.id}/turns`)).json.cards.filter((c: any) => c.type === 'startedBy').length, 0);
+  } finally {
+    await r.done();
+  }
+});
+
+test('a user turn that is not a typed message is a quiet line: a job, a shortened conversation, a card answer, a stop, Chorus text', () => {
+  const job = (inner: string) => `<task-notification>\n<task-id>b1</task-id>\n<tool-use-id>toolu_1</tool-use-id>\n${inner}\n</task-notification>`;
+  assert.deepEqual(noteOf(job('<status>completed</status>\n<summary>Background command "Watch task 17 for step changes" completed (exit code 0)</summary>')), { kind: 'job', head: 'Background job finished', sub: 'Watch task 17 for step changes' });
+  assert.deepEqual(noteOf(job('<summary>Background command "Keep the Mac awake" is still running after 31m, with no new output for 30m</summary>') + '\nThis is a check-in, not a completion.'), { kind: 'job', head: 'Background job still running', sub: 'Keep the Mac awake · 31m' });
+  assert.deepEqual(noteOf(job('<status>failed</status>\n<summary>Background command "Run the proof" failed with exit code 1</summary>')), { kind: 'job', head: 'Background job failed', sub: 'Run the proof' });
+  assert.deepEqual(noteOf(job('<summary>Monitor event: "e2e runs pass/fail"</summary>\n<event>x</event>')), { kind: 'job', head: 'Watch reported', sub: 'e2e runs pass/fail' });
+  assert.deepEqual(noteOf('This session is being continued from a previous conversation that ran out of context. The summary…'), { kind: 'compact' });
+  assert.deepEqual(noteOf('Chorus approval r_e42f164d: Done typing (all lines looked right)'), { kind: 'answer', sub: 'Done typing (all lines looked right)' });
+  assert.deepEqual(noteOf('[Request interrupted by user]'), { kind: 'stopped' });
+  assert.deepEqual(noteOf('<pasted_content id="25d7">\nChorus: the Planner says: Additions to your step.\nMore.\n</pasted_content>'), { kind: 'chorus', sub: 'the Planner says: Additions to your step.' });
+  assert.deepEqual(noteOf('Chorus restarted. Go on from where you were.'), { kind: 'chorus', sub: 'Chorus restarted. Go on from where you were.' });
+  assert.deepEqual(noteOf('You are claude-worker-1, doing one step of #8 "Start text"'), { kind: 'brief' });
+  // what the user typed stays a message, whatever it talks about
+  for (const t of ['just do whatever you need to finish this task', 'Chorus is great', 'why did the task-notification show?', 'You are right']) assert.equal(noteOf(t), undefined, t);
+});
+
+test('GET turns: a quiet line carries its kind and a short text; its whole text is read only from GET turns/:seq', async () => {
+  const r = await rig();
+  try {
+    const t = r.store.createThread({ title: 'Planner', agent: 'claude', cwd: r.project });
+    const summary = 'This session is being continued from a previous conversation that ran out of context.\n' + 'x'.repeat(5000);
+    const s = session(2);
+    s.turns.push({ seq: 3, role: 'user', text: '<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>\n<summary>Background command "Watch task 17" completed (exit code 0)</summary>\n</task-notification>', ts: '2026-11-22T10:00:03.000Z' });
+    s.turns.push({ seq: 4, role: 'user', text: summary, ts: '2026-11-22T10:00:04.000Z' });
+    s.turns.push({ seq: 5, role: 'assistant', text: 'Chorus approval r_1: not a note, the agent said it', ts: '2026-11-22T10:00:05.000Z' });
+    r.store.recordSession(t.id, s);
+    const page = (await r.api('GET', `/api/chats/${t.id}/turns`)).json;
+    const by = (seq: number) => page.turns.find((x: any) => x.seq === seq);
+    assert.equal(by(1).note, undefined);
+    assert.deepEqual(by(3).note, { kind: 'job', head: 'Background job finished', sub: 'Watch task 17' });
+    assert.match(by(3).text, /^task-id\s+b1\nstatus\s+completed/);
+    assert.deepEqual([by(4).note.kind, by(4).long, by(4).text.length], ['compact', true, NOTE_MAX]);
+    assert.equal(by(5).note, undefined, 'only a user turn can be a quiet line');
+    const whole = (await r.api('GET', `/api/chats/${t.id}/turns/4`)).json;
+    assert.equal(whole.text, summary);
+    assert.equal((await r.api('GET', `/api/chats/${t.id}/turns/99`)).json.error, 'not found');
   } finally {
     await r.done();
   }
