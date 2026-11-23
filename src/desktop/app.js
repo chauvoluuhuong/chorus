@@ -1107,7 +1107,7 @@ function phoneTop(chat) {
     // the agent, the title, and under it the agent's name and its state (the chat has no header row of its own on a phone)
     if (!chat) return `<button class="pv-back" data-act="back" aria-label="Back">${PI.back}</button><div class="ph-title"></div>`;
     const s = phState(chat);
-    // the Raw / Chat switch (plan 2026-11-22 chat-view): the only addition to a phone's chat top bar
+    // the Terminal / Chat switch (plan 2026-11-22 chat-view; named Terminal since 2026-11-23, in code still 'raw'): the only addition to a phone's chat top bar
     return `<button class="pv-back" data-act="back" aria-label="Back">${PI.back}</button>${avatar(chat, s.cls)}<div class="ph-title two"><span class="ph-t1">${esc(chat.title)}</span><span class="ph-sub">${esc(AGENT[chat.agent]?.name ?? chat.agent)} · <span class="pv-st ${s.cls}">${esc(s.label)}</span>${chat.skip ? ' <span class="badge warn" title="started without permission prompts">skip</span>' : ''}${chat.toast ? ` <span class="badge ok">${esc(chat.toast)}</span>` : ''}</span></div>${cvSwitch()}<button class="pv-back pv-r" data-act="chat-menu" aria-label="This chat: share, hand off, actions, activity, record, delete">${PI.more}</button>`;
   } else if (v.name === 'memory') {
     title = v.rec ? esc(S.mem.items.find(i => i.id === v.rec)?.title ?? 'Memory') : 'Memory';
@@ -2639,7 +2639,8 @@ function renderChat() {
 
 /* ---------- the Chat view (plan 2026-11-22 chat-view, src/desktop/chat-view.js) ---------- */
 
-/** Raw or Chat, kept per device and per size (browser storage): a phone opens in Chat, a tablet and a desktop in Raw. */
+/** Terminal ('raw' in code and storage) or Chat, kept per device and per size (browser storage): a phone opens in Chat, a tablet and
+   a desktop in Terminal. */
 const chatModeKey = (size = S.size) => `chorus.chatView.${size}`;
 function chatModeFor(size) {
   try {
@@ -2683,11 +2684,11 @@ function cvPicker(box, c) {
     },
   ], { above: true });
 }
-/** The phone's switch icon: Raw shows the Chat icon (lit), the Chat view shows the terminal icon. */
+/** The phone's switch icon: the Terminal view shows the Chat icon (lit), the Chat view shows the terminal icon. */
 function cvSwitch() {
   return chatMode() === 'raw'
     ? `<button class="pv-back pv-r cv-ico on" data-act="cv-mode" data-arg="chat" aria-label="Show the Chat view">${CV_ICONS.chat}</button>`
-    : `<button class="pv-back pv-r cv-ico" data-act="cv-mode" data-arg="raw" aria-label="Show the agent's own screen (Raw)">${CV_ICONS.raw}</button>`;
+    : `<button class="pv-back pv-r cv-ico" data-act="cv-mode" data-arg="raw" aria-label="Show the Terminal view (the agent's own screen)">${CV_ICONS.raw}</button>`;
 }
 function chatView() {
   return (cvInstance ??= makeChatView({
@@ -2696,6 +2697,8 @@ function chatView() {
     chats: () => S.state?.chats ?? [],
     size: () => S.size,
     agentName: a => AGENT[a]?.name ?? a ?? 'the agent',
+    // who a reply is from: a task chat's teammate, else the agent (the same name as on its question cards)
+    speaker: c => (c ? askWho(c, window.choruspro, AGENT) : { name: 'the agent', agent: '' }),
     stateWord: st => (st === 'idle' ? 'your turn' : STATE_LABEL[st] ?? st),
     tilde,
     onMac: ON_MAC,
@@ -2760,10 +2763,10 @@ function renderChatParts() {
     <div class="meta"><span class="dot ${esc(c.state)}"></span><span>${esc(STATE_LABEL[c.state] ?? c.state)}</span>
       ${c.model || c.effort ? `<span class="model">· ${[c.model, c.effort].filter(Boolean).map(esc).join(' · ')}</span>` : ''}${c.skip ? '<span class="badge warn" title="started without permission prompts">skip</span>' : ''}${meter(c.usage)}
       <span class="mono faint path" title="${esc(c.cwd)}">‎${esc(tilde(c.cwd))}‎</span>${c.toast ? `<span class="badge ok">${esc(c.toast)}</span>` : ''}</div>
-    ${S.size === 'phone' ? '' : `<div class="seg cv-seg" role="group" aria-label="View"><button class="${chatMode() === 'raw' ? 'on' : ''}" data-act="cv-mode" data-arg="raw" title="The agent's own screen">Raw</button><button class="${chatMode() === 'chat' ? 'on' : ''}" data-act="cv-mode" data-arg="chat" title="The conversation, drawn from its turns">Chat</button></div>`}
+    ${S.size === 'phone' ? '' : `<div class="seg cv-seg" role="group" aria-label="View"><button class="${chatMode() === 'raw' ? 'on' : ''}" data-act="cv-mode" data-arg="raw" title="The agent's own screen, as in a terminal">${CV_ICONS.raw}Terminal</button><button class="${chatMode() === 'chat' ? 'on' : ''}" data-act="cv-mode" data-arg="chat" title="The conversation, drawn from its turns">${CV_ICONS.chat}Chat</button></div>`}
     <button class="btn" data-act="share" data-arg="${esc(c.id)}" title="Copy this chat's id and place, to paste into another Chorus chat" aria-label="Share">${S.size === 'desktop' ? '⧉ Share' : '⧉'}</button>
     <button class="btn" data-act="handoff" data-arg="${esc(c.id)}" title="Continue this chat with another agent" aria-label="Hand off">${S.size === 'desktop' ? '⇄ Hand off' : '⇄'}</button>
-    ${c.sub ? '' : `${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰', '', hlFlash(c.id, 'task', taskLit, countFlash(`taskrev:${c.id}`))) : ''}${sideBtn('artifacts', 'Artifacts', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', hlFlash(c.id, 'artifacts', artLit, artFlash(c.id)))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}`}
+    ${c.sub ? '' : `${task && S.size === 'desktop' ? sideBtn('task', 'Task', '☰', '', hlFlash(c.id, 'task', taskLit, countFlash(`taskrev:${c.id}`))) : ''}${sideBtn('artifacts', 'Files', '▤', c.artifacts ? ` <span class="badge plain">${countNum(`art:${c.id}`, c.artifacts)}</span>` : '', hlFlash(c.id, 'artifacts', artLit, artFlash(c.id)))}${sideBtn('activity', 'Activity', '≋')}${sideBtn('record', 'Record', '◫')}`}
     <button class="icon-btn" data-act="delete" data-arg="${esc(c.id)}" title="Delete this chat" aria-label="Delete this chat">🗑</button>`;
   // a phone: one segmented row, Chat · Steps · Plan (a task chat's panel, from the module) · Files (the chat's artifacts), one shown at
   // a time (mockup phone-ui-v2.html scene 5). A sub thread has neither: no row
@@ -3181,7 +3184,8 @@ async function loadDrawer() {
 
 function drawerHtml(c) {
   const dd = S.drawerData;
-  const NAMES = { artifacts: 'Artifacts', activity: 'Activity', record: 'Record' };
+  // Files: one name on every size (owner, 2026-11-23); in code and in the agents' tool it is still "artifacts"
+  const NAMES = { artifacts: 'Files', activity: 'Activity', record: 'Record' };
   // a phone: a bottom sheet with a grabber, and the three drawers as tabs in its head
   const seg = `<span class="seg drawer-seg">${Object.entries(NAMES).map(([k, n]) => `<button class="${S.drawer === k ? 'on' : ''}" data-act="drawer-to" data-arg="${k}">${n}</button>`).join('')}</span>`;
   const head = `<div class="grab"></div><div class="drawer-head"><span class="grow title">${NAMES[S.drawer]}</span>${seg}<button class="icon-btn" data-act="drawer" data-arg="${S.drawer}" title="Close" aria-label="Close">✕</button></div>`;
