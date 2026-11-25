@@ -422,6 +422,15 @@ test('files/view and files/raw through the private link: files inside the chat\'
   const j = await (await get('view?p=a.json')).json();
   assert.deepEqual([j.kind, j.text], ['json', '{"a":1}']);
   assert.equal((await get('view?p=../../../../plan.md')).status, 403);
+  // a type the viewer can't show, inside the project: named, so the page says "Keynote files can't be opened here" (scene 7 C);
+  // routeOf (src/desktop/file-viewer.js) turns these answers into the page's choice
+  fs.writeFileSync(path.join(project, 'deck.key'), Buffer.alloc(2000, 7));
+  const keyA = r.store.reportArtifact('t_fv', path.join(project, 'deck.key'), 'Deck');
+  const k = await (await get(`view?r=${keyA.id}`)).json();
+  assert.deepEqual([k.why, k.type, k.size, k.rel], ['type', 'Keynote', 2000, 'deck.key']);
+  // @ts-expect-error: a page module, plain JavaScript
+  const { routeOf } = await import('../../src/desktop/file-viewer.js');
+  assert.deepEqual([routeOf(k, false), routeOf(o, false), routeOf(v, false), routeOf(k, true)], ['note', 'note', 'viewer', 'mac']);
   // the same files on the Mac's own window: the file elsewhere is shown there
   assert.equal((await r.api('GET', `/api/chats/t_fv/files/view?r=${outA.id}`)).json.text, 'secret notes');
   r.close();
