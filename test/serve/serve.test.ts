@@ -1159,6 +1159,57 @@ test('Artifacts by report: files that exist and http(s) links, newest first, wit
   }
 });
 
+test('files/view and files/raw on the Mac: a reported file or one in the chat\'s artifacts folder; gone; links, .. and links out of the folder refused', async () => {
+  const r = await rig();
+  try {
+    const a = (await r.api('POST', '/api/chats', { agent: 'codex', folder: r.project })).json.id as string;
+    fs.writeFileSync(path.join(r.project, 'plan.md'), '# The plan');
+    fs.writeFileSync(path.join(r.project, 'page.html'), '<h1>hi</h1>');
+    const plan = r.store.reportArtifact(a, path.join(r.project, 'plan.md'), 'Plan');
+    const page = r.store.reportArtifact(a, path.join(r.project, 'page.html'));
+    const link = r.store.reportArtifact(a, 'https://example.com/x');
+    const v = (await r.api('GET', `/api/chats/${a}/files/view?r=${plan.id}`)).json;
+    assert.deepEqual([v.kind, v.title, v.rel, v.text, v.size, v.why], ['markdown', 'Plan', 'plan.md', '# The plan', 10, undefined]);
+    assert.ok(v.path.endsWith('plan.md') && v.mtime);
+    const raw = await fetch(`${r.url}/api/chats/${a}/files/raw?r=${page.id}`, { headers: { authorization: `Bearer ${r.srv.token}` } });
+    assert.equal(raw.status, 200);
+    assert.equal(raw.headers.get('content-type'), 'text/html; charset=utf-8');
+    assert.equal(raw.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(raw.headers.get('cache-control'), 'no-store');
+    assert.match(raw.headers.get('content-security-policy') ?? '', /^sandbox; default-src 'none'/);
+    assert.equal(await raw.text(), '<h1>hi</h1>');
+    // the chat's artifacts folder
+    const dir = r.store.artifactsDir(a);
+    fs.mkdirSync(path.join(dir, 'sub'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'sub', 'data.csv'), 'a,b\n1,2');
+    const f = (await r.api('GET', `/api/chats/${a}/files/view?p=${encodeURIComponent('sub/data.csv')}`)).json;
+    assert.deepEqual([f.kind, f.title, f.rel, f.text], ['csv', 'data.csv', path.join('sub', 'data.csv'), 'a,b\n1,2']);
+    assert.equal(await (await fetch(`${r.url}/api/chats/${a}/files/raw?p=sub/data.csv`, { headers: { authorization: `Bearer ${r.srv.token}` } })).text(), 'a,b\n1,2');
+    // gone: a reported file deleted since, a folder item that is not there
+    fs.rmSync(path.join(r.project, 'plan.md'));
+    const g = (await r.api('GET', `/api/chats/${a}/files/view?r=${plan.id}`)).json;
+    assert.deepEqual([g.kind, g.title, g.why, g.text], ['markdown', 'Plan', 'gone', undefined]);
+    assert.equal((await r.api('GET', `/api/chats/${a}/files/raw?r=${plan.id}`)).status, 404);
+    assert.equal((await r.api('GET', `/api/chats/${a}/files/view?p=nope.md`)).json.why, 'gone');
+    // refused: a link, an unknown id, no r or p, .. out of the folder, an absolute path, a link out of the folder
+    assert.equal((await r.api('GET', `/api/chats/${a}/files/view?r=${link.id}`)).status, 400);
+    assert.equal((await r.api('GET', `/api/chats/${a}/files/view?r=99999`)).status, 404);
+    assert.equal((await r.api('GET', `/api/chats/${a}/files/view`)).status, 400);
+    assert.equal((await r.api('GET', '/api/chats/no-such-chat/files/view?p=x')).status, 404);
+    for (const p of ['../../../../page.html', 'sub/../../artifacts/../../page.html', '..', '.']) {
+      for (const kind of ['view', 'raw']) assert.equal((await r.api('GET', `/api/chats/${a}/files/${kind}?p=${encodeURIComponent(p)}`)).status, 403, `${kind} ${p}`);
+    }
+    assert.equal((await r.api('GET', `/api/chats/${a}/files/view?p=${encodeURIComponent(path.join(r.project, 'page.html'))}`)).status, 400);
+    fs.symlinkSync(path.join(r.project, 'page.html'), path.join(dir, 'out.html'));
+    assert.equal((await r.api('GET', `/api/chats/${a}/files/view?p=out.html`)).status, 403, 'a link that leaves the folder');
+    assert.equal((await r.api('GET', `/api/chats/${a}/files/raw?p=out.html`)).status, 403);
+    // the files were only read
+    assert.equal(fs.readFileSync(path.join(r.project, 'page.html'), 'utf8'), '<h1>hi</h1>');
+  } finally {
+    await r.done();
+  }
+});
+
 test('New chat: a first message\'s /skill-name loads that skill (any CLI); a /word that is no skill stays; @ lists a folder\'s files (git or not), only for folders Chorus offers', async () => {
   const r = await rig((_s, project) => {
     for (const [name, on] of [['brand-style', true], ['old-thing', false]] as const) {

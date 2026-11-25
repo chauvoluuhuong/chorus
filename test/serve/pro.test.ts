@@ -397,6 +397,45 @@ test('reported artifacts through the private link: a file inside the chat\'s pro
   r.close();
 });
 
+test('files/view and files/raw through the private link: files inside the chat\'s project and its artifacts folder are shown; a file elsewhere stays on the Mac', async () => {
+  const r = await rig(remoteStand);
+  await new Promise(x => setTimeout(x, 20));
+  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-fv-')));
+  r.store.createThread({ id: 't_fv', title: 'files', agent: 'claude', cwd: project, project });
+  fs.writeFileSync(path.join(project, 'plan.md'), '# The plan');
+  const outside = path.join(fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-out-'))), 'notes.md');
+  fs.writeFileSync(outside, 'secret notes');
+  const inA = r.store.reportArtifact('t_fv', path.join(project, 'plan.md'), 'Plan');
+  const outA = r.store.reportArtifact('t_fv', outside);
+  fs.mkdirSync(r.store.artifactsDir('t_fv'), { recursive: true });
+  fs.writeFileSync(path.join(r.store.artifactsDir('t_fv'), 'a.json'), '{"a":1}');
+  const dev = { cookie: 'chorus_device=ok', 'x-forwarded-for': '100.64.0.2', host: 'mac.tail.ts.net' };
+  const get = (p: string) => fetch(`${r.srv.url}/api/chats/t_fv/files/${p}`, { headers: dev });
+  const v = await (await get(`view?r=${inA.id}`)).json();
+  assert.deepEqual([v.kind, v.text, v.rel, v.why], ['markdown', '# The plan', 'plan.md', undefined]);
+  assert.equal(await (await get(`raw?r=${inA.id}`)).text(), '# The plan');
+  const o = await (await get(`view?r=${outA.id}`)).json();
+  assert.deepEqual([o.kind, o.title, o.why, o.text, o.size], ['markdown', 'notes.md', 'outside', undefined, undefined]);
+  const or = await get(`raw?r=${outA.id}`);
+  assert.equal(or.status, 403);
+  assert.ok(!(await or.text()).includes('secret'));
+  const j = await (await get('view?p=a.json')).json();
+  assert.deepEqual([j.kind, j.text], ['json', '{"a":1}']);
+  assert.equal((await get('view?p=../../../../plan.md')).status, 403);
+  // a type the viewer can't show, inside the project: named, so the page says "Keynote files can't be opened here" (scene 7 C);
+  // routeOf (src/desktop/file-viewer.js) turns these answers into the page's choice
+  fs.writeFileSync(path.join(project, 'deck.key'), Buffer.alloc(2000, 7));
+  const keyA = r.store.reportArtifact('t_fv', path.join(project, 'deck.key'), 'Deck');
+  const k = await (await get(`view?r=${keyA.id}`)).json();
+  assert.deepEqual([k.why, k.type, k.size, k.rel], ['type', 'Keynote', 2000, 'deck.key']);
+  // @ts-expect-error: a page module, plain JavaScript
+  const { routeOf } = await import('../../src/desktop/file-viewer.js');
+  assert.deepEqual([routeOf(k, false), routeOf(o, false), routeOf(v, false), routeOf(k, true)], ['note', 'note', 'viewer', 'mac']);
+  // the same files on the Mac's own window: the file elsewhere is shown there
+  assert.equal((await r.api('GET', `/api/chats/t_fv/files/view?r=${outA.id}`)).json.text, 'secret notes');
+  r.close();
+});
+
 test('with no module, nothing answers through a proxy', async () => {
   const r = await rig();
   await new Promise(x => setTimeout(x, 20));

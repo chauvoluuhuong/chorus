@@ -7,6 +7,8 @@
 // detail sheet, the full-screen viewer, and the message box (a phone: with its key row; wider: Enter sends, the keys sit in the box). It talks to the page through `h` (below).
 import { mdFull } from './md.js';
 import { composing } from './box-keys.js';
+import { drawDiagrams as diagrams } from './mermaid.js';
+import { artLabel, cardSum, fileSquare, OPEN_ICON } from './file-viewer.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -216,12 +218,25 @@ export function makeChatView(h) {
       return to ? `<button class="cv-sys" data-cv="open" data-arg="${esc(to)}"><span class="ic">✉</span><span class="t">${words}</span><span class="x">Open</span></button>` : `<div class="cv-sys"><span class="ic">✉</span><span class="t">${words}</span></div>`;
     }
     if (c.type === 'artifact') {
-      const canOpen = !c.link && (c.open || h.onMac);
-      const kind = { html: 'HTML', markdown: 'MARKDOWN', mermaid: 'MERMAID', image: 'IMAGE', pdf: 'PDF', text: 'TEXT', link: 'LINK' }[c.kind] ?? 'FILE';
-      const pv = c.kind === 'html' && canOpen ? `<div class="pv" data-cv-pv="${c.id}"></div>` : '';
-      const sum = (c.kind === 'markdown' || c.kind === 'mermaid') && canOpen ? `<span class="sum" data-cv-sum="${c.id}">${esc(base(c.target))}</span>` : c.link ? 'a link' : canOpen ? (c.kind === 'html' ? 'updates while the agent edits it' : esc(base(c.target))) : 'Open on the Mac';
-      const go = canOpen || c.link ? `<button class="go" data-cv="art" data-arg="${c.id}">Open ›</button>` : '';
-      return `<div class="cv-card art"><div class="hd">${c.link ? 'LINK' : 'FILE'}<span class="sp"></span>${c.link ? '' : kind}</div><div class="ti">${esc(c.title)}</div>${pv}<div class="fn">${esc(c.link ? c.target : c.rel ?? h.tilde(c.target))}</div><div class="st">${sum}${go}</div></div>`;
+      // one ↗ Open, and a click anywhere on the card does the same (plan 2026-11-25, scene 1): openFile decides where it opens. The
+      // mini preview and the summary are read only where this page may read the file (the Mac, or a file inside the project)
+      const canRead = !c.link && (c.open || h.onMac);
+      const pv = c.kind === 'html' && canRead ? `<div class="pv" data-cv-pv="${c.id}"></div>` : '';
+      // the line under the title: the markdown's size in words, a diagram, the HTML's live note, the size of a file that is not text
+      // (and that Chorus can't show it), else its name
+      const sum = c.link
+        ? 'a link'
+        : c.kind === 'markdown' && canRead
+          ? `<span class="sum" data-cv-sum="${c.id}">${esc(base(c.target))}</span>`
+          : c.kind === 'mermaid'
+            ? 'a diagram'
+            : c.kind === 'html' && canRead
+              ? 'updates while the agent edits it'
+              : ['file', 'image', 'pdf'].includes(c.kind)
+                ? `<span class="sum" data-cv-size="${c.id}">${c.kind === 'file' && c.fileType ? `Chorus can't show ${esc(c.fileType)} files` : esc(base(c.target))}</span>`
+                : `<span class="sum">${esc(base(c.target))}</span>`;
+      const where = c.link ? c.target : c.rel ?? h.tilde(c.target);
+      return `<div class="cv-card art" data-cv="art" data-arg="${c.id}"><div class="hd">${c.link ? 'LINK' : 'FILE'}<span class="sp"></span>${c.link ? '' : esc(artLabel(c))}</div>${pv}<div class="top2">${fileSquare(c.target, { link: c.link })}<div class="tt"><div class="ti">${esc(c.title)}</div><div class="fn">${esc(where)}</div></div></div><div class="st">${sum}<button class="go" data-cv="art" data-arg="${c.id}">${OPEN_ICON}Open</button></div></div>`;
     }
     return '';
   }
@@ -411,61 +426,36 @@ export function makeChatView(h) {
     el.style.height = `${Math.min(el.scrollHeight, h.size() === 'phone' ? 140 : 200)}px`;
   };
 
-  /* ---------- mermaid: the library is Chorus's own file, loaded once a reply has a diagram ---------- */
+  /* ---------- mermaid: the library is Chorus's own file, loaded once a reply has a diagram (mermaid.js, shared with the file viewer) ---------- */
 
-  let mermaidP = null;
-  const loadMermaid = () =>
-    (mermaidP ??= new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.src = h.mermaidUrl;
-      s.onload = () => res(window.mermaid);
-      s.onerror = () => ((mermaidP = null), rej(new Error('mermaid did not load')));
-      document.head.append(s);
-    }).then(m => {
-      const dark = matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.dataset.theme !== 'light';
-      m.initialize({ startOnLoad: false, securityLevel: 'strict', theme: dark ? 'dark' : 'neutral', fontFamily: 'inherit' });
-      return m;
-    }));
-  let dia = 0;
-  const drawn = new Map();
-  async function drawDiagrams(root) {
-    for (const el of root.querySelectorAll('[data-mermaid]:not([data-done])')) {
-      el.dataset.done = '1';
-      const src = el.querySelector('code')?.textContent ?? '';
-      const ft = '<div class="ft">mermaid<button data-cv="dia">Full screen</button></div>';
-      if (drawn.has(src)) {
-        el.innerHTML = drawn.get(src) + ft;
-        el.classList.add('ok');
-        continue;
-      }
-      try {
-        const m = await loadMermaid();
-        const { svg } = await m.render(`cvd${++dia}`, src);
-        drawn.set(src, svg);
-        if (el.isConnected) {
-          el.innerHTML = svg + ft;
-          el.classList.add('ok');
-        }
-      } catch {
-        // cannot be drawn: its source stays, as code
-        el.classList.add('bad');
-        document.getElementById(`dcvd${dia}`)?.remove();
-      }
-    }
-  }
+  const drawDiagrams = root => diagrams(root, { url: h.mermaidUrl, foot: '<div class="ft">mermaid<button data-cv="dia">Full screen</button></div>' });
 
   /* ---------- artifact previews: a sandboxed frame from the existing route, only once the card is in view ---------- */
 
   let seen = null;
+  const sums = new Map();
   function watchPreviews(root) {
     seen?.disconnect();
     seen = new IntersectionObserver(es => {
       for (const e of es) {
         if (!e.isIntersecting) continue;
         seen.unobserve(e.target);
-        const id = e.target.dataset.cvPv ?? e.target.dataset.cvSum;
+        const id = e.target.dataset.cvPv ?? e.target.dataset.cvSum ?? e.target.dataset.cvSize;
         const url = `/api/chats/${encodeURIComponent(cur.id)}/reported/${encodeURIComponent(id)}`;
-        if (e.target.dataset.cvPv) e.target.innerHTML = `<iframe src="${esc(url)}" sandbox="" loading="lazy" title="Preview" tabindex="-1"></iframe>`;
+        // a card's line is asked once per version of the chat's files, not again on every redraw of the stream
+        const key = `${cur.id}:${id}:${chatOf(cur.id)?.artifactsRev ?? ''}`;
+        const put = t => t && (sums.set(key, t), (e.target.textContent = t));
+        if (!e.target.dataset.cvPv && sums.has(key)) {
+          e.target.textContent = sums.get(key);
+          continue;
+        }
+        // a file that is not text: its size, and for one the viewer can't show, that it can't ("6.2 MB · Chorus can't show Keynote
+        // files"); the view answer for these reads no content (a stat)
+        if (e.target.dataset.cvSize)
+          h.api('GET', `/api/chats/${encodeURIComponent(cur.id)}/files/view?r=${encodeURIComponent(id)}`)
+            .then(v => put(cardSum(v)))
+            .catch(() => {});
+        else if (e.target.dataset.cvPv) e.target.innerHTML = `<iframe src="${esc(url)}" sandbox="" loading="lazy" title="Preview" tabindex="-1"></iframe>`;
         else
           fetch(url, { credentials: 'same-origin' })
             .then(r => (r.ok ? r.text() : ''))
@@ -473,12 +463,12 @@ export function makeChatView(h) {
               if (!t) return;
               const heads = (t.match(/^#{1,6}\s/gm) ?? []).length;
               const words = t.split(/\s+/).filter(Boolean).length;
-              e.target.textContent = `${plural(heads, 'heading', 'headings')} · ${plural(words, 'word', 'words')}`;
+              put(`${plural(heads, 'heading', 'headings')} · ${plural(words, 'word', 'words')}`);
             })
             .catch(() => {});
       }
     }, { root: root, rootMargin: '200px' });
-    for (const el of root.querySelectorAll('[data-cv-pv], [data-cv-sum]')) seen.observe(el);
+    for (const el of root.querySelectorAll('[data-cv-pv], [data-cv-sum], [data-cv-size]')) seen.observe(el);
   }
 
   /* ---------- the detail sheet and the full-screen viewer ---------- */
@@ -524,37 +514,23 @@ export function makeChatView(h) {
     body.innerHTML = `<div class="lbl">${esc(l1)}</div><pre>${esc(r.input || c.target)}</pre><div class="lbl">${esc(l2)}</div><pre>${colourDiff(r.output || '(nothing came back)', r.kind ?? c.kind)}${r.capped ? '\n<span class="d">… cut at 256 KB</span>' : ''}</pre><div class="bt">${r.cut && !full ? '<button class="btn" data-x="all">Show all</button>' : ''}<button class="btn" data-x="close">Close</button></div>`;
   }
 
-  function viewer(title, sub, inner, reload) {
+  function viewer(title, sub, inner) {
     document.querySelector('.cv-full')?.remove();
     const el = document.createElement('div');
     el.className = 'cv-full';
-    el.innerHTML = `<div class="cv-full-top"><button class="pv-back" data-x="back" aria-label="Back">‹</button><div class="t"><b>${esc(title)}</b><span>${esc(sub)}</span></div>${reload ? '<button class="pv-back pv-r" data-x="reload" aria-label="Reload">↻</button>' : ''}</div><div class="cv-full-body">${inner}</div>`;
+    el.innerHTML = `<div class="cv-full-top"><button class="pv-back" data-x="back" aria-label="Back">‹</button><div class="t"><b>${esc(title)}</b><span>${esc(sub)}</span></div></div><div class="cv-full-body">${inner}</div>`;
     el.addEventListener('click', e => {
       const x = e.target.closest('[data-x]')?.dataset.x;
       if (x === 'back') el.remove();
-      else if (x === 'reload') {
-        const f = el.querySelector('iframe');
-        if (f) f.src = f.src;
-      }
     });
     document.body.append(el);
     return el;
   }
 
-  async function openArtifact(rid) {
+  /** A file card's Open (or a click on the card): the file viewer decides where it opens (file-viewer.js openFile). */
+  function openArtifact(rid) {
     const a = dataOf(cur.id).cards.find(c => c.type === 'artifact' && String(c.id) === String(rid));
-    if (!a) return;
-    if (a.link || (!a.open && h.onMac)) return h.openReport(cur.id, a.id);
-    const url = `/api/chats/${encodeURIComponent(cur.id)}/reported/${encodeURIComponent(a.id)}`;
-    if (a.kind === 'markdown' || a.kind === 'mermaid') {
-      const el = viewer(a.title, `${a.rel ?? h.tilde(a.target)} · sandboxed`, '<div class="cv-a cv-doc"><span class="spin"></span></div>');
-      const t = await fetch(url, { credentials: 'same-origin' }).then(r => (r.ok ? r.text() : ''), () => '');
-      const doc = el.querySelector('.cv-doc');
-      doc.innerHTML = a.kind === 'mermaid' ? `<div class="cv-dia" data-mermaid><pre><code>${esc(t)}</code></pre></div>` : mdFull(t);
-      drawDiagrams(doc);
-      return;
-    }
-    viewer(a.title, `${a.rel ?? h.tilde(a.target)} · sandboxed`, `<iframe src="${esc(url)}" sandbox="" title="${esc(a.title)}"></iframe>`, true);
+    if (a) h.openFile({ chat: cur.id, r: a.id, title: a.title, link: a.link, target: a.target });
   }
 
   /* ---------- sending ---------- */
@@ -623,7 +599,7 @@ export function makeChatView(h) {
     } else if (what === 'call') void showCall(b.dataset.call);
     else if (what === 'note') void toggleNote(Number(b.dataset.seq));
     else if (what === 'open') h.openChat(b.dataset.arg);
-    else if (what === 'art') void openArtifact(b.dataset.arg);
+    else if (what === 'art') openArtifact(b.dataset.arg);
     else if (what === 'raw') h.toRaw();
     else if (what === 'send') void sendBox();
     else if (what === 'ins') insert(b.dataset.arg);

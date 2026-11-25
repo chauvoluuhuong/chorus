@@ -13,6 +13,7 @@ import path from 'node:path';
 import { adapters, inputState, NEWLINE_KEYS, toolKind, type ScreenLine, type ToolKind } from '@chauvoluuhuong/chorus-core';
 import type { Store, ThreadRow } from '../core/store.ts';
 import type { AgentId } from '../core/types.ts';
+import { kindOf } from './fileview.ts';
 
 /** Chorus's own tools that are drawn as cards, not rows (decision 7 of the plan). */
 export const CARD_TOOLS = ['start_subthread', 'start_thread', 'show_artifact', 'request_approval', 'ask_main_thread'];
@@ -64,7 +65,7 @@ export type CvCard =
   | { type: 'sub'; id: string; title: string; agent: string; state: string; status: string; started?: string | null; report?: string; question?: string; seq: number | null; at: string }
   | { type: 'chat'; id: string; title: string; teammate?: string; agent: string; skip: boolean; state: string; seq: number | null; at: string }
   | { type: 'startedBy'; id: string; title: string; agent: string; skip: boolean; seq: 0; at: string }
-  | { type: 'artifact'; id: number; title: string; target: string; rel?: string; link: boolean; kind: string; open: boolean; seq: number | null; at: string }
+  | { type: 'artifact'; id: number; title: string; target: string; rel?: string; link: boolean; kind: string; fileType?: string; open: boolean; seq: number | null; at: string }
   | { type: 'mail'; from: string; fromId?: string | null; /** a sub thread's report: the sub thread it is about */ sub?: { id: string; title: string }; subject: string; seq: number | null; at: string };
 
 export interface CvPage {
@@ -156,7 +157,12 @@ function seqAt(store: Store, id: string, at: string | null | undefined): number 
   return r?.s ?? 0;
 }
 
-const EXT_KIND: Record<string, string> = { '.html': 'html', '.htm': 'html', '.md': 'markdown', '.markdown': 'markdown', '.mmd': 'mermaid', '.mermaid': 'mermaid', '.svg': 'image', '.png': 'image', '.jpg': 'image', '.jpeg': 'image', '.gif': 'image', '.webp': 'image', '.pdf': 'pdf', '.txt': 'text', '.json': 'text', '.csv': 'text' };
+/** a reported file's kind for its card, as the file viewer names it (src/serve/fileview.ts); 'file' for one it can't show, with its
+ * type's name when known (fileType: "Keynote") */
+const cardKind = (target: string) => {
+  const k = kindOf(target);
+  return { kind: k.kind === 'none' ? 'file' : k.kind, ...(k.type ? { fileType: k.type } : {}) };
+};
 
 /** Every card of a chat, placed by the turn it came after. */
 export function cardsOf(d: CvDeps, id: string): CvCard[] {
@@ -180,10 +186,9 @@ export function cardsOf(d: CvDeps, id: string): CvCard[] {
   const parent = me.parent_thread_id && !me.sub_status ? store.getThread(me.parent_thread_id) : undefined;
   if (parent) out.push({ type: 'startedBy', id: parent.id, title: parent.title, agent: parent.agent, skip: !!me.skip_permissions, seq: 0, at: me.created });
   for (const r of d.reported(id)) {
-    const ext = path.extname(r.target).toLowerCase();
     // a file in the project shows as its path in the project (site/hero.html), as the agent names it
     const rel = !r.link && r.inside ? path.relative(me.project ?? me.cwd, r.target) : undefined;
-    out.push({ type: 'artifact', id: r.id, title: r.title, target: r.target, ...(rel && !rel.startsWith('..') ? { rel } : {}), link: r.link, kind: r.link ? 'link' : EXT_KIND[ext] ?? 'file', open: !r.link && r.inside, seq: seqAt(store, id, r.ts), at: r.ts });
+    out.push({ type: 'artifact', id: r.id, title: r.title, target: r.target, ...(rel && !rel.startsWith('..') ? { rel } : {}), link: r.link, ...(r.link ? { kind: 'link' } : cardKind(r.target)), open: !r.link && r.inside, seq: seqAt(store, id, r.ts), at: r.ts });
   }
   // mail this chat read: one line each (who it was from)
   const mail = store.db.prepare('SELECT from_thread, from_json, subject, refs, read_at FROM mail WHERE to_thread = ? AND read_at IS NOT NULL ORDER BY read_at').all(id) as { from_thread: string | null; from_json: string; subject: string; refs: string; read_at: string }[];

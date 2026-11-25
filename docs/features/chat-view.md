@@ -56,6 +56,22 @@ tools (`read_mail`, `list_watches`, …) are rows marked ◈.
   phone's Files tab, and now the desktop header's button and its panel too (they said "Artifacts"). A card in the Chat view is
   headed FILE (or LINK). In code, storage and the agents' tool the word is still "artifacts".
 
+## Opening a file (2026-11-25)
+Plan `@workspace/plans/2026-11-25-chat-view-files.md`, mockup `@workspace/mockups/chat-view-files.html`.
+- **One ↗ Open** on every file card and every row of the Files list; a click on the card or row does the same. Both call
+  `openFile()` (`src/desktop/file-viewer.js`), so the two always behave alike.
+- `openFile()` asks `GET chats/:id/files/view?r=<reported id>|p=<path in the chat's artifacts folder>` what the file is, then:
+  - **a kind the viewer shows** → the viewer: a window over the chat (a full screen on a phone), always in **Preview** first, **Raw**
+    one click away (line numbers, light colours, Wrap). Markdown (with mermaid), HTML (a sandboxed frame from `files/raw`, Desktop |
+    Phone width), mermaid, JSON (folding tree), CSV/TSV (table), diff, images, SVG, PDF; Word (.docx) and Excel (.xlsx) as a page and
+    a table per sheet; code and plain text in Raw only. It reloads in place while the agent edits the file.
+  - **anything else, on the Mac** → the Mac's own open command, as before, with a short note.
+  - **anything else, remotely** → a short message with Got it: "<Type> files can't be opened here", or "This file stays on your
+    Mac" for a file outside the chat's project (the private link sends only files inside it, as before).
+  - too big (text over 2 MB: the start, with a strip), gone, not text (sniffed): said inside the viewer.
+- Word and Excel are read by `src/serve/officeview.ts` on the Mac: unzipped in memory, turned into escaped HTML (a short list of tags)
+  or rows; formulas are never run, and the file is never written, moved, copied or opened in another app.
+
 ## Quiet lines (what is not a message)
 A CLI's transcript stores some text as user turns that the user never typed. Shown as the user's bubbles they filled the real
 Planner chat (29 background-job notices and a 12,000-character summary in one chat), so each is one line instead (`noteOf` in
@@ -118,6 +134,8 @@ The "Open Terminal" banner shows when a page shows the chat in the Chat view, th
 - `src/desktop/chat-view.js` (the view), `md.js` `mdFull` (replies), `text-picker.js` (`above`, groups), `app.js` (`chatMode`,
   `setChatMode`, `cvSwitch`, `cvPicker`, `chatView`; the only edits to the Terminal view's code are the switch and the branch in `renderChat` /
   `onSize` that picks the view), `style.css` block "the Chat view".
+- Opening files: `src/serve/fileview.ts` (kind, sniff, caps), `src/serve/officeview.ts` (Word, Excel), routes `GET chats/:id/files/view`
+  and `GET chats/:id/files/raw` in `server.ts` (`fileRoute`, `chatFile`); `src/desktop/file-viewer.js`, `mermaid.js`.
 - chorus-core: `ToolCall.kind` and `toolKind`, `Adapter.toolCallDetail`, `NATIVE_COMMANDS`, `menuShown`; probe
   `tools/probe/chatview-probe.mjs`, fixtures `fixtures/chatview-probe/2026-11-22/`.
 
@@ -126,3 +144,5 @@ The "Open Terminal" banner shows when a page shows the chat in the Chat view, th
 watch-only, a CLI with no input box, no terminal bytes, cards); `npm run proof:desktop -- --sizes` (every scene at three sizes, the Terminal view
 on a desktop compared with the newest release); `npm run smoke:chatview` (the real CLIs, from a phone's message box); chorus-core
 `test/chatview.test.ts` on the probe's fixtures, and its Pro sizes stage (a task chat's Chat tab).
+Opening files: `test/serve/fileview.test.ts`, `test/serve/file-viewer.test.ts`, the remote cases in `test/serve/pro.test.ts`;
+`node test/smoke/proof-file-viewer.ts` (every mockup scene on the Mac and as a device, screenshots in `.chorus/proof/`).

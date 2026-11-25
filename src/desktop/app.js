@@ -10,6 +10,7 @@ import { mailTypingHtml, MAIL_TYPING_MAX_MS } from './mail-typing.js';
 import { attachPicker } from './text-picker.js';
 import { md, mdInline } from './md.js';
 import { CV_ICONS, makeChatView } from './chat-view.js';
+import { closeFile, fileSquare, fileViewerState, OPEN_ICON, openFile, openNow } from './file-viewer.js';
 import { cliFitNote, newChatHint } from './cli-fit.js';
 import { nextSort, sortFolders, typeJump } from './folder-nav.js';
 import { makeImeInput } from './ime-input.js';
@@ -308,6 +309,8 @@ function onState(st) {
   }
   // a phone's ⋯ sheet open on this chat: its Artifacts row flashes like the chat head's button when the count grows
   if (S.sheet === 'chat' && artOf(st) !== artWas) drawSheet();
+  // a file open in the viewer reloads in place when its chat's files change
+  void fileViewerState();
   if (JSON.stringify(previousNews) !== JSON.stringify(st.notifications) && !$('#news').hidden && !S.newsDetail) void loadNews();
   if (!S.homeGuess) S.homeGuess = st.project.split('/').slice(0, 3).join('/');
   // a request no longer pops up at the bottom (owner, 2026-11-07): it waits in Approvals and the top bar's "waiting" button
@@ -577,6 +580,8 @@ function go(view, push = true) {
     void api('POST', `/api/chats/${S.unlockedChat}/unlock`, { on: false }).catch(() => {});
     S.unlockedChat = null;
   }
+  // the file viewer sits over this chat: another screen or chat closes it
+  if (openNow() && !(view.name === 'chat' && view.id === openNow().chat)) closeFile();
   S.view = view;
   S.drawerData = null;
   if (view.name === 'pro-ended' && !S.endedSeen) (S.endedSeen = true), remember('ended', true);
@@ -2705,7 +2710,7 @@ function chatView() {
     mermaidUrl: '/vendor/mermaid-12.2.0.min.js',
     openChat: id => go({ name: 'chat', id }),
     toRaw: () => setChatMode('raw'),
-    openReport: (id, rid) => void api('POST', `/api/chats/${encodeURIComponent(id)}/open-report`, { id: rid }).then(r => r.error && toast(r.error), e => toast(e.message)),
+    openFile: o => void openFile(fileViewerH, o),
     picker: cvPicker,
     // Esc stops a turn without closing the CLI in all three (chatview-probe E, 2026-11-22)
     canStop: a => !!AGENT[a],
@@ -3200,16 +3205,16 @@ function drawerHtml(c) {
   if (!dd || dd.id !== c.id || dd.kind !== S.drawer) return head + '<div class="drawer-body"><div class="empty">Loading…</div></div>';
   const x = dd.data;
   if (S.drawer === 'artifacts') {
-    // what the agent reported with show_artifact, wherever it is saved (plan 2026-11-13, item 5), then an old chat's folder. A click
-    // opens it with the system's open command; from a device on the private link only files inside the chat's project open there
-    const row = (title, where, ago, open, link) => open
-      ? `${open.replace('>', ` class="art-row">`)}<span class="art-t"><b>${esc(title)}</b><span class="mono faint">${esc(where)}</span><span class="faint">${esc(ago)}</span></span><span class="art-go">${link ? '↗' : 'Open'}</span>${open.startsWith('<a') ? '</a>' : '</button>'}`
-      : `<div class="art-row off"><span class="art-t"><b>${esc(title)}</b><span class="mono faint">${esc(where)}</span><span class="faint">${esc(ago)}</span></span><span class="badge plain" title="Only files inside this chat's project open on a device">Open on the Mac</span></div>`;
-    const reported = (x.reported ?? []).map(a => row(a.title, a.link ? a.target : tilde(a.target), a.ago, ON_MAC ? `<button data-act="art-report" data-arg="${a.id}">` : a.inside ? `<a href="/api/chats/${esc(c.id)}/reported/${a.id}" target="_blank" rel="noopener">` : '', a.link));
-    const old = x.items.map(a => row(a.path, tilde(a.abs), a.ago, ON_MAC ? `<button data-act="art-open" data-arg="${esc(a.path)}">` : '', false));
+    // what the agent reported with show_artifact, wherever it is saved (plan 2026-11-13, item 5), then an old chat's folder. Every row
+    // has one ↗ Open and a click on the row does the same: the file viewer decides where it opens, exactly as for the file's card in
+    // the Chat view (plan 2026-11-25, scene 1), on the Mac and over the private link alike
+    const now = openNow();
+    const row = (sq, title, where, ago, act, arg, sel) =>
+      `<button class="art-row${sel ? ' sel' : ''}" data-act="${act}" data-arg="${esc(arg)}">${sq}<span class="art-t"><b>${esc(title)}</b><span class="mono faint">${esc(where)}</span><span class="faint">${sel ? 'open now' : esc(ago)}</span></span><span class="art-go">${OPEN_ICON}Open</span></button>`;
+    const reported = (x.reported ?? []).map(a => row(fileSquare(a.target, { size: 'sm', link: a.link }), a.title, a.link ? a.target : tilde(a.target), a.ago, 'art-report', a.id, now?.chat === c.id && String(now.r) === String(a.id)));
+    const old = x.items.map(a => row(fileSquare(a.path, { size: 'sm' }), a.path, tilde(a.abs), a.ago, 'art-open', a.path, now?.chat === c.id && now.p === a.path));
     const items = reported.length + old.length ? reported.join('') + old.join('') : '<div class="empty">Nothing yet. Files the agent makes for you, and links, show up here when it reports them, wherever they are saved.</div>';
-    const note = ON_MAC ? '' : '<div class="muted" style="padding:10px 16px;font-size:12.5px;border-bottom:1px solid var(--line)">Over the private link. Files inside this chat\'s project open here; the others open only on the Mac.</div>';
-    return head + `<div class="drawer-body">${note}${items}</div>`;
+    return head + `<div class="drawer-body">${items}</div>`;
   }
   if (S.drawer === 'activity') {
     const kinds = ['all', 'tool', 'mcp', 'approval', 'file', 'usage'];
@@ -3494,6 +3499,20 @@ async function copyText(text) {
     return ok;
   }
 }
+
+/** What the file viewer needs from the page (file-viewer.js); the card and the Files row both open files through it. */
+const fileViewerH = {
+  api,
+  toast: t => toast(t),
+  get onMac() {
+    return ON_MAC;
+  },
+  size: () => S.size,
+  mermaidUrl: '/vendor/mermaid-12.2.0.min.js',
+  rev: id => S.state?.chats.find(c => c.id === id)?.artifactsRev,
+  // the Files list marks the file open now
+  onChange: () => S.view.name === 'chat' && S.drawer === 'artifacts' && renderChatParts(),
+};
 
 function toast(text, opts = {}) {
   if (!text) return;
@@ -4102,8 +4121,9 @@ document.addEventListener('click', async e => {
       return loadDecided();
     }
     case 'art-report': {
-      const r = await api('POST', `/api/chats/${S.view.id}/open-report`, { id: Number(arg) });
-      return r.error && toast(r.error);
+      // the same openFile as the file's card in the Chat view
+      const a = (S.drawerData?.data?.reported ?? []).find(x => String(x.id) === String(arg));
+      return openFile(fileViewerH, { chat: S.view.id, r: Number(arg), title: a?.title, link: a?.link, target: a?.target });
     }
     case 'ask-fold':
       S.askFold.has(arg) ? S.askFold.delete(arg) : S.askFold.add(arg);
@@ -4124,6 +4144,7 @@ document.addEventListener('click', async e => {
       S.actFilter = arg;
       return renderChatParts();
     case 'art-open':
+      return openFile(fileViewerH, { chat: S.view.id, p: arg });
     case 'art-folder':
       return api('POST', `/api/chats/${S.view.id}/open`, { path: arg, via: act === 'art-folder' ? 'folder' : undefined }).catch(err => toast(err.message));
     case 'copy':
