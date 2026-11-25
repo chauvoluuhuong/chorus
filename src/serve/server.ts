@@ -35,7 +35,7 @@ import { addSource, allSkills, CLI_NAMES, removeSource, scanSkills, SYNC_CLIS, s
 import type { AgentId } from '../core/types.ts';
 import { CLIS, type AgentCheck, type DeepReport, type FastReport } from '@chauvoluuhuong/chorus-core/doctor';
 import { check, firstLaunch, ghReady, host, isDue, lastDeep, latestReleases, markSeen, openInTerminal, openUrl, recordDeep, remoteTested, reportDetails, runCommand, runDeep, versions } from '../core/doctor.ts';
-
+import { fileNote, MEDIA_MAX, viewFile } from './fileview.ts';
 import { NotificationInbox } from './notifications.ts';
 import { imageType, parseReport, ReportSender } from './reports.ts';
 import { ChatLaunch, ProHost, type ProLoader } from './pro.ts';
@@ -1490,6 +1490,10 @@ export class ChorusServer {
       const r = this.c.dropFiles(upload[1], [{ name: u.searchParams.get('name') ?? 'file', bytes }]);
       return send(res, 'error' in r ? 409 : 200, r);
     }
+    // the file viewer (plan 2026-11-25): what a file is and its content (view), or its bytes (raw); a reported file (?r=) or a file in
+    // the chat's artifacts folder (?p=). Through the private link only files inside the chat's project; nothing is ever opened here
+    const fv = req.method === 'GET' && u.pathname.match(/^\/api\/chats\/([\w-]+)\/files\/(view|raw)$/);
+    if (fv) return this.fileRoute(req, res, u, fv[1], fv[2] === 'raw');
     // reported artifacts (plan 2026-11-13, item 5): a device on the private link opens only files inside the chat's project, served
     // to it here; it never opens anything on the Mac. Links and files elsewhere say "Open on the Mac"
     const rep = u.pathname.match(/^\/api\/chats\/([\w-]+)\/(?:reported\/(\d+)|open-report|open)$/);
@@ -1515,6 +1519,74 @@ export class ChorusServer {
     const out = await this.route(req.method ?? 'GET', u.pathname.slice(5).split('/').map(decodeURIComponent), u.searchParams, body);
     if (out === undefined) return send(res, 404, { error: 'not found' });
     send(res, 200, out);
+  }
+
+  /** GET …/files/view and …/files/raw: one file of a chat for the viewer (src/serve/fileview.ts). */
+  private fileRoute(req: http.IncomingMessage, res: http.ServerResponse, u: URL, id: string, raw: boolean) {
+    const f = this.chatFile(id, u.searchParams);
+    if ('status' in f) return send(res, f.status, { error: f.error });
+    const meta = { title: f.title, ...(f.rel ? { rel: f.rel } : {}) };
+    if (f.gone) return raw ? send(res, 404, { error: 'That file is no longer there.' }) : send(res, 200, fileNote(f.abs, meta, 'gone'));
+    if (this.isRemote(req) && !f.inside) return raw ? send(res, 403, { error: 'This file stays on your Mac.' }) : send(res, 200, fileNote(f.abs, { title: f.title }, 'outside'));
+    if (!raw) return send(res, 200, viewFile(f.abs, meta));
+    let size: number;
+    try {
+      size = fs.statSync(f.abs).size;
+    } catch {
+      return send(res, 404, { error: 'That file is no longer there.' });
+    }
+    if (size > MEDIA_MAX) return send(res, 413, { error: `Files over ${MEDIA_MAX / 1_000_000} MB are not sent here.` });
+    const ext = path.extname(f.abs).toLowerCase();
+    res.writeHead(200, { 'content-type': TYPES[ext] ?? FILE_TYPES[ext] ?? 'application/octet-stream', 'content-length': String(size), 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "sandbox; default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'" });
+    fs.createReadStream(f.abs).on('error', () => res.destroy()).pipe(res);
+  }
+
+  /**
+   * The file a viewer request names: ?r=<reported id> (a file the chat reported; `inside` when it is in the chat's project) or
+   * ?p=<path in the chat's artifacts folder> (resolved with realpath; anything that leaves the folder, by .. or a link, is refused).
+   */
+  private chatFile(id: string, q: URLSearchParams): { abs: string; title: string; rel?: string; inside: boolean; gone: boolean } | { status: number; error: string } {
+    const c = this.c, t = c.store.getThread(id);
+    if (!t) return { status: 404, error: 'no such chat' };
+    const real = (p: string) => fs.realpathSync(p);
+    const isFile = (p: string) => {
+      try {
+        return fs.statSync(p).isFile();
+      } catch {
+        return false;
+      }
+    };
+    const within = (dir: string, p: string) => {
+      const rel = path.relative(dir, p);
+      return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+    };
+    const r = q.get('r');
+    if (r !== null) {
+      const a = c.store.reportedArtifacts(id).find(x => x.id === Number(r));
+      if (!a) return { status: 404, error: 'not found' };
+      if (/^https?:\/\//i.test(a.target)) return { status: 400, error: 'That is a link, not a file.' };
+      const title = a.title ?? path.basename(a.target);
+      if (!isFile(a.target)) return { abs: a.target, title, inside: false, gone: true };
+      let project: string;
+      try {
+        project = real(t.project ?? t.cwd);
+      } catch {
+        project = t.project ?? t.cwd;
+      }
+      const target = real(a.target);
+      const inside = within(project, target);
+      return { abs: a.target, title, ...(inside ? { rel: path.relative(project, target) } : {}), inside, gone: false };
+    }
+    const p = q.get('p');
+    if (p === null || !p || p.includes('\0') || path.isAbsolute(p)) return { status: 400, error: 'r or p is needed' };
+    const dir = c.store.artifactsDir(id);
+    const abs = path.resolve(dir, p);
+    if (!within(dir, abs)) return { status: 403, error: "That is not in this chat's files." };
+    const title = path.basename(abs);
+    if (!isFile(abs)) return { abs, title, rel: p, inside: true, gone: true };
+    // a link inside the folder that points out of it is refused like a .. path
+    if (!within(real(dir), real(abs))) return { status: 403, error: "That is not in this chat's files." };
+    return { abs, title, rel: path.relative(dir, abs), inside: true, gone: false };
   }
 
   private mcpAllowed(req: http.IncomingMessage) {

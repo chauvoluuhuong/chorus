@@ -279,6 +279,11 @@ test('cards: a sub thread with its report and question, a chat it started, a rep
     assert.deepEqual(by('sub').map((c: any) => [c.title, c.report, c.question, c.seq]), [['Check the docs', 'The doc matches, except Export.', 'Accept 1.4 %?', 2]]);
     assert.deepEqual(by('chat').map((c: any) => [c.title, c.teammate, c.agent]), [['Designer · Empty state', 'Designer', 'agy']]);
     assert.deepEqual(by('artifact').map((c: any) => [c.title, c.kind, c.open, c.seq]), [['Landing hero', 'html', true, 4]]);
+    // each card knows its file's kind, as the file viewer names it; a type it can't show is named
+    for (const n of ['report.docx', 'sales.xlsx', 'data.json', 'rows.csv', 'fix.diff', 'app.ts', 'deck.key']) fs.writeFileSync(path.join(r.project, n), 'x');
+    for (const n of ['report.docx', 'sales.xlsx', 'data.json', 'rows.csv', 'fix.diff', 'app.ts', 'deck.key']) r.store.reportArtifact(other.id, path.join(r.project, n));
+    const kinds = (await r.api('GET', `/api/chats/${other.id}/turns`)).json.cards.filter((c: any) => c.type === 'artifact');
+    assert.deepEqual(kinds.map((c: any) => [c.title, c.kind, c.fileType]).sort(), [['app.ts', 'code', undefined], ['data.json', 'json', undefined], ['deck.key', 'file', 'Keynote'], ['fix.diff', 'diff', undefined], ['report.docx', 'docx', undefined], ['rows.csv', 'csv', undefined], ['sales.xlsx', 'xlsx', undefined]]);
     assert.equal(by('mail').length, 1);
     // a sub thread's report names the sub thread it is about: its line opens it
     assert.deepEqual(by('mail')[0].sub, { id: sub.id, title: 'Check the docs' });
