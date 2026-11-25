@@ -130,3 +130,13 @@ test('the card and the Files row both open files through openFile; no "Open on t
   assert.match(cv, /<div class="cv-card art" data-cv="art" data-arg="\$\{c\.id\}">/);
   assert.match(cv, /<button class="go" data-cv="art" data-arg="\$\{c\.id\}">\$\{OPEN_ICON\}Open<\/button>/);
 });
+
+test('a reply\'s inline code that names a file becomes a link to the viewer; other code does not (phone e2e 2026-11-25)', async () => {
+  // @ts-expect-error: a page module, plain JavaScript
+  const { isFilePath } = await import('../../src/desktop/chat-view.js');
+  for (const yes of ['tiem-banh-may.html', 'site/hero.html', '/Users/me/run/cake-shop-site/hello.html', '~/notes/plan.md', 'tools/preview-local.sh', 'package.json', '.env.example'])
+    assert.equal(isFilePath(yes), true, yes);
+  for (const no of ['feature/single-file', 'npm test', 'https://x.dev/a.html', '--flag.x', '2.14.1', '/', '@', 'a b.md', 'git log --oneline', '<div>.x'])
+    assert.equal(isFilePath(no), false, no);
+});
+
