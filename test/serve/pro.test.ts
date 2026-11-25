@@ -150,6 +150,22 @@ test('a chat the module resumes while it starts gets its tools', async () => {
   assert.deepEqual(seen, ['stand_in']);
 });
 
+test('a module fetched behind the running app after an update is counted in the status, so the page reloads its screens (core issue 82)', async () => {
+  const { ProHost } = await import('../../src/serve/pro.ts');
+  let swap!: (r: LoadResult) => void;
+  let changes = 0;
+  const host = new ProHost({} as ProCtx, () => changes++, { dev: false, load: async (_c, onChange) => ((swap = onChange!), stand), activate: async () => stand });
+  await host.start();
+  assert.equal(host.status().updated, undefined, 'nothing replaced yet');
+  // a plan change replaces the module too, but it is not an update: the page keeps its screens
+  swap({ ...stand, entitled: { plan: 'pro', locked: [] } });
+  assert.equal(host.status().updated, undefined);
+  swap({ ...stand, updated: true });
+  assert.equal(host.status().updated, 1);
+  assert.equal(host.toolNames().length > 0, true, 'the new module took over');
+  assert.ok(changes >= 3, 'every swap is broadcast');
+});
+
 test('Try Pro: the sign-up page opens in the browser, comes back once with a code, and the app hears it (plan stage 6)', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-'));
   const project = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-p-'));
@@ -433,6 +449,37 @@ test('files/view and files/raw through the private link: files inside the chat\'
   assert.deepEqual([routeOf(k, false), routeOf(o, false), routeOf(v, false), routeOf(k, true)], ['note', 'note', 'viewer', 'mac']);
   // the same files on the Mac's own window: the file elsewhere is shown there
   assert.equal((await r.api('GET', `/api/chats/t_fv/files/view?r=${outA.id}`)).json.text, 'secret notes');
+  r.close();
+});
+
+test('a file path written in a reply opens through the private link only inside the chat\'s project; open-path is the Mac\'s (phone e2e 2026-11-25)', async () => {
+  const r = await rig(remoteStand);
+  await new Promise(x => setTimeout(x, 20));
+  const project = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-fp-')));
+  r.store.createThread({ id: 't_fp', title: 'paths', agent: 'claude', cwd: project, project });
+  fs.writeFileSync(path.join(project, 'tiem-banh-may.html'), '<h1>Tiệm bánh</h1>');
+  const outside = path.join(fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-fpo-'))), 'private.md');
+  fs.writeFileSync(outside, 'private');
+  const dev = { cookie: 'chorus_device=ok', 'x-forwarded-for': '100.64.0.2', host: 'mac.tail.ts.net' };
+  const get = (q: string) => fetch(`${r.srv.url}/api/chats/t_fp/files/${q}`, { headers: dev });
+  // relative to the project, and the same file by its full path
+  for (const f of ['tiem-banh-may.html', path.join(project, 'tiem-banh-may.html')]) {
+    const v = await (await get(`view?f=${encodeURIComponent(f)}`)).json();
+    assert.deepEqual([v.kind, v.rel, v.text, v.why], ['html', 'tiem-banh-may.html', '<h1>Tiệm bánh</h1>', undefined], f);
+  }
+  assert.equal(await (await get(`raw?f=${encodeURIComponent('tiem-banh-may.html')}`)).text(), '<h1>Tiệm bánh</h1>');
+  // outside the project: named, never sent; .. that leaves it too
+  const o = await (await get(`view?f=${encodeURIComponent(outside)}`)).json();
+  assert.deepEqual([o.why, o.text], ['outside', undefined]);
+  assert.equal((await get(`raw?f=${encodeURIComponent(outside)}`)).status, 403);
+  const up = await (await get(`view?f=${encodeURIComponent(path.relative(project, outside))}`)).json();
+  assert.equal(up.why, 'outside');
+  assert.equal((await (await get(`view?f=${encodeURIComponent('nope.md')}`)).json()).why, 'gone');
+  // a device never opens anything on the Mac
+  const post = await fetch(`${r.srv.url}/api/chats/t_fp/open-path`, { method: 'POST', headers: { ...dev, 'x-chorus': '1', origin: 'https://mac.tail.ts.net', 'content-type': 'application/json' }, body: JSON.stringify({ path: 'tiem-banh-may.html' }) });
+  assert.equal(post.status, 403);
+  // the Mac's own window views a file anywhere on the Mac
+  assert.equal((await r.api('GET', `/api/chats/t_fp/files/view?f=${encodeURIComponent(outside)}`)).json.text, 'private');
   r.close();
 });
 

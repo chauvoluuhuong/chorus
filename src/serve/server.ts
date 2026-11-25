@@ -1496,7 +1496,7 @@ export class ChorusServer {
     if (fv) return this.fileRoute(req, res, u, fv[1], fv[2] === 'raw');
     // reported artifacts (plan 2026-11-13, item 5): a device on the private link opens only files inside the chat's project, served
     // to it here; it never opens anything on the Mac. Links and files elsewhere say "Open on the Mac"
-    const rep = u.pathname.match(/^\/api\/chats\/([\w-]+)\/(?:reported\/(\d+)|open-report|open)$/);
+    const rep = u.pathname.match(/^\/api\/chats\/([\w-]+)\/(?:reported\/(\d+)|open-report|open-path|open)$/);
     if (rep) {
       const remote = this.isRemote(req);
       if (req.method === 'POST' && remote) return send(res, 403, { error: 'Open it on the Mac.' });
@@ -1577,8 +1577,27 @@ export class ChorusServer {
       const inside = within(project, target);
       return { abs: a.target, title, ...(inside ? { rel: path.relative(project, target) } : {}), inside, gone: false };
     }
+    // ?f=: a path the agent wrote in its reply (phone e2e 2026-11-25), absolute, ~/…, or relative to the chat's project. The Mac's own page
+    // may view any file of this Mac (it reads them anyway); a device only files inside the project, as for reported files
+    const f = q.get('f');
+    if (f !== null) {
+      if (!f || f.includes('\0') || f.length > 1000) return { status: 400, error: 'f is a path' };
+      const base = t.project ?? t.cwd;
+      const abs = f.startsWith('~/') ? path.join(os.homedir(), f.slice(2)) : path.resolve(base, f);
+      const title = path.basename(abs);
+      if (!isFile(abs)) return { abs, title, inside: false, gone: true };
+      let project: string;
+      try {
+        project = real(base);
+      } catch {
+        project = base;
+      }
+      const target = real(abs);
+      const inside = within(project, target);
+      return { abs, title, ...(inside ? { rel: path.relative(project, target) } : {}), inside, gone: false };
+    }
     const p = q.get('p');
-    if (p === null || !p || p.includes('\0') || path.isAbsolute(p)) return { status: 400, error: 'r or p is needed' };
+    if (p === null || !p || p.includes('\0') || path.isAbsolute(p)) return { status: 400, error: 'r, f or p is needed' };
     const dir = c.store.artifactsDir(id);
     const abs = path.resolve(dir, p);
     if (!within(dir, abs)) return { status: 403, error: "That is not in this chat's files." };
@@ -2086,6 +2105,13 @@ export class ChorusServer {
         const a = thread && this.reported(id).find(x => x.id === Number(b.id));
         if (!a) return { error: 'That artifact is no longer there.' };
         const r = await (this.o.openFile ?? openOnThisComputer)(a.target);
+        return r.ok ? { ok: true } : { error: r.error ?? 'Could not open it.' };
+      }
+      case 'POST chats/:id/open-path': {
+        // a file named in a reply that the viewer can't show, opened on this computer (Mac only: devices get 403 above)
+        const f = thread && typeof b.path === 'string' ? this.chatFile(id, new URLSearchParams({ f: b.path })) : undefined;
+        if (!f || 'status' in f || f.gone) return { error: 'That file is no longer there.' };
+        const r = await (this.o.openFile ?? openOnThisComputer)(f.abs);
         return r.ok ? { ok: true } : { error: r.error ?? 'Could not open it.' };
       }
       case 'POST chats/:id/open':

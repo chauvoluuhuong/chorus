@@ -571,6 +571,8 @@ function go(view, push = true) {
   // Home, Chats and More are a phone's: on a wider screen the sidebar holds what they show
   if (S.size !== 'phone' && ['home', 'chats', 'more'].includes(view.name)) view = { name: 'new' };
   if (view.name === 'chat' && !(S.view.name === 'chat' && S.view.id === view.id)) S.chatTab = 'chat';
+  // a phone's Terminal lasts while that chat stays open: leaving it, the next visit opens in Chat again
+  if (!(view.name === 'chat' && view.id === S.phoneRaw)) S.phoneRaw = null;
   S.sheet = null;
   drawSheet();
   if (push && S.view && JSON.stringify(S.view) !== JSON.stringify(view)) S.history.push(S.view);
@@ -735,7 +737,21 @@ function lockedRow(ic, t) {
   return community() ? `<button class="locked" data-act="plan-welcome" title="Pro only"><span class="ico">${ic}</span>${t}<span class="lock" aria-label="Pro only">🔒</span></button>` : '';
 }
 
+/**
+ * The paid module was replaced behind the running app after an update (chorus-core issue 82): its screens are the new build's only once
+ * the page loads them again, and they can't be loaded twice in one page. Reload now when the window just opened or is hidden; else the
+ * next time it is hidden, so nothing being typed is lost.
+ */
+function reloadForProUpdate(st) {
+  const n = st.updated ?? 0;
+  if (S.proUpdated === undefined || n <= S.proUpdated) return void (S.proUpdated = Math.max(S.proUpdated ?? 0, n));
+  S.proUpdated = n;
+  if (document.hidden || performance.now() < 120_000) return location.reload();
+  document.addEventListener('visibilitychange', () => document.hidden && location.reload());
+}
+
 async function onProStatus(st) {
+  reloadForProUpdate(st);
   S.pro = st;
   document.querySelector('#pro-css')?.remove();
   if (!st.unlocked) delete window.choruspro;
@@ -2644,10 +2660,12 @@ function renderChat() {
 
 /* ---------- the Chat view (plan 2026-11-22 chat-view, src/desktop/chat-view.js) ---------- */
 
-/** Terminal ('raw' in code and storage) or Chat, kept per device and per size (browser storage): a phone opens in Chat, a tablet and
-   a desktop in Terminal. */
+/** Terminal ('raw' in code and storage) or Chat. A tablet and a desktop keep the last choice per device (browser storage) and start in
+   Terminal. A phone always opens a chat in Chat (owner, 2026-11-25: a Terminal remembered from one visit kept every chat in Terminal);
+   Terminal there lasts for that chat while it stays open (S.phoneRaw). */
 const chatModeKey = (size = S.size) => `chorus.chatView.${size}`;
 function chatModeFor(size) {
+  if (size === 'phone') return S.phoneRaw && S.phoneRaw === S.view?.id ? 'raw' : 'chat';
   try {
     const v = localStorage.getItem(chatModeKey(size));
     if (v === 'raw' || v === 'chat') return v;
@@ -2659,11 +2677,13 @@ function chatModeFor(size) {
 const chatMode = () => chatModeFor(S.size);
 function setChatMode(mode) {
   if (mode !== 'raw' && mode !== 'chat') return;
-  try {
-    localStorage.setItem(chatModeKey(), mode);
-  } catch {
-    /* kept for this page only */
-  }
+  if (S.size === 'phone') S.phoneRaw = mode === 'raw' && S.view.name === 'chat' ? S.view.id : null;
+  else
+    try {
+      localStorage.setItem(chatModeKey(), mode);
+    } catch {
+      /* kept for this page only */
+    }
   if (S.view.name !== 'chat') return;
   renderChrome();
   renderChat();

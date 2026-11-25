@@ -80,6 +80,9 @@ export function rowWord(c) {
 }
 
 /** A user's message as they typed it: a skill Chorus spelled out for the CLI (expandSkillMentions) shows as `/name` again. */
+/** Inline code in a reply that names a file: no spaces, not a link or an option, a name with an extension (`a/b.html`, `~/x.md`). */
+export const isFilePath = t =>
+  t.length > 2 && t.length < 400 && !/\s|^[a-z][\w+.-]*:\/\/|^-|[<>|*?"'`$]/i.test(t) && /(^|\/)[^/]+\.[A-Za-z0-9]{1,8}$/.test(t) && !/^\d+(\.\d+)+$/.test(t);
 export const asTyped = text => String(text ?? '').replace(/Use the Chorus skill "([\w.-]+)" \(load it with the chorus get_skill tool\)\./g, '/$1');
 
 const ago = (iso, now = Date.now()) => {
@@ -392,6 +395,26 @@ export function makeChatView(h) {
     else if (keep === 'older') s.scrollTop = s.scrollHeight - fromBottom;
     drawDiagrams(s);
     watchPreviews(s);
+    linkPaths(s);
+  }
+
+  /**
+   * A file path the agent writes in its reply (`site/hero.html`, `/Users/me/x/notes.md`) opens the file viewer when tapped (phone e2e,
+   * 2026-11-25: the Planner named the file its task made, and the phone had no way to see it). Only inline code that looks like a file
+   * (a name with an extension, no spaces, not a link); the server decides what may be shown, remotely only inside the chat's project.
+   */
+  function linkPaths(root) {
+    for (const c of root.querySelectorAll('.cv-a code')) {
+      if (c.closest('pre') || c.dataset.cv) continue;
+      const t = c.textContent.trim();
+      if (!isFilePath(t)) continue;
+      c.dataset.cv = 'path';
+      c.dataset.arg = t;
+      c.classList.add('cv-path');
+      c.setAttribute('role', 'button');
+      c.setAttribute('tabindex', '0');
+      c.title = 'Open this file';
+    }
   }
 
   function drawFoot() {
@@ -600,6 +623,7 @@ export function makeChatView(h) {
     else if (what === 'note') void toggleNote(Number(b.dataset.seq));
     else if (what === 'open') h.openChat(b.dataset.arg);
     else if (what === 'art') openArtifact(b.dataset.arg);
+    else if (what === 'path') h.openFile({ chat: cur.id, f: b.dataset.arg, title: b.dataset.arg.split('/').pop() });
     else if (what === 'raw') h.toRaw();
     else if (what === 'send') void sendBox();
     else if (what === 'ins') insert(b.dataset.arg);

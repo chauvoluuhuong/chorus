@@ -286,15 +286,16 @@ let cur = null;
 
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '');
 const CMD = MAC ? '⌘' : 'Ctrl';
-const q = o => (o.r != null ? `r=${encodeURIComponent(o.r)}` : `p=${encodeURIComponent(o.p)}`);
+const q = o => (o.r != null ? `r=${encodeURIComponent(o.r)}` : o.f != null ? `f=${encodeURIComponent(o.f)}` : `p=${encodeURIComponent(o.p)}`);
 const url = (o, what) => `/api/chats/${encodeURIComponent(o.chat)}/files/${what}?${q(o)}`;
 const phone = h => (h.size?.() ?? document.documentElement.dataset.size) === 'phone';
 
 /** The file open in the viewer now, if any: { chat, r } or { chat, p }. */
-export const openNow = () => (cur ? { chat: cur.o.chat, ...(cur.o.r != null ? { r: cur.o.r } : { p: cur.o.p }) } : null);
+export const openNow = () => (cur ? { chat: cur.o.chat, ...(cur.o.r != null ? { r: cur.o.r } : cur.o.f != null ? { f: cur.o.f } : { p: cur.o.p }) } : null);
 
 /**
- * Opens a chat's file: `{ chat, r }` (a reported file's id) or `{ chat, p }` (a path in the chat's artifacts folder); `link` and
+ * Opens a chat's file: `{ chat, r }` (a reported file's id), `{ chat, p }` (a path in the chat's artifacts folder) or `{ chat, f }` (a
+ * path the agent wrote in its reply); `link` and
  * `target` for a reported link. `h`: { api, toast, onMac, size(), mermaidUrl, rev(chat), onChange() }.
  */
 export async function openFile(h, o) {
@@ -320,7 +321,8 @@ export async function openFile(h, o) {
 /** The Mac's own open command, as the Files list did before; a short note says it went. */
 async function openOnMac(h, o, v) {
   try {
-    const r = o.r != null ? await h.api('POST', `/api/chats/${encodeURIComponent(o.chat)}/open-report`, { id: Number(o.r) }) : await h.api('POST', `/api/chats/${encodeURIComponent(o.chat)}/open`, { path: o.p });
+    const chat = encodeURIComponent(o.chat);
+    const r = o.r != null ? await h.api('POST', `/api/chats/${chat}/open-report`, { id: Number(o.r) }) : o.f != null ? await h.api('POST', `/api/chats/${chat}/open-path`, { path: o.f }) : await h.api('POST', `/api/chats/${chat}/open`, { path: o.p });
     if (r?.error) return void h.toast(r.error);
     h.toast(`Opened ${base(v.path) || v.title}`);
   } catch (e) {
@@ -380,7 +382,7 @@ function place() {
 }
 
 function show(h, o, v) {
-  const same = cur && cur.o.chat === o.chat && cur.o.r === o.r && cur.o.p === o.p;
+  const same = cur && cur.o.chat === o.chat && cur.o.r === o.r && cur.o.p === o.p && cur.o.f === o.f;
   if (cur && !same) closeFile();
   if (!cur) {
     const m = modesOf(v);
