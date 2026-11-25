@@ -100,6 +100,8 @@ export interface ProStatus {
   locked?: string[];
   /** the signed-in account's email, for the plan box; none for Community */
   email?: string;
+  /** how many times the module was replaced behind the running app after an app update (chorus-core issue 82): the page reloads its screens */
+  updated?: number;
 }
 
 const LOCKED = { status: 402, json: { locked: true } };
@@ -114,6 +116,7 @@ export class ProHost {
   private onChange: () => void;
   private doctorSeen: { type: string } | undefined;
   private closed = false;
+  private updates = 0;
 
   constructor(ctx: ProCtx, onChange: () => void, loader: ProLoader = realLoader) {
     this.ctx = ctx;
@@ -126,6 +129,8 @@ export class ProHost {
   }
 
   private use = (r: LoadResult) => {
+    // the build for this app version, fetched behind the running app after an update (core issue 82)
+    if (!isLocked(r) && r.updated) this.updates++;
     this.result = r;
     this.routes = isLocked(r) ? {} : r.routes(this.ctx);
     this.tools = isLocked(r) ? [] : r.mcpTools(this.ctx);
@@ -151,7 +156,7 @@ export class ProHost {
     if (isLocked(r)) return { unlocked: false, dev: this.loader.dev, reason: r.locked, message: r.message };
     const e = r.entitled;
     const email = e && e.plan !== 'community' ? this.loader.account?.(this.ctx)?.email : undefined;
-    return { unlocked: true, dev: this.loader.dev, version: r.version, ...(e ? { plan: e.plan, ends: e.ends, locked: e.locked } : {}), ...(email ? { email } : {}) };
+    return { unlocked: true, dev: this.loader.dev, version: r.version, ...(e ? { plan: e.plan, ends: e.ends, locked: e.locked } : {}), ...(email ? { email } : {}), ...(this.updates ? { updated: this.updates } : {}) };
   }
 
   /** Back from the browser with the one-time code: the account's licence, activated here (plan stage 6). */
