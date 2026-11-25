@@ -39,6 +39,8 @@
   --hl: #d99a00;
   --hl-glow: rgba(217, 154, 0, 0.38);
   --scrim: rgba(40, 38, 34, 0.52);
+  /* the file-type squares (mockup chat-view-files.html .ft) */
+  --t-md: #3f6fd1; --t-html: #c6613f; --t-json: #a8660b; --t-csv: #2f7d3a; --t-img: #7a4fc0; --t-pdf: #b13b32; --t-code: #3d3d3a; --t-doc: #2b5797; --t-xls: #1f7a45; --t-key: #b07a1f;
   --side-w: 264px;
   --f-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif;
   --f-serif: 'Iowan Old Style', 'Charter', Georgia, 'Times New Roman', serif;
@@ -83,6 +85,7 @@
     --hl: #f7c948;
     --hl-glow: rgba(247, 201, 72, 0.4);
     --scrim: rgba(10, 10, 9, 0.62);
+    --t-md: #8fb8ff; --t-html: #e08a6b; --t-json: #f0b85a; --t-csv: #8ccf7e; --t-img: #b99cf0; --t-pdf: #ee8a80; --t-code: #dad8d0; --t-doc: #86a8e0; --t-xls: #7fcf9c; --t-key: #e0b25e;
     color-scheme: dark;
   }
 }
@@ -388,15 +391,24 @@ pre.record { margin: 0; padding: 14px 16px; font: 12px/1.5 var(--f-mono); white-
   .task-side { display: contents; }
 }
 .art { padding: 12px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
-/* Artifacts: what the agent reported, a row each; a click opens it (plan 2026-11-13, item 5) */
-.art-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 11px 16px; font: inherit; color: inherit; text-decoration: none; cursor: pointer; }
+/* Files: what the agent reported, a row each with its type square and one ↗ Open; a click on the row does the same (plan 2026-11-25,
+   mockup chat-view-files.html scene 1). The row of the file open in the viewer is marked. */
+.art-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 10px 12px 10px 16px; font: inherit; color: inherit; text-decoration: none; cursor: pointer; }
 .art-row:hover { background: var(--hover); }
-.art-row.off { color: var(--muted); cursor: default; }
-.art-row.off:hover { background: none; }
-.art-t { flex: 1; min-width: 0; display: grid; gap: 2px; font-size: 13px; }
-.art-t .mono { font-size: 12px; word-break: break-all; }
-.art-t > .faint:last-child { font-size: 12px; }
-.art-go { color: var(--accent); font-size: 12.5px; font-weight: 600; flex: none; }
+.art-row.sel { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.art-t { flex: 1; min-width: 0; display: grid; gap: 1px; font-size: 13px; }
+.art-t b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.art-t .mono { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.art-t > .faint:last-child { font-size: 11.5px; }
+.art-go { color: var(--accent); font-size: 13px; font-weight: 600; flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 4px 6px; border-radius: 7px; }
+.art-go svg { width: 13px; height: 13px; }
+.art-row:hover .art-go { background: var(--accent-soft); }
+/* the file-type square: the extension on its type's colour */
+.ft { flex: none; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; font: 700 8.5px var(--f-mono); letter-spacing: 0.02em; color: #fff; background: var(--t-code); }
+.ft.sm { width: 22px; height: 22px; border-radius: 6px; font-size: 7px; }
+.ft.lg { width: 56px; height: 56px; border-radius: 14px; font-size: 13px; }
+.ft.md { background: var(--t-md); } .ft.html { background: var(--t-html); } .ft.json { background: var(--t-json); } .ft.csv { background: var(--t-csv); } .ft.img { background: var(--t-img); } .ft.pdf { background: var(--t-pdf); } .ft.word { background: var(--t-doc); } .ft.xls { background: var(--t-xls); } .ft.key { background: var(--t-key); } .ft.code { background: var(--t-code); color: var(--bg); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .ft { color: #1b1a18; } }
 /* the right sidebar's left edge: drag to resize, double-click to put it back (desktop only) */
 .side-resize { display: none; }
 @media (min-width: 1025px) {
@@ -1542,6 +1554,15 @@ button.cv-sys:hover .x { color: var(--accent); }
 .cv-cut button { border: 0; background: none; color: var(--accent); font-weight: 600; padding: 0; font-size: 12px; }
 .cv-sys.warn { align-items: center; background: var(--warn-soft); color: var(--ink); border-radius: 10px; padding: 8px 10px; }
 .cv-sys.warn .btn { margin-left: auto; flex: none; }
+.cv-card.art { cursor: pointer; gap: 5px; padding: 10px 12px 6px 14px; }
+.cv-card.art:hover { border-color: var(--faint); }
+.cv-card.art .top2 { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cv-card.art .tt { min-width: 0; }
+.cv-card.art .ti { font-size: 14.5px; }
+.cv-card.art .go { display: inline-flex; align-items: center; gap: 4px; padding: 4px 6px; border-radius: 7px; font-size: 13px; min-height: 30px; }
+.cv-card.art .go:hover { background: var(--accent-soft); }
+.cv-card.art .go svg { width: 13px; height: 13px; }
+.cv-card.art .st { min-height: 30px; }
 .cv-card.art .pv { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; height: 150px; position: relative; }
 .cv-card.art .pv iframe { position: absolute; inset: 0; width: 200%; height: 200%; border: 0; transform: scale(0.5); transform-origin: 0 0; pointer-events: none; background: #fff; }
 .cv-card.art .fn { font: 12px var(--f-mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1633,3 +1654,136 @@ html[data-size="phone"] body:has(#cv-slot:not([hidden])) #toasts { bottom: calc(
 /* the switch takes no more height than the header's own buttons (36 px on touch with its border), so the header and Raw under it
    stay exactly where they were */
 @media (hover: none), (pointer: coarse) { .chat-head .cv-seg { border: 0; outline: 1px solid var(--line); outline-offset: -1px; } .chat-head .cv-seg button { padding-top: 0; padding-bottom: 0; } }
+
+/* ---------- the file viewer (plan 2026-11-25, mockup chat-view-files.html scenes 2–7) ----------
+   Desktop and tablet: a window over the chat column (file-viewer.js places .fv-wrap on it), max 960 px, on a scrim. A phone: full
+   screen, like .cv-full. Preview draws the file as a page; Raw is its text with line numbers. */
+.fv-wrap { position: fixed; inset: 0; z-index: 44; background: var(--scrim); display: flex; align-items: center; justify-content: center; padding: 18px 24px; animation: fade 0.12s ease-out; }
+.fv { width: 100%; max-width: 960px; height: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32); }
+.fv-wrap.phone { padding: 0; background: var(--bg); z-index: 46; }
+.fv-wrap.phone .fv { max-width: none; border: 0; border-radius: 0; box-shadow: none; background: var(--bg); }
+.fv-h { flex: none; display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 14px; border-bottom: 1px solid var(--line); min-width: 0; }
+.fv-h .nm { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.fv-h .nm b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fv-h .nm span { font: 11.5px var(--f-mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fv-h .vsep { width: 1px; height: 20px; background: var(--line); flex: none; }
+.fv-h .seg { flex: none; background: var(--panel); }
+.fv-h .seg button, .fv-pseg .seg button { display: inline-flex; align-items: center; gap: 5px; }
+.fv .seg button[disabled] { color: var(--faint); cursor: not-allowed; }
+.fv .seg svg { width: 13px; height: 13px; }
+.fv .ibtn { border: 0; background: transparent; border-radius: 7px; width: 30px; height: 30px; display: grid; place-items: center; color: var(--muted); flex: none; padding: 0; }
+.fv .ibtn:hover, .fv .ibtn[aria-pressed='true'] { background: var(--sel); color: var(--ink); }
+.fv .ibtn svg { width: 16px; height: 16px; }
+.fv-wrap.phone .fv-h { gap: 4px; padding: calc(6px + var(--safe-top)) 8px 6px; }
+.fv-wrap.phone .fv-h .pv-back { border: 0; background: none; width: 44px; height: 44px; display: grid; place-items: center; color: var(--accent); font-size: 24px; flex: none; padding: 0; }
+.fv-wrap.phone .fv-h .nm b { font-size: 15px; }
+.fv-wrap.phone .fv-h .nm span { font-size: 11px; }
+.fv-wrap.phone .ibtn { width: 40px; height: 40px; }
+.fv-pseg { flex: none; padding: 8px 12px; border-bottom: 1px solid var(--line); display: flex; }
+.fv-pseg .seg { width: 100%; background: var(--panel); }
+.fv-pseg .seg button { flex: 1; justify-content: center; padding: 7px 0; font-size: 13.5px; }
+.fv-b { flex: 1; min-height: 0; overflow: auto; position: relative; }
+.fv-f { flex: none; display: flex; align-items: center; gap: 12px; padding: 6px 14px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--faint); white-space: nowrap; overflow: hidden; }
+.fv-f .grow { flex: 1; }
+.fv-f .live { color: var(--ok); display: inline-flex; align-items: center; gap: 5px; }
+.fv-f .live::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+.fv-f kbd { color: var(--muted); }
+@media (max-width: 1024px) { .fv-f > span:last-child { display: none; } }
+.fv-strip { flex: none; padding: 8px 16px; font-size: 12.5px; background: var(--warn-soft); color: var(--ink-2); border-bottom: 1px solid var(--line); }
+.fv-strip.bottom { border-bottom: 0; border-top: 1px solid var(--line); position: sticky; bottom: 0; }
+/* Preview: a document drawn as a page (markdown through md.js, a Word file through the server's parsing layer) */
+.fv-doc { max-width: 720px; margin: 0 auto; padding: 30px 36px 44px; font-size: 15px; line-height: 1.65; color: var(--ink); overflow-wrap: anywhere; }
+.fv-wrap.phone .fv-doc { padding: 18px 18px 40px; font-size: 14.5px; line-height: 1.6; }
+.fv-doc.cv-a { font-size: 15px; line-height: 1.65; }
+.fv-doc p { margin: 0 0 12px; }
+.fv-doc ul, .fv-doc ol { margin: 0 0 12px; padding-left: 22px; } .fv-doc li { margin: 4px 0; }
+.fv-doc.cv-a h3, .fv-docx h1 { font-size: 26px; line-height: 1.25; margin: 0 0 8px; letter-spacing: -0.01em; }
+.fv-doc.cv-a h4, .fv-docx h2 { font-size: 18px; line-height: 1.3; margin: 26px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.fv-doc.cv-a h5, .fv-docx h3 { font-size: 16px; margin: 20px 0 6px; }
+.fv-doc.cv-a h6, .fv-docx h4, .fv-docx h5, .fv-docx h6 { font-size: 15px; margin: 16px 0 4px; color: var(--ink); }
+.fv-doc.cv-a > :first-child, .fv-docx > :first-child { margin-top: 0; }
+.fv-wrap.phone .fv-doc.cv-a h3, .fv-wrap.phone .fv-docx h1 { font-size: 21px; }
+.fv-wrap.phone .fv-doc.cv-a h4, .fv-wrap.phone .fv-docx h2 { font-size: 16px; margin-top: 18px; }
+.fv-doc code { font: 13px var(--f-mono); background: var(--hover); border-radius: 4px; padding: 1px 5px; }
+.fv-doc pre code { background: none; padding: 0; }
+.fv-doc table { border-collapse: collapse; font-size: 14px; margin: 4px 0 14px; width: auto; }
+.fv-doc th, .fv-doc td { border: 1px solid var(--line); padding: 6px 12px; text-align: left; vertical-align: top; }
+.fv-doc th { background: var(--side); color: var(--ink); font-weight: 600; font-size: 14px; }
+.fv-doc .cv-table { overflow-x: auto; }
+.fv-doc .cv-dia { margin: 4px 0 14px; background: var(--bg); }
+.fv-doc img { max-width: 100%; height: auto; }
+.fv-dia { max-width: none; display: grid; place-items: center; min-height: 100%; }
+.fv-dia .cv-dia { border: 0; background: none; width: 100%; }
+/* Raw: the file's text, line numbers, light colours */
+.fv-raw { font: 12.5px/1.7 var(--f-mono); padding: 12px 0 24px; counter-reset: l; color: var(--ink-2); min-width: max-content; }
+.fv-raw.wrap { min-width: 0; }
+.fv-raw > div { counter-increment: l; position: relative; padding: 0 20px 0 56px; white-space: pre; }
+.fv-raw.wrap > div { white-space: pre-wrap; overflow-wrap: anywhere; }
+.fv-raw > div::before { content: counter(l); position: absolute; left: 0; top: 0; width: 56px; padding-right: 18px; box-sizing: border-box; text-align: right; color: var(--faint); user-select: none; -webkit-user-select: none; }
+.fv-raw .h { color: var(--accent); font-weight: 700; }
+.fv-raw .b { color: var(--ink); font-weight: 700; }
+.fv-raw .c, .fv-raw .tg, .fv-raw .n2 { color: var(--claude); }
+.fv-raw .m { color: var(--faint); }
+.fv-raw .k { color: var(--codex); }
+.fv-raw .s { color: var(--ok); }
+.fv-raw .at { color: var(--plan); }
+.fv-raw .bad { color: var(--bad); }
+.fv-wrap.phone .fv-raw { font-size: 11.5px; }
+.fv-wrap.phone .fv-raw > div { padding: 0 12px 0 44px; } .fv-wrap.phone .fv-raw > div::before { width: 44px; padding-right: 12px; }
+/* the HTML page in its sandboxed frame; Phone narrows it to a phone's width */
+.fv-frame { height: 100%; display: flex; flex-direction: column; background: var(--side); }
+.fv-frame .fr { flex: 1; margin: 14px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+.fv-frame.narrow .fr { flex: 1; width: 390px; max-width: calc(100% - 28px); align-self: center; }
+.fv-wrap.phone .fv-frame .fr { margin: 0; border: 0; border-radius: 0; }
+.fv-frame iframe, .fv-pdf { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
+/* images and SVG on a checkerboard, fit to the window; a click shows the full size */
+.fv-check { min-height: 100%; display: grid; place-items: center; padding: 16px; background-color: var(--panel); background-image: linear-gradient(45deg, var(--hover) 25%, transparent 25%), linear-gradient(-45deg, var(--hover) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--hover) 75%), linear-gradient(-45deg, transparent 75%, var(--hover) 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0; }
+.fv-check img { max-width: 100%; max-height: calc(100% - 0px); object-fit: contain; cursor: zoom-in; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18); }
+.fv-b:has(.fv-check:not(.full)) .fv-check { height: 100%; }
+.fv-check:not(.full) img { max-height: 100%; }
+.fv-check.full { place-items: start; overflow: visible; }
+.fv-check.full img { max-width: none; max-height: none; cursor: zoom-out; }
+/* JSON: a tree you can fold */
+.fv-tree { font: 12.5px/1.75 var(--f-mono); padding: 12px 16px 24px; color: var(--ink-2); }
+.fv-tree details > summary { list-style: none; cursor: pointer; white-space: nowrap; }
+.fv-tree details > summary::-webkit-details-marker { display: none; }
+.fv-tree details > summary::before { content: '▸'; display: inline-block; width: 14px; color: var(--faint); }
+.fv-tree details[open] > summary::before { content: '▾'; }
+.fv-tree details[open] > summary .jp, .fv-tree details:not([open]) > summary .jc { display: none; }
+.fv-tree .jk { padding-left: 18px; }
+.fv-tree .jl { padding-left: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fv-tree .k { color: var(--codex); } .fv-tree .s { color: var(--ok); } .fv-tree .n2 { color: var(--claude); } .fv-tree .m { color: var(--faint); }
+/* tables (CSV, TSV, a sheet): a fixed header, numbers to the right */
+.fv-table { min-width: 100%; width: max-content; }
+.fv-tbl { border-collapse: collapse; font-size: 12.5px; min-width: 100%; }
+.fv-tbl th { position: sticky; top: 0; background: var(--side); font-weight: 600; text-align: left; z-index: 1; }
+.fv-tbl th, .fv-tbl td { border-bottom: 1px solid var(--line); padding: 5px 12px; white-space: nowrap; max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
+.fv-tbl .r { text-align: right; font-variant-numeric: tabular-nums; }
+.fv-tbl tbody tr:hover { background: var(--hover); }
+.fv-tabs { position: sticky; left: 0; display: flex; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid var(--line); background: var(--panel); font-size: 12.5px; }
+.fv-tabs button { border: 0; background: transparent; border-radius: 6px 6px 0 0; padding: 4px 12px; color: var(--muted); }
+.fv-tabs button.on { background: var(--sel); color: var(--ink); font-weight: 600; }
+.fv-k-xlsx .fv-tbl th { top: 0; }
+/* a patch: added and removed lines */
+.fv-diff { font: 12.5px/1.7 var(--f-mono); padding: 10px 0 24px; min-width: max-content; }
+.fv-diff > div { padding: 0 16px; white-space: pre; }
+.fv-diff .ad { background: var(--ok-soft); color: var(--ok); } .fv-diff .rm { background: var(--bad-soft); color: var(--bad); } .fv-diff .hk { color: var(--faint); }
+/* what it says instead of the file: gone, not text, too big */
+.fv-empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 30px; color: var(--ink-2); }
+.fv-empty svg.off { width: 30px; height: 30px; color: var(--faint); }
+.fv-empty h4 { margin: 4px 0 0; font-size: 17px; color: var(--ink); }
+.fv-empty p { margin: 0; max-width: 420px; font-size: 14px; color: var(--muted); }
+.fv-empty .acts { display: flex; gap: 8px; margin-top: 8px; }
+.fv-empty .btn svg { width: 13px; height: 13px; }
+/* remotely, a file it can't send: one kind message and Got it (a bottom sheet on a phone, a small dialog wider; .cv-sheet's frame) */
+.fv-note-wrap { z-index: 47; }
+.cv-sheet.fv-note { align-items: center; text-align: center; gap: 8px; padding: 8px 18px calc(22px + var(--safe-bot, 0px)); }
+html:not([data-size="phone"]) .cv-sheet.fv-note { max-width: 420px; padding: 20px 20px 16px; }
+html:not([data-size="phone"]) .cv-sheet.fv-note .grab { display: none; }
+.fv-note .grab { margin-bottom: 8px; }
+.fv-note h3 { margin: 4px 0 0; font-size: 16.5px; }
+.fv-note p { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.5; }
+.fv-note p b { color: var(--ink-2); }
+.fv-note .path { font: 11.5px var(--f-mono); color: var(--muted); background: var(--hover); border-radius: 6px; padding: 3px 8px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fv-note .btn.primary { width: 100%; justify-content: center; padding: 11px; font-size: 14.5px; border-radius: 11px; margin-top: 8px; }
+html:not([data-size="phone"]) .fv-note .btn.primary { padding: 8px; font-size: 13.5px; border-radius: 9px; }
