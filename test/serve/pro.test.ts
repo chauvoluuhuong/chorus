@@ -150,6 +150,22 @@ test('a chat the module resumes while it starts gets its tools', async () => {
   assert.deepEqual(seen, ['stand_in']);
 });
 
+test('a module fetched behind the running app after an update is counted in the status, so the page reloads its screens (core issue 82)', async () => {
+  const { ProHost } = await import('../../src/serve/pro.ts');
+  let swap!: (r: LoadResult) => void;
+  let changes = 0;
+  const host = new ProHost({} as ProCtx, () => changes++, { dev: false, load: async (_c, onChange) => ((swap = onChange!), stand), activate: async () => stand });
+  await host.start();
+  assert.equal(host.status().updated, undefined, 'nothing replaced yet');
+  // a plan change replaces the module too, but it is not an update: the page keeps its screens
+  swap({ ...stand, entitled: { plan: 'pro', locked: [] } });
+  assert.equal(host.status().updated, undefined);
+  swap({ ...stand, updated: true });
+  assert.equal(host.status().updated, 1);
+  assert.equal(host.toolNames().length > 0, true, 'the new module took over');
+  assert.ok(changes >= 3, 'every swap is broadcast');
+});
+
 test('Try Pro: the sign-up page opens in the browser, comes back once with a code, and the app hears it (plan stage 6)', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-'));
   const project = fs.mkdtempSync(path.join(os.tmpdir(), 'chorus-pro-p-'));

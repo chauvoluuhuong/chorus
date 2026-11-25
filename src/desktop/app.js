@@ -735,7 +735,21 @@ function lockedRow(ic, t) {
   return community() ? `<button class="locked" data-act="plan-welcome" title="Pro only"><span class="ico">${ic}</span>${t}<span class="lock" aria-label="Pro only">🔒</span></button>` : '';
 }
 
+/**
+ * The paid module was replaced behind the running app after an update (chorus-core issue 82): its screens are the new build's only once
+ * the page loads them again, and they can't be loaded twice in one page. Reload now when the window just opened or is hidden; else the
+ * next time it is hidden, so nothing being typed is lost.
+ */
+function reloadForProUpdate(st) {
+  const n = st.updated ?? 0;
+  if (S.proUpdated === undefined || n <= S.proUpdated) return void (S.proUpdated = Math.max(S.proUpdated ?? 0, n));
+  S.proUpdated = n;
+  if (document.hidden || performance.now() < 120_000) return location.reload();
+  document.addEventListener('visibilitychange', () => document.hidden && location.reload());
+}
+
 async function onProStatus(st) {
+  reloadForProUpdate(st);
   S.pro = st;
   document.querySelector('#pro-css')?.remove();
   if (!st.unlocked) delete window.choruspro;
