@@ -148,6 +148,8 @@ export function makeChatView(h) {
   const open = new Set();
   let cur = null;
   let timer = null;
+  /** keeps a reader at the bottom when the stream gets shorter (mount) */
+  let follow = null;
   let pending = null;
   let picker = null;
   let notice = null;
@@ -391,7 +393,7 @@ export function makeChatView(h) {
     const atBottom = s.scrollHeight - s.scrollTop - s.clientHeight < 40;
     const fromBottom = s.scrollHeight - s.scrollTop;
     s.innerHTML = `<div class="cv-col">${streamHtml()}</div>`;
-    if (keep === 'bottom' || (keep === 'auto' && atBottom)) s.scrollTop = s.scrollHeight;
+    if (keep === 'bottom' || (keep === 'auto' && (atBottom || cur.stick))) s.scrollTop = s.scrollHeight;
     else if (keep === 'older') s.scrollTop = s.scrollHeight - fromBottom;
     drawDiagrams(s);
     watchPreviews(s);
@@ -636,6 +638,8 @@ export function makeChatView(h) {
 
   function onScroll(e) {
     const s = e.target;
+    // the reader is at the bottom (or near it): the view keeps following what comes in, also when the box below grows
+    if (cur) cur.stick = s.scrollHeight - s.scrollTop - s.clientHeight < 40;
     const d = cur && dataOf(cur.id);
     if (!d?.more || cur.loadingOlder || s.scrollTop > 80) return;
     cur.loadingOlder = true;
@@ -656,10 +660,18 @@ export function makeChatView(h) {
         pending = null;
         notice = null;
       }
-      cur = { id, el, sel: null };
+      cur = { id, el, sel: null, stick: true };
       el.innerHTML = `<div class="cv-banner" hidden></div><div class="cv-stream" role="log" aria-live="polite"></div><div class="cv-footwrap"></div>`;
       el.addEventListener('click', onClick);
-      el.querySelector('.cv-stream').addEventListener('scroll', onScroll, { passive: true });
+      const stream = el.querySelector('.cv-stream');
+      stream.addEventListener('scroll', onScroll, { passive: true });
+      // the stream gets shorter when the box grows ("Working" and Stop appear above it, a long message wraps): a reader who was at the
+      // bottom stays there, so the running call's line ("Running sleep 10") is not left behind the box (phone e2e, 2026-11-26)
+      follow?.disconnect();
+      follow = new ResizeObserver(() => {
+        if (cur?.el === el && cur.stick) stream.scrollTop = stream.scrollHeight;
+      });
+      follow.observe(stream);
       el.addEventListener('input', e => e.target.classList?.contains('cv-in') && grow(e.target));
       el.addEventListener('keydown', e => {
         // a hardware keyboard: Enter sends, Shift+Enter is a new line; never mid-word (an input method building a word)
